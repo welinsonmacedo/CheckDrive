@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-primary: #2563eb;
+  --color-secondary: #64748b;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-app-bg: #f8fafc;
+  --color-card-bg: #ffffff;
+  --color-app-border: #e2e8f0;
+  --color-text-main: #1e293b;
+  --color-text-muted: #64748b;
+
+  --radius-card: 16px;
+  --radius-pill: 100px;
+}
+
+@layer base {
+  body {
+    -webkit-tap-highlight-color: transparent;
+    @apply bg-app-bg text-text-main antialiased;
+  }
+}
+
+@layer components {
+  .bento-card {
+    @apply bg-card-bg border border-app-border rounded-card shadow-sm p-5 flex flex-col transition-all;
+  }
+}
