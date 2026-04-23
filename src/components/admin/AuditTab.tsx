@@ -105,15 +105,14 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
 
   return (
     <div className="space-y-6">
-      <div className="bento-card bg-zinc-50 border-app-border flex items-center justify-between py-4 px-6">
+      <div className="bento-card bg-zinc-50 border-app-border flex items-center justify-between py-2 px-3">
         <div className="space-y-1">
           <h3 className="text-sm font-black text-text-main uppercase tracking-tight">Auditoria Automática</h3>
-          <p className="text-[10px] text-text-muted font-bold italic uppercase tracking-wider">Verificar se houve falha no envio de checklists de escalas concluídas</p>
         </div>
         <button 
           onClick={handleRunAudit}
           disabled={saving}
-          className="h-10 px-6 bg-danger text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2"
+          className="h-10 px-6 m-4 bg-danger text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2"
         >
           <AlertTriangle size={14} />
           Executar Auditoria Agora

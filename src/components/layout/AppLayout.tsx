@@ -16,56 +16,7 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
 
-      <header className="h-16 px-6 bg-white border-b border-zinc-200 flex items-center justify-between sticky top-0 z-40">
-
-        <div className="flex items-center gap-3">
-          <Link to="/" className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center cursor-pointer">
-            <span className="text-white font-black text-xs">CD</span>
-          </Link>
-
-          <span className="font-bold text-lg hidden sm:block">
-            CheckDrive
-          </span>
-        </div>
-
-        <div className="flex items-center gap-4">
-
-          {/* DOCS APENAS PARA ADMIN */}
-          {!isDriver && (
-            <Link
-              to="/docs"
-              className="text-zinc-500 hover:text-primary transition-colors flex items-center gap-1.5"
-              title="Documentação"
-            >
-              <BookOpen size={18} />
-              <span className="text-xs font-bold uppercase tracking-wider hidden sm:block">
-                Docs
-              </span>
-            </Link>
-          )}
-
-          <div className="hidden sm:block w-px h-8 bg-app-border mx-2"></div>
-
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-semibold text-zinc-900">
-              {user?.name}
-            </p>
-
-            <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">
-              {user?.role === 'admin' ? 'Administrador' : 'Motorista'}
-            </p>
-          </div>
-
-          <button
-            onClick={onLogout}
-            className="p-2 hover:bg-zinc-100 rounded-full transition-colors hidden sm:block text-zinc-500 hover:text-danger"
-            title="Sair"
-          >
-            <LogOut size={20} />
-          </button>
-
-        </div>
-      </header>
+    
 
       <main className={`flex-1 overflow-x-hidden ${isDriver && !location.pathname.includes('/checklist') ? 'pb-20 sm:pb-0' : ''}`}>
         {children}

@@ -66,20 +66,7 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
     }
   };
 
-  const clearChecklistHistory = async () => {
-    if (!confirm('DESEJA EXCLUIR TODOS OS ENVIO DE CHECKLIST? Esta ação é irreversível.')) return;
-    setSaving(true);
-    try {
-      await supabase.from('checklist_submissions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      alert('Dados resetados com sucesso.');
-      fetchData();
-    } catch(err) {
-      console.error(err);
-      alert('Erro ao limpar checklists.');
-    } finally {
-      setSaving(false);
-    }
-  };
+
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -152,36 +139,9 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
         </form>
       </div>
 
-      <div className="bento-card space-y-6">
-        <div className="space-y-2">
-          <h3 className="text-sm font-black text-text-main uppercase tracking-tight">Sessão e Conta</h3>
-          <p className="text-xs text-text-muted font-medium italic">Gerencie sua sessão administrativa</p>
-        </div>
-        <button 
-          onClick={() => supabase.auth.signOut()}
-          className="w-full h-12 border border-app-border rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-zinc-50 transition-all text-danger"
-        >
-          <AlertCircle size={16} />
-          Encerrar Sessão (Sair)
-        </button>
-      </div>
+    
 
-      <div className="bento-card border-danger/20 bg-red-50/20 space-y-6">
-        <div className="space-y-2">
-          <h3 className="text-sm font-black text-danger uppercase tracking-tight">Zona de Risco</h3>
-          <p className="text-xs text-danger font-bold italic">Atenção: Ações permanentes</p>
-        </div>
-        <div className="space-y-3">
-          <button 
-            disabled={saving}
-            onClick={clearChecklistHistory}
-            className="w-full h-12 bg-white border border-danger/20 rounded-xl text-[10px] font-black uppercase tracking-widest text-danger hover:bg-danger hover:text-white transition-all disabled:opacity-50"
-          >
-            Limpar Histórico de Checklists
-          </button>
-          <p className="text-[10px] font-medium text-danger/60 text-center italic">Isso apagará todos os relatórios mas manterá usuários e veículos.</p>
-        </div>
-      </div>
+    
     </div>
   );
 }

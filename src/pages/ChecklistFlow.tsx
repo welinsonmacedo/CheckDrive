@@ -429,19 +429,7 @@ export default function ChecklistFlow() {
                       </select>
                       <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted rotate-90 pointer-events-none" />
                     </div>
-                    {/* Add manual input if desired or if trailerId is empty but required */}
-                    {(options.vehicles.find(v => v.id === formData.vehicleId)?.requires_trailer) && (
-                      <div className="mt-2 text-[10px] text-text-muted">
-                        Ou insira a placa manualmente:
-                        <input
-                          type="text"
-                          placeholder="Ex: REB-0000"
-                          className="w-full h-10 px-4 mt-1 rounded-xl border border-app-border bg-white text-sm font-semibold text-text-main outline-none focus:border-primary"
-                          value={formData.manualTrailerPlate}
-                          onChange={e => setFormData({...formData, manualTrailerPlate: e.target.value.toUpperCase()})}
-                        />
-                      </div>
-                    )}
+                 
                   </div>
 
                   <div className="space-y-1.5">
