@@ -101,7 +101,11 @@ CREATE TABLE IF NOT EXISTS app_settings (
     id TEXT PRIMARY KEY DEFAULT 'global',
     system_type TEXT NOT NULL DEFAULT 'points', -- 'points' or 'cash'
     initial_value NUMERIC NOT NULL DEFAULT 1000,
-    penalty_value NUMERIC NOT NULL DEFAULT 50,
+    penalty_value NUMERIC NOT NULL DEFAULT 50, -- Legacy/Fallback
+    penalty_start NUMERIC NOT NULL DEFAULT 50,
+    penalty_end NUMERIC NOT NULL DEFAULT 50,
+    penalty_fuel NUMERIC NOT NULL DEFAULT 50,
+    penalty_yard NUMERIC NOT NULL DEFAULT 50,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -148,8 +152,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 -- Insert default settings
-INSERT INTO app_settings (id, system_type, initial_value, penalty_value)
-VALUES ('global', 'points', 1000, 50)
+INSERT INTO app_settings (id, system_type, initial_value, penalty_value, penalty_start, penalty_end, penalty_fuel, penalty_yard)
+VALUES ('global', 'points', 1000, 50, 50, 50, 50, 50)
 ON CONFLICT (id) DO NOTHING;
 
 -- --- RLS (Row Level Security) ---

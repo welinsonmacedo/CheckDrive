@@ -123,17 +123,36 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
               </div>
             </div>
             
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Penalidade por Checklist Pendente</label>
-              <div className="flex gap-4 items-center">
-                <input 
-                  type="number"
-                  className="flex-1 h-11 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-bold outline-none focus:border-primary transition-all"
-                  value={appSettings?.penalty_value || 50}
-                  onChange={e => setAppSettings({...appSettings, penalty_value: Number(e.target.value)})}
-                />
-                <div className="px-5 h-11 bg-zinc-100 rounded-xl flex items-center justify-center font-bold text-[10px] text-text-muted uppercase tracking-widest">
-                  {appSettings?.system_type === 'cash' ? 'BRL' : 'PTS'}
+            <div className="space-y-3">
+              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Penalidades por Faltas de Checklist</label>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 border border-app-border rounded-xl p-3 bg-zinc-50/50">
+                  <label className="text-[10px] font-bold text-text-main uppercase tracking-widest">Início de Viagem</label>
+                  <div className="flex gap-2 items-center text-xs">
+                     <input type="number" className="flex-1 min-w-0 h-10 px-3 rounded-lg border border-app-border font-bold outline-none focus:border-primary" value={appSettings?.penalty_start || 50} onChange={e => setAppSettings({...appSettings, penalty_start: Number(e.target.value)})} />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 border border-app-border rounded-xl p-3 bg-zinc-50/50">
+                  <label className="text-[10px] font-bold text-text-main uppercase tracking-widest">Fim de Viagem</label>
+                  <div className="flex gap-2 items-center text-xs">
+                     <input type="number" className="flex-1 min-w-0 h-10 px-3 rounded-lg border border-app-border font-bold outline-none focus:border-primary" value={appSettings?.penalty_end || 50} onChange={e => setAppSettings({...appSettings, penalty_end: Number(e.target.value)})} />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 border border-app-border rounded-xl p-3 bg-zinc-50/50">
+                  <label className="text-[10px] font-bold text-text-main uppercase tracking-widest">Abastecimento</label>
+                  <div className="flex gap-2 items-center text-xs">
+                     <input type="number" className="flex-1 min-w-0 h-10 px-3 rounded-lg border border-app-border font-bold outline-none focus:border-primary" value={appSettings?.penalty_fuel || 50} onChange={e => setAppSettings({...appSettings, penalty_fuel: Number(e.target.value)})} />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 border border-app-border rounded-xl p-3 bg-zinc-50/50">
+                  <label className="text-[10px] font-bold text-text-main uppercase tracking-widest">Pátio</label>
+                  <div className="flex gap-2 items-center text-xs">
+                     <input type="number" className="flex-1 min-w-0 h-10 px-3 rounded-lg border border-app-border font-bold outline-none focus:border-primary" value={appSettings?.penalty_yard || 50} onChange={e => setAppSettings({...appSettings, penalty_yard: Number(e.target.value)})} />
+                  </div>
                 </div>
               </div>
             </div>

@@ -46,7 +46,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
-  const [appSettings, setAppSettings] = useState({ system_type: 'points', initial_value: 1000, penalty_value: 50 });
+  const [appSettings, setAppSettings] = useState({ system_type: 'points', initial_value: 1000, penalty_start: 50, penalty_end: 50, penalty_fuel: 50, penalty_yard: 50 });
   const [loading, setLoading] = useState(true);
   const [vehiclesWithPending, setVehiclesWithPending] = useState<any[]>([]);
   const [openDropdowns, setOpenDropdowns] = useState<string[]>(['cadastros']);

@@ -51,9 +51,14 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
         const missingFuel = !schedule.fuel_checklist_id;
 
         if (missingStart || missingEnd || missingFuel) {
-          const penaltyCount = (missingStart ? 1 : 0) + (missingEnd ? 1 : 0) + (missingFuel ? 1 : 0);
-          const penaltyAmount = Number(appSettings.penalty_value) || 50;
-          const totalPenalty = penaltyCount * penaltyAmount;
+          const pStart = Number(appSettings.penalty_start) || 50;
+          const pEnd = Number(appSettings.penalty_end) || 50;
+          const pFuel = Number(appSettings.penalty_fuel) || 50;
+          
+          let totalPenalty = 0;
+          if (missingStart) totalPenalty += pStart;
+          if (missingEnd) totalPenalty += pEnd;
+          if (missingFuel) totalPenalty += pFuel;
 
           // Apply penalty to performance
           const { data: perf } = await supabase
