@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
+import { Search } from 'lucide-react';
 
 interface SchedulesTabProps {
   onViewChecklist: (checklistId: string) => void;
@@ -15,6 +16,10 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
   const [trailers, setTrailers] = useState<any[]>([]);
   const [routes, setRoutes] = useState<any[]>([]);
   
+  const todayLocal = new Date();
+  todayLocal.setMinutes(todayLocal.getMinutes() - todayLocal.getTimezoneOffset());
+  const [filterDate, setFilterDate] = useState(todayLocal.toISOString().split('T')[0]);
+
   const [scheduleForm, setScheduleForm] = useState({ 
     driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '' 
   });
@@ -24,8 +29,14 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Build local start and end of day to query UTC boundaries correctly
+      const localStart = new Date(`${filterDate}T00:00:00`);
+      const localEnd = new Date(`${filterDate}T23:59:59.999`);
+
       const { data } = await supabase.from('schedules')
         .select('*, profiles(*), vehicles(plate), trailers(plate), routes(origin, destination)')
+        .gte('start_at', localStart.toISOString())
+        .lte('start_at', localEnd.toISOString())
         .order('start_at', { ascending: false });
       setSchedules(data || []);
       
@@ -46,17 +57,19 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [filterDate]);
 
   const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      // Clean data for UUID fields: if empty string, send null
+      // Fix timezone logic by properly passing ISO string representing local time
       const dataToInsert = {
         ...scheduleForm,
+        start_at: new Date(scheduleForm.start_at).toISOString(),
+        end_at: new Date(scheduleForm.end_at).toISOString(),
         trailer_id: scheduleForm.trailer_id || null,
-        route_id: scheduleForm.route_id || null, // Route is required in UI but good to be safe
+        route_id: scheduleForm.route_id || null, 
         vehicle_id: scheduleForm.vehicle_id || null,
         driver_id: scheduleForm.driver_id || null
       };
@@ -83,17 +96,34 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
     }
   };
 
-  if (loading) {
+  if (loading && !schedules.length) {
     return <div className="p-8 text-center text-text-muted font-bold text-xs">Carregando Escalas...</div>;
   }
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
       <div className="xl:col-span-8 bento-card !p-0">
-         <div className="p-5 border-b border-app-border flex items-center justify-between">
+         <div className="p-5 border-b border-app-border flex sm:flex-row flex-col sm:items-center justify-between gap-4">
             <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Escalas Agendadas</span>
+            <div className="flex items-center gap-2">
+               <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider hidden sm:inline-block">Data:</span>
+               <input 
+                 type="date"
+                 className="h-10 px-3 rounded-lg border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary transition-all"
+                 value={filterDate}
+                 onChange={e => setFilterDate(e.target.value)}
+               />
+               <button onClick={fetchData} className="h-10 px-3 flex items-center justify-center bg-zinc-100 rounded-lg text-text-muted hover:bg-zinc-200 transition-colors">
+                  <Search size={14} />
+               </button>
+            </div>
          </div>
-         <div className="overflow-x-auto text-left">
+         <div className="overflow-x-auto text-left min-h-[300px]">
+         {loading ? (
+             <div className="p-8 text-center text-text-muted font-bold text-xs">Carregando...</div>
+         ) : schedules.length === 0 ? (
+             <div className="p-8 text-center text-text-muted font-bold text-xs uppercase tracking-widest">Nenhuma escala programada para {new Date(`${filterDate}T12:00:00`).toLocaleDateString()}</div>
+         ) : (
             <table className="w-full">
               <thead className="bg-app-bg/50">
                 <tr>
@@ -122,14 +152,14 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 text-center items-center">
                         {sch.start_checklist_id ? (
                           <button onClick={() => onViewChecklist(sch.start_checklist_id)} className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-green-100 text-green-700 hover:bg-green-200 transition-colors cursor-pointer title" title="Ver Checklist">
                             Início ✓
                           </button>
                         ) : (
                           <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-zinc-100 text-zinc-500">
-                            Início - Pendente
+                            Início ✕
                           </span>
                         )}
                         
@@ -139,7 +169,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                           </button>
                         ) : (
                           <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-zinc-100 text-zinc-500">
-                            Fim - Pendente
+                            Fim ✕
                           </span>
                         )}
 
@@ -149,7 +179,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                           </button>
                         ) : (
                           <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-zinc-100 text-zinc-500">
-                            Posto - Pendente
+                            Posto ✕
                           </span>
                         )}
                       </div>
@@ -163,6 +193,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                 ))}
               </tbody>
             </table>
+         )}
          </div>
       </div>
 
