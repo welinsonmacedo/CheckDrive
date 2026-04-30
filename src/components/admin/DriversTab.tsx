@@ -273,11 +273,13 @@ const openCreateForm = () => {
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
                             user.role === 'admin'
-                              ? 'bg-blue-50 text-primary'
-                              : 'bg-zinc-50 text-text-muted'
+                              ? 'bg-blue-50 text-blue-600'
+                              : user.role === 'standard'
+                              ? 'bg-purple-50 text-purple-600'
+                              : 'bg-zinc-50 text-zinc-600'
                           }`}
                         >
-                          {user.role}
+                          {user.role === 'admin' ? 'Administrador' : user.role === 'standard' ? 'Padrão' : 'Motorista'}
 
                           {isInternal && (
                             <span className="bg-orange-100 text-orange-700 px-1 py-0.5 rounded">
@@ -419,6 +421,7 @@ const openCreateForm = () => {
         >
           <option value="driver">Motorista</option>
           <option value="admin">Administrador</option>
+          <option value="standard">Padrão</option>
         </select>
 
         <label className="flex items-center gap-3 text-sm text-text-muted">

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'framer-motion';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SchedulesTabProps {
   onViewChecklist: (checklistId: string) => void;
 }
 
 export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
+  const { user } = useAuth();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -153,7 +155,9 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <button onClick={() => deleteItem(sch.id)} className="text-danger hover:underline text-[10px] font-bold">Excluir</button>
+                      {user?.role === 'admin' && (
+                        <button onClick={() => deleteItem(sch.id)} className="text-danger hover:underline text-[10px] font-bold">Excluir</button>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -54,9 +54,12 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
 
       const { data: rankData } = await supabase
         .from('driver_performance')
-        .select(`score, profiles (full_name)`)
-        .order('score', { ascending: false }).limit(3);
-      setRankings(rankData || []);
+        .select(`score, profiles!inner(full_name, role)`)
+        .eq('profiles.role', 'driver')
+        .order('score', { ascending: false });
+      
+      const filteredRanks = (rankData || []).filter((r: any) => !r.profiles?.full_name?.endsWith('//INTERNO')).slice(0, 3);
+      setRankings(filteredRanks);
     } catch (error) {
       console.error('Error fetching overview', error);
     } finally {

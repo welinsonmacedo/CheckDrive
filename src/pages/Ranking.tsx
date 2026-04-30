@@ -23,10 +23,12 @@ export default function Ranking() {
         .from('driver_performance')
         .select(`
           score,
-          profiles (
-            full_name
+          profiles!inner(
+            full_name,
+            role
           )
         `)
+        .eq('profiles.role', 'driver')
         .order('score', { ascending: false });
 
       if (error) throw error;

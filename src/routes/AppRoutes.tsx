@@ -22,7 +22,7 @@ export default function AppRoutes() {
       <Route path="/" element={
         <ProtectedRoute>
           <AppLayout user={user} onLogout={logout}>
-            {user?.role === 'admin' ? <AdminDashboard /> : <DriverHome />}
+            {(user?.role === 'admin' || user?.role === 'standard') ? <AdminDashboard /> : <DriverHome />}
           </AppLayout>
         </ProtectedRoute>
       } />

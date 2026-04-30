@@ -12,6 +12,7 @@ import {
   X,
   Fuel,
   History,
+  Trophy,
   CalendarDays,
   ChevronRight,
   Bell,
@@ -38,9 +39,12 @@ import AuditTab from '../components/admin/AuditTab';
 import OverviewTab from '../components/admin/OverviewTab';
 import SettingsTab from '../components/admin/SettingsTab';
 import ChecklistDetailsModal from '../components/admin/ChecklistDetailsModal';
+import RankingTab from '../components/admin/RankingTab';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [appSettings, setAppSettings] = useState({ system_type: 'points', initial_value: 1000, penalty_value: 50 });
   const [loading, setLoading] = useState(true);
@@ -137,11 +141,13 @@ export default function AdminDashboard() {
   const navItems = [
     { id: 'overview', icon: LayoutDashboard, label: 'Painel', color: 'from-blue-500 to-cyan-500' },
     { id: 'checklists', icon: BarChart3, label: 'Relatórios', color: 'from-purple-500 to-pink-500' },
+    { id: 'ranking', icon: Trophy, label: 'Ranking', color: 'from-yellow-400 to-yellow-600' },
     { id: 'maintenance', icon: AlertTriangle, label: 'Pendências', color: 'from-red-500 to-orange-500' },
     { id: 'abastecimentos', icon: Fuel, label: 'Abastecimento', color: 'from-green-500 to-emerald-500' },
     { id: 'schedules', icon: CalendarDays, label: 'Escalas', color: 'from-indigo-500 to-blue-500' },
-    { id: 'audit', icon: History, label: 'Auditoria', color: 'from-slate-500 to-gray-500' },
-    { id: 'settings', icon: Settings, label: 'Configurações', color: 'from-gray-500 to-slate-500' },
+    ...(user?.role === 'admin' ? [{ id: 'audit', icon: History, label: 'Auditoria', color: 'from-slate-500 to-gray-500' }] : []),
+    // Only admin gets settings
+    ...(user?.role === 'admin' ? [{ id: 'settings', icon: Settings, label: 'Configurações', color: 'from-gray-500 to-slate-500' }] : []),
   ];
 
   const registerItems = [
@@ -178,57 +184,59 @@ export default function AdminDashboard() {
             </motion.button>
           ))}
 
-          {/* Dropdown: Cadastros */}
-          <div className="mt-2">
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={() => toggleDropdown('cadastros')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
-                registerItems.some(item => item.id === activeTab)
-                  ? 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-800 shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <Database size={20} className={registerItems.some(item => item.id === activeTab) ? 'text-primary' : 'text-gray-400 group-hover:text-gray-600'} />
-              <span className="text-sm font-semibold flex-1 text-left">Cadastros</span>
-              <motion.div
-                animate={{ rotate: openDropdowns.includes('cadastros') ? 180 : 0 }}
-                transition={{ duration: 0.2 }}
+          {/* Dropdown: Cadastros - Only visible for admin */}
+          {user?.role === 'admin' && (
+            <div className="mt-2">
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={() => toggleDropdown('cadastros')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                  registerItems.some(item => item.id === activeTab)
+                    ? 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-800 shadow-sm' 
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
               >
-                <ChevronDown size={16} className="text-gray-400" />
-              </motion.div>
-            </motion.button>
-
-            <AnimatePresence>
-              {openDropdowns.includes('cadastros') && (
+                <Database size={20} className={registerItems.some(item => item.id === activeTab) ? 'text-primary' : 'text-gray-400 group-hover:text-gray-600'} />
+                <span className="text-sm font-semibold flex-1 text-left">Cadastros</span>
                 <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
+                  animate={{ rotate: openDropdowns.includes('cadastros') ? 180 : 0 }}
                   transition={{ duration: 0.2 }}
-                  className="ml-6 mt-1 space-y-1 overflow-hidden"
                 >
-                  {registerItems.map((item) => (
-                    <motion.button
-                      key={item.id}
-                      whileHover={{ x: 5 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setActiveTab(item.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group ${
-                        activeTab === item.id 
-                          ? `bg-gradient-to-r ${item.color} text-white shadow-md` 
-                          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                      }`}
-                    >
-                      <item.icon size={18} className={activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-gray-600'} />
-                      <span className="text-xs font-semibold flex-1 text-left">{item.label}</span>
-                      {activeTab === item.id && <ChevronRight size={14} className="text-white/70" />}
-                    </motion.button>
-                  ))}
+                  <ChevronDown size={16} className="text-gray-400" />
                 </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+              </motion.button>
+
+              <AnimatePresence>
+                {openDropdowns.includes('cadastros') && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="ml-6 mt-1 space-y-1 overflow-hidden"
+                  >
+                    {registerItems.map((item) => (
+                      <motion.button
+                        key={item.id}
+                        whileHover={{ x: 5 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setActiveTab(item.id)}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group ${
+                          activeTab === item.id 
+                            ? `bg-gradient-to-r ${item.color} text-white shadow-md` 
+                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                        }`}
+                      >
+                        <item.icon size={18} className={activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-gray-600'} />
+                        <span className="text-xs font-semibold flex-1 text-left">{item.label}</span>
+                        {activeTab === item.id && <ChevronRight size={14} className="text-white/70" />}
+                      </motion.button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </nav>
 
         {/* Botão Logout */}
@@ -288,6 +296,7 @@ export default function AdminDashboard() {
               {activeTab === 'vehicles' && <VehiclesTab />}
               {activeTab === 'routes' && <RoutesTab />}
               {activeTab === 'checklist_setup' && <ChecklistSetupTab />}
+              {activeTab === 'ranking' && <RankingTab appSettings={appSettings} />}
               {activeTab === 'checklists' && (
                 <ChecklistsHistoryTab onViewDetails={(sub) => {
                   setSelectedSub(sub);
@@ -304,8 +313,8 @@ export default function AdminDashboard() {
                   if (data) setSelectedSub(data);
                 }} />
               )}
-              {activeTab === 'audit' && <AuditTab appSettings={appSettings} />}
-              {activeTab === 'settings' && (
+              {activeTab === 'audit' && user?.role === 'admin' && <AuditTab appSettings={appSettings} />}
+              {activeTab === 'settings' && user?.role === 'admin' && (
                 <SettingsTab 
                   appSettings={appSettings} 
                   setAppSettings={setAppSettings} 

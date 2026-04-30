@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id),
     email TEXT UNIQUE NOT NULL,
     full_name TEXT NOT NULL,
-    role TEXT CHECK (role IN ('driver', 'admin')) DEFAULT 'driver',
+    role TEXT CHECK (role IN ('driver', 'admin', 'standard')) DEFAULT 'driver',
     active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -149,13 +149,24 @@ ALTER TABLE schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trailers ENABLE ROW LEVEL SECURITY;
 
--- Helper to check if current user is admin safely (Security Definer with search_path avoids recursion)
+-- Helper to check if current user is admin safely
 CREATE OR REPLACE FUNCTION public.is_admin() 
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles 
     WHERE id = auth.uid() AND role = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Helper to check if current user is admin or standard safely
+CREATE OR REPLACE FUNCTION public.is_manager() 
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = auth.uid() AND role IN ('admin', 'standard')
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
@@ -184,16 +195,16 @@ CREATE POLICY "Admin Manage" ON checklist_items FOR ALL USING (is_admin());
 -- Submissions Policies
 CREATE POLICY "Drivers can see own submissions" ON checklist_submissions FOR SELECT USING (auth.uid() = driver_id);
 CREATE POLICY "Drivers can insert own submissions" ON checklist_submissions FOR INSERT TO authenticated WITH CHECK (auth.uid() = driver_id);
-CREATE POLICY "Admins can view/manage all" ON checklist_submissions FOR ALL USING (is_admin());
+CREATE POLICY "Managers can view/manage all" ON checklist_submissions FOR ALL USING (is_manager());
 
 -- Performance Policies
 CREATE POLICY "Public Read" ON driver_performance FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Admin Manage" ON driver_performance FOR ALL USING (is_admin());
+CREATE POLICY "Managers Manage" ON driver_performance FOR ALL USING (is_manager());
 
 -- Issues Policies
-CREATE POLICY "Drivers can see own related issues" ON public.checklist_issues FOR SELECT TO authenticated USING (auth.uid() = driver_id OR is_admin());
+CREATE POLICY "Drivers can see own related issues" ON public.checklist_issues FOR SELECT TO authenticated USING (auth.uid() = driver_id OR is_manager());
 CREATE POLICY "Drivers can insert own related issues" ON public.checklist_issues FOR INSERT TO authenticated WITH CHECK (auth.uid() = driver_id);
-CREATE POLICY "Admins can manage all issues" ON public.checklist_issues FOR ALL TO authenticated USING (is_admin());
+CREATE POLICY "Managers can manage all issues" ON public.checklist_issues FOR ALL TO authenticated USING (is_manager());
 
 -- Settings Policies
 CREATE POLICY "Anyone authenticated can read settings" ON public.app_settings FOR SELECT TO authenticated USING (true);
@@ -201,7 +212,9 @@ CREATE POLICY "Admins can manage settings" ON public.app_settings FOR ALL TO aut
 
 -- Schedules Policies
 CREATE POLICY "Anyone authenticated can read schedules" ON public.schedules FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Admins can manage schedules" ON public.schedules FOR ALL TO authenticated USING (is_admin());
+CREATE POLICY "Managers can insert schedules" ON public.schedules FOR INSERT TO authenticated WITH CHECK (is_manager());
+CREATE POLICY "Managers can update schedules" ON public.schedules FOR UPDATE TO authenticated USING (is_manager());
+CREATE POLICY "Admins can delete schedules" ON public.schedules FOR DELETE TO authenticated USING (is_admin());
 
 -- Audit Logs Policies
 CREATE POLICY "Drivers can see own audits" ON public.audit_logs FOR SELECT TO authenticated USING (auth.uid() = driver_id OR is_admin());
