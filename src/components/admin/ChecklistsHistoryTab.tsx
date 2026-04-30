@@ -72,7 +72,9 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
                     <td className="px-5 py-4 text-xs font-bold">{sub.profiles?.full_name}</td>
                     <td className="px-5 py-4 text-xs font-mono">{sub.vehicles?.plate}</td>
                     <td className="px-5 py-4">
-                       <span className="px-2 py-1 bg-app-bg rounded text-[10px] font-bold uppercase tracking-widest text-text-muted">{sub.type}</span>
+                       <span className="px-2 py-1 bg-app-bg rounded text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                        {sub.type === 'start' ? 'Início de Viagem' : sub.type === 'end' ? 'Fim de Viagem' : sub.type === 'fuel' ? 'Abastecimento' : sub.type === 'yard' ? 'Pátio' : sub.type}
+                       </span>
                     </td>
                     <td className="px-5 py-4 text-right">
                        <button 

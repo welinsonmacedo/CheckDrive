@@ -145,7 +145,9 @@ export default function DriverRankingDetailsModal({ driver, month, appSettings, 
                                       {new Date(sub.created_at).toLocaleDateString()} às {new Date(sub.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                    </div>
                                 </td>
-                                <td className="px-4 py-3 text-xs font-bold text-text-main">{sub.type}</td>
+                                <td className="px-4 py-3 text-xs font-bold text-text-main">
+                                   {sub.type === 'start' ? 'Início de Viagem' : sub.type === 'end' ? 'Fim de Viagem' : sub.type === 'fuel' ? 'Abastecimento' : sub.type === 'yard' ? 'Pátio' : sub.type}
+                                </td>
                                 <td className="px-4 py-3">
                                    <div className="flex items-center gap-2 font-medium text-[10px] text-text-muted">
                                       <MapPin size={12} />

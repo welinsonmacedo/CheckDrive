@@ -5,6 +5,8 @@ import { CheckCircle2, Search, X } from 'lucide-react';
 export default function VehiclesTab() {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [trailers, setTrailers] = useState<any[]>([]);
+  const [types, setTypes] = useState<any[]>([]);
+  const [models, setModels] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -15,12 +17,16 @@ export default function VehiclesTab() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vRes, tRes] = await Promise.all([
+      const [vRes, tRes, typesRes, modelsRes] = await Promise.all([
         supabase.from('vehicles').select('*').order('plate'),
-        supabase.from('trailers').select('*').order('plate')
+        supabase.from('trailers').select('*').order('plate'),
+        supabase.from('vehicle_types').select('*').order('name'),
+        supabase.from('vehicle_models').select('*').order('name')
       ]);
       setVehicles(vRes.data || []);
       setTrailers(tRes.data || []);
+      setTypes(typesRes.data || []);
+      setModels(modelsRes.data || []);
     } catch (error) {
       console.error('Error fetching vehicles:', error);
     } finally {
@@ -239,23 +245,34 @@ export default function VehiclesTab() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Modelo</label>
-              <input 
+              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Tipo de Veículo</label>
+              <select 
                 required
                 className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary"
-                placeholder="Ex: Volvo FH 540"
-                value={vehicleForm.model}
-                onChange={e => setVehicleForm({...vehicleForm, model: e.target.value})}
-              />
+                value={vehicleForm.type}
+                onChange={e => setVehicleForm({...vehicleForm, type: e.target.value, model: ''})}
+              >
+                <option value="">Selecione o tipo</option>
+                {types.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Tipo de Veículo</label>
-              <input 
-                placeholder="Ex: Truck, Van, Bitrens..." 
+              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Modelo</label>
+              <select 
+                required
+                disabled={!vehicleForm.type}
                 className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary"
-                value={vehicleForm.type}
-                onChange={e => setVehicleForm({...vehicleForm, type: e.target.value})}
-              />
+                value={vehicleForm.model}
+                onChange={e => setVehicleForm({...vehicleForm, model: e.target.value})}
+              >
+                <option value="">Selecione o modelo</option>
+                {models.filter(m => {
+                   const typeId = types.find(t => t.name === vehicleForm.type)?.id;
+                   return m.type_id === typeId;
+                }).map(m => (
+                  <option key={m.id} value={m.name}>{m.name}</option>
+                ))}
+              </select>
             </div>
             <div className="flex items-center gap-3 pt-2">
               <input 

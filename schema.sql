@@ -105,6 +105,23 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS vehicle_types (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT UNIQUE NOT NULL,
+    max_speed NUMERIC,
+    ideal_consumption NUMERIC,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS vehicle_models (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    type_id UUID REFERENCES vehicle_types(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- 10. Schedules (Escalas)
 CREATE TABLE IF NOT EXISTS schedules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -209,6 +226,15 @@ CREATE POLICY "Managers can manage all issues" ON public.checklist_issues FOR AL
 -- Settings Policies
 CREATE POLICY "Anyone authenticated can read settings" ON public.app_settings FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admins can manage settings" ON public.app_settings FOR ALL TO authenticated USING (is_admin());
+
+ALTER TABLE vehicle_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vehicle_models ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone authenticated can read vehicle_types" ON public.vehicle_types FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admins can manage vehicle_types" ON public.vehicle_types FOR ALL TO authenticated USING (is_admin());
+
+CREATE POLICY "Anyone authenticated can read vehicle_models" ON public.vehicle_models FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admins can manage vehicle_models" ON public.vehicle_models FOR ALL TO authenticated USING (is_admin());
 
 -- Schedules Policies
 CREATE POLICY "Anyone authenticated can read schedules" ON public.schedules FOR SELECT TO authenticated USING (true);
