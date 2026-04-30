@@ -43,6 +43,8 @@ export default function ChecklistFlow() {
   
   const [lastKm, setLastKm] = useState<number | null>(null);
   const [isScheduled, setIsScheduled] = useState(false);
+  const [isInternal, setIsInternal] = useState(false);
+  const [isTrailerOnly, setIsTrailerOnly] = useState(false);
 
   useEffect(() => {
     fetchOptions();
@@ -81,6 +83,14 @@ export default function ChecklistFlow() {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+        if (profile?.full_name?.includes('//INTERNO')) {
+           setIsInternal(true);
+        }
+      }
+
       const [vRes, rRes, tRes] = await Promise.all([
         supabase.from('vehicles').select('*').eq('active', true),
         supabase.from('routes').select('*').eq('active', true),
@@ -182,6 +192,8 @@ export default function ChecklistFlow() {
 
   const isStepValid = () => {
     if (currentStep === 0) {
+      if (isInternal && isTrailerOnly) return !!formData.trailerId;
+
       const selectedVehicle = options.vehicles.find(v => v.id === formData.vehicleId);
       const trailerRequired = selectedVehicle?.requires_trailer;
       
@@ -196,6 +208,7 @@ export default function ChecklistFlow() {
       return formData.vehicleId && isKmValid && (type === 'yard' || formData.routeId) && (!trailerRequired || (formData.trailerId || formData.manualTrailerPlate));
     }
     if (currentStep === 1) {
+      if (isInternal && isTrailerOnly) return true;
       if (type === 'yard') return true;
       if (type === 'fuel') return formData.photos.front; // Only tachograph (stored in 'front') is required for fuel
       return formData.photos.front && formData.photos.back && formData.photos.left && formData.photos.right;
@@ -204,7 +217,7 @@ export default function ChecklistFlow() {
       if (type === 'fuel') {
          return options.items.every((i: any) => formData.itemValues[i.id] && formData.itemValues[i.id].trim() !== '');
       }
-      return options.items.every((i: any) => formData.itemValues[i.id]);
+      return options.items.filter(i => (isInternal && isTrailerOnly) ? i.is_trailer_item : true).every((i: any) => formData.itemValues[i.id]);
     }
     return true;
   };
@@ -237,7 +250,7 @@ export default function ChecklistFlow() {
         .from('checklist_submissions')
         .insert({
           driver_id: user.id,
-          vehicle_id: formData.vehicleId,
+          vehicle_id: (isInternal && isTrailerOnly) ? null : formData.vehicleId,
           trailer_id: formData.trailerId || null,
           route_id: formData.routeId || null,
           type: type || 'start',
@@ -393,67 +406,84 @@ export default function ChecklistFlow() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">Veículo</label>
-                    <div className="relative">
-                      <select 
-                        disabled={isScheduled}
-                        className={`w-full h-12 px-4 rounded-xl border border-app-border bg-white text-sm font-semibold text-text-main outline-none focus:border-primary transition-colors appearance-none ${isScheduled ? 'opacity-70 bg-zinc-50' : ''}`}
-                        value={formData.vehicleId}
-                        onChange={e => setFormData({...formData, vehicleId: e.target.value})}
-                      >
-                        <option value="">Selecione o veículo</option>
-                        {options.vehicles.map(v => (
-                          <option key={v.id} value={v.id}>{v.model} ({v.plate})</option>
-                        ))}
-                      </select>
-                      <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted rotate-90 pointer-events-none" />
+                  {isInternal && (
+                    <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-100 rounded-xl cursor-pointer" onClick={() => setIsTrailerOnly(!isTrailerOnly)}>
+                       <input 
+                         type="checkbox" 
+                         checked={isTrailerOnly}
+                         className="w-4 h-4 rounded text-primary focus:ring-primary focus:ring-2"
+                         readOnly
+                       />
+                       <span className="text-xs font-bold text-orange-800">Checklist Somente de Reboque</span>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                      Reboque {options.vehicles.find(v => v.id === formData.vehicleId)?.requires_trailer ? <span className="text-primary">(Obrigatório)</span> : '(Opcional)'}
-                    </label>
-                    <div className="relative">
-                      <select 
-                        disabled={isScheduled}
-                        className={`w-full h-12 px-4 rounded-xl border ${options.vehicles.find(v => v.id === formData.vehicleId)?.requires_trailer && !formData.trailerId ? 'border-primary/50 bg-blue-50/10' : 'border-app-border bg-white'} text-sm font-semibold text-text-main outline-none focus:border-primary transition-colors appearance-none ${isScheduled ? 'opacity-70 bg-zinc-50' : ''}`}
-                        value={formData.trailerId}
-                        onChange={e => setFormData({...formData, trailerId: e.target.value})}
-                      >
-                        <option value="">Nenhum reboque</option>
-                        {options.trailers.map(t => (
-                          <option key={t.id} value={t.id}>{t.plate}</option>
-                        ))}
-                      </select>
-                      <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted rotate-90 pointer-events-none" />
-                    </div>
-                 
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                      KM Atual {type === 'yard' && <span className="normal-case text-primary font-medium">(Opcional)</span>}
-                    </label>
-                    <div className="relative">
-                      <input 
-                        type="number" 
-                        placeholder="Ex: 125430"
-                        className={`w-full h-12 px-4 pl-10 rounded-xl border ${formData.km && lastKm !== null && parseInt(formData.km) < lastKm ? 'border-danger focus:border-danger bg-red-50' : 'border-app-border focus:border-primary bg-white'} text-sm font-bold text-text-main outline-none transition-colors`}
-                        value={formData.km}
-                        onChange={e => setFormData({...formData, km: e.target.value})}
-                      />
-                      <Gauge size={14} className={`absolute left-4 top-1/2 -translate-y-1/2 ${formData.km && lastKm !== null && parseInt(formData.km) < lastKm ? 'text-danger' : 'text-text-muted'}`} />
-                    </div>
-                    {formData.km && lastKm !== null && parseInt(formData.km) < lastKm && (
-                      <div className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1">
-                        <AlertCircle size={10} /> Não pode ser menor que o último KM registrado: {lastKm}
+                  {(!isInternal || !isTrailerOnly) && (
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">Veículo</label>
+                      <div className="relative">
+                        <select 
+                          disabled={isScheduled}
+                          className={`w-full h-12 px-4 rounded-xl border border-app-border bg-white text-sm font-semibold text-text-main outline-none focus:border-primary transition-colors appearance-none ${isScheduled ? 'opacity-70 bg-zinc-50' : ''}`}
+                          value={formData.vehicleId}
+                          onChange={e => setFormData({...formData, vehicleId: e.target.value})}
+                        >
+                          <option value="">Selecione o veículo</option>
+                          {options.vehicles.map(v => (
+                            <option key={v.id} value={v.id}>{v.model} ({v.plate})</option>
+                          ))}
+                        </select>
+                        <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted rotate-90 pointer-events-none" />
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
-                  {type !== 'yard' && (
+                  {((!isInternal || !isTrailerOnly) && options.vehicles.find(v => v.id === formData.vehicleId)?.requires_trailer) || (isInternal && isTrailerOnly) ? (
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                        Reboque <span className="text-primary">(Obrigatório)</span>
+                      </label>
+                      <div className="relative">
+                        <select 
+                          disabled={isScheduled && !isTrailerOnly}
+                          className={`w-full h-12 px-4 rounded-xl border ${!formData.trailerId ? 'border-primary/50 bg-blue-50/10' : 'border-app-border bg-white'} text-sm font-semibold text-text-main outline-none focus:border-primary transition-colors appearance-none ${isScheduled && !isTrailerOnly ? 'opacity-70 bg-zinc-50' : ''}`}
+                          value={formData.trailerId}
+                          onChange={e => setFormData({...formData, trailerId: e.target.value})}
+                        >
+                          <option value="">Selecione o reboque</option>
+                          {options.trailers.map(t => (
+                            <option key={t.id} value={t.id}>{t.plate}</option>
+                          ))}
+                        </select>
+                        <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted rotate-90 pointer-events-none" />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {(!isInternal || !isTrailerOnly) && (
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                        KM Atual {type === 'yard' && <span className="normal-case text-primary font-medium">(Opcional)</span>}
+                      </label>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          placeholder="Ex: 125430"
+                          className={`w-full h-12 px-4 pl-10 rounded-xl border ${formData.km && lastKm !== null && parseInt(formData.km) < lastKm ? 'border-danger focus:border-danger bg-red-50' : 'border-app-border focus:border-primary bg-white'} text-sm font-bold text-text-main outline-none transition-colors`}
+                          value={formData.km}
+                          onChange={e => setFormData({...formData, km: e.target.value})}
+                        />
+                        <Gauge size={14} className={`absolute left-4 top-1/2 -translate-y-1/2 ${formData.km && lastKm !== null && parseInt(formData.km) < lastKm ? 'text-danger' : 'text-text-muted'}`} />
+                      </div>
+                      {formData.km && lastKm !== null && parseInt(formData.km) < lastKm && (
+                        <div className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1">
+                          <AlertCircle size={10} /> Não pode ser menor que o último KM registrado: {lastKm}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {type !== 'yard' && (!isInternal || !isTrailerOnly) && (
                     <div className="space-y-1.5">
                       <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">Rota</label>
                       <div className="relative">
