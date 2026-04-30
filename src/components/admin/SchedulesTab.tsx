@@ -21,10 +21,17 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
   const [filterDate, setFilterDate] = useState(todayLocal.toISOString().split('T')[0]);
 
   const [scheduleForm, setScheduleForm] = useState({ 
-    driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '' 
+    id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '' 
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const formatForInput = (dateString: string) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -63,22 +70,27 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
     e.preventDefault();
     setSaving(true);
     try {
-      // Fix timezone logic by properly passing ISO string representing local time
       const dataToInsert = {
-        ...scheduleForm,
-        start_at: new Date(scheduleForm.start_at).toISOString(),
-        end_at: new Date(scheduleForm.end_at).toISOString(),
+        driver_id: scheduleForm.driver_id || null,
+        vehicle_id: scheduleForm.vehicle_id || null,
         trailer_id: scheduleForm.trailer_id || null,
         route_id: scheduleForm.route_id || null, 
-        vehicle_id: scheduleForm.vehicle_id || null,
-        driver_id: scheduleForm.driver_id || null
+        start_at: new Date(scheduleForm.start_at).toISOString(),
+        end_at: new Date(scheduleForm.end_at).toISOString()
       };
 
-      const { error } = await supabase.from('schedules').insert([dataToInsert]);
-      if (error) throw error;
-      setScheduleForm({ driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '' });
+      if (scheduleForm.id) {
+        const { error } = await supabase.from('schedules').update(dataToInsert).eq('id', scheduleForm.id);
+        if (error) throw error;
+        alert('Escala atualizada!');
+      } else {
+        const { error } = await supabase.from('schedules').insert([dataToInsert]);
+        if (error) throw error;
+        alert('Escala agendada!');
+      }
+      
+      setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '' });
       fetchData();
-      alert('Escala agendada!');
     } catch (error: any) {
       alert('Erro: ' + error.message);
     } finally {
@@ -86,7 +98,11 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
     }
   };
 
-  const deleteItem = async (id: string) => {
+  const deleteItem = async (id: string, hasChecklist: boolean) => {
+    if (hasChecklist) {
+      alert('Não é possível excluir uma escala que já tem checklist iniciado.');
+      return;
+    }
     if (!window.confirm('Tem certeza que deseja excluir?')) return;
     try {
       await supabase.from('schedules').delete().eq('id', id);
@@ -94,6 +110,18 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
     } catch (error: any) {
       alert('Erro: ' + error.message);
     }
+  };
+
+  const handleEdit = (sch: any) => {
+    setScheduleForm({
+      id: sch.id,
+      driver_id: sch.driver_id || '',
+      vehicle_id: sch.vehicle_id || '',
+      trailer_id: sch.trailer_id || '',
+      route_id: sch.route_id || '',
+      start_at: formatForInput(sch.start_at),
+      end_at: formatForInput(sch.end_at)
+    });
   };
 
   if (loading && !schedules.length) {
@@ -135,7 +163,15 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-app-border">
-                {schedules.map((sch) => (
+                {schedules.map((sch) => {
+                  const hasChecklist = !!(sch.start_checklist_id || sch.end_checklist_id || sch.fuel_checklist_id);
+                  const createdTime = sch.created_at ? new Date(sch.created_at).getTime() : new Date(sch.start_at).getTime();
+                  const isWithinOneHour = (Date.now() - createdTime) <= 60 * 60 * 1000;
+                  
+                  const canEdit = user?.role === 'admin' || (!hasChecklist && isWithinOneHour);
+                  const canDelete = user?.role === 'admin' && !hasChecklist;
+
+                  return (
                   <tr key={sch.id} className="hover:bg-app-bg/30">
                     <td className="px-5 py-4">
                       <span className="text-xs font-bold text-text-main">{sch.profiles?.full_name}</span>
@@ -184,13 +220,16 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-right">
-                      {user?.role === 'admin' && (
-                        <button onClick={() => deleteItem(sch.id)} className="text-danger hover:underline text-[10px] font-bold">Excluir</button>
+                    <td className="px-5 py-4 text-right flex gap-3 justify-end items-center">
+                      {canEdit && (
+                        <button onClick={() => handleEdit(sch)} className="text-primary hover:underline text-[10px] font-bold">Editar</button>
+                      )}
+                      {canDelete && (
+                        <button onClick={() => deleteItem(sch.id, hasChecklist)} className="text-danger hover:underline text-[10px] font-bold">Excluir</button>
                       )}
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
          )}
@@ -199,8 +238,12 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
 
       <div className="xl:col-span-4 bento-card space-y-5">
         <div className="space-y-1">
-          <h3 className="text-sm font-black text-text-main uppercase tracking-tight">Nova Escala</h3>
-          <p className="text-[10px] text-text-muted font-bold italic uppercase tracking-wider">Atribua uma jornada a um motorista</p>
+          <h3 className="text-sm font-black text-text-main uppercase tracking-tight">
+            {scheduleForm.id ? 'Editar Escala' : 'Nova Escala'}
+          </h3>
+          <p className="text-[10px] text-text-muted font-bold italic uppercase tracking-wider">
+            {scheduleForm.id ? 'Atualize as informações da escala' : 'Atribua uma jornada a um motorista'}
+          </p>
         </div>
         <form onSubmit={handleSaveSchedule} className="space-y-4">
           <div className="space-y-1.5">
@@ -279,13 +322,22 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
             </div>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 flex gap-3 flex-col sm:flex-row">
+            {scheduleForm.id && (
+              <button 
+                type="button" 
+                onClick={() => setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '' })}
+                className="flex-1 h-12 bg-zinc-100 text-text-muted font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-200 transition-all font-mono"
+              >
+                Cancelar
+              </button>
+            )}
             <button 
               type="submit" 
               disabled={saving}
-              className="w-full h-12 bg-primary text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-primary-hover hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/25 disabled:opacity-50"
+              className="flex-1 h-12 bg-primary text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-primary-hover hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/25 disabled:opacity-50"
             >
-              {saving ? 'Agendando...' : 'Agendar Escala'}
+              {saving ? 'Processando...' : (scheduleForm.id ? 'Salvar Alteração' : 'Agendar Escala')}
             </button>
           </div>
         </form>
