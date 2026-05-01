@@ -26,6 +26,11 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const formatForLabel = (dateString: string) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+  };
+
   const formatForInput = (dateString: string) => {
     if (!dateString) return '';
     const d = new Date(dateString);
@@ -46,6 +51,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
         .lte('start_at', localEnd.toISOString())
         .order('start_at', { ascending: false });
       setSchedules(data || []);
+
       
       const { data: d } = await supabase.from('profiles').select('*').eq('role', 'driver');
       setUsers(d || []);
@@ -70,13 +76,19 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
     e.preventDefault();
     setSaving(true);
     try {
+      // Parse local dates explicitly to avoid browser timezone quirks
+      const parseLocal = (localString: string) => {
+        const [year, month, day, hour, minute] = localString.split(/[-T:]/).map(Number);
+        return new Date(year, month - 1, day, hour, minute).toISOString();
+      };
+
       const dataToInsert = {
         driver_id: scheduleForm.driver_id || null,
         vehicle_id: scheduleForm.vehicle_id || null,
         trailer_id: scheduleForm.trailer_id || null,
         route_id: scheduleForm.route_id || null, 
-        start_at: new Date(scheduleForm.start_at).toISOString(),
-        end_at: new Date(scheduleForm.end_at).toISOString()
+        start_at: parseLocal(scheduleForm.start_at),
+        end_at: parseLocal(scheduleForm.end_at)
       };
 
       if (scheduleForm.id) {
@@ -177,8 +189,8 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                       <span className="text-xs font-bold text-text-main">{sch.profiles?.full_name}</span>
                     </td>
                     <td className="px-5 py-4 text-[10px] font-medium text-text-muted">
-                      {new Date(sch.start_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}<br/>
-                      {new Date(sch.end_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                      {formatForLabel(sch.start_at)}<br/>
+                      {formatForLabel(sch.end_at)}
                     </td>
                     <td className="px-5 py-4">
                       <div className="text-[10px] font-bold text-text-main uppercase">{sch.routes?.origin} → {sch.routes?.destination}</div>
