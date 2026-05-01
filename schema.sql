@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS checklist_submissions (
     route_id UUID REFERENCES routes(id),
     type TEXT NOT NULL, -- 'Início de Viagem', 'Abastecimento', 'Fim de Viagem'
     odometer INTEGER NOT NULL,
+    latitude NUMERIC,
+    longitude NUMERIC,
     photos JSONB DEFAULT '{}'::jsonb, -- { front: url, back: url, ... }
     details JSONB DEFAULT '{}'::jsonb, -- { itemValues: { id: status } }
     status TEXT DEFAULT 'pending', -- 'pending', 'concluded'

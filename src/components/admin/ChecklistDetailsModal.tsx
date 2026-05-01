@@ -201,7 +201,7 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
           
           <div className="flex-1 overflow-y-auto p-8 space-y-10">
             {/* Informações básicas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-1">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Motorista</span>
                 <p className="text-sm font-black text-gray-800">{selectedSub.profiles?.full_name || 'N/A'}</p>
@@ -214,16 +214,32 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / KM</span>
                 <div className="flex items-center gap-2">
                   <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
-                    selectedSub.status === 'concluded' 
+                    selectedSub.status === 'concluded' || selectedSub.status === 'com_defeitos' || selectedSub.status === 'concluido'
                       ? 'bg-green-50 text-green-600 border border-green-100' 
                       : 'bg-red-50 text-red-600 border border-red-100'
                   }`}>
-                    {selectedSub.status === 'concluded' ? 'Concluído' : 'Pendente'}
+                    {selectedSub.status}
                   </span>
                   <span className="text-sm font-mono font-bold text-gray-700">
                     {selectedSub.odometer !== null && selectedSub.odometer !== undefined ? `${selectedSub.odometer} KM` : 'N/A'}
                   </span>
                 </div>
+              </div>
+              
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Localização</span>
+                {selectedSub.latitude && selectedSub.longitude ? (
+                  <a 
+                    href={`https://www.google.com/maps/search/?api=1&query=${selectedSub.latitude},${selectedSub.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-sm font-black text-primary hover:text-primary-hover hover:underline"
+                  >
+                    Ver no Mapa
+                  </a>
+                ) : (
+                  <p className="text-sm font-bold text-gray-400">Não registrada</p>
+                )}
               </div>
             </div>
 

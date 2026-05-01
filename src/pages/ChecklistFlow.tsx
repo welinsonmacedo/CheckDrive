@@ -228,6 +228,23 @@ export default function ChecklistFlow() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      let latitude = null;
+      let longitude = null;
+
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+          });
+        });
+        latitude = position.coords.latitude;
+        longitude = position.coords.longitude;
+      } catch (err) {
+        console.warn('Could not get geolocation:', err);
+      }
+
       // 1. Upload external photos
       const photoUrls: Record<string, string> = {};
       for (const [key, file] of Object.entries(formData.photos)) {
@@ -255,6 +272,8 @@ export default function ChecklistFlow() {
           route_id: formData.routeId || null,
           type: type || 'start',
           odometer: parseInt(formData.km) || 0,
+          latitude: latitude,
+          longitude: longitude,
           photos: photoUrls,
           status: type === 'fuel' ? 'concluido' : (Object.values(itemValues).includes('defect') ? 'com_defeitos' : 'concluido'),
           details: { 
