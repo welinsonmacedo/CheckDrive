@@ -59,31 +59,36 @@ export default function DriverHome() {
         checklists: count || 0
       });
 
-      // Fetch active schedule
-      const { data: schedule } = await supabase
+      // Fetch relevant schedule (Active or Next Upcoming)
+      // We look for schedules that haven't been finished yet (end_checklist_id is null)
+      // And we order by start_at to find the most immediate one
+      const { data: fetchedSchedules, error: scheduleError } = await supabase
         .from('schedules')
-        .select('id, start_at, end_at, vehicles(plate, requires_trailer), routes(origin, destination)')
+        .select('id, start_at, end_at, start_checklist_id, end_checklist_id, vehicles(plate, requires_trailer), routes(origin, destination)')
         .eq('driver_id', user.id)
-        .lte('start_at', new Date().toISOString())
-        .gte('end_at', new Date().toISOString())
-        .limit(1)
-        .single();
+        .is('end_checklist_id', null)
+        .order('start_at', { ascending: true })
+        .limit(5);
 
-      if (schedule) {
-        setActiveSchedule(schedule);
+      if (scheduleError) {
+        console.error('Error fetching schedules:', scheduleError);
+      } else if (fetchedSchedules && fetchedSchedules.length > 0) {
+        // Find the most appropriate one to show:
+        // 1. One that has already started (and is not finished)
+        // 2. OR the next one starting today
+        const now = new Date();
+        const active = fetchedSchedules.find(s => 
+          new Date(s.start_at) <= now && new Date(s.end_at) >= now
+        );
+        
+        if (active) {
+          setActiveSchedule(active);
+        } else {
+          // If no active, show the one with the closest start date
+          setActiveSchedule(fetchedSchedules[0]);
+        }
       } else {
-        // Look for next upcoming today to show them
-        const todayStr = new Date().toISOString().split('T')[0];
-        const { data: upcoming } = await supabase
-          .from('schedules')
-          .select('id, start_at, end_at, vehicles(plate, requires_trailer), routes(origin, destination)')
-          .eq('driver_id', user.id)
-          .gte('start_at', new Date().toISOString())
-          .like('start_at', `${todayStr}%`)
-          .order('start_at')
-          .limit(1)
-          .single();
-        if (upcoming) setActiveSchedule(upcoming);
+        setActiveSchedule(null);
       }
 
     } catch (error) {

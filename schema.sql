@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS checklist_issues (
     item_title TEXT NOT NULL,
     description TEXT,
     photo_url TEXT,
+    attachments JSONB DEFAULT '[]'::jsonb, -- New: Support for multiple photos/descriptions if needed as one record
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'resolved')),
     resolution_notes TEXT,
     resolved_at TIMESTAMP WITH TIME ZONE,

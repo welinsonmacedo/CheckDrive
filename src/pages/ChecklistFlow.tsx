@@ -38,7 +38,7 @@ export default function ChecklistFlow() {
       right: null as File | null
     },
     itemValues: {} as Record<string, 'normal' | 'defect'>,
-    defects: {} as Record<string, { description: string, photo: File | null }>
+    defects: {} as Record<string, Array<{ description: string, photo: File | null }>>
   });
   
   const [lastKm, setLastKm] = useState<number | null>(null);
@@ -109,11 +109,18 @@ export default function ChecklistFlow() {
         if (scheduleId) {
           query = query.eq('id', scheduleId);
         } else {
-          const todayStr = new Date().toISOString().split('T')[0];
-          query = query.like('start_at', `${todayStr}%`).gte('end_at', new Date().toISOString()).order('start_at');
+          // Look for currently active or upcoming schedule (start_at <= now AND end_at >= now-12h)
+          // We use a window to catch schedules that might have just "expired" in UTC but are still relevant to the driver
+          const now = new Date();
+          const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+          query = query
+            .is('end_checklist_id', null)
+            .lte('start_at', now.toISOString())
+            .gte('end_at', twelveHoursAgo.toISOString())
+            .order('start_at', { ascending: false });
         }
         
-        const { data: schedule } = await query.limit(1).single();
+        const { data: schedule } = await query.limit(1).maybeSingle();
         
         if (schedule) {
           prefill = {
@@ -288,39 +295,43 @@ export default function ChecklistFlow() {
       if (subError) throw subError;
 
       // 3. Handle Defects (if any)
-      const defectData: Record<string, { description: string, photoUrl: string | null }> = {};
+      const defectData: Record<string, Array<{ description: string, photoUrl: string | null }>> = {};
       const issuesToInsert = [];
       
-      const defectEntries = Object.entries(formData.defects) as [string, { description: string, photo: File | null }][];
-      for (const [itemId, defect] of defectEntries) {
-        let defectPhotoUrl = null;
-        if (defect.photo) {
-          const path = `${user.id}/defects/${Date.now()}_${itemId}.jpg`;
-          const { error: uploadError } = await supabase.storage
-            .from('checklist-photos')
-            .upload(path, defect.photo);
-          
-          if (!uploadError) {
-            defectPhotoUrl = path;
-          }
-        }
-        
+      const defectEntries = Object.entries(formData.defects) as [string, Array<{ description: string, photo: File | null }>][];
+      for (const [itemId, subDefects] of defectEntries) {
+        defectData[itemId] = [];
         const itemTitle = options.items.find((i: any) => i.id === itemId)?.title || 'Item Desconhecido';
-        
-        defectData[itemId] = {
-          description: defect.description,
-          photoUrl: defectPhotoUrl
-        };
 
-        issuesToInsert.push({
-          submission_id: submission.id,
-          vehicle_id: formData.vehicleId,
-          driver_id: user.id,
-          item_title: itemTitle,
-          description: defect.description,
-          photo_url: defectPhotoUrl,
-          status: 'pending'
-        });
+        for (let i = 0; i < subDefects.length; i++) {
+          const subDefect = subDefects[i];
+          let defectPhotoUrl = null;
+          if (subDefect.photo) {
+            const path = `${user.id}/defects/${Date.now()}_${itemId}_${i}.jpg`;
+            const { error: uploadError } = await supabase.storage
+              .from('checklist-photos')
+              .upload(path, subDefect.photo);
+            
+            if (!uploadError) {
+              defectPhotoUrl = path;
+            }
+          }
+          
+          defectData[itemId].push({
+            description: subDefect.description,
+            photoUrl: defectPhotoUrl
+          });
+
+          issuesToInsert.push({
+            submission_id: submission.id,
+            vehicle_id: (isInternal && isTrailerOnly) ? null : formData.vehicleId,
+            driver_id: user.id,
+            item_title: itemTitle,
+            description: subDefect.description,
+            photo_url: defectPhotoUrl,
+            status: 'pending'
+          });
+        }
       }
 
       // Insert issues into dedicated table
@@ -621,7 +632,16 @@ export default function ChecklistFlow() {
                                 }}
                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${formData.itemValues[item.id] === 'normal' ? 'bg-primary text-white border-primary' : 'bg-white text-text-muted'}`}>NORMAL</button>
                               <button 
-                               onClick={() => setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: 'defect' }}))}
+                               onClick={() => {
+                                 setFormData(prev => ({
+                                   ...prev, 
+                                   itemValues: {...prev.itemValues, [item.id]: 'defect' },
+                                   defects: {
+                                     ...prev.defects,
+                                     [item.id]: (prev.defects[item.id] || [{ description: '', photo: null }])
+                                   }
+                                 }));
+                               }}
                                className={`px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${formData.itemValues[item.id] === 'defect' ? 'bg-danger text-white border-danger shadow-md shadow-danger/20' : 'bg-red-50 text-danger'}`}>DEFEITO</button>
                             </div>
                           )}
@@ -631,61 +651,85 @@ export default function ChecklistFlow() {
                           <motion.div 
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-4"
+                            className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-6"
                           >
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Descrição do Problema</label>
-                              <textarea 
-                                className="w-full p-3 rounded-lg border border-red-100 bg-white text-xs text-text-main outline-none focus:border-danger"
-                                placeholder="Descreva o defeito encontrado..."
-                                rows={2}
-                                value={formData.defects[item.id]?.description || ''}
-                                onChange={(e) => setFormData(prev => ({
-                                  ...prev,
-                                  defects: {
-                                    ...prev.defects,
-                                    [item.id]: { ...(prev.defects[item.id] || { photo: null }), description: e.target.value }
-                                  }
-                                }))}
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Foto do Defeito</label>
-                              <div className="flex items-center gap-3">
-                                <div className="relative w-16 h-16 rounded-lg border border-red-200 bg-white flex items-center justify-center overflow-hidden">
-                                  <input 
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                            {(formData.defects[item.id] || []).map((defect, index) => (
+                              <div key={index} className="space-y-4 pb-4 border-b border-danger/10 last:border-0 last:pb-0 relative">
+                                {index > 0 && (
+                                  <button 
+                                    onClick={() => {
+                                      const newDefects = [...(formData.defects[item.id] || [])];
+                                      newDefects.splice(index, 1);
+                                      setFormData(prev => ({ ...prev, defects: { ...prev.defects, [item.id]: newDefects } }));
+                                    }}
+                                    className="absolute -right-2 -top-2 w-6 h-6 rounded-full bg-danger text-white flex items-center justify-center shadow-sm"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                )}
+                                
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
+                                    <span>Descrição do Problema #{index + 1}</span>
+                                  </label>
+                                  <textarea 
+                                    className="w-full p-3 rounded-lg border border-red-100 bg-white text-xs text-text-main outline-none focus:border-danger"
+                                    placeholder="Descreva o defeito encontrado..."
+                                    rows={2}
+                                    value={defect.description}
                                     onChange={(e) => {
-                                      const file = e.target.files?.[0];
-                                      if (file) {
-                                        imageCompression(file, { maxSizeMB: 0.5 }).then(compressed => {
-                                          setFormData(prev => ({
-                                            ...prev,
-                                            defects: {
-                                              ...prev.defects,
-                                              [item.id]: { ...(prev.defects[item.id] || { description: '' }), photo: compressed }
-                                            }
-                                          }));
-                                        });
-                                      }
+                                      const newDefects = [...(formData.defects[item.id] || [])];
+                                      newDefects[index] = { ...newDefects[index], description: e.target.value };
+                                      setFormData(prev => ({ ...prev, defects: { ...prev.defects, [item.id]: newDefects } }));
                                     }}
                                   />
-                                  {formData.defects[item.id]?.photo ? (
-                                    <img 
-                                      src={URL.createObjectURL(formData.defects[item.id].photo!)} 
-                                      className="w-full h-full object-cover" 
-                                      alt="Defeito" 
-                                    />
-                                  ) : (
-                                    <Camera size={20} className="text-danger/40" />
-                                  )}
                                 </div>
-                                <span className="text-[10px] font-medium text-text-muted italic">Toque para anexar evidência fotográfica</span>
+                                
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Foto do Defeito</label>
+                                  <div className="flex items-center gap-3">
+                                    <div className="relative w-16 h-16 rounded-lg border border-red-200 bg-white flex items-center justify-center overflow-hidden">
+                                      <input 
+                                        type="file"
+                                        accept="image/*"
+                                        capture="environment"
+                                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            imageCompression(file, { maxSizeMB: 0.5 }).then(compressed => {
+                                              const newDefects = [...(formData.defects[item.id] || [])];
+                                              newDefects[index] = { ...newDefects[index], photo: compressed };
+                                              setFormData(prev => ({ ...prev, defects: { ...prev.defects, [item.id]: newDefects } }));
+                                            });
+                                          }
+                                        }}
+                                      />
+                                      {defect.photo ? (
+                                        <img 
+                                          src={URL.createObjectURL(defect.photo!)} 
+                                          className="w-full h-full object-cover" 
+                                          alt="Defeito" 
+                                        />
+                                      ) : (
+                                        <Camera size={20} className="text-danger/40" />
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] font-medium text-text-muted italic">Toque para anexar evidência</span>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
+                            ))}
+                            
+                            <button 
+                              onClick={() => {
+                                const newDefects = [...(formData.defects[item.id] || []), { description: '', photo: null }];
+                                setFormData(prev => ({ ...prev, defects: { ...prev.defects, [item.id]: newDefects } }));
+                              }}
+                              className="w-full py-2 border-2 border-dashed border-danger/20 rounded-lg text-[9px] font-bold text-danger uppercase tracking-widest hover:bg-danger/5 transition-colors"
+                            >
+                              + Adicionar outro defeito para este item
+                            </button>
                           </motion.div>
                         )}
                       </React.Fragment>
@@ -710,7 +754,16 @@ export default function ChecklistFlow() {
                                 }}
                                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${formData.itemValues[item.id] === 'normal' ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100' : 'bg-white text-text-muted'}`}>NORMAL</button>
                               <button 
-                               onClick={() => setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: 'defect' }}))}
+                               onClick={() => {
+                                 setFormData(prev => ({
+                                   ...prev, 
+                                   itemValues: {...prev.itemValues, [item.id]: 'defect' },
+                                   defects: {
+                                     ...prev.defects,
+                                     [item.id]: (prev.defects[item.id] || [{ description: '', photo: null }])
+                                   }
+                                 }));
+                               }}
                                className={`px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${formData.itemValues[item.id] === 'defect' ? 'bg-danger text-white border-danger shadow-md shadow-danger/20' : 'bg-red-50 text-danger'}`}>DEFEITO</button>
                             </div>
                           </div>
@@ -719,61 +772,84 @@ export default function ChecklistFlow() {
                             <motion.div 
                               initial={{ opacity: 0, y: -10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-4"
+                              className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-6"
                             >
-                               <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Descrição do Problema (Reboque)</label>
-                                <textarea 
-                                  className="w-full p-3 rounded-lg border border-red-100 bg-white text-xs text-text-main outline-none focus:border-danger"
-                                  placeholder="Descreva o defeito no reboque..."
-                                  rows={2}
-                                  value={formData.defects[item.id]?.description || ''}
-                                  onChange={(e) => setFormData(prev => ({
-                                    ...prev,
-                                    defects: {
-                                      ...prev.defects,
-                                      [item.id]: { ...(prev.defects[item.id] || { photo: null }), description: e.target.value }
-                                    }
-                                  }))}
-                                />
-                              </div>
-                              {/* Photo logic same as above */}
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Foto do Defeito</label>
-                                <div className="flex items-center gap-3">
-                                  <div className="relative w-16 h-16 rounded-lg border border-red-200 bg-white flex items-center justify-center overflow-hidden">
-                                    <input 
-                                      type="file"
-                                      accept="image/*"
-                                      capture="environment"
-                                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                               {(formData.defects[item.id] || []).map((defect, index) => (
+                                <div key={index} className="space-y-4 pb-4 border-b border-danger/10 last:border-0 last:pb-0 relative">
+                                  {index > 0 && (
+                                    <button 
+                                      onClick={() => {
+                                        const newDefects = [...(formData.defects[item.id] || [])];
+                                        newDefects.splice(index, 1);
+                                        setFormData(prev => ({ ...prev, defects: { ...prev.defects, [item.id]: newDefects } }));
+                                      }}
+                                      className="absolute -right-2 -top-2 w-6 h-6 rounded-full bg-danger text-white flex items-center justify-center shadow-sm"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  )}
+                                  
+                                  <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
+                                      <span>Descrição do Problema (Reboque) #{index + 1}</span>
+                                    </label>
+                                    <textarea 
+                                      className="w-full p-3 rounded-lg border border-red-100 bg-white text-xs text-text-main outline-none focus:border-danger"
+                                      placeholder="Descreva o defeito no reboque..."
+                                      rows={2}
+                                      value={defect.description}
                                       onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                          imageCompression(file, { maxSizeMB: 0.5 }).then(compressed => {
-                                            setFormData(prev => ({
-                                              ...prev,
-                                              defects: {
-                                                ...prev.defects,
-                                                [item.id]: { ...(prev.defects[item.id] || { description: '' }), photo: compressed }
-                                              }
-                                            }));
-                                          });
-                                        }
+                                        const newDefects = [...(formData.defects[item.id] || [])];
+                                        newDefects[index] = { ...newDefects[index], description: e.target.value };
+                                        setFormData(prev => ({ ...prev, defects: { ...prev.defects, [item.id]: newDefects } }));
                                       }}
                                     />
-                                    {formData.defects[item.id]?.photo ? (
-                                      <img 
-                                        src={URL.createObjectURL(formData.defects[item.id].photo!)} 
-                                        className="w-full h-full object-cover" 
-                                        alt="Defeito" 
-                                      />
-                                    ) : (
-                                      <Camera size={20} className="text-danger/40" />
-                                    )}
+                                  </div>
+                                  
+                                  <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Foto do Defeito</label>
+                                    <div className="flex items-center gap-3">
+                                      <div className="relative w-16 h-16 rounded-lg border border-red-200 bg-white flex items-center justify-center overflow-hidden">
+                                        <input 
+                                          type="file"
+                                          accept="image/*"
+                                          capture="environment"
+                                          className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              imageCompression(file, { maxSizeMB: 0.5 }).then(compressed => {
+                                                const newDefects = [...(formData.defects[item.id] || [])];
+                                                newDefects[index] = { ...newDefects[index], photo: compressed };
+                                                setFormData(prev => ({ ...prev, defects: { ...prev.defects, [item.id]: newDefects } }));
+                                              });
+                                            }
+                                          }}
+                                        />
+                                        {defect.photo ? (
+                                          <img 
+                                            src={URL.createObjectURL(defect.photo!)} 
+                                            className="w-full h-full object-cover" 
+                                            alt="Defeito" 
+                                          />
+                                        ) : (
+                                          <Camera size={20} className="text-danger/40" />
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
+                              ))}
+
+                              <button 
+                                onClick={() => {
+                                  const newDefects = [...(formData.defects[item.id] || []), { description: '', photo: null }];
+                                  setFormData(prev => ({ ...prev, defects: { ...prev.defects, [item.id]: newDefects } }));
+                                }}
+                                className="w-full py-2 border-2 border-dashed border-danger/20 rounded-lg text-[9px] font-bold text-danger uppercase tracking-widest hover:bg-danger/5 transition-colors"
+                              >
+                                + Adicionar outro defeito para este item (Reboque)
+                              </button>
                             </motion.div>
                           )}
                         </React.Fragment>

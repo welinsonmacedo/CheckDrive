@@ -91,20 +91,29 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
 
   // Fallback: extrair defeitos dos details (caso não exista na tabela checklist_issues)
   function extractDefectsFromDetails() {
-    const items = [];
+    const items: any[] = [];
     
     if (selectedSub?.details?.itemValues) {
       for (const [itemId, val] of Object.entries(selectedSub.details.itemValues)) {
         if (val === 'defect' || val === 'defeito') {
-          const defectInfo = selectedSub.details.defects?.[itemId];
-          items.push({
-            id: itemId,
-            item_title: selectedSub.details.itemTitles?.[itemId] || `Item ${itemId}`,
-            description: defectInfo?.description || 'Nenhuma descrição fornecida',
-            photo_url: defectInfo?.photoUrl || null,
-            vehicles: selectedSub.vehicles,
-            profiles: selectedSub.profiles,
-            created_at: selectedSub.created_at
+          const rawDefectInfo = selectedSub.details.defects?.[itemId];
+          
+          // Handle both old single object and new array of objects
+          const subDefects = Array.isArray(rawDefectInfo) 
+            ? rawDefectInfo 
+            : [rawDefectInfo || { description: 'Nenhuma descrição fornecida', photoUrl: null }];
+          
+          subDefects.forEach((defectInfo: any, index: number) => {
+            const titleSuffix = subDefects.length > 1 ? ` (${index + 1})` : '';
+            items.push({
+              id: `${itemId}_${index}`,
+              item_title: (selectedSub.details.itemTitles?.[itemId] || `Item ${itemId}`) + titleSuffix,
+              description: defectInfo?.description || 'Nenhuma descrição fornecida',
+              photo_url: defectInfo?.photoUrl || null,
+              vehicles: selectedSub.vehicles,
+              profiles: selectedSub.profiles,
+              created_at: selectedSub.created_at
+            });
           });
         }
       }
