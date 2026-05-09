@@ -12,7 +12,12 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchAuditLogs();
+    const runInitialAudit = async () => {
+      await fetchAuditLogs();
+      // Silently run audit for very old schedules
+      await handleRunAudit(true);
+    };
+    runInitialAudit();
   }, []);
 
   const fetchAuditLogs = async () => {
@@ -29,19 +34,22 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
     }
   };
 
-  const handleRunAudit = async () => {
-    if (!confirm('Deseja verificar escalas atrasadas e aplicar penalidades automáticas?')) return;
+  const handleRunAudit = async (silent = false) => {
+    if (!silent && !confirm('Deseja verificar escalas atrasadas e aplicar penalidades automáticas?')) return;
     setSaving(true);
     try {
       // 1. Get expired schedules without penalty applied
+      // Threshold: 1 hour after end_at
+      const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+      
       const { data: expired } = await supabase
         .from('schedules')
         .select('*')
-        .lt('end_at', new Date().toISOString())
+        .lt('end_at', oneHourAgo)
         .eq('penalty_applied', false);
 
       if (!expired || expired.length === 0) {
-        alert('Nenhuma escala pendente de auditoria encontrada.');
+        if (!silent) alert('Nenhuma escala pendente de auditoria encontrada.');
         return;
       }
 
@@ -99,10 +107,10 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
         }
       }
 
-      alert('Auditoria concluída com sucesso!');
+      if (!silent) alert('Auditoria concluída com sucesso!');
       fetchAuditLogs();
     } catch (error: any) {
-      alert('Erro na auditoria: ' + error.message);
+      if (!silent) alert('Erro na auditoria: ' + error.message);
     } finally {
       setSaving(false);
     }

@@ -97,9 +97,9 @@ export default function DriverHome() {
   };
 
   const checklistTypes = [
-    { id: 'start', label: 'Início de Viagem', icon: ClipboardCheck, color: 'text-primary', bg: 'bg-blue-50', desc: 'Registre o início' },
-    { id: 'fuel', label: 'Abastecimento', icon: Fuel, color: 'text-warning', bg: 'bg-orange-50', desc: 'Litragem e KM' },
-    { id: 'end', label: 'Fim de Viagem', icon: CheckCircle2, color: 'text-success', bg: 'bg-green-50', desc: 'Encerre jornada' },
+    { id: 'start', label: 'Início de Viagem', icon: ClipboardCheck, color: 'text-primary', bg: 'bg-blue-50', desc: 'Registre o início', field: 'start_checklist_id' },
+    { id: 'fuel', label: 'Abastecimento', icon: Fuel, color: 'text-warning', bg: 'bg-orange-50', desc: 'Litragem e KM', field: 'fuel_checklist_id' },
+    { id: 'end', label: 'Fim de Viagem', icon: CheckCircle2, color: 'text-success', bg: 'bg-green-50', desc: 'Encerre jornada', field: 'end_checklist_id' },
   ];
 
   const internalTypes = [
@@ -107,6 +107,27 @@ export default function DriverHome() {
   ];
 
   const displayedTypes = user?.isInternal ? internalTypes : checklistTypes;
+
+  const isTypeDone = (typeId: string) => {
+    if (!activeSchedule) return false;
+    if (typeId === 'start') return !!activeSchedule.start_checklist_id;
+    if (typeId === 'end') return !!activeSchedule.end_checklist_id;
+    if (typeId === 'fuel') return !!activeSchedule.fuel_checklist_id;
+    return false;
+  };
+
+  const isTypeLocked = (typeId: string) => {
+    if (user?.isInternal) return false;
+    if (!activeSchedule) return true;
+    
+    // Logic: Start must be done before Fuel and End
+    if (typeId === 'fuel' || typeId === 'end') {
+      return !activeSchedule.start_checklist_id;
+    }
+    
+    // If already done, it's locked
+    return isTypeDone(typeId);
+  };
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-8 py-10">
@@ -162,12 +183,25 @@ export default function DriverHome() {
             </div>
           </div>
           <div className="relative z-10 mt-2">
-            <button
-              onClick={() => navigate(`/checklist/start?schedule=${activeSchedule.id}`)}
-              className="w-full bg-white text-primary h-12 rounded-xl font-black text-sm uppercase tracking-widest shadow-sm hover:bg-zinc-50 transition-colors"
-            >
-              Iniciar Checklist da Escala
-            </button>
+            {!activeSchedule.start_checklist_id ? (
+              <button
+                onClick={() => navigate(`/checklist/start?schedule=${activeSchedule.id}`)}
+                className="w-full bg-white text-primary h-12 rounded-xl font-black text-sm uppercase tracking-widest shadow-sm hover:bg-zinc-50 transition-colors"
+              >
+                Realizar Checklist Inicial
+              </button>
+            ) : !activeSchedule.end_checklist_id ? (
+              <button
+                onClick={() => navigate(`/checklist/end?schedule=${activeSchedule.id}`)}
+                className="w-full bg-white text-success h-12 rounded-xl font-black text-sm uppercase tracking-widest shadow-sm hover:bg-zinc-50 transition-colors"
+              >
+                Realizar Checklist Final
+              </button>
+            ) : (
+              <div className="w-full bg-white/20 border border-white/30 h-12 rounded-xl flex items-center justify-center">
+                <span className="text-white font-black text-xs uppercase tracking-widest">Escala Concluída</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -179,23 +213,38 @@ export default function DriverHome() {
           <div className="h-px flex-1 mx-4 bg-app-border" />
         </div>
         <div className="grid gap-4">
-          {displayedTypes.map((type) => (
-            <motion.button
-              key={type.id}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => navigate(`/checklist/${type.id}`)}
-              className="w-full bento-card !p-4 flex-row items-center gap-5 group hover:border-primary/30 active:bg-app-bg"
-            >
-              <div className={`${type.bg} ${type.color} p-4 rounded-xl group-hover:scale-105 transition-transform`}>
-                <type.icon size={24} />
-              </div>
-              <div className="flex-1 text-left">
-                <span className="block font-bold text-base text-text-main">{type.label}</span>
-                <span className="block text-xs text-text-muted font-medium italic">{type.desc}</span>
-              </div>
-              <ChevronRight size={20} className="text-app-border group-hover:text-primary transition-colors" />
-            </motion.button>
-          ))}
+          {displayedTypes.map((type) => {
+            const done = isTypeDone(type.id);
+            const locked = isTypeLocked(type.id);
+            
+            return (
+              <motion.button
+                key={type.id}
+                whileTap={locked ? {} : { scale: 0.98 }}
+                disabled={locked}
+                onClick={() => navigate(`/checklist/${type.id}?schedule=${activeSchedule?.id}`)}
+                className={`w-full bento-card !p-4 flex-row items-center gap-5 group transition-all ${
+                  locked 
+                    ? 'opacity-60 grayscale cursor-not-allowed border-dashed bg-gray-50/50' 
+                    : 'hover:border-primary/30 active:bg-app-bg'
+                }`}
+              >
+                <div className={`${done ? 'bg-green-400 text-white' : type.bg + ' ' + type.color} p-4 rounded-xl group-hover:scale-105 transition-transform`}>
+                  <type.icon size={24} />
+                </div>
+                <div className="flex-1 text-left">
+                  <div className="flex items-center gap-2">
+                    <span className={`block font-bold text-base ${done ? 'text-green-600' : 'text-text-main'}`}>{type.label}</span>
+                    {done && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 text-[8px] font-black uppercase tracking-widest">FEITO</span>
+                    )}
+                  </div>
+                  <span className="block text-xs text-text-muted font-medium italic">{type.desc}</span>
+                </div>
+                {!locked && <ChevronRight size={20} className="text-app-border group-hover:text-primary transition-colors" />}
+              </motion.button>
+            );
+          })}
         </div>
       </div>
 
