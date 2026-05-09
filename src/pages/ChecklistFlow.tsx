@@ -376,7 +376,7 @@ export default function ChecklistFlow() {
           .is(type === 'start' ? 'start_checklist_id' : type === 'end' ? 'end_checklist_id' : 'fuel_checklist_id', null)
           .order('start_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
         
         if (activeSchedule) {
           const updateField = type === 'start' ? 'start_checklist_id' : type === 'end' ? 'end_checklist_id' : 'fuel_checklist_id';

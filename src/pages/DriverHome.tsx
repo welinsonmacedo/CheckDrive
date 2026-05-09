@@ -118,7 +118,7 @@ export default function DriverHome() {
 
   const isTypeLocked = (typeId: string) => {
     if (user?.isInternal) return false;
-    if (!activeSchedule) return true;
+    if (!activeSchedule) return false;
     
     // Logic: Start must be done before Fuel and End
     if (typeId === 'fuel' || typeId === 'end') {
@@ -222,7 +222,7 @@ export default function DriverHome() {
                 key={type.id}
                 whileTap={locked ? {} : { scale: 0.98 }}
                 disabled={locked}
-                onClick={() => navigate(`/checklist/${type.id}?schedule=${activeSchedule?.id}`)}
+                onClick={() => navigate(activeSchedule ? `/checklist/${type.id}?schedule=${activeSchedule.id}` : `/checklist/${type.id}`)}
                 className={`w-full bento-card !p-4 flex-row items-center gap-5 group transition-all ${
                   locked 
                     ? 'opacity-60 grayscale cursor-not-allowed border-dashed bg-gray-50/50' 

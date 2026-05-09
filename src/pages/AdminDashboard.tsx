@@ -42,6 +42,8 @@ import ChecklistDetailsModal from '../components/admin/ChecklistDetailsModal';
 import RankingTab from '../components/admin/RankingTab';
 import { useAuth } from '../contexts/AuthContext';
 
+import { runSilentAudit } from '../lib/auditService';
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -58,6 +60,13 @@ export default function AdminDashboard() {
     fetchData();
     fetchVehiclesWithPending();
     
+    // Background audit specifically invoked when admin is online
+    runSilentAudit();
+    const intervalId = setInterval(() => {
+      runSilentAudit();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(intervalId);
   }, []);
 
 

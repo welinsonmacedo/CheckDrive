@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS schedules (
     end_at TIMESTAMP WITH TIME ZONE NOT NULL,
     start_checklist_id UUID REFERENCES checklist_submissions(id),
     end_checklist_id UUID REFERENCES checklist_submissions(id),
+    fuel_checklist_id UUID REFERENCES checklist_submissions(id),
     penalty_applied BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -246,7 +247,7 @@ CREATE POLICY "Admins can manage vehicle_models" ON public.vehicle_models FOR AL
 -- Schedules Policies
 CREATE POLICY "Anyone authenticated can read schedules" ON public.schedules FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Managers can insert schedules" ON public.schedules FOR INSERT TO authenticated WITH CHECK (is_manager());
-CREATE POLICY "Managers can update schedules" ON public.schedules FOR UPDATE TO authenticated USING (is_manager());
+CREATE POLICY "Managers can update schedules" ON public.schedules FOR UPDATE TO authenticated USING (is_manager() OR auth.uid() = driver_id);
 CREATE POLICY "Admins can delete schedules" ON public.schedules FOR DELETE TO authenticated USING (is_admin());
 
 -- Audit Logs Policies

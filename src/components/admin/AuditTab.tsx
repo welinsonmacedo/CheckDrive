@@ -6,6 +6,8 @@ interface AuditTabProps {
   appSettings: any;
 }
 
+import { runSilentAudit } from '../../lib/auditService';
+
 export default function AuditTab({ appSettings }: AuditTabProps) {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
@@ -38,74 +40,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
     if (!silent && !confirm('Deseja verificar escalas atrasadas e aplicar penalidades automáticas?')) return;
     setSaving(true);
     try {
-      // 1. Get expired schedules without penalty applied
-      // Threshold: 1 hour after end_at
-      const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
-      
-      const { data: expired } = await supabase
-        .from('schedules')
-        .select('*')
-        .lt('end_at', oneHourAgo)
-        .eq('penalty_applied', false);
-
-      if (!expired || expired.length === 0) {
-        if (!silent) alert('Nenhuma escala pendente de auditoria encontrada.');
-        return;
-      }
-
-      for (const schedule of expired) {
-        const missingStart = !schedule.start_checklist_id;
-        const missingEnd = !schedule.end_checklist_id;
-        const missingFuel = !schedule.fuel_checklist_id;
-
-        if (missingStart || missingEnd || missingFuel) {
-          const pStart = Number(appSettings.penalty_start) || 50;
-          const pEnd = Number(appSettings.penalty_end) || 50;
-          const pFuel = Number(appSettings.penalty_fuel) || 50;
-          
-          let totalPenalty = 0;
-          if (missingStart) totalPenalty += pStart;
-          if (missingEnd) totalPenalty += pEnd;
-          if (missingFuel) totalPenalty += pFuel;
-
-          // Apply penalty to performance
-          const { data: perf } = await supabase
-            .from('driver_performance')
-            .select('score')
-            .eq('driver_id', schedule.driver_id)
-            .maybeSingle();
-
-          const newScore = (perf?.score || 1000) - totalPenalty;
-
-          await supabase.from('driver_performance').upsert({ 
-            driver_id: schedule.driver_id, 
-            score: newScore,
-            updated_at: new Date().toISOString()
-          });
-
-          // Mark schedule as penalized
-          await supabase.from('schedules').update({ penalty_applied: true }).eq('id', schedule.id);
-
-          // Build detailed reason
-          const missingItems = [];
-          if (missingStart) missingItems.push('inicial');
-          if (missingEnd) missingItems.push('final');
-          if (missingFuel) missingItems.push('abastecimento');
-          
-          const reason = `Penalidade automática: Falta de checklist ${missingItems.join(', ').replace(/, ([^,]*)$/, ' e $1')} na escala.`;
-
-          // Log Audit
-          await supabase.from('audit_logs').insert({
-            driver_id: schedule.driver_id,
-            type: 'penalty',
-            amount: totalPenalty,
-            reason
-          });
-        } else {
-          // Both checklists done, just mark as audited
-          await supabase.from('schedules').update({ penalty_applied: true }).eq('id', schedule.id);
-        }
-      }
+      await runSilentAudit();
 
       if (!silent) alert('Auditoria concluída com sucesso!');
       fetchAuditLogs();
