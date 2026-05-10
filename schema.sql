@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
     penalty_end NUMERIC NOT NULL DEFAULT 50,
     penalty_fuel NUMERIC NOT NULL DEFAULT 50,
     penalty_yard NUMERIC NOT NULL DEFAULT 50,
+    require_external_photos BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

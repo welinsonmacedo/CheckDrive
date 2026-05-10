@@ -46,6 +46,7 @@ export default function ChecklistFlow() {
   const [isScheduled, setIsScheduled] = useState(false);
   const [isInternal, setIsInternal] = useState(false);
   const [isTrailerOnly, setIsTrailerOnly] = useState(false);
+  const [requireExternalPhotos, setRequireExternalPhotos] = useState(true);
 
   useEffect(() => {
     fetchOptions();
@@ -109,11 +110,16 @@ export default function ChecklistFlow() {
         }
       }
 
-      const [vRes, rRes, tRes] = await Promise.all([
+      const [vRes, rRes, tRes, settingsRes] = await Promise.all([
         supabase.from('vehicles').select('*').eq('active', true),
         supabase.from('routes').select('*').eq('active', true),
-        supabase.from('trailers').select('*').eq('active', true)
+        supabase.from('trailers').select('*').eq('active', true),
+        supabase.from('app_settings').select('*').eq('id', 'global').maybeSingle()
       ]);
+
+      if (settingsRes.data && settingsRes.data.require_external_photos !== undefined) {
+         setRequireExternalPhotos(settingsRes.data.require_external_photos !== false);
+      }
 
       // Check for active schedule to pre-fill
       let prefill = { vehicleId: '', trailerId: '', routeId: '' };
@@ -236,6 +242,7 @@ export default function ChecklistFlow() {
       if (isInternal && isTrailerOnly) return true;
       if (type === 'yard') return true;
       if (type === 'fuel') return formData.photos.front; // Only tachograph (stored in 'front') is required for fuel
+      if (!requireExternalPhotos) return true;
       return formData.photos.front && formData.photos.back && formData.photos.left && formData.photos.right;
     }
     if (currentStep === 2) {
@@ -617,6 +624,12 @@ export default function ChecklistFlow() {
                     { id: 'right', label: 'Lateral Dir.' }
                   ]).map(pos => (
                     <div key={pos.id} className="space-y-2">
+                      <div className="flex justify-between items-center px-1">
+                        <span className="text-[9px] font-black text-text-main uppercase tracking-widest">{pos.label}</span>
+                        {(!requireExternalPhotos && type !== 'fuel') && (
+                           <span className="text-[8px] font-bold text-text-muted uppercase tracking-widest bg-zinc-100 px-1.5 py-0.5 rounded">Opcional</span>
+                        )}
+                      </div>
                       <div className="relative aspect-[4/3]">
                         <input 
                           type="file" 

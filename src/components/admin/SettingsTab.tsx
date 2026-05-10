@@ -164,7 +164,29 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <div className="space-y-3 pt-2">
+               <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Fotos do Veículo (4 Lados)</label>
+               <div className="flex items-center justify-between border border-app-border rounded-xl p-4 bg-zinc-50/50">
+                  <div>
+                    <h4 className="text-xs font-bold text-text-main">Obrigatoriedade</h4>
+                    <p className="text-[10px] text-text-muted mt-0.5">Se ativo, será obrigatório tirar as 4 fotos do veículo no início/fim de viagem.</p>
+                  </div>
+                  <label className="flex items-center cursor-pointer">
+                    <div className="relative">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only" 
+                        checked={appSettings?.require_external_photos ?? true}
+                        onChange={(e) => setAppSettings({...appSettings, require_external_photos: e.target.checked})}
+                      />
+                      <div className={`block w-10 h-6 rounded-full transition-colors ${appSettings?.require_external_photos !== false ? 'bg-primary' : 'bg-gray-300'}`}></div>
+                      <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${appSettings?.require_external_photos !== false ? 'transform translate-x-4' : ''}`}></div>
+                    </div>
+                  </label>
+               </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
               <button 
                 disabled={saving}
                 className="flex-1 h-12 bg-primary text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
