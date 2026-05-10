@@ -25,6 +25,7 @@ import {
   ChevronDown,
   Database,
   Navigation,
+  HardDrive,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -43,6 +44,7 @@ import OverviewTab from '../components/admin/OverviewTab';
 import SettingsTab from '../components/admin/SettingsTab';
 import ChecklistDetailsModal from '../components/admin/ChecklistDetailsModal';
 import RankingTab from '../components/admin/RankingTab';
+import DatabaseTab from '../components/admin/DatabaseTab';
 import { useAuth } from '../contexts/AuthContext';
 
 import { runSilentAudit } from '../lib/auditService';
@@ -159,6 +161,7 @@ export default function AdminDashboard() {
     { id: 'abastecimentos', icon: Fuel, label: 'Abastecimento', color: 'from-green-500 to-emerald-500' },
     { id: 'schedules', icon: CalendarDays, label: 'Escalas', color: 'from-indigo-500 to-blue-500' },
     ...(user?.role === 'admin' ? [{ id: 'audit', icon: History, label: 'Auditoria', color: 'from-slate-500 to-gray-500' }] : []),
+    ...(user?.role === 'admin' ? [{ id: 'database', icon: HardDrive, label: 'Banco de Dados', color: 'from-blue-600 to-indigo-600' }] : []),
     // Only admin gets settings
     ...(user?.role === 'admin' ? [{ id: 'settings', icon: Settings, label: 'Configurações', color: 'from-gray-500 to-slate-500' }] : []),
   ];
@@ -330,6 +333,7 @@ export default function AdminDashboard() {
                 }} />
               )}
               {activeTab === 'audit' && user?.role === 'admin' && <AuditTab appSettings={appSettings} />}
+              {activeTab === 'database' && user?.role === 'admin' && <DatabaseTab />}
               {activeTab === 'settings' && user?.role === 'admin' && (
                 <SettingsTab 
                   appSettings={appSettings} 

@@ -268,6 +268,55 @@ CREATE POLICY "Managers can manage all issues" ON public.checklist_issues FOR AL
 CREATE POLICY "Anyone authenticated can read settings" ON public.app_settings FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admins can manage settings" ON public.app_settings FOR ALL TO authenticated USING (is_admin());
 
+-- Database Stats Function
+CREATE OR REPLACE FUNCTION public.get_database_stats()
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    db_size BIGINT;
+    storage_size BIGINT;
+    file_count BIGINT;
+    fotos_size BIGINT;
+    docs_size BIGINT;
+    out_json JSON;
+BEGIN
+    SELECT pg_database_size(current_database()) INTO db_size;
+    
+    BEGIN
+        SELECT COALESCE(SUM((metadata->>'size')::numeric), 0), COUNT(*)
+        INTO storage_size, file_count
+        FROM storage.objects;
+        
+        SELECT COALESCE(SUM((metadata->>'size')::numeric), 0)
+        INTO fotos_size
+        FROM storage.objects
+        WHERE bucket_id IN ('checklist-photos', 'truck-photos');
+
+        SELECT COALESCE(SUM((metadata->>'size')::numeric), 0)
+        INTO docs_size
+        FROM storage.objects
+        WHERE bucket_id NOT IN ('checklist-photos', 'truck-photos');
+    EXCEPTION WHEN OTHERS THEN
+        storage_size := 0;
+        file_count := 0;
+        fotos_size := 0;
+        docs_size := 0;
+    END;
+
+    out_json := json_build_object(
+        'db_size', db_size,
+        'storage_size', storage_size,
+        'file_count', file_count,
+        'fotos_size', fotos_size,
+        'docs_size', docs_size
+    );
+    
+    RETURN out_json;
+END;
+$$;
+
 ALTER TABLE vehicle_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicle_models ENABLE ROW LEVEL SECURITY;
 
