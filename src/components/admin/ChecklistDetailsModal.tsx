@@ -1,6 +1,6 @@
 // components/admin/ChecklistDetailsModal.tsx
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ClipboardCheck, Eye, EyeOff, Image as ImageIcon, AlertCircle, ChevronDown, ChevronUp, ZoomIn, ZoomOut, Download } from 'lucide-react';
+import { X, ClipboardCheck, Eye, EyeOff, Image as ImageIcon, AlertCircle, ChevronDown, ChevronUp, ZoomIn, ZoomOut, Download, AlertOctagon } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useState, useEffect } from 'react';
 
@@ -18,6 +18,23 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [defectItems, setDefectItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  const [manualPenalties, setManualPenalties] = useState<any[]>([]);
+  const [showPenaltyForm, setShowPenaltyForm] = useState(false);
+  const [selectedPenaltyId, setSelectedPenaltyId] = useState('');
+  const [applyingPenalty, setApplyingPenalty] = useState(false);
+
+  useEffect(() => {
+    const fetchPenalties = async () => {
+      try {
+        const { data, error } = await supabase.from('manual_penalties').select('*').order('name');
+        if (!error && data) {
+          setManualPenalties(data);
+        }
+      } catch (err) {}
+    };
+    fetchPenalties();
+  }, []);
 
   useEffect(() => {
     if (selectedSub) {
@@ -125,6 +142,49 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
     }
   }
 
+  const handleApplyManualPenalty = async () => {
+    if (!selectedPenaltyId) return;
+    const penalty = manualPenalties.find(p => p.id === selectedPenaltyId);
+    if (!penalty || !selectedSub.driver_id) return;
+    
+    setApplyingPenalty(true);
+    try {
+      // 1. Get current performance
+      const { data: perf } = await supabase
+        .from('driver_performance')
+        .select('score')
+        .eq('driver_id', selectedSub.driver_id)
+        .maybeSingle();
+
+      const newScore = (perf?.score || 1000) - penalty.points;
+
+      // 2. Upsert performance
+      const { error: perfError } = await supabase.from('driver_performance').upsert({ 
+        driver_id: selectedSub.driver_id, 
+        score: newScore,
+        updated_at: new Date().toISOString()
+      });
+      if (perfError) throw perfError;
+
+      // 3. Create audit log
+      const { error: auditError } = await supabase.from('audit_logs').insert({
+        driver_id: selectedSub.driver_id,
+        type: 'manual',
+        amount: penalty.points,
+        reason: `Penalidade Manual (Checklist ${selectedSub.id?.split('-')[0]}): ${penalty.name}`
+      });
+      if (auditError) throw auditError;
+
+      alert('Penalidade aplicada com sucesso!');
+      setShowPenaltyForm(false);
+      setSelectedPenaltyId('');
+    } catch (error: any) {
+      alert('Erro ao aplicar penalidade: ' + error.message);
+    } finally {
+      setApplyingPenalty(false);
+    }
+  };
+
   if (!selectedSub) return null;
 
   const getPhotoUrl = (path: string) => {
@@ -200,12 +260,47 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                 Nº {selectedSub.id?.split('-')[0]} • {new Date(selectedSub.created_at).toLocaleString()}
               </p>
             </div>
-            <button 
-              onClick={onClose} 
-              className="h-10 w-10 bg-white border border-gray-200 rounded-xl flex items-center justify-center shadow-sm hover:bg-gray-50 hover:shadow-md transition-all"
-            >
-              <X size={18} className="text-gray-400" />
-            </button>
+            <div className="flex items-center gap-3">
+              {manualPenalties.length > 0 && selectedSub.driver_id && (
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowPenaltyForm(!showPenaltyForm)}
+                    className="h-10 px-4 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-orange-100 transition-colors"
+                  >
+                    <AlertOctagon size={16} />
+                    Aplicar Penalidade
+                  </button>
+                  {showPenaltyForm && (
+                     <div className="absolute right-0 top-12 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-20">
+                       <h4 className="text-[10px] font-black text-gray-800 uppercase mb-3">Penalidade Manual</h4>
+                       <div className="space-y-3">
+                         <select 
+                           className="w-full h-10 px-3 rounded-lg border border-gray-200 text-[11px] font-bold outline-none focus:border-primary"
+                           value={selectedPenaltyId}
+                           onChange={e => setSelectedPenaltyId(e.target.value)}
+                         >
+                           <option value="">Selecione...</option>
+                           {manualPenalties.map(p => <option key={p.id} value={p.id}>{p.name} (-{p.points} pts)</option>)}
+                         </select>
+                         <button 
+                           onClick={handleApplyManualPenalty}
+                           disabled={!selectedPenaltyId || applyingPenalty}
+                           className="w-full h-10 bg-orange-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                         >
+                           {applyingPenalty ? 'Aplicando...' : 'Confirmar'}
+                         </button>
+                       </div>
+                     </div>
+                  )}
+                </div>
+              )}
+              <button 
+                onClick={onClose} 
+                className="h-10 w-10 bg-white border border-gray-200 rounded-xl flex items-center justify-center shadow-sm hover:bg-gray-50 hover:shadow-md transition-all"
+              >
+                <X size={18} className="text-gray-400" />
+              </button>
+            </div>
           </div>
           
           <div className="flex-1 overflow-y-auto p-8 space-y-10">

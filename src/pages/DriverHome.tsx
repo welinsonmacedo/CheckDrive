@@ -60,13 +60,15 @@ export default function DriverHome() {
       });
 
       // Fetch relevant schedule (Active or Next Upcoming)
-      // We look for schedules that haven't been finished yet (end_checklist_id is null)
-      // And we order by start_at to find the most immediate one
+      // We look for schedules that haven't expired for more than 30 mins
+      const now = new Date();
+      const thirtyMinsAgo = new Date(now.getTime() - 30 * 60 * 1000);
+      
       const { data: fetchedSchedules, error: scheduleError } = await supabase
         .from('schedules')
-        .select('id, start_at, end_at, start_checklist_id, end_checklist_id, vehicles(plate, requires_trailer), routes(origin, destination)')
+        .select('id, start_at, end_at, start_checklist_id, end_checklist_id, fuel_checklist_id, vehicles(plate, requires_trailer), routes(origin, destination)')
         .eq('driver_id', user.id)
-        .is('end_checklist_id', null)
+        .gte('end_at', thirtyMinsAgo.toISOString())
         .order('start_at', { ascending: true })
         .limit(5);
 
@@ -74,11 +76,8 @@ export default function DriverHome() {
         console.error('Error fetching schedules:', scheduleError);
       } else if (fetchedSchedules && fetchedSchedules.length > 0) {
         // Find the most appropriate one to show:
-        // 1. One that has already started (and is not finished)
-        // 2. OR the next one starting today
-        const now = new Date();
         const active = fetchedSchedules.find(s => 
-          new Date(s.start_at) <= now && new Date(s.end_at) >= now
+          new Date(s.start_at) <= now && new Date(s.end_at) >= thirtyMinsAgo
         );
         
         if (active) {
@@ -119,11 +118,6 @@ export default function DriverHome() {
   const isTypeLocked = (typeId: string) => {
     if (user?.isInternal) return false;
     if (!activeSchedule) return false;
-    
-    // Logic: Start must be done before Fuel and End
-    if (typeId === 'fuel' || typeId === 'end') {
-      return !activeSchedule.start_checklist_id;
-    }
     
     // If already done, it's locked
     return isTypeDone(typeId);

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Star, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FleetSettingsSection from './FleetSettingsSection';
+import ManualPenaltiesSettingsSection from './ManualPenaltiesSettingsSection';
 
 interface SettingsTabProps {
   appSettings: any;
@@ -11,7 +12,7 @@ interface SettingsTabProps {
 
 export default function SettingsTab({ appSettings, setAppSettings, fetchData }: SettingsTabProps) {
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'points' | 'vehicles'>('points');
+  const [activeTab, setActiveTab] = useState<'points' | 'vehicles' | 'manual_penalties'>('points');
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +85,12 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
           className={`flex-1 py-2.5 rounded-lg text-[10px] uppercase tracking-widest font-black transition-all ${activeTab === 'vehicles' ? 'bg-white shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] text-text-main' : 'text-text-muted hover:text-text-main hover:bg-zinc-100/50'}`}
         >
           Veículos
+        </button>
+        <button
+          onClick={() => setActiveTab('manual_penalties')}
+          className={`flex-1 py-2.5 rounded-lg text-[10px] uppercase tracking-widest font-black transition-all ${activeTab === 'manual_penalties' ? 'bg-white shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] text-text-main' : 'text-text-muted hover:text-text-main hover:bg-zinc-100/50'}`}
+        >
+          Penalidades Manuais
         </button>
       </div>
 
@@ -175,8 +182,10 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
             </div>
           </form>
         </div>
-      ) : (
+      ) : activeTab === 'vehicles' ? (
         <FleetSettingsSection />
+      ) : (
+        <ManualPenaltiesSettingsSection />
       )}
     </div>
   );

@@ -8,7 +8,7 @@ export default function RoutesTab() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  const [routeForm, setRouteForm] = useState<{id: string, origin: string, destination: string, stops: string[]}>({ id: '', origin: '', destination: '', stops: [] });
+  const [routeForm, setRouteForm] = useState<{id: string, origin: string, destination: string, stops: string[], distance_km: string}>({ id: '', origin: '', destination: '', stops: [], distance_km: '' });
 
   const fetchData = async () => {
     setLoading(true);
@@ -34,18 +34,20 @@ export default function RoutesTab() {
         const { error } = await supabase.from('routes').update({
           origin: routeForm.origin,
           destination: routeForm.destination,
-          stops: routeForm.stops
+          stops: routeForm.stops,
+          distance_km: routeForm.distance_km ? parseFloat(routeForm.distance_km) : null
         }).eq('id', routeForm.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from('routes').insert([{
           origin: routeForm.origin,
           destination: routeForm.destination,
-          stops: routeForm.stops
+          stops: routeForm.stops,
+          distance_km: routeForm.distance_km ? parseFloat(routeForm.distance_km) : null
         }]);
         if (error) throw error;
       }
-      setRouteForm({ id: '', origin: '', destination: '', stops: [] });
+      setRouteForm({ id: '', origin: '', destination: '', stops: [], distance_km: '' });
       fetchData();
     } catch (error: any) {
       alert('Erro: ' + error.message);
@@ -93,6 +95,7 @@ export default function RoutesTab() {
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Origem</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Paradas</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Destino</th>
+                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Distância</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
@@ -110,10 +113,11 @@ export default function RoutesTab() {
                       ) : '-'}
                     </td>
                     <td className="px-5 py-4 text-xs font-bold">{r.destination}</td>
+                    <td className="px-5 py-4 text-xs font-medium text-text-muted">{r.distance_km ? `${r.distance_km} km` : '-'}</td>
                     <td className="px-5 py-4 text-right flex items-center justify-end gap-2">
                        <button
                          onClick={() => {
-                           setRouteForm({ id: r.id, origin: r.origin || '', destination: r.destination || '', stops: r.stops || [] });
+                           setRouteForm({ id: r.id, origin: r.origin || '', destination: r.destination || '', stops: r.stops || [], distance_km: r.distance_km?.toString() || '' });
                            window.scrollTo({ top: 0, behavior: 'smooth' });
                          }}
                          className="p-1.5 rounded-lg hover:bg-zinc-100 text-text-muted hover:text-primary transition-colors title='Editar Rota'"
@@ -130,7 +134,7 @@ export default function RoutesTab() {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={4} className="px-5 py-10 text-center text-xs text-text-muted italic">Nenhuma rota cadastrada.</td></tr>
+                  <tr><td colSpan={5} className="px-5 py-10 text-center text-xs text-text-muted italic">Nenhuma rota cadastrada.</td></tr>
                 )}
               </tbody>
             </table>
@@ -200,11 +204,25 @@ export default function RoutesTab() {
               onChange={e => setRouteForm({...routeForm, destination: e.target.value})}
             />
           </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Distância (km) - Opcional</label>
+            <input 
+              type="number"
+              step="0.1"
+              min="0"
+              className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary"
+              placeholder="Ex: 150.5"
+              value={routeForm.distance_km}
+              onChange={e => setRouteForm({...routeForm, distance_km: e.target.value})}
+            />
+          </div>
+
           <div className="pt-2 flex gap-2">
             {routeForm.id && (
                <button
                  type="button"
-                 onClick={() => setRouteForm({ id: '', origin: '', destination: '', stops: [] })}
+                 onClick={() => setRouteForm({ id: '', origin: '', destination: '', stops: [], distance_km: '' })}
                  className="flex-1 h-12 bg-app-bg text-text-main border border-app-border font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-100 transition-all shadow-sm"
                >
                  Cancelar

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
-import { Search } from 'lucide-react';
+import { Search, MessageCircle } from 'lucide-react';
 
 interface SchedulesTabProps {
   onViewChecklist: (checklistId: string) => void;
@@ -15,13 +15,16 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [trailers, setTrailers] = useState<any[]>([]);
   const [routes, setRoutes] = useState<any[]>([]);
+  const [baits, setBaits] = useState<any[]>([]);
   
   const todayLocal = new Date();
   todayLocal.setMinutes(todayLocal.getMinutes() - todayLocal.getTimezoneOffset());
   const [filterDate, setFilterDate] = useState(todayLocal.toISOString().split('T')[0]);
+  const [filterOrigin, setFilterOrigin] = useState('');
 
   const [scheduleForm, setScheduleForm] = useState({ 
-    id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '' 
+    id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '',
+    bait1_id: '', bait2_id: '', bait3_id: ''
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -46,7 +49,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       const localEnd = new Date(`${filterDate}T23:59:59.999`);
 
       const { data } = await supabase.from('schedules')
-        .select('*, profiles(*), vehicles(plate), trailers(plate), routes(origin, destination)')
+        .select('*, profiles(*), vehicles(plate, type), trailers(plate), routes(origin, destination), bait1:baits!schedules_bait1_id_fkey(name), bait2:baits!schedules_bait2_id_fkey(name), bait3:baits!schedules_bait3_id_fkey(name)')
         .gte('start_at', localStart.toISOString())
         .lte('start_at', localEnd.toISOString())
         .order('start_at', { ascending: false });
@@ -59,8 +62,10 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       setVehicles(v || []);
       const { data: t } = await supabase.from('trailers').select('id, plate').eq('active', true);
       setTrailers(t || []);
-      const { data: r } = await supabase.from('routes').select('id, origin, destination').eq('active', true);
+      const { data: r } = await supabase.from('routes').select('id, origin, destination, stops, distance_km').eq('active', true);
       setRoutes(r || []);
+      const { data: b } = await supabase.from('baits').select('id, name').eq('active', true).order('name');
+      setBaits(b || []);
     } catch (error) {
       console.error('Error fetching schedule data:', error);
     } finally {
@@ -87,6 +92,9 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
         vehicle_id: scheduleForm.vehicle_id || null,
         trailer_id: scheduleForm.trailer_id || null,
         route_id: scheduleForm.route_id || null, 
+        bait1_id: scheduleForm.bait1_id || null,
+        bait2_id: scheduleForm.bait2_id || null,
+        bait3_id: scheduleForm.bait3_id || null,
         start_at: parseLocal(scheduleForm.start_at),
         end_at: parseLocal(scheduleForm.end_at)
       };
@@ -96,12 +104,36 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
         if (error) throw error;
         alert('Escala atualizada!');
       } else {
-        const { error } = await supabase.from('schedules').insert([dataToInsert]);
+        const { data: newSchedules, error } = await supabase.from('schedules').insert([dataToInsert]).select();
         if (error) throw error;
+        
+        const newSchedule = newSchedules[0];
+
+        // Search for any manual checklists for this driver within the schedule timeframe
+        const { data: checklists } = await supabase
+          .from('checklist_submissions')
+          .select('id, type')
+          .eq('driver_id', dataToInsert.driver_id)
+          .gte('created_at', dataToInsert.start_at)
+          .lte('created_at', dataToInsert.end_at);
+
+        if (checklists && checklists.length > 0) {
+          const updateData: any = {};
+          checklists.forEach(c => {
+             if (c.type === 'start' && !updateData.start_checklist_id) updateData.start_checklist_id = c.id;
+             if (c.type === 'end' && !updateData.end_checklist_id) updateData.end_checklist_id = c.id;
+             if (c.type === 'fuel' && !updateData.fuel_checklist_id) updateData.fuel_checklist_id = c.id;
+          });
+
+          if (Object.keys(updateData).length > 0) {
+             await supabase.from('schedules').update(updateData).eq('id', newSchedule.id);
+          }
+        }
+
         alert('Escala agendada!');
       }
       
-      setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '' });
+      setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '', bait1_id: '', bait2_id: '', bait3_id: '' });
       fetchData();
     } catch (error: any) {
       alert('Erro: ' + error.message);
@@ -131,6 +163,9 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       vehicle_id: sch.vehicle_id || '',
       trailer_id: sch.trailer_id || '',
       route_id: sch.route_id || '',
+      bait1_id: sch.bait1_id || '',
+      bait2_id: sch.bait2_id || '',
+      bait3_id: sch.bait3_id || '',
       start_at: formatForInput(sch.start_at),
       end_at: formatForInput(sch.end_at)
     });
@@ -140,28 +175,80 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
     return <div className="p-8 text-center text-text-muted font-bold text-xs">Carregando Escalas...</div>;
   }
 
+  const uniqueOrigins = Array.from(new Set(routes.map(r => r.origin))).sort();
+  const filteredSchedules = schedules.filter(sch => filterOrigin ? sch.routes?.origin === filterOrigin : true);
+
+  const exportToWhatsApp = () => {
+    let message = `*ESCALAS - ${new Date(`${filterDate}T12:00:00`).toLocaleDateString()}* - ${filterOrigin || 'Todas as Origens'}\n\n`;
+
+    filteredSchedules.forEach((sch, index) => {
+      const start = new Date(sch.start_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const end = new Date(sch.end_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      
+      message += `*${index + 1}. MOTORISTA:* ${sch.profiles?.full_name}\n`;
+      message += `*VEÍCULO:* ${sch.vehicles?.type || 'Não definido'}\n`;
+      message += `*PLACA:* ${sch.vehicles?.plate}${sch.trailers?.plate ? ` | REB: ${sch.trailers.plate}` : ''}\n`;
+      message += `*ROTA:* ${sch.routes?.origin} → ${sch.routes?.destination}\n`;
+      message += `*SAÍDA:* ${start}\n`;
+      message += `*CHEGADA:* ${end}\n`;
+      
+      const baits = [sch.bait1?.name, sch.bait2?.name, sch.bait3?.name].filter(Boolean);
+      if (baits.length > 0) {
+        message += `*ISCAS:* ${baits.join(', ')}\n`;
+      }
+      message += `\n`;
+    });
+
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
       <div className="xl:col-span-8 bento-card !p-0">
-         <div className="p-5 border-b border-app-border flex sm:flex-row flex-col sm:items-center justify-between gap-4">
-            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Escalas Agendadas</span>
-            <div className="flex items-center gap-2">
-               <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider hidden sm:inline-block">Data:</span>
-               <input 
-                 type="date"
-                 className="h-10 px-3 rounded-lg border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary transition-all"
-                 value={filterDate}
-                 onChange={e => setFilterDate(e.target.value)}
-               />
-               <button onClick={fetchData} className="h-10 px-3 flex items-center justify-center bg-zinc-100 rounded-lg text-text-muted hover:bg-zinc-200 transition-colors">
-                  <Search size={14} />
-               </button>
+         <div className="p-5 border-b border-app-border flex flex-col justify-between gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Escalas Agendadas</span>
+              {filteredSchedules.length > 0 && (
+                <button
+                  onClick={exportToWhatsApp}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm"
+                >
+                  <MessageCircle size={14} />
+                  WhatsApp
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+               <div className="flex items-center gap-2">
+                 <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider hidden sm:inline-block">Origem:</span>
+                 <select 
+                   className="h-10 px-3 rounded-lg border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary transition-all max-w-[150px]"
+                   value={filterOrigin}
+                   onChange={e => setFilterOrigin(e.target.value)}
+                 >
+                   <option value="">Todas</option>
+                   {uniqueOrigins.map(o => <option key={o as string} value={o as string}>{o as string}</option>)}
+                 </select>
+               </div>
+               <div className="flex items-center gap-2">
+                 <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider hidden sm:inline-block">Data:</span>
+                 <input 
+                   type="date"
+                   className="h-10 px-3 rounded-lg border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary transition-all"
+                   value={filterDate}
+                   onChange={e => setFilterDate(e.target.value)}
+                 />
+                 <button onClick={fetchData} className="h-10 px-3 flex items-center justify-center bg-zinc-100 rounded-lg text-text-muted hover:bg-zinc-200 transition-colors">
+                    <Search size={14} />
+                 </button>
+               </div>
             </div>
          </div>
          <div className="overflow-x-auto text-left min-h-[300px]">
          {loading ? (
              <div className="p-8 text-center text-text-muted font-bold text-xs">Carregando...</div>
-         ) : schedules.length === 0 ? (
+         ) : filteredSchedules.length === 0 ? (
              <div className="p-8 text-center text-text-muted font-bold text-xs uppercase tracking-widest">Nenhuma escala programada para {new Date(`${filterDate}T12:00:00`).toLocaleDateString()}</div>
          ) : (
             <table className="w-full">
@@ -175,12 +262,12 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-app-border">
-                {schedules.map((sch) => {
+                {filteredSchedules.map((sch) => {
                   const hasChecklist = !!(sch.start_checklist_id || sch.end_checklist_id || sch.fuel_checklist_id);
                   const createdTime = sch.created_at ? new Date(sch.created_at).getTime() : new Date(sch.start_at).getTime();
                   const isWithinOneHour = (Date.now() - createdTime) <= 60 * 60 * 1000;
                   
-                  const canEdit = user?.role === 'admin' || (!hasChecklist && isWithinOneHour);
+                  const canEdit = !hasChecklist && (user?.role === 'admin' || isWithinOneHour);
                   const canDelete = user?.role === 'admin' && !hasChecklist;
 
                   return (
@@ -198,6 +285,11 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                         {sch.vehicles?.plate}
                         {sch.trailers?.plate && <span className="ml-2 text-primary font-bold">| REB: {sch.trailers.plate}</span>}
                       </div>
+                      {(sch.bait1 || sch.bait2 || sch.bait3) && (
+                        <div className="text-[9px] font-bold text-fuchsia-600 mt-1 uppercase">
+                          Iscas: {[sch.bait1?.name, sch.bait2?.name, sch.bait3?.name].filter(Boolean).join(', ')}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2 text-center items-center">
@@ -307,8 +399,44 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
               required
             >
               <option value="">Selecionar...</option>
-              {routes.map(r => <option key={r.id} value={r.id}>{r.origin} → {r.destination}</option>)}
+              {routes.map(r => (
+                <option key={r.id} value={r.id}>
+                  {r.origin} → {r.destination} {r.stops && r.stops.length > 0 ? ` (Paradas: ${r.stops.join(', ')})` : ''}
+                </option>
+              ))}
             </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-primary uppercase tracking-widest">Iscas (Opcional - Até 3)</label>
+            <div className="space-y-2">
+              <select 
+                className="w-full h-11 px-4 rounded-xl border border-primary/20 bg-primary/5 text-xs font-bold outline-none focus:border-primary transition-all"
+                value={scheduleForm.bait1_id}
+                onChange={e => setScheduleForm({...scheduleForm, bait1_id: e.target.value})}
+              >
+                <option value="">Nenhuma Isca 1</option>
+                {baits.map(b => <option key={b.id} value={b.id} disabled={[scheduleForm.bait2_id, scheduleForm.bait3_id].includes(b.id)}>{b.name}</option>)}
+              </select>
+              <select 
+                className="w-full h-11 px-4 rounded-xl border border-primary/20 bg-primary/5 text-xs font-bold outline-none focus:border-primary transition-all"
+                value={scheduleForm.bait2_id}
+                onChange={e => setScheduleForm({...scheduleForm, bait2_id: e.target.value})}
+                disabled={!scheduleForm.bait1_id}
+              >
+                <option value="">Nenhuma Isca 2</option>
+                {baits.map(b => <option key={b.id} value={b.id} disabled={[scheduleForm.bait1_id, scheduleForm.bait3_id].includes(b.id)}>{b.name}</option>)}
+              </select>
+              <select 
+                className="w-full h-11 px-4 rounded-xl border border-primary/20 bg-primary/5 text-xs font-bold outline-none focus:border-primary transition-all"
+                value={scheduleForm.bait3_id}
+                onChange={e => setScheduleForm({...scheduleForm, bait3_id: e.target.value})}
+                disabled={!scheduleForm.bait2_id}
+              >
+                <option value="">Nenhuma Isca 3</option>
+                {baits.map(b => <option key={b.id} value={b.id} disabled={[scheduleForm.bait1_id, scheduleForm.bait2_id].includes(b.id)}>{b.name}</option>)}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -338,7 +466,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
             {scheduleForm.id && (
               <button 
                 type="button" 
-                onClick={() => setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '' })}
+                onClick={() => setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '', bait1_id: '', bait2_id: '', bait3_id: '' })}
                 className="flex-1 h-12 bg-zinc-100 text-text-muted font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-200 transition-all font-mono"
               >
                 Cancelar

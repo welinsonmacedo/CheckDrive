@@ -24,6 +24,7 @@ import {
   AlertCircle,
   ChevronDown,
   Database,
+  Navigation,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +36,8 @@ import ChecklistSetupTab from '../components/admin/ChecklistSetupTab';
 import ChecklistsHistoryTab from '../components/admin/ChecklistsHistoryTab';
 import MaintenanceTab from '../components/admin/MaintenanceTab';
 import FuelTab from '../components/admin/FuelTab';
+import BaitsTab from '../components/admin/BaitsTab';
+import TrackingTab from '../components/admin/TrackingTab';
 import AuditTab from '../components/admin/AuditTab';
 import OverviewTab from '../components/admin/OverviewTab';
 import SettingsTab from '../components/admin/SettingsTab';
@@ -149,7 +152,8 @@ export default function AdminDashboard() {
 
   const navItems = [
     { id: 'overview', icon: LayoutDashboard, label: 'Painel', color: 'from-blue-500 to-cyan-500' },
-    { id: 'checklists', icon: BarChart3, label: 'Relatórios', color: 'from-purple-500 to-pink-500' },
+    { id: 'tracking', icon: Navigation, label: 'Monitoramento', color: 'from-emerald-500 to-teal-500' },
+    { id: 'checklists', icon: BarChart3, label: 'CheckList', color: 'from-purple-500 to-pink-500' },
     { id: 'ranking', icon: Trophy, label: 'Ranking', color: 'from-yellow-400 to-yellow-600' },
     { id: 'maintenance', icon: AlertTriangle, label: 'Pendências', color: 'from-red-500 to-orange-500' },
     { id: 'abastecimentos', icon: Fuel, label: 'Abastecimento', color: 'from-green-500 to-emerald-500' },
@@ -164,6 +168,7 @@ export default function AdminDashboard() {
     { id: 'vehicles', icon: Truck, label: 'Veículos', color: 'from-teal-500 to-green-500' },
     { id: 'routes', icon: Map, label: 'Rotas', color: 'from-violet-500 to-purple-500' },
     { id: 'checklist_setup', icon: ClipboardCheck, label: 'Itens de Checklist', color: 'from-rose-500 to-red-500' },
+    { id: 'baits', icon: Map, label: 'Iscas', color: 'from-fuchsia-500 to-purple-500' },
   ];
 
   return (
@@ -301,10 +306,12 @@ export default function AdminDashboard() {
               {activeTab === 'overview' && (
                 <OverviewTab setActiveTab={setActiveTab} appSettings={appSettings} />
               )}
+              {activeTab === 'tracking' && <TrackingTab />}
               {activeTab === 'drivers' && <DriversTab />}
               {activeTab === 'vehicles' && <VehiclesTab />}
               {activeTab === 'routes' && <RoutesTab />}
               {activeTab === 'checklist_setup' && <ChecklistSetupTab />}
+              {activeTab === 'baits' && <BaitsTab />}
               {activeTab === 'ranking' && <RankingTab appSettings={appSettings} />}
               {activeTab === 'checklists' && (
                 <ChecklistsHistoryTab onViewDetails={(sub) => {

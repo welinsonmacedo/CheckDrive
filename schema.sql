@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS vehicles (
     type TEXT, -- 'Truck', 'Van', etc.
     requires_trailer BOOLEAN DEFAULT false,
     active BOOLEAN DEFAULT true,
+    manual_location TEXT,
+    manual_status TEXT,
+    last_status_update TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -34,6 +37,7 @@ CREATE TABLE IF NOT EXISTS routes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     origin TEXT NOT NULL,
     destination TEXT NOT NULL,
+    distance_km NUMERIC,
     stops JSONB DEFAULT '[]'::jsonb,
     active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -141,11 +145,22 @@ CREATE TABLE IF NOT EXISTS schedules (
     start_checklist_id UUID REFERENCES checklist_submissions(id),
     end_checklist_id UUID REFERENCES checklist_submissions(id),
     fuel_checklist_id UUID REFERENCES checklist_submissions(id),
+    bait1_id UUID REFERENCES baits(id),
+    bait2_id UUID REFERENCES baits(id),
+    bait3_id UUID REFERENCES baits(id),
     penalty_applied BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 11. Audit Logs (Histórico de Pontuação/Saldo)
+-- 12. Baits (Iscas)
+CREATE TABLE IF NOT EXISTS baits (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 13. Audit Logs (Histórico de Pontuação/Saldo)
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     driver_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
@@ -160,6 +175,15 @@ INSERT INTO app_settings (id, system_type, initial_value, penalty_value, penalty
 VALUES ('global', 'points', 1000, 50, 50, 50, 50, 50)
 ON CONFLICT (id) DO NOTHING;
 
+-- 14. Manual Penalties
+CREATE TABLE IF NOT EXISTS manual_penalties (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    points NUMERIC NOT NULL,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- --- RLS (Row Level Security) ---
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
@@ -173,6 +197,7 @@ ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trailers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE baits ENABLE ROW LEVEL SECURITY;
 
 -- Helper to check if current user is admin safely
 CREATE OR REPLACE FUNCTION public.is_admin() 
@@ -249,6 +274,10 @@ CREATE POLICY "Anyone authenticated can read schedules" ON public.schedules FOR 
 CREATE POLICY "Managers can insert schedules" ON public.schedules FOR INSERT TO authenticated WITH CHECK (is_manager());
 CREATE POLICY "Managers can update schedules" ON public.schedules FOR UPDATE TO authenticated USING (is_manager() OR auth.uid() = driver_id);
 CREATE POLICY "Admins can delete schedules" ON public.schedules FOR DELETE TO authenticated USING (is_admin());
+
+-- Baits Policies
+CREATE POLICY "Anyone authenticated can read baits" ON public.baits FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admins can manage baits" ON public.baits FOR ALL TO authenticated USING (is_admin());
 
 -- Audit Logs Policies
 CREATE POLICY "Drivers can see own audits" ON public.audit_logs FOR SELECT TO authenticated USING (auth.uid() = driver_id OR is_admin());
