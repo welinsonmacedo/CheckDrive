@@ -8,7 +8,10 @@ const supabase = createClient(
 );
 
 async function run() {
-  const { data, error } = await supabase.from('manual_penalties').select('*');
-  console.log(error);
+  const { data: { user } } = await supabase.auth.signInWithPassword({
+    email: 'WelinsonMarlon15@gmail.com',
+    password: 'password' // We don't know the password, maybe we can login in another way?
+  });
+  console.log(user);
 }
 run();

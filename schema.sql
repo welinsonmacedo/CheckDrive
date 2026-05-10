@@ -97,10 +97,12 @@ CREATE TABLE IF NOT EXISTS checklist_issues (
     photo_url TEXT,
     attachments JSONB DEFAULT '[]'::jsonb, -- New: Support for multiple photos/descriptions if needed as one record
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'resolved')),
+    report_count INTEGER DEFAULT 1,
     resolution_notes TEXT,
     resolved_at TIMESTAMP WITH TIME ZONE,
     resolved_by UUID REFERENCES profiles(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- 9. App Settings (Global config)
@@ -198,6 +200,7 @@ ALTER TABLE schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trailers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE baits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE manual_penalties ENABLE ROW LEVEL SECURITY;
 
 -- Helper to check if current user is admin safely
 CREATE OR REPLACE FUNCTION public.is_admin() 
@@ -242,6 +245,9 @@ CREATE POLICY "Admin Manage" ON checklist_types FOR ALL USING (is_admin());
 CREATE POLICY "Public Read" ON checklist_items FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admin Manage" ON checklist_items FOR ALL USING (is_admin());
 
+CREATE POLICY "Public Read" ON manual_penalties FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admin Manage" ON manual_penalties FOR ALL USING (is_admin()) WITH CHECK (is_admin());
+
 -- Submissions Policies
 CREATE POLICY "Drivers can see own submissions" ON checklist_submissions FOR SELECT USING (auth.uid() = driver_id);
 CREATE POLICY "Drivers can insert own submissions" ON checklist_submissions FOR INSERT TO authenticated WITH CHECK (auth.uid() = driver_id);
@@ -252,8 +258,9 @@ CREATE POLICY "Public Read" ON driver_performance FOR SELECT TO authenticated US
 CREATE POLICY "Managers Manage" ON driver_performance FOR ALL USING (is_manager());
 
 -- Issues Policies
-CREATE POLICY "Drivers can see own related issues" ON public.checklist_issues FOR SELECT TO authenticated USING (auth.uid() = driver_id OR is_manager());
-CREATE POLICY "Drivers can insert own related issues" ON public.checklist_issues FOR INSERT TO authenticated WITH CHECK (auth.uid() = driver_id);
+CREATE POLICY "Public Read for Issues" ON public.checklist_issues FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Drivers can insert issues" ON public.checklist_issues FOR INSERT TO authenticated WITH CHECK (auth.uid() = driver_id);
+CREATE POLICY "Drivers can update issues" ON public.checklist_issues FOR UPDATE TO authenticated USING (true);
 CREATE POLICY "Managers can manage all issues" ON public.checklist_issues FOR ALL TO authenticated USING (is_manager());
 
 -- Settings Policies

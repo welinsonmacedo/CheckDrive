@@ -42,6 +42,7 @@ export default function ChecklistFlow() {
   });
   
   const [lastKm, setLastKm] = useState<number | null>(null);
+  const [existingIssues, setExistingIssues] = useState<any[]>([]);
   const [isScheduled, setIsScheduled] = useState(false);
   const [isInternal, setIsInternal] = useState(false);
   const [isTrailerOnly, setIsTrailerOnly] = useState(false);
@@ -53,10 +54,27 @@ export default function ChecklistFlow() {
   useEffect(() => {
     if (formData.vehicleId) {
       fetchLastKm(formData.vehicleId);
+      fetchExistingIssues(formData.vehicleId);
     } else {
       setLastKm(null);
+      setExistingIssues([]);
     }
   }, [formData.vehicleId]);
+
+  const fetchExistingIssues = async (vehicleId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('checklist_issues')
+        .select('*')
+        .eq('status', 'pending')
+        .eq('vehicle_id', vehicleId);
+      if (!error && data) {
+         setExistingIssues(data);
+      }
+    } catch (e) {
+      console.error('Error fetching existing issues', e);
+    }
+  };
 
   const fetchLastKm = async (vehicleId: string) => {
     try {
@@ -334,9 +352,43 @@ export default function ChecklistFlow() {
         }
       }
 
-      // Insert issues into dedicated table
+      // Insert or update issues into dedicated table
       if (issuesToInsert.length > 0) {
-        await supabase.from('checklist_issues').insert(issuesToInsert);
+        for (const newIssue of issuesToInsert) {
+           const { data: existings } = await supabase.from('checklist_issues')
+               .select('*')
+               .eq('vehicle_id', newIssue.vehicle_id)
+               .eq('status', 'pending')
+               .eq('item_title', newIssue.item_title);
+
+           if (existings && existings.length > 0) {
+              const ex = existings[0];
+              let currentAttachments = Array.isArray(ex.attachments) ? ex.attachments : [];
+              currentAttachments.push({
+                 description: newIssue.description,
+                 photoUrl: newIssue.photo_url,
+                 driver_id: newIssue.driver_id,
+                 submission_id: newIssue.submission_id,
+                 created_at: new Date().toISOString()
+              });
+              
+              const { error: updateError } = await supabase.from('checklist_issues')
+                 .update({
+                    report_count: (ex.report_count || 1) + 1,
+                    attachments: currentAttachments,
+                    updated_at: new Date().toISOString()
+                 })
+                 .eq('id', ex.id);
+                 
+              if (updateError) {
+                  console.error("Failed to update report_count. Falling back to insert.", updateError);
+                  // If column doesn't exist yet, we just insert a new one
+                  await supabase.from('checklist_issues').insert(newIssue);
+              }
+           } else {
+              await supabase.from('checklist_issues').insert(newIssue);
+           }
+        }
       }
 
       // Update submission with defect data if needed
@@ -608,42 +660,61 @@ export default function ChecklistFlow() {
                     {options.items.some(i => !i.is_trailer_item) && <h4 className="text-[9px] font-black text-primary uppercase tracking-widest pl-1">Veículo Principal</h4>}
                     {options.items.filter(i => !i.is_trailer_item).map(item => (
                       <React.Fragment key={item.id}>
-                        <div className="p-4 rounded-xl border border-app-border bg-app-bg flex items-center justify-between group hover:bg-white hover:border-primary/20 transition-all">
-                          <span className="text-xs font-bold text-text-main flex-1 mr-4">{item.title}</span>
+                        <div className="p-4 rounded-xl border border-app-border bg-app-bg flex flex-col group hover:bg-white hover:border-primary/20 transition-all">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-text-main flex-1 mr-4">{item.title}</span>
+                            
+                            {type === 'fuel' ? (
+                              <input 
+                                type="number"
+                                step="0.01"
+                                placeholder="Valor numérico..."
+                                className="w-32 h-9 px-3 rounded-lg border border-app-border bg-white text-xs font-bold outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                                value={formData.itemValues[item.id] || ''}
+                                onChange={(e) => setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: e.target.value }}))}
+                              />
+                            ) : (
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => {
+                                    setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: 'normal' }}));
+                                    // Clear defect data if reverting
+                                    const newDefects = { ...formData.defects };
+                                    delete newDefects[item.id];
+                                    setFormData(prev => ({ ...prev, defects: newDefects }));
+                                  }}
+                                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${formData.itemValues[item.id] === 'normal' ? 'bg-primary text-white border-primary' : 'bg-white text-text-muted'}`}>NORMAL</button>
+                                <button 
+                                 onClick={() => {
+                                   setFormData(prev => ({
+                                     ...prev, 
+                                     itemValues: {...prev.itemValues, [item.id]: 'defect' },
+                                     defects: {
+                                       ...prev.defects,
+                                       [item.id]: (prev.defects[item.id] || [{ description: '', photo: null }])
+                                     }
+                                   }));
+                                 }}
+                                 className={`px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${formData.itemValues[item.id] === 'defect' ? 'bg-danger text-white border-danger shadow-md shadow-danger/20' : 'bg-red-50 text-danger'}`}>DEFEITO</button>
+                              </div>
+                            )}
+                          </div>
                           
-                          {type === 'fuel' ? (
-                            <input 
-                              type="number"
-                              step="0.01"
-                              placeholder="Valor numérico..."
-                              className="w-32 h-9 px-3 rounded-lg border border-app-border bg-white text-xs font-bold outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                              value={formData.itemValues[item.id] || ''}
-                              onChange={(e) => setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: e.target.value }}))}
-                            />
-                          ) : (
-                            <div className="flex gap-2">
-                              <button 
-                                onClick={() => {
-                                  setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: 'normal' }}));
-                                  // Clear defect data if reverting
-                                  const newDefects = { ...formData.defects };
-                                  delete newDefects[item.id];
-                                  setFormData(prev => ({ ...prev, defects: newDefects }));
-                                }}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${formData.itemValues[item.id] === 'normal' ? 'bg-primary text-white border-primary' : 'bg-white text-text-muted'}`}>NORMAL</button>
-                              <button 
-                               onClick={() => {
-                                 setFormData(prev => ({
-                                   ...prev, 
-                                   itemValues: {...prev.itemValues, [item.id]: 'defect' },
-                                   defects: {
-                                     ...prev.defects,
-                                     [item.id]: (prev.defects[item.id] || [{ description: '', photo: null }])
-                                   }
-                                 }));
-                               }}
-                               className={`px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${formData.itemValues[item.id] === 'defect' ? 'bg-danger text-white border-danger shadow-md shadow-danger/20' : 'bg-red-50 text-danger'}`}>DEFEITO</button>
-                            </div>
+                          {/* Defeitos Conhecidos / Existentes */}
+                          {existingIssues.some((issue) => issue.item_title === item.title) && (
+                             <div className="mt-3 pt-3 border-t border-app-border">
+                               <p className="text-[10px] font-black text-warning uppercase tracking-widest flex items-center gap-1 mb-2">
+                                 <AlertCircle size={12} /> Defeito Pendente
+                               </p>
+                               {existingIssues.filter(issue => issue.item_title === item.title).map(issue => (
+                                 <div key={issue.id} className="text-xs text-text-muted italic bg-orange-50/50 p-2 rounded-lg border border-orange-100">
+                                   "{issue.description || 'Sem descrição'}"
+                                   <div className="mt-1 text-[9px] font-bold text-orange-600 uppercase tracking-widest">
+                                     Reportado {issue.report_count || 1} {issue.report_count === 1 ? 'vez' : 'vezes'}
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
                           )}
                         </div>
                         

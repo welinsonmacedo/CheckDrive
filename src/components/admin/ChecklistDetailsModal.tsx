@@ -261,16 +261,22 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
               </p>
             </div>
             <div className="flex items-center gap-3">
-              {manualPenalties.length > 0 && selectedSub.driver_id && (
+              {selectedSub.driver_id && (
                 <div className="relative">
                   <button 
-                    onClick={() => setShowPenaltyForm(!showPenaltyForm)}
-                    className="h-10 px-4 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest hover:bg-orange-100 transition-colors"
+                    onClick={() => {
+                        if (manualPenalties.length === 0) {
+                            alert('Nenhuma penalidade manual cadastrada. Vá em "Configurações > Penalidades Manuais" para cadastrar.');
+                            return;
+                        }
+                        setShowPenaltyForm(!showPenaltyForm)
+                    }}
+                    className={`h-10 px-4 border rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors ${manualPenalties.length > 0 ? 'bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'}`}
                   >
                     <AlertOctagon size={16} />
                     Aplicar Penalidade
                   </button>
-                  {showPenaltyForm && (
+                  {showPenaltyForm && manualPenalties.length > 0 && (
                      <div className="absolute right-0 top-12 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-20">
                        <h4 className="text-[10px] font-black text-gray-800 uppercase mb-3">Penalidade Manual</h4>
                        <div className="space-y-3">

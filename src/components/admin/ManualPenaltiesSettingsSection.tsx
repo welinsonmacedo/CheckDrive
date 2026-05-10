@@ -22,8 +22,8 @@ export default function ManualPenaltiesSettingsSection() {
       if (error) throw error;
       setPenalties(data || []);
     } catch (error: any) {
-      if (error.message?.includes('Could not find the table') || error.message?.includes('relation "manual_penalties" does not exist')) {
-        setErrorMsg('A tabela "manual_penalties" não foi encontrada. Por favor, execute o script SQL no Supabase para criá-la.');
+      if (error.message?.includes('Could not find the table') || error.message?.includes('relation "manual_penalties" does not exist') || error.message?.includes('violates row-level security policy')) {
+        setErrorMsg('A tabela "manual_penalties" não foi encontrada, ou as permissões estão faltando. Por favor, execute o script SQL no editor do Supabase.');
       } else {
         console.error(error);
       }
@@ -51,7 +51,12 @@ export default function ManualPenaltiesSettingsSection() {
       setShowForm(false);
       fetchData();
     } catch (error: any) {
-      alert('Erro: ' + error.message);
+      if (error.message?.includes('violates row-level security policy')) {
+        alert('Erro de Permissão (RLS): As políticas da tabela "manual_penalties" não foram aplicadas. Feche este modal e siga as instruções na tela.');
+        setErrorMsg('Parece que faltam as políticas de permissão RLS para a tabela "manual_penalties". Por favor, execute o script SQL abaixo no Supabase.');
+      } else {
+        alert('Erro: ' + error.message);
+      }
     }
   };
 
@@ -79,7 +84,16 @@ export default function ManualPenaltiesSettingsSection() {
     points NUMERIC NOT NULL,
     active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);`}
+);
+
+ALTER TABLE manual_penalties ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public Read" ON manual_penalties;
+DROP POLICY IF EXISTS "Admin Manage" ON manual_penalties;
+
+CREATE POLICY "Public Read" ON manual_penalties FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admin Manage" ON manual_penalties FOR ALL TO authenticated USING (true) WITH CHECK (true);
+`}
            </pre>
          </div>
       </div>
