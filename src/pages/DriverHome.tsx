@@ -203,9 +203,12 @@ export default function DriverHome() {
                     return (
                       <button
                         key={type.id}
-                        onClick={() => navigate(`/checklist/${type.id}?schedule=${activeSchedule.id}`)}
+                        disabled={done}
+                        onClick={() => {
+                          if (!done) navigate(`/checklist/${type.id}?schedule=${activeSchedule.id}`);
+                        }}
                         className={`w-full h-14 rounded-xl flex items-center px-4 gap-3 font-black text-sm uppercase tracking-widest shadow-sm transition-all ${
-                          done ? 'bg-success text-white border-2 border-white/20' : 'bg-white text-primary hover:bg-zinc-50'
+                          done ? 'bg-[#299c5e] text-white border border-[#30b56d] cursor-default opacity-90' : 'bg-white text-primary hover:bg-zinc-50'
                         }`}
                       >
                         <type.icon size={20} />
