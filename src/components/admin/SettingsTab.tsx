@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase';
 import FleetSettingsSection from './FleetSettingsSection';
 import ManualPenaltiesSettingsSection from './ManualPenaltiesSettingsSection';
 
+import ScoreCloseModal from './ScoreCloseModal';
+
 interface SettingsTabProps {
   appSettings: any;
   setAppSettings: (settings: any) => void;
@@ -13,6 +15,7 @@ interface SettingsTabProps {
 export default function SettingsTab({ appSettings, setAppSettings, fetchData }: SettingsTabProps) {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'points' | 'vehicles' | 'manual_penalties'>('points');
+  const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,44 +32,8 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
     }
   };
 
-  const handleResetBalances = async () => {
-    const resetValue = Number(appSettings.initial_value) || 1000;
-    if (!confirm(`Deseja resetar o saldo de TODOS os motoristas para ${resetValue}?`)) return;
-    
-    setSaving(true);
-    try {
-      // Get all drivers
-      const { data: drivers } = await supabase.from('profiles').select('id').eq('role', 'driver');
-      
-      if (drivers && drivers.length > 0) {
-        const upsertData = drivers.map(d => ({
-          driver_id: d.id,
-          score: resetValue,
-          updated_at: new Date().toISOString()
-        }));
-
-        const { error } = await supabase
-          .from('driver_performance')
-          .upsert(upsertData);
-        
-        if (error) throw error;
-      }
-
-      // Log audit
-      await supabase.from('audit_logs').insert({
-        driver_id: null,
-        type: 'reset',
-        amount: resetValue,
-        reason: 'Reset mensal de saldos para todos os motoristas'
-      });
-
-      alert('Saldos resetados.');
-      fetchData();
-    } catch (error: any) {
-      alert('Erro: ' + error.message);
-    } finally {
-      setSaving(false);
-    }
+  const handleResetBalancesClick = () => {
+    setIsClosingModalOpen(true);
   };
 
 
@@ -196,10 +163,10 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
               <button 
                 type="button"
                 disabled={saving}
-                onClick={handleResetBalances}
-                className="h-12 px-6 border border-app-border rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-50 transition-all font-mono disabled:opacity-50"
+                onClick={handleResetBalancesClick}
+                className="h-12 px-6 border border-app-border rounded-xl text-[10px] font-black uppercase tracking-widest text-text-main hover:bg-zinc-50 transition-all disabled:opacity-50"
               >
-                Resetar Saldos
+                Resetar (Fechamento)
               </button>
             </div>
           </form>
@@ -208,6 +175,17 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
         <FleetSettingsSection />
       ) : (
         <ManualPenaltiesSettingsSection />
+      )}
+
+      {isClosingModalOpen && (
+        <ScoreCloseModal 
+          initialScore={Number(appSettings.initial_value) || 1000}
+          onClose={() => setIsClosingModalOpen(false)}
+          onSuccess={() => {
+            setIsClosingModalOpen(false);
+            fetchData();
+          }}
+        />
       )}
     </div>
   );

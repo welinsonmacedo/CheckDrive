@@ -370,3 +370,28 @@ ALTER TABLE public.checklist_types ADD COLUMN IF NOT EXISTS slug TEXT UNIQUE;
 UPDATE public.checklist_types SET slug = 'start' WHERE title = 'Início de Viagem';
 UPDATE public.checklist_types SET slug = 'fuel' WHERE title = 'Abastecimento';
 UPDATE public.checklist_types SET slug = 'end' WHERE title = 'Fim de Viagem';
+
+CREATE TABLE IF NOT EXISTS score_closings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    closed_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    closed_by UUID REFERENCES profiles(id)
+);
+
+CREATE TABLE IF NOT EXISTS score_closing_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    closing_id UUID REFERENCES score_closings(id) ON DELETE CASCADE,
+    driver_id UUID REFERENCES profiles(id),
+    score INTEGER NOT NULL,
+    total_checklists INTEGER DEFAULT 0
+);
+
+ALTER TABLE score_closings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE score_closing_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public can view score closings" ON score_closings FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admins can insert score closings" ON score_closings FOR INSERT TO authenticated WITH CHECK (is_admin());
+
+CREATE POLICY "Public can view score closing items" ON score_closing_items FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admins can insert score closing items" ON score_closing_items FOR INSERT TO authenticated WITH CHECK (is_admin());
