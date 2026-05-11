@@ -49,7 +49,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       const localEnd = new Date(`${filterDate}T23:59:59.999`);
 
       const { data } = await supabase.from('schedules')
-        .select('*, profiles(*), vehicles(plate, type), trailers(plate), routes(origin, destination), bait1:baits!schedules_bait1_id_fkey(name), bait2:baits!schedules_bait2_id_fkey(name), bait3:baits!schedules_bait3_id_fkey(name)')
+        .select('*, profiles(*), vehicles(plate, type), trailers(plate), routes(origin, destination, stops), bait1:baits!schedules_bait1_id_fkey(name), bait2:baits!schedules_bait2_id_fkey(name), bait3:baits!schedules_bait3_id_fkey(name)')
         .gte('start_at', localStart.toISOString())
         .lte('start_at', localEnd.toISOString())
         .order('start_at', { ascending: false });
@@ -188,7 +188,11 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       message += `*${index + 1}. MOTORISTA:* ${sch.profiles?.full_name}\n`;
       message += `*VEÍCULO:* ${sch.vehicles?.type || 'Não definido'}\n`;
       message += `*PLACA:* ${sch.vehicles?.plate}${sch.trailers?.plate ? ` | REB: ${sch.trailers.plate}` : ''}\n`;
-      message += `*ROTA:* ${sch.routes?.origin} → ${sch.routes?.destination}\n`;
+      let routeText = `${sch.routes?.origin} → ${sch.routes?.destination}`;
+      if (Array.isArray(sch.routes?.stops) && sch.routes.stops.length > 0) {
+        routeText = `${sch.routes.origin} → ${sch.routes.stops.join(' → ')} → ${sch.routes.destination}`;
+      }
+      message += `*ROTA:* ${routeText}\n`;
       message += `*SAÍDA:* ${start}\n`;
       message += `*CHEGADA:* ${end}\n`;
       
