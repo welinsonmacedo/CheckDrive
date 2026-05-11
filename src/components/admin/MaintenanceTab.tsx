@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Search, CheckCircle2, Download, X, ZoomIn, ZoomOut, AlertCircle, CheckCircle } from "lucide-react";
+import { Search, CheckCircle2, Download, X, ZoomIn, ZoomOut, AlertCircle, CheckCircle, Plus } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import ManualIssueModal from "./ManualIssueModal";
 
 export default function MaintenanceTab() {
 
@@ -8,6 +9,7 @@ export default function MaintenanceTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"pending" | "resolved">("pending");
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
@@ -205,18 +207,28 @@ export default function MaintenanceTab() {
             {activeTab === "pending" ? "Pendências de Manutenção" : "Manutenções Resolvidas"}
           </span>
 
-          <div className="relative">
+          <div className="flex items-center gap-4">
+             <button
+                onClick={() => setIsManualModalOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors uppercase tracking-wider"
+             >
+                <Plus size={14} />
+                Lançar Nova
+             </button>
 
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"/>
+             <div className="relative">
 
-            <input
-              type="text"
-              placeholder="Filtrar placa, item ou motorista..."
-              className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] border border-app-border w-64"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"/>
 
+               <input
+                 type="text"
+                 placeholder="Filtrar placa, item ou motorista..."
+                 className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] border border-app-border w-64"
+                 value={searchTerm}
+                 onChange={(e) => setSearchTerm(e.target.value)}
+               />
+
+             </div>
           </div>
 
         </div>
@@ -450,6 +462,16 @@ export default function MaintenanceTab() {
 
         </div>
 
+      )}
+
+      {isManualModalOpen && (
+        <ManualIssueModal
+          onClose={() => setIsManualModalOpen(false)}
+          onSuccess={() => {
+            setIsManualModalOpen(false);
+            fetchIssues();
+          }}
+        />
       )}
 
     </div>
