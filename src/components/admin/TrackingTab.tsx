@@ -164,18 +164,36 @@ export default function TrackingTab() {
     return 'bg-purple-100 text-purple-700 border-purple-200'; 
   };
 
-  const filteredVehicles = vehicles.filter(v => 
-    (vehicleTypeFilter === '' || v.type === vehicleTypeFilter) &&
-    (v.plate?.toLowerCase().includes(searchTerm.toLowerCase()) || schedulesMap[`v_${v.id}`]?.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const getSortOrder = (item: any, type: 'vehicle' | 'driver' | 'bait') => {
+    const key = type === 'vehicle' ? 'v_' : type === 'driver' ? 'd_' : 'b_';
+    const schedule = schedulesMap[`${key}${item.id}`];
+    const state = getComputedState(item, schedule, type === 'vehicle');
+    
+    if (state.status === 'Em trânsito') return 0;
+    if (state.status === 'Aguardando Início') return 1;
+    if (state.isManual) return 2;
+    if (state.status === 'Viagem Concluída') return 3;
+    return 4; // Sem viagem
+  };
 
-  const filteredDrivers = drivers.filter(d => 
-    d.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || schedulesMap[`d_${d.id}`]?.vehicles?.plate?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredVehicles = vehicles
+    .filter(v => 
+      (vehicleTypeFilter === '' || v.type === vehicleTypeFilter) &&
+      (v.plate?.toLowerCase().includes(searchTerm.toLowerCase()) || schedulesMap[`v_${v.id}`]?.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    .sort((a, b) => getSortOrder(a, 'vehicle') - getSortOrder(b, 'vehicle'));
 
-  const filteredBaits = baits.filter(b => 
-    b.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredDrivers = drivers
+    .filter(d => 
+      d.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || schedulesMap[`d_${d.id}`]?.vehicles?.plate?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => getSortOrder(a, 'driver') - getSortOrder(b, 'driver'));
+
+  const filteredBaits = baits
+    .filter(b => 
+      b.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => getSortOrder(a, 'bait') - getSortOrder(b, 'bait'));
 
   const vehicleTypes = Array.from(new Set(vehicles.map(v => v.type).filter(Boolean)));
 
