@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS checklist_issues (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     submission_id UUID REFERENCES checklist_submissions(id) ON DELETE CASCADE,
     vehicle_id UUID REFERENCES vehicles(id),
+    trailer_id UUID REFERENCES trailers(id),
     driver_id UUID REFERENCES profiles(id),
     item_title TEXT NOT NULL,
     description TEXT,

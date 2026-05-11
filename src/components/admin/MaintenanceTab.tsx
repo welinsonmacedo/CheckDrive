@@ -54,6 +54,7 @@ export default function MaintenanceTab() {
       );
 
       const vehicleIds = [...new Set(filteredIssues.map((i: any) => i.vehicle_id).filter(Boolean))];
+      const trailerIds = [...new Set(filteredIssues.map((i: any) => i.trailer_id).filter(Boolean))];
       const driverIds = [...new Set(filteredIssues.map((i: any) => i.driver_id).filter(Boolean))];
 
       let vehiclesData: any[] = [];
@@ -63,6 +64,15 @@ export default function MaintenanceTab() {
           .select("id, plate, model")
           .in("id", vehicleIds);
         vehiclesData = data || [];
+      }
+
+      let trailersData: any[] = [];
+      if (trailerIds.length > 0) {
+        const { data } = await supabase
+          .from("trailers")
+          .select("id, plate")
+          .in("id", trailerIds);
+        trailersData = data || [];
       }
 
       let driversData: any[] = [];
@@ -77,6 +87,7 @@ export default function MaintenanceTab() {
       const issuesWithRelations = filteredIssues.map((issue: any) => ({
         ...issue,
         vehicles: vehiclesData.find(v => v.id === issue.vehicle_id),
+        trailers: trailersData.find(t => t.id === issue.trailer_id),
         profiles: driversData.find(d => d.id === issue.driver_id)
       }));
 
@@ -302,8 +313,8 @@ export default function MaintenanceTab() {
                        </td>
 
                       <td className="px-5 py-4">
-                        <div className="font-bold text-sm">{issue.vehicles?.plate || "Sem Placa"}</div>
-                        <div className="text-[10px] text-gray-400">{issue.vehicles?.model || "Carreta/Interno"}</div>
+                        <div className="font-bold text-sm">{(issue.vehicles?.plate) || (issue.trailers?.plate) || "Sem Placa"}</div>
+                        <div className="text-[10px] text-gray-400">{(issue.vehicles ? issue.vehicles.model : (issue.trailers ? 'Reboque' : "Carreta/Interno"))}</div>
                        </td>
 
                       <td className="px-5 py-4 text-sm">
@@ -424,7 +435,7 @@ export default function MaintenanceTab() {
               <div className="absolute bottom-4 left-4 right-4 bg-black/70 backdrop-blur-sm rounded-lg p-3 text-white">
                 <div className="flex items-center justify-between text-sm">
                   <div>
-                    <span className="font-bold">{selectedIssue.vehicles?.plate || "Sem Placa"}</span>
+                    <span className="font-bold">{(selectedIssue.vehicles?.plate) || (selectedIssue.trailers?.plate) || "Sem Placa"}</span>
                     <span className="mx-2">•</span>
                     <span>{selectedIssue.item_title}</span>
                     {selectedIssue.report_count > 1 && (

@@ -79,6 +79,7 @@ export default function ManualIssueModal({ onClose, onSuccess }: ManualIssueModa
         .from('checklist_issues')
         .insert({
           vehicle_id: formData.vehicleId || null,
+          trailer_id: formData.trailerId || null,
           driver_id: user?.id,
           item_title: formData.itemTitle,
           description: formData.description,
