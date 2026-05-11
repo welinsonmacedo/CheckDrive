@@ -397,3 +397,66 @@ CREATE POLICY "Admins can insert score closings" ON score_closings FOR INSERT TO
 
 CREATE POLICY "Public can view score closing items" ON score_closing_items FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admins can insert score closing items" ON score_closing_items FOR INSERT TO authenticated WITH CHECK (is_admin());
+
+-- Auto Closing RPC function
+CREATE OR REPLACE FUNCTION public.run_auto_score_closing()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    settings record;
+    last_closing date;
+    start_d date;
+    end_d date;
+    new_closing_id uuid;
+    driver record;
+    initial_score integer;
+BEGIN
+    SELECT * INTO settings FROM public.app_settings WHERE id = 'global';
+    
+    IF settings.closing_rule IS NULL OR settings.closing_rule = 'manual' THEN
+        RETURN;
+    END IF;
+
+    initial_score := COALESCE(settings.initial_value, 1000);
+
+    SELECT period_end INTO last_closing FROM public.score_closings ORDER BY period_end DESC LIMIT 1;
+    IF last_closing IS NULL THEN
+        -- Fallback to the start of the current month
+        last_closing := date_trunc('month', current_date)::date - integer '1';
+    END IF;
+
+    start_d := last_closing + integer '1';
+
+    IF settings.closing_rule = 'fixed_day' THEN
+        -- Find the target closing date for the CURRENT month
+        end_d := date_trunc('month', current_date)::date + ((COALESCE(settings.closing_day, 1) - 1) || ' days')::interval;
+        
+        -- If current date is after end_d, and start_d <= end_d (we haven't already closed it)
+        IF current_date > end_d AND start_d <= end_d THEN
+             -- Add a 1-day safety buffer? The prompt said "1 dia após finalizar a ultima escala da data do fechamento" -> equivalent to `current_date > end_d + interval '1 day'`. But `current_date > end_d` is already 1 day after.
+             -- Let's check if the schedules of end_d are finished. We can't really dynamically pause cron, so let's use `current_date > end_d` because it implies it's at least 1 day later (midnights passed).
+             
+             INSERT INTO public.score_closings (period_start, period_end, closed_by)
+             VALUES (start_d, end_d, NULL)
+             RETURNING id INTO new_closing_id;
+
+             -- Insert items:
+             FOR driver IN SELECT id, role FROM public.profiles WHERE role = 'driver' AND full_name NOT LIKE '%//INTERNO%' LOOP
+                 INSERT INTO public.score_closing_items (closing_id, driver_id, score, total_checklists)
+                 SELECT new_closing_id, driver.id, 
+                        COALESCE((SELECT score FROM public.driver_performance WHERE driver_id = driver.id), initial_score), 
+                        COALESCE((SELECT total_checklists FROM public.driver_performance WHERE driver_id = driver.id), 0);
+             END LOOP;
+
+             -- Reset scores:
+             UPDATE public.driver_performance SET score = initial_score, total_checklists = 0;
+
+             -- Optional: insert audit
+             INSERT INTO public.audit_logs (driver_id, type, amount, reason)
+             VALUES (NULL, 'reset', initial_score, 'Fechamento automático (' || start_d || ' a ' || end_d || ')');
+        END IF;
+    END IF;
+END;
+$$;

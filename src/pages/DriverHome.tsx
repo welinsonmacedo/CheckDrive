@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Car, Fuel, Route, ClipboardCheck, Trophy, AlertTriangle, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -107,6 +107,8 @@ export default function DriverHome() {
 
   const displayedTypes = user?.isInternal ? internalTypes : checklistTypes;
 
+  const [showScheduleOptions, setShowScheduleOptions] = useState(false);
+
   const isTypeDone = (typeId: string) => {
     if (!activeSchedule) return false;
     if (typeId === 'start') return !!activeSchedule.start_checklist_id;
@@ -117,10 +119,9 @@ export default function DriverHome() {
 
   const isTypeLocked = (typeId: string) => {
     if (user?.isInternal) return false;
-    if (!activeSchedule) return false;
-    
-    // If already done, it's locked
-    return isTypeDone(typeId);
+    // Se há escala ativa, os cards normais ficam totalmente inativos
+    if (activeSchedule) return true;
+    return false;
   };
 
   return (
@@ -163,8 +164,15 @@ export default function DriverHome() {
 
       {/* Active Schedule Alert */}
       {!user?.isInternal && activeSchedule && (
-        <div className="bg-primary border border-primary/20 rounded-2xl p-5 flex flex-col gap-4 text-white shadow-lg overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
+        <div 
+          onClick={() => setShowScheduleOptions(!showScheduleOptions)}
+          className={`border rounded-2xl p-5 flex flex-col gap-4 text-white shadow-lg overflow-hidden relative cursor-pointer transition-colors ${
+            activeSchedule.start_checklist_id && activeSchedule.end_checklist_id 
+              ? 'bg-success border-success/20' 
+              : 'bg-primary border-primary/20'
+          }`}
+        >
+          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
             <Route size={100} />
           </div>
           <div className="relative z-10 flex items-start justify-between">
@@ -175,27 +183,47 @@ export default function DriverHome() {
               <h3 className="text-xl font-black tracking-tight">{activeSchedule.routes?.origin} &#8594; {activeSchedule.routes?.destination}</h3>
               <p className="text-white/80 text-sm font-medium mt-1">Veículo: <span className="font-mono">{activeSchedule.vehicles?.plate}</span></p>
             </div>
+            <motion.div animate={{ rotate: showScheduleOptions ? 180 : 0 }}>
+              <ChevronRight size={24} className="text-white/80 transform rotate-90" />
+            </motion.div>
           </div>
-          <div className="relative z-10 mt-2">
-            {!activeSchedule.start_checklist_id ? (
-              <button
-                onClick={() => navigate(`/checklist/start?schedule=${activeSchedule.id}`)}
-                className="w-full bg-white text-primary h-12 rounded-xl font-black text-sm uppercase tracking-widest shadow-sm hover:bg-zinc-50 transition-colors"
-              >
-                Realizar Checklist Inicial
-              </button>
-            ) : !activeSchedule.end_checklist_id ? (
-              <button
-                onClick={() => navigate(`/checklist/end?schedule=${activeSchedule.id}`)}
-                className="w-full bg-white text-success h-12 rounded-xl font-black text-sm uppercase tracking-widest shadow-sm hover:bg-zinc-50 transition-colors"
-              >
-                Realizar Checklist Final
-              </button>
-            ) : (
-              <div className="w-full bg-white/20 border border-white/30 h-12 rounded-xl flex items-center justify-center">
-                <span className="text-white font-black text-xs uppercase tracking-widest">Escala Concluída</span>
-              </div>
-            )}
+          
+          <div className="relative z-10">
+            <AnimatePresence>
+              {showScheduleOptions ? (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }} 
+                  animate={{ opacity: 1, height: 'auto' }} 
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex flex-col gap-3 mt-4" 
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {checklistTypes.map((type) => {
+                    const done = isTypeDone(type.id);
+                    return (
+                      <button
+                        key={type.id}
+                        onClick={() => navigate(`/checklist/${type.id}?schedule=${activeSchedule.id}`)}
+                        className={`w-full h-14 rounded-xl flex items-center px-4 gap-3 font-black text-sm uppercase tracking-widest shadow-sm transition-all ${
+                          done ? 'bg-success text-white border-2 border-white/20' : 'bg-white text-primary hover:bg-zinc-50'
+                        }`}
+                      >
+                        <type.icon size={20} />
+                        <span className="flex-1 text-left">{type.label}</span>
+                        {done && <CheckCircle2 size={20} />}
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              ) : (
+                <div className="pt-2 flex items-center justify-between text-xs font-bold text-white/80 uppercase tracking-widest border-t border-white/20">
+                  <span>Clique para opções de checklist</span>
+                  {activeSchedule.start_checklist_id && activeSchedule.end_checklist_id && (
+                    <span className="bg-white/20 px-2 py-0.5 rounded">Concluída</span>
+                  )}
+                </div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       )}

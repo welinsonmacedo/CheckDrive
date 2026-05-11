@@ -96,6 +96,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             .then(profile => {
               if (profile) setUserSafe(session, profile);
             });
+            
+          // 🔥 Roda rotina automática de fechamento em background
+          supabase.rpc('run_auto_score_closing').catch(err => {
+            console.error('Erro na rotina de fechamento autmático:', err);
+          });
         } else {
           setUser(null);
         }
