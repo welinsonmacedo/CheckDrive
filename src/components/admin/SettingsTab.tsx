@@ -131,6 +131,46 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
               </div>
             </div>
 
+            <div className="space-y-3 pt-2 border-t border-app-border">
+               <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Fechamento Automático</label>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border border-app-border rounded-xl p-4 bg-zinc-50/50">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-text-main">Regra de Fechamento</label>
+                    <select 
+                      className="w-full h-10 px-3 rounded-lg border border-app-border bg-white text-xs font-bold outline-none focus:border-primary transition-all"
+                      value={appSettings?.closing_rule || 'manual'}
+                      onChange={e => setAppSettings({...appSettings, closing_rule: e.target.value})}
+                    >
+                      <option value="manual">Manual (Não fechar automático)</option>
+                      <option value="fixed_day">Dia Fixo do Mês</option>
+                      <option value="last_sunday">Último Domingo do Mês</option>
+                    </select>
+                  </div>
+                  
+                  {appSettings?.closing_rule === 'fixed_day' && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-text-main">Dia de Fechamento</label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        max="31"
+                        className="w-full h-10 px-3 rounded-lg border border-app-border bg-white text-xs font-bold outline-none focus:border-primary transition-all"
+                        value={appSettings?.closing_day || 1}
+                        onChange={e => setAppSettings({...appSettings, closing_day: Number(e.target.value)})}
+                      />
+                    </div>
+                  )}
+                  {appSettings?.closing_rule === 'last_sunday' && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-text-main">Dia de Fechamento</label>
+                      <div className="w-full h-10 px-3 pt-2.5 rounded-lg border border-app-border bg-gray-100 text-xs text-text-muted">
+                        Do último domingo até o último sábado
+                      </div>
+                    </div>
+                  )}
+               </div>
+            </div>
+
             <div className="space-y-3 pt-2">
                <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Fotos do Veículo (4 Lados)</label>
                <div className="flex items-center justify-between border border-app-border rounded-xl p-4 bg-zinc-50/50">

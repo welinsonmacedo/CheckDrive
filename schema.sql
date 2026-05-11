@@ -116,6 +116,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
     penalty_fuel NUMERIC NOT NULL DEFAULT 50,
     penalty_yard NUMERIC NOT NULL DEFAULT 50,
     require_external_photos BOOLEAN NOT NULL DEFAULT true,
+    closing_rule TEXT DEFAULT 'manual', -- 'manual', 'fixed_day', 'last_sunday'
+    closing_day INTEGER DEFAULT 1,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
