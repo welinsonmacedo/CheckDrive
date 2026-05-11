@@ -143,7 +143,6 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
                     >
                       <option value="manual">Manual (Não fechar automático)</option>
                       <option value="fixed_day">Dia Fixo do Mês</option>
-                      <option value="last_sunday">Último Domingo do Mês</option>
                     </select>
                   </div>
                   
@@ -158,14 +157,6 @@ export default function SettingsTab({ appSettings, setAppSettings, fetchData }: 
                         value={appSettings?.closing_day || 1}
                         onChange={e => setAppSettings({...appSettings, closing_day: Number(e.target.value)})}
                       />
-                    </div>
-                  )}
-                  {appSettings?.closing_rule === 'last_sunday' && (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-text-main">Dia de Fechamento</label>
-                      <div className="w-full h-10 px-3 pt-2.5 rounded-lg border border-app-border bg-gray-100 text-xs text-text-muted">
-                        Do último domingo até o último sábado
-                      </div>
                     </div>
                   )}
                </div>
