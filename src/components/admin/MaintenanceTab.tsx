@@ -53,23 +53,31 @@ export default function MaintenanceTab() {
         (i: any) => !fuelSubmissionIds.includes(i.submission_id)
       );
 
-      const vehicleIds = [...new Set(filteredIssues.map((i: any) => i.vehicle_id))];
-      const driverIds = [...new Set(filteredIssues.map((i: any) => i.driver_id))];
+      const vehicleIds = [...new Set(filteredIssues.map((i: any) => i.vehicle_id).filter(Boolean))];
+      const driverIds = [...new Set(filteredIssues.map((i: any) => i.driver_id).filter(Boolean))];
 
-      const { data: vehicles } = await supabase
-        .from("vehicles")
-        .select("id, plate, model")
-        .in("id", vehicleIds);
+      let vehiclesData: any[] = [];
+      if (vehicleIds.length > 0) {
+        const { data } = await supabase
+          .from("vehicles")
+          .select("id, plate, model")
+          .in("id", vehicleIds);
+        vehiclesData = data || [];
+      }
 
-      const { data: drivers } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", driverIds);
+      let driversData: any[] = [];
+      if (driverIds.length > 0) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", driverIds);
+        driversData = data || [];
+      }
 
       const issuesWithRelations = filteredIssues.map((issue: any) => ({
         ...issue,
-        vehicles: vehicles?.find(v => v.id === issue.vehicle_id),
-        profiles: drivers?.find(d => d.id === issue.driver_id)
+        vehicles: vehiclesData.find(v => v.id === issue.vehicle_id),
+        profiles: driversData.find(d => d.id === issue.driver_id)
       }));
 
       setIssues(issuesWithRelations);
@@ -294,8 +302,8 @@ export default function MaintenanceTab() {
                        </td>
 
                       <td className="px-5 py-4">
-                        <div className="font-bold text-sm">{issue.vehicles?.plate}</div>
-                        <div className="text-[10px] text-gray-400">{issue.vehicles?.model}</div>
+                        <div className="font-bold text-sm">{issue.vehicles?.plate || "Sem Placa"}</div>
+                        <div className="text-[10px] text-gray-400">{issue.vehicles?.model || "Carreta/Interno"}</div>
                        </td>
 
                       <td className="px-5 py-4 text-sm">
@@ -307,6 +315,12 @@ export default function MaintenanceTab() {
                         {issue.description && (
                           <div className="text-xs text-gray-500 mt-1 max-w-xs">
                             {issue.description}
+                          </div>
+                        )}
+                        {issue.report_count > 1 && (
+                          <div className="mt-2 inline-flex items-center gap-1 bg-red-100 text-red-700 text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wider">
+                            <AlertCircle size={12} />
+                            Repetido {issue.report_count}x
                           </div>
                         )}
                        </td>
@@ -410,9 +424,14 @@ export default function MaintenanceTab() {
               <div className="absolute bottom-4 left-4 right-4 bg-black/70 backdrop-blur-sm rounded-lg p-3 text-white">
                 <div className="flex items-center justify-between text-sm">
                   <div>
-                    <span className="font-bold">{selectedIssue.vehicles?.plate}</span>
+                    <span className="font-bold">{selectedIssue.vehicles?.plate || "Sem Placa"}</span>
                     <span className="mx-2">•</span>
                     <span>{selectedIssue.item_title}</span>
+                    {selectedIssue.report_count > 1 && (
+                      <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">
+                        Repetiu {selectedIssue.report_count}x
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs">
                     {new Date(selectedIssue.created_at).toLocaleString()}
