@@ -423,26 +423,36 @@ export default function ChecklistFlow() {
 
       // 4. Link to Schedule if applicable
       if (type === 'start' || type === 'end' || type === 'fuel') {
-        const { data: activeSchedule } = await supabase
-          .from('schedules')
-          .select('id')
-          .eq('driver_id', user.id)
-          .eq('vehicle_id', formData.vehicleId)
-          .eq('route_id', formData.routeId)
-          // Look for any schedule today (simple approach) or current active one
-          .lte('start_at', new Date().toISOString()) 
-          .gte('end_at', new Date(new Date().getTime() - 24 * 60 * 60 * 1000).toISOString()) // Within last 24h
-          .is(type === 'start' ? 'start_checklist_id' : type === 'end' ? 'end_checklist_id' : 'fuel_checklist_id', null)
-          .order('start_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const scheduleId = new URLSearchParams(window.location.search).get('schedule');
         
-        if (activeSchedule) {
+        let activeScheduleId = scheduleId;
+
+        if (!activeScheduleId) {
+          const { data: activeSchedule } = await supabase
+            .from('schedules')
+            .select('id')
+            .eq('driver_id', user.id)
+            .eq('vehicle_id', formData.vehicleId)
+            .eq('route_id', formData.routeId)
+            // Look for any schedule today (simple approach) or current active one
+            .lte('start_at', new Date().toISOString()) 
+            .gte('end_at', new Date(new Date().getTime() - 24 * 60 * 60 * 1000).toISOString()) // Within last 24h
+            .is(type === 'start' ? 'start_checklist_id' : type === 'end' ? 'end_checklist_id' : 'fuel_checklist_id', null)
+            .order('start_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (activeSchedule) {
+            activeScheduleId = activeSchedule.id;
+          }
+        }
+
+        if (activeScheduleId) {
           const updateField = type === 'start' ? 'start_checklist_id' : type === 'end' ? 'end_checklist_id' : 'fuel_checklist_id';
           await supabase
             .from('schedules')
             .update({ [updateField]: submission.id })
-            .eq('id', activeSchedule.id);
+            .eq('id', activeScheduleId);
         }
       }
 
