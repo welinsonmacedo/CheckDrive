@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS profiles (
     email TEXT UNIQUE NOT NULL,
     full_name TEXT NOT NULL,
     role TEXT CHECK (role IN ('driver', 'admin', 'standard')) DEFAULT 'driver',
+    driver_type TEXT DEFAULT 'Interno/Pátio',
+    participates_in_ranking BOOLEAN DEFAULT true,
     active BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

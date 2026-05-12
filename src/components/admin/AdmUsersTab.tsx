@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { CheckCircle2, Search, X, Plus } from 'lucide-react';
 
-export default function DriversTab() {
+export default function AdmUsersTab() {
   const [users, setUsers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
@@ -14,21 +14,20 @@ export default function DriversTab() {
     id: '',
     fullName: '',
     email: '',
-    role: 'driver',
+    role: 'standard',
     password: '',
-    driverType: 'Interno/Pátio',
-    participatesInRanking: true
+    isInternal: false
   });
 const openCreateForm = () => {
   setUserForm({
     id: '',
     fullName: '',
     email: '',
-    role: 'driver',
+    role: 'standard',
     password: '',
-    driverType: 'Interno/Pátio',
-    participatesInRanking: true
+    isInternal: false
   });
+
   setShowForm(true);
 };
   const fetchUsers = async () => {
@@ -37,7 +36,7 @@ const openCreateForm = () => {
       const { data } = await supabase
         .from('profiles')
         .select('*')
-        .eq('role', 'driver')
+        .in('role', ['admin', 'standard'])
         .order('full_name');
 
       setUsers(data || []);
@@ -58,25 +57,17 @@ const openCreateForm = () => {
 
     const parsedName = userForm.fullName;
 
-    // Create a payload object, wrap in try/catch to gracefully ignore missing columns if user hasn't run schematic yet
-    const updatePayload = {
-      full_name: parsedName,
-      role: userForm.role,
-      driver_type: userForm.driverType,
-      participates_in_ranking: userForm.participatesInRanking
-    };
-
     try {
       if (userForm.id) {
         const { error } = await supabase
           .from('profiles')
-          .update(updatePayload)
+          .update({
+            full_name: parsedName,
+            role: userForm.role
+          })
           .eq('id', userForm.id);
 
-        if (error) {
-            // fallback if columns don't exist
-            await supabase.from('profiles').update({ full_name: parsedName, role: userForm.role }).eq('id', userForm.id);
-        }
+        if (error) throw error;
       } else {
         const { data, error } = await supabase.auth.signUp({
           email: userForm.email,
@@ -97,8 +88,9 @@ const openCreateForm = () => {
               {
                 id: data.user.id,
                 email: userForm.email,
-                active: true,
-                ...updatePayload
+                full_name: parsedName,
+                role: userForm.role,
+                active: true
               },
               { onConflict: 'id' }
             );
@@ -111,17 +103,11 @@ const openCreateForm = () => {
 
             await supabase
               .from('profiles')
-              .update(updatePayload)
+              .update({
+                role: userForm.role,
+                full_name: parsedName
+              })
               .eq('id', data.user.id);
-          }
-
-          if (userForm.role === 'driver' && userForm.participatesInRanking) {
-            await supabase
-              .from('driver_performance')
-              .upsert(
-                { driver_id: data.user.id, score: 1000 },
-                { onConflict: 'driver_id' }
-              );
           }
         }
       }
@@ -130,10 +116,9 @@ const openCreateForm = () => {
         id: '',
         fullName: '',
         email: '',
-        role: 'driver',
+        role: 'standard',
         password: '',
-        driverType: 'Interno/Pátio',
-        participatesInRanking: true
+        isInternal: false
       });
 
       setShowForm(false);
@@ -232,7 +217,7 @@ const openCreateForm = () => {
                 </th>
 
                 <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                  Tipo de Motorista
+                  Nível
                 </th>
 
                 <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right">
@@ -272,16 +257,14 @@ const openCreateForm = () => {
                       <td className="px-5 py-4">
 
                         <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-orange-100 text-orange-700`}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                            user.role === 'admin'
+                              ? 'bg-blue-50 text-blue-600'
+                              : 'bg-purple-50 text-purple-600'
+                          }`}
                         >
-                          {user.driver_type || 'Interno/Pátio'}
+                          {user.role === 'admin' ? 'Administrador' : 'Padrão'}
                         </span>
-                        
-                        {!user.participates_in_ranking && (
-                          <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-500">
-                            Sem Pontuação
-                          </span>
-                        )}
 
                       </td>
 
@@ -293,10 +276,9 @@ const openCreateForm = () => {
                               id: user.id,
                               fullName: cleanName || '',
                               email: user.email || '',
-                              role: 'driver',
+                              role: user.role || 'standard',
                               password: '',
-                              driverType: user.driver_type || 'Interno/Pátio',
-                              participatesInRanking: user.participates_in_ranking !== false
+                              isInternal: false
                             });
 
                             setShowForm(true);
@@ -409,27 +391,15 @@ const openCreateForm = () => {
         )}
 
         <select
-          value={userForm.driverType}
+          value={userForm.role}
           onChange={e =>
-            setUserForm({ ...userForm, driverType: e.target.value })
+            setUserForm({ ...userForm, role: e.target.value })
           }
           className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
         >
-          <option value="Interno/Pátio">Interno / Pátio</option>
-          <option value="Distribuição">Distribuição</option>
-          <option value="Transferência">Transferência</option>
+          <option value="admin">Administrador</option>
+          <option value="standard">Padrão</option>
         </select>
-
-        <label className="flex items-center gap-3 text-sm text-text-muted">
-          <input
-            type="checkbox"
-            checked={userForm.participatesInRanking}
-            onChange={e =>
-              setUserForm({ ...userForm, participatesInRanking: e.target.checked })
-            }
-          />
-          Participa da Pontuação (Ranking)
-        </label>
 
         <button
           disabled={saving}

@@ -30,6 +30,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import SchedulesTab from '../components/admin/SchedulesTab';
+import AdmUsersTab from '../components/admin/AdmUsersTab';
 import DriversTab from '../components/admin/DriversTab';
 import VehiclesTab from '../components/admin/VehiclesTab';
 import RoutesTab from '../components/admin/RoutesTab';
@@ -167,6 +168,7 @@ export default function AdminDashboard() {
   ];
 
   const registerItems = [
+    { id: 'adm_users', icon: Users, label: 'Usuários Admin', color: 'from-blue-500 to-indigo-500' },
     { id: 'drivers', icon: Users, label: 'Motoristas', color: 'from-amber-500 to-yellow-500' },
     { id: 'vehicles', icon: Truck, label: 'Veículos', color: 'from-teal-500 to-green-500' },
     { id: 'routes', icon: Map, label: 'Rotas', color: 'from-violet-500 to-purple-500' },
@@ -310,6 +312,7 @@ export default function AdminDashboard() {
                 <OverviewTab setActiveTab={setActiveTab} appSettings={appSettings} />
               )}
               {activeTab === 'tracking' && <TrackingTab />}
+              {activeTab === 'adm_users' && <AdmUsersTab />}
               {activeTab === 'drivers' && <DriversTab />}
               {activeTab === 'vehicles' && <VehiclesTab />}
               {activeTab === 'routes' && <RoutesTab />}
