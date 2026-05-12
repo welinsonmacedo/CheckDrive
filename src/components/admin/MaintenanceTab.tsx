@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, CheckCircle2, Download, X, ZoomIn, ZoomOut, AlertCircle, CheckCircle, Plus } from "lucide-react";
+import { Search, CheckCircle2, Download, X, ZoomIn, ZoomOut, AlertCircle, CheckCircle, Plus, Eye } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ManualIssueModal from "./ManualIssueModal";
 
@@ -340,12 +340,13 @@ export default function MaintenanceTab() {
 
                         {imageUrl && (
 
-                          <img
-                            src={imageUrl}
-                            className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:opacity-80 hover:shadow-md transition-all"
+                          <button
                             onClick={() => openImageModal(issue)}
-                            alt="Defeito"
-                          />
+                            title="Ver Foto"
+                            className="w-10 h-10 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Eye size={20} />
+                          </button>
 
                         )}
 

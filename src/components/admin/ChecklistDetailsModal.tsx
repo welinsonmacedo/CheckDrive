@@ -1,6 +1,6 @@
 // components/admin/ChecklistDetailsModal.tsx
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ClipboardCheck, Eye, EyeOff, Image as ImageIcon, AlertCircle, ChevronDown, ChevronUp, ZoomIn, ZoomOut, Download, AlertOctagon } from 'lucide-react';
+import { X, ClipboardCheck, Eye, EyeOff, Image as ImageIcon, AlertCircle, ChevronDown, ChevronUp, ZoomIn, ZoomOut, Download, AlertOctagon, Fuel } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useState, useEffect } from 'react';
 
@@ -353,117 +353,148 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
               </div>
             </div>
 
-            {/* Defeitos Encontrados */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                  <AlertCircle size={14} className="text-red-500" />
-                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                    Defeitos Encontrados
-                  </h4>
-                  <span className="text-[9px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
-                    {defectItems.length} {defectItems.length === 1 ? 'defeito' : 'defeitos'}
-                  </span>
+            {/* Defeitos Encontrados ou Abastecimento */}
+            {selectedSub.type === 'fuel' ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <Fuel size={14} className="text-primary" />
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                      Litragem Registrada
+                    </h4>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  {selectedSub.details?.itemTitles && Object.keys(selectedSub.details.itemTitles).length > 0 ? (
+                    Object.keys(selectedSub.details.itemTitles).map(itemId => {
+                      const title = selectedSub.details.itemTitles[itemId];
+                      const value = selectedSub.details.itemValues?.[itemId];
+                      if (!value) return null;
+                      const displayValue = value === 'defect' ? 'N/A' : value;
+                      return (
+                        <div key={itemId} className="flex flex-col bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 min-w-[120px]">
+                          <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">{title}</span>
+                          <span className="text-lg font-bold text-primary mt-1">{displayValue}</span>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <span className="text-[10px] text-text-muted italic p-4">Sem detalhes adicionais</span>
+                  )}
                 </div>
               </div>
-              
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
-                    <span className="text-xs text-gray-500">Carregando defeitos...</span>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={14} className="text-red-500" />
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                      Defeitos Encontrados
+                    </h4>
+                    <span className="text-[9px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                      {defectItems.length} {defectItems.length === 1 ? 'defeito' : 'defeitos'}
+                    </span>
                   </div>
                 </div>
-              ) : !hasDefects ? (
-                <div className="text-center py-8 bg-green-50 rounded-xl border border-green-100">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                      <ClipboardCheck size={24} className="text-green-600" />
+                
+                {loading ? (
+                  <div className="text-center py-8">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
+                      <span className="text-xs text-gray-500">Carregando defeitos...</span>
                     </div>
-                    <p className="text-sm font-medium text-green-700">Nenhum defeito encontrado!</p>
-                    <p className="text-xs text-green-600">Todos os itens do checklist estão normais.</p>
                   </div>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {defectItems.map((item) => {
-                    const isExpanded = expandedItems.includes(item.id);
-                    const imageUrl = item.photo_url ? getPhotoUrl(item.photo_url) : null;
-                    
-                    return (
-                      <div key={item.id} className="flex flex-col p-4 rounded-xl bg-red-50/30 border border-red-200">
-                        <div 
-                          className="flex items-center justify-between cursor-pointer"
-                          onClick={() => {
-                            setExpandedItems(prev => 
-                              prev.includes(item.id) 
-                                ? prev.filter(i => i !== item.id)
-                                : [...prev, item.id]
-                            );
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-gray-800">{item.item_title}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-red-100 text-red-700">
-                              DEFEITO
-                            </span>
-                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                          </div>
-                        </div>
-                        
-                        {isExpanded && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="mt-4 pt-4 border-t border-red-200"
-                          >
-                            {/* Descrição */}
-                            <div className="space-y-2 mb-4">
-                              <span className="text-[10px] font-bold text-red-600 uppercase">Descrição Reportada:</span>
-                              <div className={`p-3 rounded-lg ${item.description ? 'bg-white' : 'bg-gray-50'}`}>
-                                <p className={`text-xs font-medium ${item.description ? 'text-gray-600' : 'text-gray-400 italic'}`}>
-                                  {item.description || 'Nenhuma descrição fornecida'}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            {/* Foto do defeito */}
-                            {imageUrl ? (
-                              <div className="space-y-2">
-                                <span className="text-[10px] font-bold text-red-600 uppercase">Foto do Defeito:</span>
-                                <div className="flex gap-2">
-                                  <img
-                                    src={imageUrl}
-                                    className="w-32 h-32 object-cover rounded-lg cursor-pointer hover:opacity-80 hover:shadow-md transition-all border border-red-200"
-                                    onClick={() => openImageModal(item)}
-                                    alt="Defeito"
-                                    onError={(e) => {
-                                      console.error('Erro ao carregar imagem:', e);
-                                      e.currentTarget.src = 'https://placehold.co/400x300/e2e8f0/94a3b8?text=Erro';
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-2">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase">Foto do Defeito:</span>
-                                <div className="w-32 h-32 rounded-lg bg-gray-100 flex flex-col items-center justify-center gap-1 border border-gray-200">
-                                  <ImageIcon size={24} className="text-gray-400" />
-                                  <span className="text-[9px] text-gray-400">Nenhuma foto anexada</span>
-                                </div>
-                              </div>
-                            )}
-                          </motion.div>
-                        )}
+                ) : !hasDefects ? (
+                  <div className="text-center py-8 bg-green-50 rounded-xl border border-green-100">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <ClipboardCheck size={24} className="text-green-600" />
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      <p className="text-sm font-medium text-green-700">Nenhum defeito encontrado!</p>
+                      <p className="text-xs text-green-600">Todos os itens do checklist estão normais.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {defectItems.map((item) => {
+                      const isExpanded = expandedItems.includes(item.id);
+                      const imageUrl = item.photo_url ? getPhotoUrl(item.photo_url) : null;
+                      
+                      return (
+                        <div key={item.id} className="flex flex-col p-4 rounded-xl bg-red-50/30 border border-red-200">
+                          <div 
+                            className="flex items-center justify-between cursor-pointer"
+                            onClick={() => {
+                              setExpandedItems(prev => 
+                                prev.includes(item.id) 
+                                  ? prev.filter(i => i !== item.id)
+                                  : [...prev, item.id]
+                              );
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-gray-800">{item.item_title}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-red-100 text-red-700">
+                                DEFEITO
+                              </span>
+                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </div>
+                          </div>
+                          
+                          {isExpanded && (
+                            <motion.div 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="mt-4 pt-4 border-t border-red-200"
+                            >
+                              {/* Descrição */}
+                              <div className="space-y-2 mb-4">
+                                <span className="text-[10px] font-bold text-red-600 uppercase">Descrição Reportada:</span>
+                                <div className={`p-3 rounded-lg ${item.description ? 'bg-white' : 'bg-gray-50'}`}>
+                                  <p className={`text-xs font-medium ${item.description ? 'text-gray-600' : 'text-gray-400 italic'}`}>
+                                    {item.description || 'Nenhuma descrição fornecida'}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {/* Foto do defeito */}
+                              {imageUrl ? (
+                                <div className="space-y-2">
+                                  <span className="text-[10px] font-bold text-red-600 uppercase">Foto do Defeito:</span>
+                                  <div className="flex gap-2">
+                                    <img
+                                      src={imageUrl}
+                                      className="w-32 h-32 object-cover rounded-lg cursor-pointer hover:opacity-80 hover:shadow-md transition-all border border-red-200"
+                                      onClick={() => openImageModal(item)}
+                                      alt="Defeito"
+                                      onError={(e) => {
+                                        console.error('Erro ao carregar imagem:', e);
+                                        e.currentTarget.src = 'https://placehold.co/400x300/e2e8f0/94a3b8?text=Erro';
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-2">
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase">Foto do Defeito:</span>
+                                  <div className="w-32 h-32 rounded-lg bg-gray-100 flex flex-col items-center justify-center gap-1 border border-gray-200">
+                                    <ImageIcon size={24} className="text-gray-400" />
+                                    <span className="text-[9px] text-gray-400">Nenhuma foto anexada</span>
+                                  </div>
+                                </div>
+                              )}
+                            </motion.div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Botão para carregar fotos do veículo */}
             {hasPhotos && !loadPhotos && (
