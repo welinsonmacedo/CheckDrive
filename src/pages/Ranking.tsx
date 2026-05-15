@@ -23,9 +23,11 @@ export default function Ranking() {
         .from('driver_performance')
         .select(`
           score,
+          total_checklists,
           profiles!inner(
             full_name,
-            role
+            role,
+            participates_in_ranking
           )
         `)
         .eq('profiles.role', 'driver')
@@ -33,9 +35,13 @@ export default function Ranking() {
 
       if (error) throw error;
       
-      // Filter out internal drivers and limit
+      // Filter out non-participating drivers and internal drivers, sort by score and then total_checklists, then limit
       const filtered = (data || [])
-        .filter((item: any) => !item.profiles?.full_name?.endsWith('//INTERNO'))
+        .filter((item: any) => item.profiles?.participates_in_ranking !== false && !item.profiles?.full_name?.endsWith('//INTERNO'))
+        .sort((a: any, b: any) => {
+          if (b.score !== a.score) return b.score - a.score;
+          return (b.total_checklists || 0) - (a.total_checklists || 0);
+        })
         .slice(0, 20);
 
       setRanking(filtered);
@@ -91,6 +97,7 @@ export default function Ranking() {
                   </span>
                   <span className="block text-[10px] text-text-muted font-bold uppercase tracking-wider">
                     {index === 0 ? 'Líder da Operação' : 'Consistência Operacional'}
+                    {' • '}{item.total_checklists || 0} {(item.total_checklists === 1) ? 'Escala' : 'Escalas'}
                   </span>
                 </div>
 

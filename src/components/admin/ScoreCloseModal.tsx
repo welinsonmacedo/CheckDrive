@@ -39,13 +39,14 @@ export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: Sc
       if (closingErr) throw closingErr;
 
       // 2. Fetch current drivers performance
-      const { data: drivers } = await supabase.from('profiles').select('id, driver_performance(*)').eq('role', 'driver');
+      const { data: drivers } = await supabase.from('profiles').select('id, participates_in_ranking, driver_performance(*)').eq('role', 'driver');
       
       const itemsToInsert = [];
       const resetsToUpsert = [];
 
       if (drivers && drivers.length > 0) {
          for (const d of drivers) {
+             if (d.participates_in_ranking === false) continue;
              const perf = d.driver_performance?.[0] || { score: initialScore, total_checklists: 0 };
              itemsToInsert.push({
                  closing_id: closingRec.id,

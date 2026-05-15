@@ -8,7 +8,7 @@ export const runSilentAudit = async () => {
     // Check if the user is authenticated and has permission implicitly by attempting fetch
     const { data: expired, error } = await supabase
       .from('schedules')
-      .select('*')
+      .select('*, profiles(participates_in_ranking)')
       .lt('end_at', oneHourAgo)
       .eq('penalty_applied', false);
 
@@ -21,6 +21,12 @@ export const runSilentAudit = async () => {
     const appSettings = settings || {};
 
     for (const schedule of expired) {
+      // If driver doesn't participate in ranking, just mark as audited and skip penalties
+      if (schedule.profiles?.participates_in_ranking === false) {
+          await supabase.from('schedules').update({ penalty_applied: true }).eq('id', schedule.id);
+          continue;
+      }
+
       const missingStart = !schedule.start_checklist_id;
       const missingEnd = !schedule.end_checklist_id;
       const missingFuel = !schedule.fuel_checklist_id;

@@ -38,9 +38,8 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
       if (selectedPeriod === 'current') {
         const { data: drivers } = await supabase
           .from('profiles')
-          .select('id, full_name, role, driver_performance(score)')
-          .eq('role', 'driver')
-          .not('full_name', 'like', '%//INTERNO%');
+          .select('id, full_name, role, participates_in_ranking, driver_performance(score, total_checklists)')
+          .eq('role', 'driver');
 
         if (!drivers) {
           setRanking([]);
@@ -48,16 +47,23 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
           return;
         }
 
-        const ranked = drivers.map(driver => ({
+        const ranked = drivers
+          .filter(driver => driver.participates_in_ranking !== false)
+          .map(driver => ({
           ...driver,
-          score: driver.driver_performance?.[0]?.score || (appSettings?.initial_value || 1000)
-        })).sort((a, b) => b.score - a.score);
+          score: driver.driver_performance?.[0]?.score || (appSettings?.initial_value || 1000),
+          total_checklists: driver.driver_performance?.[0]?.total_checklists || 0
+        })).sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          // Se empatar na pontuação, ganha quem fez mais escalas
+          return (b.total_checklists || 0) - (a.total_checklists || 0);
+        });
 
         setRanking(ranked);
       } else {
         const { data: items } = await supabase
           .from('score_closing_items')
-          .select('driver_id, score, profiles(full_name)')
+          .select('driver_id, score, total_checklists, profiles(full_name)')
           .eq('closing_id', selectedPeriod);
 
         if (!items) {
@@ -66,8 +72,12 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
           const ranked = items.map((item: any) => ({
             id: item.driver_id,
             full_name: item.profiles?.full_name || 'Motorista',
-            score: item.score
-          })).sort((a, b) => b.score - a.score);
+            score: item.score,
+            total_checklists: item.total_checklists || 0
+          })).sort((a, b) => {
+             if (b.score !== a.score) return b.score - a.score;
+             return (b.total_checklists || 0) - (a.total_checklists || 0);
+          });
           setRanking(ranked);
         }
       }
@@ -138,6 +148,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
                     </span>
                     <span className="block text-[10px] text-text-muted font-bold uppercase tracking-wider truncate">
                       {index === 0 ? 'Líder da Operação' : 'Consistência Operacional'}
+                      {' • '}{item.total_checklists || 0} {(item.total_checklists === 1) ? 'Escala' : 'Escalas'}
                     </span>
                   </div>
 

@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 export default function DriverHome() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [driverInfo, setDriverInfo] = useState({ name: 'Carregando...', score: 0, checklists: 0 });
+  const [driverInfo, setDriverInfo] = useState({ name: 'Carregando...', score: 0, checklists: 0, participates_in_ranking: true });
   const [systemType, setSystemType] = useState('points');
   const [activeSchedule, setActiveSchedule] = useState<any>(null);
 
@@ -56,7 +56,8 @@ export default function DriverHome() {
       setDriverInfo({
         name: profile?.full_name || user.email?.split('@')[0] || 'Motorista',
         score: score,
-        checklists: count || 0
+        checklists: count || 0,
+        participates_in_ranking: profile?.participates_in_ranking !== false
       });
 
       // Fetch relevant schedule (Active or Next Upcoming)
@@ -133,19 +134,21 @@ export default function DriverHome() {
       </div>
 
       {!user?.isInternal ? (
-      <div className="grid grid-cols-2 gap-4">
-        <button 
-          onClick={() => navigate('/ranking')}
-          className="bento-card items-center justify-center text-center hover:border-primary/30 active:bg-app-bg transition-all"
-        >
-          <Trophy className="text-warning mb-2" size={24} />
-          <span className="text-3xl font-black text-text-main tabular-nums tracking-tighter">
-            {systemType === 'cash' ? `R$ ${driverInfo.score}` : driverInfo.score}
-          </span>
-          <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-            {systemType === 'cash' ? 'Meu Saldo' : 'Sua Pontuação'}
-          </span>
-        </button>
+      <div className={`grid ${driverInfo.participates_in_ranking ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+        {driverInfo.participates_in_ranking && (
+          <button 
+            onClick={() => navigate('/ranking')}
+            className="bento-card items-center justify-center text-center hover:border-primary/30 active:bg-app-bg transition-all"
+          >
+            <Trophy className="text-warning mb-2" size={24} />
+            <span className="text-3xl font-black text-text-main tabular-nums tracking-tighter">
+              {systemType === 'cash' ? `R$ ${driverInfo.score}` : driverInfo.score}
+            </span>
+            <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+              {systemType === 'cash' ? 'Meu Saldo' : 'Sua Pontuação'}
+            </span>
+          </button>
+        )}
         <div className="bento-card items-center justify-center text-center">
           <ClipboardCheck className="text-primary mb-2" size={24} />
           <span className="text-3xl font-black text-text-main tabular-nums tracking-tighter">{driverInfo.checklists}</span>

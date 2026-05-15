@@ -15,6 +15,10 @@ export default function MaintenanceTab() {
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
   const [zoom, setZoom] = useState(1);
 
+  const [resolvingIssueId, setResolvingIssueId] = useState<string | null>(null);
+  const [resolveNotes, setResolveNotes] = useState("");
+  const [isResolving, setIsResolving] = useState(false);
+
   useEffect(() => {
     fetchIssues();
   }, []);
@@ -103,25 +107,37 @@ export default function MaintenanceTab() {
 
   }
 
-  async function handleResolveIssue(issueId: string) {
+  function openResolveModal(issueId: string) {
+    setResolvingIssueId(issueId);
+    setResolveNotes("");
+  }
 
-    const notes = window.prompt("Observações da solução (opcional):");
+  async function confirmResolveIssue() {
+    if (!resolvingIssueId) return;
 
-    if (notes === null) return;
+    setIsResolving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const { data: { user } } = await supabase.auth.getUser();
+      await supabase
+        .from("checklist_issues")
+        .update({
+          status: "resolved",
+          resolution_notes: resolveNotes,
+          resolved_at: new Date().toISOString(),
+          resolved_by: user?.id
+        })
+        .eq("id", resolvingIssueId);
 
-    await supabase
-      .from("checklist_issues")
-      .update({
-        status: "resolved",
-        resolution_notes: notes,
-        resolved_at: new Date().toISOString(),
-        resolved_by: user?.id
-      })
-      .eq("id", issueId);
-
-    fetchIssues();
+      setResolvingIssueId(null);
+      setResolveNotes("");
+      fetchIssues();
+    } catch(err) {
+      console.error(err);
+      alert("Erro ao resolver. Tente novamente.");
+    } finally {
+      setIsResolving(false);
+    }
   }
 
   function openImageModal(issue: any) {
@@ -356,7 +372,7 @@ export default function MaintenanceTab() {
 
                         {issue.status === "pending" && (
                           <button
-                            onClick={() => handleResolveIssue(issue.id)}
+                            onClick={() => openResolveModal(issue.id)}
                             className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg flex items-center gap-1 text-xs font-semibold transition-colors"
                           >
                             <CheckCircle2 size={14}/>
@@ -503,6 +519,46 @@ export default function MaintenanceTab() {
             fetchIssues();
           }}
         />
+      )}
+
+      {resolvingIssueId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Resolver Pendência</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Observações da solução (opcional)
+                </label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  rows={4}
+                  placeholder="Descreva como a pendência foi resolvida..."
+                  value={resolveNotes}
+                  onChange={(e) => setResolveNotes(e.target.value)}
+                />
+              </div>
+              <div className="flex bg-gray-50 -mx-6 -mb-6 px-6 py-4 justify-end gap-3 rounded-b-xl border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setResolvingIssueId(null)}
+                  disabled={isResolving}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmResolveIssue}
+                  disabled={isResolving}
+                  className="px-4 py-2 text-sm font-medium bg-primary text-white hover:bg-primary-dark rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isResolving ? 'Resolvendo...' : 'Confirmar Resolução'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
