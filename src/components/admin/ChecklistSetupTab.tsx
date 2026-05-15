@@ -13,6 +13,7 @@ export default function ChecklistSetupTab() {
   });
   
   const [saving, setSaving] = useState(false);
+  const [editingItemIds, setEditingItemIds] = useState<string[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -64,10 +65,17 @@ export default function ChecklistSetupTab() {
         order_index: 0 // Simplification since order will now be global
       }));
 
+      // Se estiver editando, remove os antigos antes de inserir os novos
+      if (editingItemIds.length > 0) {
+        const { error: delError } = await supabase.from('checklist_items').delete().in('id', editingItemIds);
+        if (delError) throw delError;
+      }
+
       const { error } = await supabase.from('checklist_items').insert(inserts);
       if (error) throw error;
       
       setItemForm({ title: '', is_trailer_item: false, selectedTypes: [] });
+      setEditingItemIds([]);
       fetchData();
     } catch (error: any) {
       alert('Erro: ' + error.message);
@@ -99,6 +107,15 @@ export default function ChecklistSetupTab() {
     });
   };
 
+  const startEditingItem = (item: any) => {
+    setItemForm({
+      title: item.title,
+      is_trailer_item: item.is_trailer_item,
+      selectedTypes: item.types
+    });
+    setEditingItemIds(item.ids);
+  };
+
   const createDefaultTypes = async () => {
     try {
       await supabase.from('checklist_types').insert([
@@ -128,17 +145,18 @@ export default function ChecklistSetupTab() {
       )}
 
       <div className="bento-card flex flex-col gap-6">
-         <div className="border-b border-app-border pb-4 flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <div className="border-b border-app-border pb-4 flex flex-col md:flex-row md:items-start justify-between gap-4">
             <div>
-              <h3 className="text-sm font-black text-text-main uppercase tracking-tight">Novo Item</h3>
-              <p className="text-xs text-text-muted mt-1">Cadastre os itens e marque para qual tipo ele deve aparecer.</p>
+              <h3 className="text-sm font-black text-text-main uppercase tracking-tight">{editingItemIds.length > 0 ? "Editando Item" : "Novo Item"}</h3>
+              <p className="text-xs text-text-muted mt-1">{editingItemIds.length > 0 ? "Altere onde este item deve aparecer" : "Cadastre os itens e marque para qual tipo ele deve aparecer."}</p>
             </div>
             
             <form onSubmit={handleSaveItem} className="flex flex-col gap-4 w-full md:w-2/3 lg:w-1/2">
               <div className="flex flex-col gap-2">
                 <input 
                   required
-                  className="h-10 px-4 rounded-xl border border-app-border text-sm font-bold outline-none focus:border-primary w-full shadow-sm bg-zinc-50 focus:bg-white transition-colors"
+                  disabled={editingItemIds.length > 0}
+                  className="h-10 px-4 rounded-xl border border-app-border text-sm font-bold outline-none focus:border-primary w-full shadow-sm bg-zinc-50 focus:bg-white transition-colors disabled:opacity-50"
                   placeholder="Nome do item (ex: Nível do Óleo)"
                   value={itemForm.title}
                   onChange={e => setItemForm({ ...itemForm, title: e.target.value })}
@@ -166,21 +184,36 @@ export default function ChecklistSetupTab() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input 
                     type="checkbox" 
-                    className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary"
+                    disabled={editingItemIds.length > 0}
+                    className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary disabled:opacity-50"
                     checked={itemForm.is_trailer_item}
                     onChange={e => setItemForm({...itemForm, is_trailer_item: e.target.checked})}
                   />
                   <span className="text-xs font-black text-text-main uppercase tracking-widest">Item para Reboque</span>
                 </label>
                 
-                <button 
-                  disabled={saving || checklistTypes.length === 0} 
-                  className="h-10 px-6 bg-primary text-white flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50"
-                  type="submit"
-                >
-                  <Plus size={16} />
-                  Cadastrar Item
-                </button>
+                <div className="flex gap-2">
+                  {editingItemIds.length > 0 && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setEditingItemIds([]);
+                        setItemForm({ title: '', is_trailer_item: false, selectedTypes: [] });
+                      }}
+                      className="h-10 px-4 bg-zinc-200 text-zinc-700 flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:bg-zinc-300 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                  <button 
+                    disabled={saving || checklistTypes.length === 0} 
+                    className="h-10 px-6 bg-primary text-white flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50"
+                    type="submit"
+                  >
+                    <Plus size={16} />
+                    {editingItemIds.length > 0 ? "Salvar" : "Cadastrar Item"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -214,7 +247,10 @@ export default function ChecklistSetupTab() {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-right">
-                       <button onClick={() => deleteItem(item.ids)} className="text-text-muted hover:text-danger p-2 transition-colors rounded-lg hover:bg-red-50"><X size={16}/></button>
+                       <div className="flex items-center justify-end gap-2">
+                         <button onClick={() => startEditingItem(item)} className="text-text-muted hover:text-primary p-2 transition-colors rounded-lg hover:bg-blue-50"><Edit2 size={16}/></button>
+                         <button onClick={() => deleteItem(item.ids)} className="text-text-muted hover:text-danger p-2 transition-colors rounded-lg hover:bg-red-50"><X size={16}/></button>
+                       </div>
                     </td>
                   </tr>
                 )) : (
