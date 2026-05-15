@@ -12,6 +12,8 @@ export default function ManualIssueModal({ onClose, onSuccess }: ManualIssueModa
   const [loading, setLoading] = useState(false);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [trailers, setTrailers] = useState<any[]>([]);
+  const [manualItems, setManualItems] = useState<any[]>([]);
+  const [isOtherItem, setIsOtherItem] = useState(false);
   
   const [formData, setFormData] = useState({
     vehicleId: '',
@@ -26,12 +28,23 @@ export default function ManualIssueModal({ onClose, onSuccess }: ManualIssueModa
   }, []);
 
   const fetchData = async () => {
-    const [vRes, tRes] = await Promise.all([
-      supabase.from('vehicles').select('*').eq('active', true),
-      supabase.from('trailers').select('*').eq('active', true),
-    ]);
-    if (vRes.data) setVehicles(vRes.data);
-    if (tRes.data) setTrailers(tRes.data);
+    try {
+      const [vRes, tRes, typesRes] = await Promise.all([
+        supabase.from('vehicles').select('*').eq('active', true),
+        supabase.from('trailers').select('*').eq('active', true),
+        supabase.from('checklist_types').select('id').eq('slug', 'manual').maybeSingle()
+      ]);
+      
+      if (vRes.data) setVehicles(vRes.data);
+      if (tRes.data) setTrailers(tRes.data);
+      
+      if (typesRes.data) {
+        const { data: items } = await supabase.from('checklist_items').select('*').eq('type_id', typesRes.data.id).order('title');
+        if (items) setManualItems(items);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,13 +160,49 @@ export default function ManualIssueModal({ onClose, onSuccess }: ManualIssueModa
             <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
               Item com Problema (ex: Pneu, Farol) <span className="text-danger">*</span>
             </label>
-            <input
-              type="text"
-              required
-              value={formData.itemTitle}
-              onChange={e => setFormData({ ...formData, itemTitle: e.target.value })}
-              className="w-full h-10 px-3 rounded-lg border border-app-border text-sm font-semibold outline-none focus:border-primary"
-            />
+            {!isOtherItem ? (
+              <select
+                required
+                value={formData.itemTitle}
+                onChange={e => {
+                  if (e.target.value === 'other') {
+                    setIsOtherItem(true);
+                    setFormData({ ...formData, itemTitle: '' });
+                  } else {
+                    setFormData({ ...formData, itemTitle: e.target.value });
+                  }
+                }}
+                className="w-full h-10 px-3 rounded-lg border border-app-border text-sm font-semibold outline-none focus:border-primary"
+              >
+                <option value="">Selecione o item...</option>
+                {manualItems.map(item => (
+                  <option key={item.id} value={item.title}>{item.title} {item.is_trailer_item ? '(Reboque)' : ''}</option>
+                ))}
+                <option value="other">Outro (Digitar)</option>
+              </select>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="Digite o nome do item..."
+                  value={formData.itemTitle}
+                  onChange={e => setFormData({ ...formData, itemTitle: e.target.value })}
+                  className="w-full h-10 px-3 rounded-lg border border-app-border text-sm font-semibold outline-none focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOtherItem(false);
+                    setFormData({ ...formData, itemTitle: '' });
+                  }}
+                  className="h-10 px-3 bg-zinc-100 text-zinc-600 rounded-lg text-xs font-bold hover:bg-zinc-200 transition-colors"
+                >
+                  Voltar
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">

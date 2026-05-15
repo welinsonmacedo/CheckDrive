@@ -21,7 +21,20 @@ export default function ChecklistSetupTab() {
 
   const fetchData = async () => {
     const { data: types } = await supabase.from('checklist_types').select('*').order('title');
-    setChecklistTypes(types || []);
+    let currentTypes = types || [];
+    
+    // Auto-create 'Lançamento Manual' type if it doesn't exist
+    const hasManualType = currentTypes.some(t => t.slug === 'manual');
+    if (!hasManualType && currentTypes.length > 0) {
+       const { data: manualType } = await supabase.from('checklist_types').insert([
+         { title: 'Lançamento Manual', slug: 'manual' }
+       ]).select().single();
+       if (manualType) {
+         currentTypes = [...currentTypes, manualType];
+       }
+    }
+    
+    setChecklistTypes(currentTypes);
 
     const { data: items } = await supabase
       .from('checklist_items')
