@@ -50,8 +50,12 @@ export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: Sc
              
              let driverInitialScore = initialScore;
              const sp: any = d.score_profiles;
-             if (sp && sp.base_value) {
-                driverInitialScore = Number(sp.base_value);
+             if (sp) {
+                if (sp.calculation_type === 'fixed' && sp.base_value !== undefined) {
+                    driverInitialScore = Number(sp.base_value);
+                } else if (sp.calculation_type !== 'fixed') {
+                    driverInitialScore = 0;
+                }
              }
 
              const perf = d.driver_performance?.[0] || { score: driverInitialScore, total_checklists: 0 };

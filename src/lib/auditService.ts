@@ -8,7 +8,7 @@ export const runSilentAudit = async () => {
     // Check if the user is authenticated and has permission implicitly by attempting fetch
     const { data: expired, error } = await supabase
       .from('schedules')
-      .select('*, profiles(participates_in_ranking, score_profiles(penalty_start, penalty_end, penalty_fuel, penalty_yard, base_value))')
+      .select('*, profiles(participates_in_ranking, score_profiles(penalty_start, penalty_end, penalty_fuel, penalty_yard, base_value, calculation_type))')
       .lt('end_at', oneHourAgo)
       .eq('penalty_applied', false);
 
@@ -50,8 +50,18 @@ export const runSilentAudit = async () => {
           .eq('driver_id', schedule.driver_id)
           .maybeSingle();
 
-        const baseScore = Number(profileInfo.base_value ?? appSettings.initial_value ?? 1000);
-        const newScore = (perf?.score || baseScore) - totalPenalty;
+        let baseScore = Number(appSettings.initial_value || 1000);
+        if (profileInfo && profileInfo.calculation_type) {
+           if (profileInfo.calculation_type === 'fixed' && profileInfo.base_value !== undefined) {
+               baseScore = Number(profileInfo.base_value);
+           } else if (profileInfo.calculation_type !== 'fixed') {
+               baseScore = 0;
+           }
+        }
+        
+        // Use perf.score if it exists (can be 0 or negative), else baseScore
+        const currentScore = perf ? perf.score : baseScore;
+        const newScore = currentScore - totalPenalty;
 
         await supabase.from('driver_performance').upsert({ 
           driver_id: schedule.driver_id, 

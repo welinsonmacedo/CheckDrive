@@ -487,6 +487,59 @@ export default function ChecklistFlow() {
         }
       }
 
+      // 5. Update performance if it's the end of the trip
+      if (type === 'end') {
+        try {
+           const { data: profile } = await supabase.from('profiles')
+              .select(`
+                participates_in_ranking,
+                score_profile_id,
+                score_profiles(calculation_type, base_value),
+                driver_performance(score, total_checklists)
+              `)
+              .eq('id', user.id)
+              .single();
+              
+            if (profile && profile.participates_in_ranking !== false) {
+               const scoreProfile: any = profile.score_profiles;
+               let newScore = profile.driver_performance?.[0]?.score || 0; 
+               let currentTotal = profile.driver_performance?.[0]?.total_checklists || 0;
+               
+               const baseValue = Number(scoreProfile?.base_value || 0);
+               
+               currentTotal += 1; // Always increment
+               
+               if (scoreProfile) {
+                  if (scoreProfile.calculation_type === 'per_schedule') {
+                      newScore += baseValue;
+                  } else if (scoreProfile.calculation_type === 'per_workday') {
+                      const startOfDay = new Date();
+                      startOfDay.setHours(0,0,0,0);
+                      
+                      const { count, error: countErr } = await supabase.from('checklist_submissions')
+                          .select('id', { count: 'exact', head: true })
+                          .eq('driver_id', user.id)
+                          .eq('type', 'end')
+                          .gte('created_at', startOfDay.toISOString());
+                          
+                      if (count === 1 && !countErr) {
+                           newScore += baseValue;
+                      }
+                  } 
+               }
+               
+               await supabase.from('driver_performance').upsert({
+                  driver_id: user.id,
+                  score: newScore,
+                  total_checklists: currentTotal,
+                  updated_at: new Date().toISOString()
+               });
+            }
+        } catch (err) {
+            console.error('Error updating driver performance:', err);
+        }
+      }
+
       navigate('/');
     } catch (error) {
       console.error('Submission failed:', error);

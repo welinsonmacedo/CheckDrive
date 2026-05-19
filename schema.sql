@@ -450,6 +450,8 @@ DECLARE
     new_closing_id uuid;
     driver record;
     initial_score integer;
+    d_initial_score integer;
+    sp_calc TEXT;
 BEGIN
     SELECT * INTO settings FROM public.app_settings WHERE id = 'global';
     
@@ -473,27 +475,39 @@ BEGIN
         
         -- If current date is after end_d, and start_d <= end_d (we haven't already closed it)
         IF current_date > end_d AND start_d <= end_d THEN
-             -- Add a 1-day safety buffer? The prompt said "1 dia após finalizar a ultima escala da data do fechamento" -> equivalent to `current_date > end_d + interval '1 day'`. But `current_date > end_d` is already 1 day after.
-             -- Let's check if the schedules of end_d are finished. We can't really dynamically pause cron, so let's use `current_date > end_d` because it implies it's at least 1 day later (midnights passed).
              
              INSERT INTO public.score_closings (period_start, period_end, closed_by)
              VALUES (start_d, end_d, NULL)
              RETURNING id INTO new_closing_id;
 
-             -- Insert items:
-             FOR driver IN SELECT id, role FROM public.profiles WHERE role = 'driver' AND full_name NOT LIKE '%//INTERNO%' LOOP
+             -- Insert items & Reset scores
+             FOR driver IN 
+                SELECT p.id, p.role, p.score_profile_id, sp.base_value, sp.calculation_type 
+                FROM public.profiles p
+                LEFT JOIN score_profiles sp ON p.score_profile_id = sp.id
+                WHERE p.role = 'driver' AND p.full_name NOT LIKE '%//INTERNO%' AND p.participates_in_ranking = true
+             LOOP
+                 d_initial_score := initial_score;
+                 IF driver.base_value IS NOT NULL THEN
+                     IF driver.calculation_type = 'fixed' THEN
+                         d_initial_score := driver.base_value;
+                     ELSE
+                         d_initial_score := 0;
+                     END IF;
+                 END IF;
+
                  INSERT INTO public.score_closing_items (closing_id, driver_id, score, total_checklists)
-                 SELECT new_closing_id, driver.id, 
-                        COALESCE((SELECT score FROM public.driver_performance WHERE driver_id = driver.id), initial_score), 
-                        COALESCE((SELECT total_checklists FROM public.driver_performance WHERE driver_id = driver.id), 0);
+                 VALUES (
+                    new_closing_id, driver.id, 
+                    COALESCE((SELECT score FROM public.driver_performance WHERE driver_id = driver.id), d_initial_score), 
+                    COALESCE((SELECT total_checklists FROM public.driver_performance WHERE driver_id = driver.id), 0)
+                 );
+                 
+                 UPDATE public.driver_performance SET score = d_initial_score, total_checklists = 0 WHERE driver_id = driver.id;
+
+                 INSERT INTO public.audit_logs (driver_id, type, amount, reason)
+                 VALUES (driver.id, 'reset', d_initial_score, 'Fechamento automático (' || start_d || ' a ' || end_d || ') e reset do ciclo');
              END LOOP;
-
-             -- Reset scores:
-             UPDATE public.driver_performance SET score = initial_score, total_checklists = 0;
-
-             -- Optional: insert audit
-             INSERT INTO public.audit_logs (driver_id, type, amount, reason)
-             VALUES (NULL, 'reset', initial_score, 'Fechamento automático (' || start_d || ' a ' || end_d || ')');
         END IF;
     END IF;
 END;
