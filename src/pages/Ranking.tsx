@@ -9,6 +9,7 @@ export default function Ranking() {
   const [ranking, setRanking] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [systemType, setSystemType] = useState('points');
+  const [profileName, setProfileName] = useState('Geral');
 
   useEffect(() => {
     fetchRanking();
@@ -16,10 +17,18 @@ export default function Ranking() {
 
   const fetchRanking = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: userProfile } = await supabase.from('profiles').select('score_profile_id, score_profiles(name)').eq('id', user.id).single();
+      const userProfileId = userProfile?.score_profile_id;
+      const spName = (userProfile?.score_profiles as any)?.name;
+      if (spName) setProfileName(spName);
+
       const { data: settings } = await supabase.from('app_settings').select('system_type').single();
       if (settings) setSystemType(settings.system_type);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('driver_performance')
         .select(`
           score,
@@ -27,11 +36,19 @@ export default function Ranking() {
           profiles!inner(
             full_name,
             role,
-            participates_in_ranking
+            participates_in_ranking,
+            score_profile_id
           )
         `)
-        .eq('profiles.role', 'driver')
-        .order('score', { ascending: false });
+        .eq('profiles.role', 'driver');
+        
+      if (userProfileId) {
+        query = query.eq('profiles.score_profile_id', userProfileId);
+      } else {
+        query = query.is('profiles.score_profile_id', null);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       
@@ -63,7 +80,7 @@ export default function Ranking() {
         </button>
         <div>
           <h2 className="text-2xl font-black text-text-main tracking-tight">Ranking de Motoristas</h2>
-          <p className="text-text-muted text-xs font-medium uppercase tracking-widest">Os melhores da operação</p>
+          <p className="text-text-muted text-xs font-medium uppercase tracking-widest">Os melhores da operação • {profileName}</p>
         </div>
       </div>
 
