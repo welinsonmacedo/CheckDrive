@@ -46,6 +46,7 @@ import SettingsTab from '../components/admin/SettingsTab';
 import ChecklistDetailsModal from '../components/admin/ChecklistDetailsModal';
 import RankingTab from '../components/admin/RankingTab';
 import DatabaseTab from '../components/admin/DatabaseTab';
+import ReportsTab from '../components/admin/ReportsTab';
 import { useAuth } from '../contexts/AuthContext';
 
 import { runSilentAudit } from '../lib/auditService';
@@ -161,6 +162,7 @@ export default function AdminDashboard() {
     { id: 'maintenance', icon: AlertTriangle, label: 'Pendências', color: 'from-red-500 to-orange-500' },
     { id: 'abastecimentos', icon: Fuel, label: 'Abastecimento', color: 'from-green-500 to-emerald-500' },
     { id: 'schedules', icon: CalendarDays, label: 'Escalas', color: 'from-indigo-500 to-blue-500' },
+    { id: 'reports', icon: BarChart3, label: 'Relatório Gerencial', color: 'from-indigo-600 to-blue-600' },
     ...(user?.role === 'admin' ? [{ id: 'audit', icon: History, label: 'Auditoria', color: 'from-slate-500 to-gray-500' }] : []),
     ...(user?.role === 'admin' ? [{ id: 'database', icon: HardDrive, label: 'Banco de Dados', color: 'from-blue-600 to-indigo-600' }] : []),
     // Only admin gets settings
@@ -179,7 +181,7 @@ export default function AdminDashboard() {
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Sidebar */}
-      <aside className="w-72 flex-shrink-0 bg-white/95 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl flex flex-col h-full">
+      <aside className="w-72 flex-shrink-0 bg-white/95 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl flex flex-col h-full print:hidden">
      
         
 
@@ -286,7 +288,7 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-y-auto">
         {/* Top Bar */}
-        <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-8 py-4 flex items-center justify-between">
+        <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-8 py-4 flex items-center justify-between print:hidden">
           <div>
             <h2 className="text-2xl font-black text-gray-800">
               {[...navItems, ...registerItems].find(i => i.id === activeTab)?.label || 'Dashboard'}
@@ -312,6 +314,7 @@ export default function AdminDashboard() {
                 <OverviewTab setActiveTab={setActiveTab} appSettings={appSettings} />
               )}
               {activeTab === 'tracking' && <TrackingTab />}
+              {activeTab === 'reports' && <ReportsTab />}
               {activeTab === 'adm_users' && <AdmUsersTab />}
               {activeTab === 'drivers' && <DriversTab />}
               {activeTab === 'vehicles' && <VehiclesTab />}
