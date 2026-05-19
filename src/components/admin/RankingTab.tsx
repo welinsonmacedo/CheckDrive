@@ -38,7 +38,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
       if (selectedPeriod === 'current') {
         const { data: drivers } = await supabase
           .from('profiles')
-          .select('id, full_name, role, participates_in_ranking, driver_performance(score, total_checklists)')
+          .select('id, full_name, role, participates_in_ranking, score_profiles(name), driver_performance(score, total_checklists)')
           .eq('role', 'driver');
 
         if (!drivers) {
@@ -50,8 +50,10 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
         const ranked = drivers
           .filter(driver => driver.participates_in_ranking !== false)
           .map(driver => ({
-          ...driver,
-          score: driver.driver_performance?.[0]?.score || (appSettings?.initial_value || 1000),
+          id: driver.id,
+          full_name: driver.full_name,
+          profile_name: (driver.score_profiles as any)?.name || 'Sem Perfil',
+          score: driver.driver_performance?.[0]?.score || 0,
           total_checklists: driver.driver_performance?.[0]?.total_checklists || 0
         })).sort((a, b) => {
           if (b.score !== a.score) return b.score - a.score;
@@ -63,7 +65,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
       } else {
         const { data: items } = await supabase
           .from('score_closing_items')
-          .select('driver_id, score, total_checklists, profiles(full_name)')
+          .select('driver_id, score, total_checklists, profiles(full_name, score_profiles(name))')
           .eq('closing_id', selectedPeriod);
 
         if (!items) {
@@ -72,6 +74,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
           const ranked = items.map((item: any) => ({
             id: item.driver_id,
             full_name: item.profiles?.full_name || 'Motorista',
+            profile_name: item.profiles?.score_profiles?.name || 'Sem Perfil',
             score: item.score,
             total_checklists: item.total_checklists || 0
           })).sort((a, b) => {
@@ -112,58 +115,76 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
         </div>
       </div>
 
-      <div className="bento-card !p-0 overflow-hidden">
+      <div className="space-y-6">
         {loading ? (
-          <div className="p-10 text-center text-xs font-bold text-text-muted animate-pulse">Carregando ranking...</div>
+          <div className="bento-card !p-0 overflow-hidden">
+             <div className="p-10 text-center text-xs font-bold text-text-muted animate-pulse">Carregando ranking...</div>
+          </div>
         ) : ranking.length === 0 ? (
-          <div className="p-10 text-center">
-            <Star size={32} className="mx-auto text-app-border mb-3" />
-            <p className="text-xs font-bold text-text-muted uppercase tracking-widest">Nenhum motorista disponível no ranking</p>
+          <div className="bento-card !p-0 overflow-hidden">
+            <div className="p-10 text-center">
+              <Star size={32} className="mx-auto text-app-border mb-3" />
+              <p className="text-xs font-bold text-text-muted uppercase tracking-widest">Nenhum motorista disponível no ranking</p>
+            </div>
           </div>
         ) : (
-          <div className="divide-y divide-app-border">
-            {ranking.map((item, index) => {
-              const isTop3 = index < 3;
-              const colors = ['text-yellow-500', 'text-zinc-400', 'text-amber-600'];
-              const bgColors = ['bg-yellow-50', 'bg-zinc-50', 'bg-amber-50'];
+          Object.entries(
+            ranking.reduce((acc, curr) => {
+              const name = curr.profile_name;
+              if (!acc[name]) acc[name] = [];
+              acc[name].push(curr);
+              return acc;
+            }, {} as Record<string, any[]>)
+          ).map(([groupName, groupDrivers]) => (
+            <div key={groupName} className="bento-card !p-0 overflow-hidden shadow-sm">
+              <div className="bg-zinc-50/80 border-b border-app-border px-4 py-3 flex items-center justify-between">
+                <h3 className="text-xs font-black text-text-main uppercase tracking-widest">{groupName}</h3>
+                <span className="text-[10px] font-bold text-text-muted px-2 py-1 bg-white border border-app-border rounded-lg">{groupDrivers.length} Motorista(s)</span>
+              </div>
+              <div className="divide-y divide-app-border">
+                {groupDrivers.map((item, index) => {
+                  const isTop3 = index < 3;
+                  const colors = ['text-yellow-500', 'text-zinc-400', 'text-amber-600'];
+                  const bgColors = ['bg-yellow-50', 'bg-zinc-50', 'bg-amber-50'];
 
-              return (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  onClick={() => {
-                     // Only open details if it's current. For old closings, we'd need to adapt the modal.
-                     if (selectedPeriod === 'current') setSelectedDriver(item);
-                  }}
-                  className={`flex items-center gap-4 p-4 hover:bg-app-bg/50 transition-colors ${selectedPeriod === 'current' ? 'cursor-pointer' : ''} ${isTop3 ? 'bg-primary/5' : ''}`}
-                >
-                  <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center font-black text-sm ${isTop3 ? `${bgColors[index]} ${colors[index]}` : 'bg-app-bg border border-app-border text-text-muted'}`}>
-                    {index === 0 ? <Trophy size={18} /> : index + 1}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <span className={`block font-bold text-sm truncate ${isTop3 ? 'text-text-main' : 'text-text-main'}`}>
-                      {item.full_name || 'Motorista'}
-                    </span>
-                    <span className="block text-[10px] text-text-muted font-bold uppercase tracking-wider truncate">
-                      {index === 0 ? 'Líder da Operação' : 'Consistência Operacional'}
-                      {' • '}{item.total_checklists || 0} {(item.total_checklists === 1) ? 'Escala' : 'Escalas'}
-                    </span>
-                  </div>
+                  return (
+                    <motion.div
+                      key={item.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      onClick={() => {
+                         if (selectedPeriod === 'current') setSelectedDriver(item);
+                      }}
+                      className={`flex items-center gap-4 p-4 hover:bg-app-bg/50 transition-colors ${selectedPeriod === 'current' ? 'cursor-pointer' : ''} ${isTop3 ? 'bg-primary/5' : ''}`}
+                    >
+                      <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center font-black text-sm ${isTop3 ? `${bgColors[index]} ${colors[index]}` : 'bg-app-bg border border-app-border text-text-muted'}`}>
+                        {index === 0 ? <Trophy size={18} /> : index + 1}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <span className={`block font-bold text-sm truncate ${isTop3 ? 'text-text-main' : 'text-text-main'}`}>
+                          {item.full_name || 'Motorista'}
+                        </span>
+                        <span className="block text-[10px] text-text-muted font-bold uppercase tracking-wider truncate">
+                          {index === 0 ? 'Líder da Operação' : 'Consistência Operacional'}
+                          {' • '}{item.total_checklists || 0} {(item.total_checklists === 1) ? 'Escala' : 'Escalas'}
+                        </span>
+                      </div>
 
-                  <div className="text-right shrink-0">
-                    <span className="block font-black text-text-main text-lg tabular-nums">
-                      {appSettings?.system_type === 'cash' ? `R$ ${item.score}` : item.score}
-                    </span>
-                    <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest">
-                      {appSettings?.system_type === 'cash' ? 'Saldo no Período' : 'Pontos no Período'}
-                    </span>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
+                      <div className="text-right shrink-0">
+                        <span className="block font-black text-text-main text-lg tabular-nums">
+                          {appSettings?.system_type === 'cash' ? `R$ ${item.score}` : item.score}
+                        </span>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest">
+                          {appSettings?.system_type === 'cash' ? 'Saldo' : 'Pontos'}
+                        </span>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          ))
         )}
       </div>
 
