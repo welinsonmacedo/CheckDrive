@@ -540,7 +540,7 @@ export default function ChecklistFlow() {
         }
       }
 
-      navigate('/');
+      navigate('/dashboard');
     } catch (error) {
       console.error('Submission failed:', error);
       alert('Falha ao enviar checklist. Verifique conexão e tente novamente.');

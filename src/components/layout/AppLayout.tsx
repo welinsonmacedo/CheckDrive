@@ -27,9 +27,9 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 h-16 flex items-center justify-around z-50 sm:hidden">
 
           <Link
-            to="/"
+            to="/dashboard"
             className={`flex flex-col items-center gap-1 transition-colors ${
-              location.pathname === '/' ? 'text-primary' : 'text-zinc-400'
+              location.pathname === '/dashboard' ? 'text-primary' : 'text-zinc-400'
             }`}
           >
             <Home size={20} />

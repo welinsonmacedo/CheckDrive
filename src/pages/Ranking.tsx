@@ -73,7 +73,7 @@ export default function Ranking() {
     <div className="p-6 max-w-2xl mx-auto space-y-6 py-10 pb-24">
       <div className="flex items-center gap-4">
         <button 
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/dashboard')}
           className="w-10 h-10 rounded-xl bg-white border border-app-border flex items-center justify-center hover:bg-zinc-50 transition-colors"
         >
           <ChevronLeft size={20} className="text-text-main" />

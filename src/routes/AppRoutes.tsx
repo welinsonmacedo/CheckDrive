@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 
 // Pages
+import LandingPage from '../pages/LandingPage';
 import Login from '../pages/Login';
 import DriverHome from '../pages/DriverHome';
 import DriverManual from '../pages/DriverManual';
@@ -18,9 +19,10 @@ export default function AppRoutes() {
   
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       
-      <Route path="/" element={
+      <Route path="/dashboard" element={
         <ProtectedRoute>
           <AppLayout user={user} onLogout={logout}>
             {(user?.role === 'admin' || user?.role === 'standard') ? <AdminDashboard /> : <DriverHome />}

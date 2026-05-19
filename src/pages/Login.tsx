@@ -13,7 +13,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      navigate('/', { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, authLoading, navigate]);
 

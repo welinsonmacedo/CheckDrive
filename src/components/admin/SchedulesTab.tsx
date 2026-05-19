@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { Search, MessageCircle } from 'lucide-react';
+import Select from 'react-select';
 
 interface SchedulesTabProps {
   onViewChecklist: (checklistId: string) => void;
@@ -79,6 +80,11 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
 
   const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!scheduleForm.driver_id || !scheduleForm.vehicle_id || !scheduleForm.route_id) {
+       alert('Por favor, preencha os campos obrigatórios (Motorista, Veículo e Rota).');
+       return;
+    }
+    
     setSaving(true);
     try {
       // Parse local dates explicitly to avoid browser timezone quirks
@@ -356,95 +362,108 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
         <form onSubmit={handleSaveSchedule} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Motorista</label>
-            <select 
-              className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-bold outline-none focus:border-primary transition-all"
-              value={scheduleForm.driver_id}
-              onChange={e => setScheduleForm({...scheduleForm, driver_id: e.target.value})}
-              required
-            >
-              <option value="">Selecionar...</option>
-              {users.filter(u => !u.full_name?.endsWith('//INTERNO')).map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-            </select>
+            <Select 
+              className="text-xs font-bold"
+              placeholder="Selecionar motorista..."
+              isClearable
+              options={users.filter(u => !u.full_name?.endsWith('//INTERNO')).map(u => ({ value: u.id, label: u.full_name }))}
+              value={users.filter(u => !u.full_name?.endsWith('//INTERNO')).map(u => ({ value: u.id, label: u.full_name })).find(o => o.value === scheduleForm.driver_id) || null}
+              onChange={(selected) => setScheduleForm({...scheduleForm, driver_id: selected?.value || ''})}
+              styles={{
+                control: (base, state) => ({ ...base, minHeight: '44px', borderRadius: '0.75rem', borderColor: state.isFocused ? '#0ea5e9' : '#e5e7eb', boxShadow: 'none' })
+              }}
+            />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Veículo</label>
-            <select 
-              className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-bold outline-none focus:border-primary transition-all"
-              value={scheduleForm.vehicle_id}
-              onChange={e => setScheduleForm({...scheduleForm, vehicle_id: e.target.value})}
-              required
-            >
-              <option value="">Selecionar...</option>
-              {vehicles.filter(v => {
+            <Select 
+              className="text-xs font-bold"
+              placeholder="Selecionar veículo..."
+              isClearable
+              options={vehicles.filter(v => {
                 const driver = users.find(u => u.id === scheduleForm.driver_id);
                 if (!v.modality_id) return true;
                 if (driver && driver.modality_ids && driver.modality_ids.includes(v.modality_id)) return true;
                 return false;
-              }).map(v => <option key={v.id} value={v.id}>{v.plate}</option>)}
-            </select>
+              }).map(v => ({ value: v.id, label: v.plate }))}
+              value={vehicles.map(v => ({ value: v.id, label: v.plate })).find(o => o.value === scheduleForm.vehicle_id) || null}
+              onChange={(selected) => setScheduleForm({...scheduleForm, vehicle_id: selected?.value || ''})}
+              styles={{
+                control: (base, state) => ({ ...base, minHeight: '44px', borderRadius: '0.75rem', borderColor: state.isFocused ? '#0ea5e9' : '#e5e7eb', boxShadow: 'none' })
+              }}
+            />
           </div>
 
           {vehicles.find(v => v.id === scheduleForm.vehicle_id)?.requires_trailer && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-1.5">
               <label className="text-[10px] font-bold text-primary uppercase tracking-widest">Reboque (Obrigatório para este veículo)</label>
-              <select 
-                className="w-full h-11 px-4 rounded-xl border border-primary/30 bg-blue-50/20 text-xs font-bold outline-none focus:border-primary transition-all"
-                value={scheduleForm.trailer_id}
-                onChange={e => setScheduleForm({...scheduleForm, trailer_id: e.target.value})}
-                required
-              >
-                <option value="">Selecionar Reboque...</option>
-                {trailers.map(t => <option key={t.id} value={t.id}>{t.plate}</option>)}
-              </select>
+              <Select 
+                className="text-xs font-bold"
+                placeholder="Selecionar reboque..."
+                isClearable
+                options={trailers.map(t => ({ value: t.id, label: t.plate }))}
+                value={trailers.map(t => ({ value: t.id, label: t.plate })).find(o => o.value === scheduleForm.trailer_id) || null}
+                onChange={(selected) => setScheduleForm({...scheduleForm, trailer_id: selected?.value || ''})}
+                styles={{
+                  control: (base, state) => ({ ...base, minHeight: '44px', borderRadius: '0.75rem', borderColor: state.isFocused ? '#0ea5e9' : 'rgba(14, 165, 233, 0.3)', backgroundColor: 'rgba(239, 246, 255, 0.2)', boxShadow: 'none' })
+                }}
+              />
             </motion.div>
           )}
 
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Rota</label>
-            <select 
-              className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-bold outline-none focus:border-primary transition-all"
-              value={scheduleForm.route_id}
-              onChange={e => setScheduleForm({...scheduleForm, route_id: e.target.value})}
-              required
-            >
-              <option value="">Selecionar...</option>
-              {routes.map(r => (
-                <option key={r.id} value={r.id}>
-                  {r.origin} → {r.destination} {r.stops && r.stops.length > 0 ? ` (Paradas: ${r.stops.join(', ')})` : ''}
-                </option>
-              ))}
-            </select>
+            <Select 
+              className="text-xs font-bold"
+              placeholder="Selecionar rota..."
+              isClearable
+              options={routes.map(r => ({ value: r.id, label: `${r.origin} → ${r.destination} ${r.stops && r.stops.length > 0 ? `(Paradas: ${r.stops.join(', ')})` : ''}` }))}
+              value={routes.map(r => ({ value: r.id, label: `${r.origin} → ${r.destination} ${r.stops && r.stops.length > 0 ? `(Paradas: ${r.stops.join(', ')})` : ''}` })).find(o => o.value === scheduleForm.route_id) || null}
+              onChange={(selected) => setScheduleForm({...scheduleForm, route_id: selected?.value || ''})}
+              styles={{
+                control: (base, state) => ({ ...base, minHeight: '44px', borderRadius: '0.75rem', borderColor: state.isFocused ? '#0ea5e9' : '#e5e7eb', boxShadow: 'none' })
+              }}
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-primary uppercase tracking-widest">Iscas (Opcional - Até 3)</label>
             <div className="space-y-2">
-              <select 
-                className="w-full h-11 px-4 rounded-xl border border-primary/20 bg-primary/5 text-xs font-bold outline-none focus:border-primary transition-all"
-                value={scheduleForm.bait1_id}
-                onChange={e => setScheduleForm({...scheduleForm, bait1_id: e.target.value})}
-              >
-                <option value="">Nenhuma Isca 1</option>
-                {baits.map(b => <option key={b.id} value={b.id} disabled={[scheduleForm.bait2_id, scheduleForm.bait3_id].includes(b.id)}>{b.name}</option>)}
-              </select>
-              <select 
-                className="w-full h-11 px-4 rounded-xl border border-primary/20 bg-primary/5 text-xs font-bold outline-none focus:border-primary transition-all"
-                value={scheduleForm.bait2_id}
-                onChange={e => setScheduleForm({...scheduleForm, bait2_id: e.target.value})}
-                disabled={!scheduleForm.bait1_id}
-              >
-                <option value="">Nenhuma Isca 2</option>
-                {baits.map(b => <option key={b.id} value={b.id} disabled={[scheduleForm.bait1_id, scheduleForm.bait3_id].includes(b.id)}>{b.name}</option>)}
-              </select>
-              <select 
-                className="w-full h-11 px-4 rounded-xl border border-primary/20 bg-primary/5 text-xs font-bold outline-none focus:border-primary transition-all"
-                value={scheduleForm.bait3_id}
-                onChange={e => setScheduleForm({...scheduleForm, bait3_id: e.target.value})}
-                disabled={!scheduleForm.bait2_id}
-              >
-                <option value="">Nenhuma Isca 3</option>
-                {baits.map(b => <option key={b.id} value={b.id} disabled={[scheduleForm.bait1_id, scheduleForm.bait2_id].includes(b.id)}>{b.name}</option>)}
-              </select>
+              <Select 
+                className="text-xs font-bold"
+                placeholder="Selecionar Isca 1..."
+                isClearable
+                options={baits.map(b => ({ value: b.id, label: b.name, isDisabled: [scheduleForm.bait2_id, scheduleForm.bait3_id].includes(b.id) }))}
+                value={baits.map(b => ({ value: b.id, label: b.name })).find(o => o.value === scheduleForm.bait1_id) || null}
+                onChange={(selected) => setScheduleForm({...scheduleForm, bait1_id: selected?.value || ''})}
+                styles={{
+                  control: (base, state) => ({ ...base, minHeight: '44px', borderRadius: '0.75rem', borderColor: state.isFocused ? '#0ea5e9' : 'rgba(14, 165, 233, 0.2)', backgroundColor: 'rgba(14, 165, 233, 0.05)', boxShadow: 'none' })
+                }}
+              />
+              <Select 
+                className="text-xs font-bold"
+                placeholder="Selecionar Isca 2..."
+                isClearable
+                isDisabled={!scheduleForm.bait1_id}
+                options={baits.map(b => ({ value: b.id, label: b.name, isDisabled: [scheduleForm.bait1_id, scheduleForm.bait3_id].includes(b.id) }))}
+                value={baits.map(b => ({ value: b.id, label: b.name })).find(o => o.value === scheduleForm.bait2_id) || null}
+                onChange={(selected) => setScheduleForm({...scheduleForm, bait2_id: selected?.value || ''})}
+                styles={{
+                  control: (base, state) => ({ ...base, minHeight: '44px', borderRadius: '0.75rem', borderColor: state.isFocused ? '#0ea5e9' : 'rgba(14, 165, 233, 0.2)', backgroundColor: 'rgba(14, 165, 233, 0.05)', boxShadow: 'none' })
+                }}
+              />
+              <Select 
+                className="text-xs font-bold"
+                placeholder="Selecionar Isca 3..."
+                isClearable
+                isDisabled={!scheduleForm.bait2_id}
+                options={baits.map(b => ({ value: b.id, label: b.name, isDisabled: [scheduleForm.bait1_id, scheduleForm.bait2_id].includes(b.id) }))}
+                value={baits.map(b => ({ value: b.id, label: b.name })).find(o => o.value === scheduleForm.bait3_id) || null}
+                onChange={(selected) => setScheduleForm({...scheduleForm, bait3_id: selected?.value || ''})}
+                styles={{
+                  control: (base, state) => ({ ...base, minHeight: '44px', borderRadius: '0.75rem', borderColor: state.isFocused ? '#0ea5e9' : 'rgba(14, 165, 233, 0.2)', backgroundColor: 'rgba(14, 165, 233, 0.05)', boxShadow: 'none' })
+                }}
+              />
             </div>
           </div>
 
