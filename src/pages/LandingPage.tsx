@@ -1,10 +1,16 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, ShieldCheck, Trophy, Map, ArrowRight, BarChart3, Clock, LayoutDashboard, ClipboardCheck } from 'lucide-react';
+import { Truck, ShieldCheck, Trophy, Map, ArrowRight, BarChart3, Clock, LayoutDashboard, ClipboardCheck, MessageCircle } from 'lucide-react';
 
 export default function LandingPage() {
   const navigate = useNavigate();
+
+  const handleWhatsAppClick = () => {
+    const phoneNumber = '5534991448794';
+    const message = encodeURIComponent('Olá! Gostaria de saber mais sobre o sistema CheckDrive.');
+    window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
+  };
 
   return (
     <div className="min-h-screen bg-white selection:bg-primary/20 selection:text-primary">
@@ -156,6 +162,18 @@ export default function LandingPage() {
           </p>
         </div>
       </footer>
+
+      {/* WhatsApp Floating Button */}
+      <motion.button
+        onClick={handleWhatsAppClick}
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.5 }}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-green-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-green-600 hover:shadow-xl hover:-translate-y-1 transition-all z-50 focus:outline-none focus:ring-4 focus:ring-green-500/30"
+        aria-label="Falar conosco no WhatsApp"
+      >
+        <MessageCircle size={28} />
+      </motion.button>
     </div>
   );
 }
