@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Car, Fuel, Route, ClipboardCheck, Trophy, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Car, Fuel, Route, ClipboardCheck, Trophy, AlertTriangle, ChevronRight, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -164,6 +164,20 @@ export default function DriverHome() {
           </div>
         </div>
       )}
+
+      {/* Manual do App Link */}
+      <button onClick={() => navigate('/driver-manual')} className="w-full flex items-center justify-between p-4 bg-white border border-app-border rounded-2xl shadow-sm hover:border-primary/30 active:bg-zinc-50 transition-all">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex shrink-0 items-center justify-center">
+            <BookOpen size={20} />
+          </div>
+          <div className="text-left">
+            <h3 className="text-sm font-black text-text-main">Manual do App</h3>
+            <p className="text-[10px] uppercase tracking-widest font-bold text-text-muted mt-0.5">Aprenda a usar o aplicativo</p>
+          </div>
+        </div>
+        <ChevronRight size={20} className="text-text-muted" />
+      </button>
 
       {/* Active Schedule Alert */}
       {!user?.isInternal && activeSchedule && (

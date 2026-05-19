@@ -6,6 +6,7 @@ import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 // Pages
 import Login from '../pages/Login';
 import DriverHome from '../pages/DriverHome';
+import DriverManual from '../pages/DriverManual';
 import Ranking from '../pages/Ranking';
 import ChecklistFlow from '../pages/ChecklistFlow';
 import AdminDashboard from '../pages/AdminDashboard';
@@ -39,6 +40,14 @@ export default function AppRoutes() {
         <ProtectedRoute role="driver">
           <AppLayout user={user} onLogout={logout}>
             <Ranking />
+          </AppLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/driver-manual" element={
+        <ProtectedRoute role="driver">
+          <AppLayout user={user} onLogout={logout}>
+            <DriverManual />
           </AppLayout>
         </ProtectedRoute>
       } />
