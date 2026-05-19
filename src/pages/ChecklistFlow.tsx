@@ -613,7 +613,7 @@ export default function ChecklistFlow() {
                         >
                           <option value="">Selecione o veículo</option>
                           {options.vehicles.map(v => (
-                            <option key={v.id} value={v.id}>{v.model} ({v.plate})</option>
+                            <option key={v.id} value={v.id}>{v.plate}</option>
                           ))}
                         </select>
                         <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted rotate-90 pointer-events-none" />

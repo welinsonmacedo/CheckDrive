@@ -23,6 +23,7 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
   const [showPenaltyForm, setShowPenaltyForm] = useState(false);
   const [selectedPenaltyId, setSelectedPenaltyId] = useState('');
   const [applyingPenalty, setApplyingPenalty] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
 
   useEffect(() => {
     const fetchPenalties = async () => {
@@ -347,14 +348,12 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
               <div className="space-y-1">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Localização</span>
                 {selectedSub.latitude && selectedSub.longitude ? (
-                  <a 
-                    href={`https://www.google.com/maps/search/?api=1&query=${selectedSub.latitude},${selectedSub.longitude}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button 
+                    onClick={() => setShowMapModal(true)}
                     className="flex items-center gap-1.5 text-sm font-black text-primary hover:text-primary-hover hover:underline"
                   >
                     Ver no Mapa
-                  </a>
+                  </button>
                 ) : (
                   <p className="text-sm font-bold text-gray-400">Não registrada</p>
                 )}
@@ -652,6 +651,47 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Map Modal */}
+      {showMapModal && selectedSub?.latitude && selectedSub?.longitude && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 pb-20 sm:pb-6">
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowMapModal(false)}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-4xl bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[70vh]"
+          >
+            <div className="p-4 border-b border-app-border flex items-center justify-between">
+              <div>
+                <h3 className="font-black text-lg text-text-main">Localização no Mapa</h3>
+                <p className="text-xs text-text-muted">Latitude: {selectedSub.latitude}, Longitude: {selectedSub.longitude}</p>
+              </div>
+              <button 
+                onClick={() => setShowMapModal(false)}
+                className="p-2 hover:bg-zinc-100 rounded-xl transition-colors text-text-muted hover:text-text-main"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 w-full h-full bg-zinc-100">
+              <iframe 
+                src={`https://maps.google.com/maps?q=${selectedSub.latitude},${selectedSub.longitude}&z=15&output=embed`}
+                width="100%" 
+                height="100%" 
+                style={{ border: 0 }} 
+                allowFullScreen={true} 
+                loading="lazy" 
+                referrerPolicy="no-referrer-when-downgrade"
+                title="Google Maps"
+              ></iframe>
+            </div>
+          </motion.div>
         </div>
       )}
     </AnimatePresence>
