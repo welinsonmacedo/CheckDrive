@@ -53,8 +53,8 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
           id: driver.id,
           full_name: driver.full_name,
           profile_name: (driver.score_profiles as any)?.name || 'Sem Perfil',
-          score: driver.driver_performance?.[0]?.score || 0,
-          total_checklists: driver.driver_performance?.[0]?.total_checklists || 0
+          score: Array.isArray(driver.driver_performance) ? driver.driver_performance[0]?.score ?? 0 : driver.driver_performance?.score ?? 0,
+          total_checklists: Array.isArray(driver.driver_performance) ? driver.driver_performance[0]?.total_checklists ?? 0 : driver.driver_performance?.total_checklists ?? 0
         })).sort((a, b) => {
           if (b.score !== a.score) return b.score - a.score;
           // Se empatar na pontuação, ganha quem fez mais escalas

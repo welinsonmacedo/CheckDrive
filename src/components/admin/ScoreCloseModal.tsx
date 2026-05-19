@@ -58,7 +58,7 @@ export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: Sc
                 }
              }
 
-             const perf = d.driver_performance?.[0] || { score: driverInitialScore, total_checklists: 0 };
+             const perf = Array.isArray(d.driver_performance) ? d.driver_performance[0] : d.driver_performance || { score: driverInitialScore, total_checklists: 0 };
              itemsToInsert.push({
                  closing_id: closingRec.id,
                  driver_id: d.id,

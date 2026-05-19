@@ -251,14 +251,14 @@ export default function ReportsTab() {
                    </div>
 
                    {/* Defects List */}
-                   <div className="lg:col-span-2 bg-white rounded-2xl border border-app-border shadow-sm overflow-hidden flex flex-col">
+                   <div className="lg:col-span-2 bg-white rounded-2xl border border-app-border shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible">
                       <div className="p-5 border-b border-app-border bg-zinc-50/50">
                         <h3 className="text-sm font-black text-text-main tracking-tight flex items-center gap-2">
                           <FileText size={18} className="text-primary"/>
                           Listagem de Ocorrências
                         </h3>
                       </div>
-                      <div className="flex-1 overflow-auto max-h-[400px]">
+                      <div className="flex-1 overflow-auto max-h-[400px] print:max-h-none print:overflow-visible">
                         <table className="w-full text-left border-collapse">
                           <thead className="bg-zinc-50/80 sticky top-0 border-b border-app-border">
                             <tr>
@@ -305,7 +305,7 @@ export default function ReportsTab() {
 
           {activeReport === 'scores' && (
              <div className="space-y-6">
-                <div className="bg-white rounded-2xl border border-app-border shadow-sm overflow-hidden min-h-[400px] flex flex-col">
+                <div className="bg-white rounded-2xl border border-app-border shadow-sm overflow-hidden min-h-[400px] flex flex-col print:shadow-none print:border-none print:overflow-visible print:min-h-0 print:h-auto">
                   {closures.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-text-muted">
                        <BarChart3 size={48} className="opacity-20 mb-4" />
@@ -319,7 +319,7 @@ export default function ReportsTab() {
                            <h3 className="text-sm font-black text-text-main tracking-tight">Fechamentos Concluídos</h3>
                         </div>
                         <select 
-                          className="h-10 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary"
+                          className="h-10 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary print:hidden"
                           value={selectedClosure}
                           onChange={(e) => setSelectedClosure(e.target.value)}
                         >
@@ -331,7 +331,7 @@ export default function ReportsTab() {
                         </select>
                       </div>
 
-                      <div className="flex-1 overflow-auto">
+                      <div className="flex-1 overflow-auto print:overflow-visible">
                         <table className="w-full text-left border-collapse">
                           <thead className="bg-zinc-50/80 sticky top-0 border-b border-app-border">
                             <tr>

@@ -502,8 +502,8 @@ export default function ChecklistFlow() {
               
             if (profile && profile.participates_in_ranking !== false) {
                const scoreProfile: any = profile.score_profiles;
-               let newScore = profile.driver_performance?.[0]?.score || 0; 
-               let currentTotal = profile.driver_performance?.[0]?.total_checklists || 0;
+               let newScore = Array.isArray(profile.driver_performance) ? profile.driver_performance[0]?.score ?? 0 : profile.driver_performance?.score ?? 0; 
+               let currentTotal = Array.isArray(profile.driver_performance) ? profile.driver_performance[0]?.total_checklists ?? 0 : profile.driver_performance?.total_checklists ?? 0;
                
                const baseValue = Number(scoreProfile?.base_value || 0);
                

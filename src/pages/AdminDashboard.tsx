@@ -182,7 +182,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50 print:h-auto print:overflow-visible flex-col md:flex-row">
       {/* Sidebar */}
       <aside className="w-72 flex-shrink-0 bg-white/95 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl flex flex-col h-full print:hidden">
      
@@ -289,7 +289,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto">
+      <div className="flex-1 flex flex-col h-full overflow-y-auto print:h-auto print:overflow-visible">
         {/* Top Bar */}
         <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-8 py-4 flex items-center justify-between print:hidden">
           <div>
@@ -312,6 +312,7 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
+              className="print:h-auto print:overflow-visible"
             >
               {activeTab === 'overview' && (
                 <OverviewTab setActiveTab={setActiveTab} appSettings={appSettings} />
