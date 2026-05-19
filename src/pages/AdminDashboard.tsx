@@ -7,6 +7,7 @@ import {
   Settings, 
   BarChart3, 
   LayoutDashboard, 
+  BookOpen,
   AlertTriangle,
   ClipboardCheck,
   X,
@@ -47,6 +48,7 @@ import ChecklistDetailsModal from '../components/admin/ChecklistDetailsModal';
 import RankingTab from '../components/admin/RankingTab';
 import DatabaseTab from '../components/admin/DatabaseTab';
 import ReportsTab from '../components/admin/ReportsTab';
+import ManualTab from '../components/admin/ManualTab';
 import { useAuth } from '../contexts/AuthContext';
 
 import { runSilentAudit } from '../lib/auditService';
@@ -163,6 +165,7 @@ export default function AdminDashboard() {
     { id: 'abastecimentos', icon: Fuel, label: 'Abastecimento', color: 'from-green-500 to-emerald-500' },
     { id: 'schedules', icon: CalendarDays, label: 'Escalas', color: 'from-indigo-500 to-blue-500' },
     { id: 'reports', icon: BarChart3, label: 'Relatório Gerencial', color: 'from-indigo-600 to-blue-600' },
+    { id: 'manual', icon: BookOpen, label: 'Manual do Sistema', color: 'from-cyan-600 to-blue-600' },
     ...(user?.role === 'admin' ? [{ id: 'audit', icon: History, label: 'Auditoria', color: 'from-slate-500 to-gray-500' }] : []),
     ...(user?.role === 'admin' ? [{ id: 'database', icon: HardDrive, label: 'Banco de Dados', color: 'from-blue-600 to-indigo-600' }] : []),
     // Only admin gets settings
@@ -315,6 +318,7 @@ export default function AdminDashboard() {
               )}
               {activeTab === 'tracking' && <TrackingTab />}
               {activeTab === 'reports' && <ReportsTab />}
+              {activeTab === 'manual' && <ManualTab />}
               {activeTab === 'adm_users' && <AdmUsersTab />}
               {activeTab === 'drivers' && <DriversTab />}
               {activeTab === 'vehicles' && <VehiclesTab />}
