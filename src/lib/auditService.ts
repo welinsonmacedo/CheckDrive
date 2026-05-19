@@ -8,7 +8,7 @@ export const runSilentAudit = async () => {
     // Check if the user is authenticated and has permission implicitly by attempting fetch
     const { data: expired, error } = await supabase
       .from('schedules')
-      .select('*, profiles(participates_in_ranking)')
+      .select('*, profiles(participates_in_ranking, score_profiles(penalty_start, penalty_end, penalty_fuel, penalty_yard, base_value))')
       .lt('end_at', oneHourAgo)
       .eq('penalty_applied', false);
 
@@ -26,15 +26,17 @@ export const runSilentAudit = async () => {
           await supabase.from('schedules').update({ penalty_applied: true }).eq('id', schedule.id);
           continue;
       }
+      
+      const profileInfo = schedule.profiles?.score_profiles || {};
 
       const missingStart = !schedule.start_checklist_id;
       const missingEnd = !schedule.end_checklist_id;
       const missingFuel = !schedule.fuel_checklist_id;
 
       if (missingStart || missingEnd || missingFuel) {
-        const pStart = Number(appSettings.penalty_start) || 50;
-        const pEnd = Number(appSettings.penalty_end) || 50;
-        const pFuel = Number(appSettings.penalty_fuel) || 50;
+        const pStart = Number(profileInfo.penalty_start ?? appSettings.penalty_start ?? 50);
+        const pEnd = Number(profileInfo.penalty_end ?? appSettings.penalty_end ?? 50);
+        const pFuel = Number(profileInfo.penalty_fuel ?? appSettings.penalty_fuel ?? 50);
         
         let totalPenalty = 0;
         if (missingStart) totalPenalty += pStart;
@@ -48,7 +50,8 @@ export const runSilentAudit = async () => {
           .eq('driver_id', schedule.driver_id)
           .maybeSingle();
 
-        const newScore = (perf?.score || 1000) - totalPenalty;
+        const baseScore = Number(profileInfo.base_value ?? appSettings.initial_value ?? 1000);
+        const newScore = (perf?.score || baseScore) - totalPenalty;
 
         await supabase.from('driver_performance').upsert({ 
           driver_id: schedule.driver_id, 

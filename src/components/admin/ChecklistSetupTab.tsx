@@ -9,7 +9,8 @@ export default function ChecklistSetupTab() {
   const [itemForm, setItemForm] = useState({ 
     title: '', 
     is_trailer_item: false,
-    selectedTypes: [] as string[]
+    selectedTypes: [] as string[],
+    appears_in_manual: false
   });
   
   const [saving, setSaving] = useState(false);
@@ -51,6 +52,7 @@ export default function ChecklistSetupTab() {
       acc[key] = {
         title: current.title,
         is_trailer_item: current.is_trailer_item,
+        appears_in_manual: current.appears_in_manual || false,
         types: [],
         ids: [] // Store IDs so we can delete all of them
       };
@@ -60,7 +62,7 @@ export default function ChecklistSetupTab() {
     return acc;
   }, {} as Record<string, any>);
 
-  const uniqueItems = Object.values(groupedItems);
+  const uniqueItems = Object.values(groupedItems) as any[];
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,6 +77,7 @@ export default function ChecklistSetupTab() {
         type_id: typeId,
         title: itemForm.title,
         is_trailer_item: itemForm.is_trailer_item,
+        appears_in_manual: itemForm.appears_in_manual,
         order_index: 0 // Simplification since order will now be global
       }));
 
@@ -85,9 +88,18 @@ export default function ChecklistSetupTab() {
       }
 
       const { error } = await supabase.from('checklist_items').insert(inserts);
-      if (error) throw error;
+      if (error) {
+        // Fallback for appears_in_manual column missing
+        const fallbackInserts = itemForm.selectedTypes.map(typeId => ({
+          type_id: typeId,
+          title: itemForm.title,
+          is_trailer_item: itemForm.is_trailer_item,
+          order_index: 0
+        }));
+        await supabase.from('checklist_items').insert(fallbackInserts);
+      }
       
-      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [] });
+      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false });
       setEditingItemIds([]);
       fetchData();
     } catch (error: any) {
@@ -124,7 +136,8 @@ export default function ChecklistSetupTab() {
     setItemForm({
       title: item.title,
       is_trailer_item: item.is_trailer_item,
-      selectedTypes: item.types
+      selectedTypes: item.types,
+      appears_in_manual: item.appears_in_manual || false
     });
     setEditingItemIds(item.ids);
   };
@@ -193,7 +206,7 @@ export default function ChecklistSetupTab() {
                  </div>
               </div>
 
-              <div className="flex items-center justify-between mt-2">
+              <div className="flex items-center gap-4 mt-1">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input 
                     type="checkbox" 
@@ -205,28 +218,38 @@ export default function ChecklistSetupTab() {
                   <span className="text-xs font-black text-text-main uppercase tracking-widest">Item para Reboque</span>
                 </label>
                 
-                <div className="flex gap-2">
-                  {editingItemIds.length > 0 && (
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        setEditingItemIds([]);
-                        setItemForm({ title: '', is_trailer_item: false, selectedTypes: [] });
-                      }}
-                      className="h-10 px-4 bg-zinc-200 text-zinc-700 flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:bg-zinc-300 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                  )}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary"
+                    checked={itemForm.appears_in_manual}
+                    onChange={e => setItemForm({...itemForm, appears_in_manual: e.target.checked})}
+                  />
+                  <span className="text-xs font-black text-text-muted uppercase tracking-widest">Aparece em Pendência Manual</span>
+                </label>
+              </div>
+                
+              <div className="flex justify-end gap-2 mt-2">
+                {editingItemIds.length > 0 && (
                   <button 
-                    disabled={saving || checklistTypes.length === 0} 
-                    className="h-10 px-6 bg-primary text-white flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50"
-                    type="submit"
+                    type="button"
+                    onClick={() => {
+                      setEditingItemIds([]);
+                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false });
+                    }}
+                    className="h-10 px-4 bg-zinc-200 text-zinc-700 flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:bg-zinc-300 transition-colors"
                   >
-                    <Plus size={16} />
-                    {editingItemIds.length > 0 ? "Salvar" : "Cadastrar Item"}
+                    Cancelar
                   </button>
-                </div>
+                )}
+                <button 
+                  disabled={saving || checklistTypes.length === 0} 
+                  className="h-10 px-6 bg-primary text-white flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:opacity-90 transition-opacity disabled:opacity-50"
+                  type="submit"
+                >
+                  <Plus size={16} />
+                  {editingItemIds.length > 0 ? "Salvar" : "Cadastrar Item"}
+                </button>
               </div>
             </form>
           </div>
@@ -238,6 +261,7 @@ export default function ChecklistSetupTab() {
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Item / Pergunta</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Tipo de Equip.</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Aparece em</th>
+                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Manual?</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right border-y border-app-border">Ações</th>
                 </tr>
               </thead>
@@ -253,11 +277,18 @@ export default function ChecklistSetupTab() {
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap gap-1">
                         {checklistTypes.filter(t => item.types.includes(t.id)).map(t => (
-                          <span key={t.id} className="px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded text-[9px] font-bold uppercase tracking-wider border border-app-border">
-                            {t.title}
-                          </span>
+                           <span key={t.id} className="px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded text-[9px] font-bold uppercase tracking-wider border border-app-border">
+                             {t.title}
+                           </span>
                         ))}
                       </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      {item.appears_in_manual ? (
+                        <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">Sim</span>
+                      ) : (
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Não</span>
+                      )}
                     </td>
                     <td className="px-5 py-4 text-right">
                        <div className="flex items-center justify-end gap-2">
@@ -267,7 +298,7 @@ export default function ChecklistSetupTab() {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={4} className="px-5 py-10 text-center text-sm text-text-muted italic">Nenhum item cadastrado ainda.</td></tr>
+                  <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-text-muted italic">Nenhum item cadastrado ainda.</td></tr>
                 )}
               </tbody>
             </table>

@@ -156,7 +156,15 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
         .eq('driver_id', selectedSub.driver_id)
         .maybeSingle();
 
-      const newScore = (perf?.score || 1000) - penalty.points;
+      const { data: profileArgs } = await supabase
+        .from('profiles')
+        .select('score_profiles(base_value)')
+        .eq('id', selectedSub.driver_id)
+        .maybeSingle();
+      
+      const sp: any = profileArgs?.score_profiles;
+      const defaultScore = Number(sp?.base_value || 1000);
+      const newScore = (perf?.score || defaultScore) - penalty.points;
 
       // 2. Upsert performance
       const { error: perfError } = await supabase.from('driver_performance').upsert({ 
@@ -551,10 +559,15 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                     return (
                       <div key={pos} className="space-y-2">
                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center block">
-                          {pos === 'front' ? 'Dianteira' : 
-                           pos === 'back' ? 'Traseira' :
-                           pos === 'left' ? 'Lateral Esquerda' :
-                           pos === 'right' ? 'Lateral Direita' : pos}
+                          {selectedSub.type === 'fuel' ? (
+                             pos === 'front' ? 'Tacógrafo' :
+                             pos === 'receipt' ? 'Cupom Fiscal' : pos
+                          ) : (
+                             pos === 'front' ? 'Dianteira' : 
+                             pos === 'back' ? 'Traseira' :
+                             pos === 'left' ? 'Lateral Esquerda' :
+                             pos === 'right' ? 'Lateral Direita' : pos
+                          )}
                         </span>
                         <div 
                           className="aspect-[4/3] rounded-xl overflow-hidden border border-gray-200 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow"

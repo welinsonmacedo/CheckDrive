@@ -47,6 +47,8 @@ export default function ChecklistFlow() {
   const [isInternal, setIsInternal] = useState(false);
   const [isTrailerOnly, setIsTrailerOnly] = useState(false);
   const [requireExternalPhotos, setRequireExternalPhotos] = useState(true);
+  const [requireFuelReceiptPhoto, setRequireFuelReceiptPhoto] = useState(true);
+  const [requireLocation, setRequireLocation] = useState(false);
 
   useEffect(() => {
     fetchOptions();
@@ -103,8 +105,10 @@ export default function ChecklistFlow() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
+      let userProfile = null;
       if (user) {
-        const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+        const { data: profile } = await supabase.from('profiles').select('full_name, modality_ids').eq('id', user.id).single();
+        userProfile = profile;
         if (profile?.full_name?.includes('//INTERNO')) {
            setIsInternal(true);
         }
@@ -117,8 +121,21 @@ export default function ChecklistFlow() {
         supabase.from('app_settings').select('*').eq('id', 'global').maybeSingle()
       ]);
 
+      let availableVehicles = vRes.data || [];
+      if (userProfile && userProfile.modality_ids && userProfile.modality_ids.length > 0) {
+        availableVehicles = availableVehicles.filter(v => 
+          !v.modality_id || userProfile.modality_ids.indexOf(v.modality_id) !== -1
+        );
+      }
+
       if (settingsRes.data && settingsRes.data.require_external_photos !== undefined) {
          setRequireExternalPhotos(settingsRes.data.require_external_photos !== false);
+      }
+      if (settingsRes.data && settingsRes.data.require_fuel_receipt_photo !== undefined) {
+         setRequireFuelReceiptPhoto(settingsRes.data.require_fuel_receipt_photo !== false);
+      }
+      if (settingsRes.data && settingsRes.data.require_location !== undefined) {
+         setRequireLocation(settingsRes.data.require_location === true);
       }
 
       // Check for active schedule to pre-fill
@@ -175,7 +192,7 @@ export default function ChecklistFlow() {
       }
 
       setOptions({
-        vehicles: vRes.data || [],
+        vehicles: availableVehicles,
         routes: rRes.data || [],
         trailers: tRes.data || [],
         items: checklistItems
@@ -241,7 +258,11 @@ export default function ChecklistFlow() {
     if (currentStep === 1) {
       if (isInternal && isTrailerOnly) return true;
       if (type === 'yard') return true;
-      if (type === 'fuel') return formData.photos.front; // Only tachograph (stored in 'front') is required for fuel
+      if (type === 'fuel') {
+         if (!formData.photos.front) return false;
+         if (requireFuelReceiptPhoto && !formData.photos.receipt) return false;
+         return true;
+      }
       if (!requireExternalPhotos) return true;
       return formData.photos.front && formData.photos.back && formData.photos.left && formData.photos.right;
     }
@@ -276,6 +297,12 @@ export default function ChecklistFlow() {
       } catch (err) {
         console.warn('Could not get geolocation:', err);
       }
+      
+      if (requireLocation && (latitude === null || longitude === null)) {
+        alert('É obrigatório permitir e obter a localização GPS para salvar o checklist. Verifique as permissões do seu navegador e seu sinal GPS.');
+        setLoading(false);
+        return;
+      }
 
       // 1. Upload external photos
       const photoUrls: Record<string, string> = {};
@@ -295,6 +322,9 @@ export default function ChecklistFlow() {
       const itemValues = formData.itemValues;
       const itemTitles = options.items.reduce((acc: any, item: any) => ({ ...acc, [item.id]: item.title }), {});
 
+      // Extract receipt URL if available
+      const receipt_photo_url = photoUrls.receipt || null;
+
       const { data: submission, error: subError } = await supabase
         .from('checklist_submissions')
         .insert({
@@ -307,6 +337,7 @@ export default function ChecklistFlow() {
           latitude: latitude,
           longitude: longitude,
           photos: photoUrls,
+          receipt_photo_url: receipt_photo_url,
           status: type === 'fuel' ? 'concluido' : (Object.values(itemValues).includes('defect') ? 'com_defeitos' : 'concluido'),
           details: { 
             itemValues,
@@ -626,8 +657,11 @@ export default function ChecklistFlow() {
                   </div>
                 </div>
 
-                <div className={`grid gap-4 ${type === 'fuel' ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                  {(type === 'fuel' ? [{ id: 'front', label: 'Tacógrafo' }] : [
+                <div className={`grid gap-4 ${type === 'fuel' ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                  {(type === 'fuel' ? [
+                    { id: 'front', label: 'Tacógrafo' },
+                    { id: 'receipt', label: 'Cupom Fiscal' }
+                  ] : [
                     { id: 'front', label: 'Frente' },
                     { id: 'back', label: 'Traseira' },
                     { id: 'left', label: 'Lateral Esq.' },
@@ -637,6 +671,9 @@ export default function ChecklistFlow() {
                       <div className="flex justify-between items-center px-1">
                         <span className="text-[9px] font-black text-text-main uppercase tracking-widest">{pos.label}</span>
                         {(!requireExternalPhotos && type !== 'fuel') && (
+                           <span className="text-[8px] font-bold text-text-muted uppercase tracking-widest bg-zinc-100 px-1.5 py-0.5 rounded">Opcional</span>
+                        )}
+                        {(!requireFuelReceiptPhoto && pos.id === 'receipt') && (
                            <span className="text-[8px] font-bold text-text-muted uppercase tracking-widest bg-zinc-100 px-1.5 py-0.5 rounded">Opcional</span>
                         )}
                       </div>

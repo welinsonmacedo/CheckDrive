@@ -58,7 +58,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       
       const { data: d } = await supabase.from('profiles').select('*').eq('role', 'driver');
       setUsers(d || []);
-      const { data: v } = await supabase.from('vehicles').select('id, plate, requires_trailer').eq('active', true);
+      const { data: v } = await supabase.from('vehicles').select('id, plate, requires_trailer, modality_id').eq('active', true);
       setVehicles(v || []);
       const { data: t } = await supabase.from('trailers').select('id, plate').eq('active', true);
       setTrailers(t || []);
@@ -375,7 +375,12 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
               required
             >
               <option value="">Selecionar...</option>
-              {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate}</option>)}
+              {vehicles.filter(v => {
+                const driver = users.find(u => u.id === scheduleForm.driver_id);
+                if (!v.modality_id) return true;
+                if (driver && driver.modality_ids && driver.modality_ids.includes(v.modality_id)) return true;
+                return false;
+              }).map(v => <option key={v.id} value={v.id}>{v.plate}</option>)}
             </select>
           </div>
 

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Truck, Plus, Trash2, Edit2 } from 'lucide-react';
+import { Truck, Plus, Trash2, Edit2, Layers } from 'lucide-react';
 
 export default function FleetSettingsSection() {
   const [types, setTypes] = useState<any[]>([]);
   const [models, setModels] = useState<any[]>([]);
+  const [modalities, setModalities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Type form
@@ -15,6 +16,10 @@ export default function FleetSettingsSection() {
   const [modelForm, setModelForm] = useState({ id: '', type_id: '', name: '' });
   const [showModelForm, setShowModelForm] = useState(false);
 
+  // Modality form
+  const [modalityForm, setModalityForm] = useState({ id: '', name: '' });
+  const [showModalityForm, setShowModalityForm] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -22,12 +27,14 @@ export default function FleetSettingsSection() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [typesRes, modelsRes] = await Promise.all([
+      const [typesRes, modelsRes, modalitiesRes] = await Promise.all([
         supabase.from('vehicle_types').select('*').order('name'),
-        supabase.from('vehicle_models').select('*, vehicle_types(name)').order('name')
+        supabase.from('vehicle_models').select('*, vehicle_types(name)').order('name'),
+        supabase.from('vehicle_modalities').select('*').order('name')
       ]);
       setTypes(typesRes.data || []);
       setModels(modelsRes.data || []);
+      setModalities(modalitiesRes.data || []);
     } catch (error) {
       console.error(error);
     } finally {
@@ -97,6 +104,33 @@ export default function FleetSettingsSection() {
       alert('Erro: ' + error.message);
     }
   };
+  
+  const handleSaveModality = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload = { name: modalityForm.name };
+      if (modalityForm.id) {
+        await supabase.from('vehicle_modalities').update(payload).eq('id', modalityForm.id);
+      } else {
+        await supabase.from('vehicle_modalities').insert(payload);
+      }
+      setModalityForm({ id: '', name: '' });
+      setShowModalityForm(false);
+      fetchData();
+    } catch (error: any) {
+      alert('Erro: ' + error.message);
+    }
+  };
+
+  const handleDeleteModality = async (id: string) => {
+    if (!confirm('Excluir esta modalidade?')) return;
+    try {
+      await supabase.from('vehicle_modalities').delete().eq('id', id);
+      fetchData();
+    } catch (error: any) {
+      alert('Erro: ' + error.message);
+    }
+  };
 
   if (loading) return <div className="animate-pulse flex space-x-4"><div className="flex-1 space-y-4 py-1"><div className="h-4 bg-zinc-200 rounded w-3/4"></div><div className="space-y-2"><div className="h-4 bg-zinc-200 rounded"></div></div></div></div>;
 
@@ -115,8 +149,58 @@ export default function FleetSettingsSection() {
       </div>
 
       <div className="space-y-6">
-        {/* Tipos de Veículos */}
+        {/* Modalidades de Veículos */}
         <div className="space-y-3">
+           <div className="flex justify-between items-center">
+             <h4 className="text-xs font-bold text-text-muted uppercase tracking-widest flex items-center gap-1"><Layers size={14}/> Modalidades (Restrições Visuais)</h4>
+             <button 
+               type="button"
+               onClick={() => setShowModalityForm(!showModalityForm)}
+               className="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 hover:bg-primary/20 transition-colors"
+             >
+               <Plus size={12} /> Nova Modalidade
+             </button>
+           </div>
+           
+           {showModalityForm && (
+             <form onSubmit={handleSaveModality} className="bg-zinc-50 p-4 rounded-xl border border-app-border space-y-4">
+               <div className="space-y-1">
+                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Nome da Modalidade</label>
+                 <input type="text" required placeholder="Ex: Bitrem, RodoCaçamba, etc" className="w-full sm:w-1/2 h-10 px-3 rounded-lg border border-app-border font-bold text-xs" value={modalityForm.name} onChange={e => setModalityForm({...modalityForm, name: e.target.value})} />
+               </div>
+               <div className="flex gap-2">
+                 <button type="submit" className="px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-lg">Salvar</button>
+                 <button type="button" onClick={() => { setShowModalityForm(false); setModalityForm({id:'', name:''}) }} className="px-4 py-2 border border-app-border text-text-muted text-[10px] font-black uppercase tracking-widest rounded-lg">Cancelar</button>
+               </div>
+             </form>
+           )}
+           
+           <div className="overflow-x-auto border border-app-border rounded-xl">
+             <table className="w-full text-left text-xs">
+               <thead className="bg-zinc-50 border-b border-app-border">
+                 <tr>
+                   <th className="px-4 py-2 font-bold text-text-muted uppercase tracking-widest text-[9px]">Modalidade</th>
+                   <th className="px-4 py-2 font-bold text-text-muted uppercase tracking-widest text-[9px] text-right">Ações</th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-app-border">
+                 {modalities.map(m => (
+                   <tr key={m.id} className="hover:bg-zinc-50/50">
+                     <td className="px-4 py-3 font-bold text-text-main">{m.name}</td>
+                     <td className="px-4 py-3 flex justify-end gap-2">
+                       <button type="button" onClick={() => { setModalityForm({ id: m.id, name: m.name }); setShowModalityForm(true); }} className="text-primary hover:text-primary/70"><Edit2 size={14} /></button>
+                       <button type="button" onClick={() => handleDeleteModality(m.id)} className="text-danger hover:text-danger/70"><Trash2 size={14} /></button>
+                     </td>
+                   </tr>
+                 ))}
+                 {modalities.length === 0 && <tr><td colSpan={2} className="px-4 py-4 text-center text-text-muted text-xs">Nenhuma modalidade cadastrada</td></tr>}
+               </tbody>
+             </table>
+           </div>
+        </div>
+
+        {/* Tipos de Veículos */}
+        <div className="space-y-3 pt-4 border-t border-app-border">
           <div className="flex justify-between items-center">
             <h4 className="text-xs font-bold text-text-muted uppercase tracking-widest">Tipos de Veículo</h4>
             <button 

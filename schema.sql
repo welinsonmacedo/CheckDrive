@@ -9,15 +9,24 @@ CREATE TABLE IF NOT EXISTS profiles (
     driver_type TEXT DEFAULT 'Interno/Pátio',
     participates_in_ranking BOOLEAN DEFAULT true,
     active BOOLEAN DEFAULT true,
+    modality_ids UUID[] DEFAULT '{}',
+    score_profile_id UUID REFERENCES score_profiles(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- 2. Vehicles table
+CREATE TABLE IF NOT EXISTS vehicle_modalities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS vehicles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     plate TEXT UNIQUE NOT NULL,
     model TEXT NOT NULL,
     type TEXT, -- 'Truck', 'Van', etc.
+    modality_id UUID REFERENCES vehicle_modalities(id),
     requires_trailer BOOLEAN DEFAULT false,
     active BOOLEAN DEFAULT true,
     manual_location TEXT,
@@ -75,6 +84,7 @@ CREATE TABLE IF NOT EXISTS checklist_submissions (
     latitude NUMERIC,
     longitude NUMERIC,
     photos JSONB DEFAULT '{}'::jsonb, -- { front: url, back: url, ... }
+    receipt_photo_url TEXT,
     details JSONB DEFAULT '{}'::jsonb, -- { itemValues: { id: status } }
     status TEXT DEFAULT 'pending', -- 'pending', 'concluded'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -119,6 +129,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
     penalty_fuel NUMERIC NOT NULL DEFAULT 50,
     penalty_yard NUMERIC NOT NULL DEFAULT 50,
     require_external_photos BOOLEAN NOT NULL DEFAULT true,
+    require_fuel_receipt_photo BOOLEAN NOT NULL DEFAULT true,
+    require_location BOOLEAN NOT NULL DEFAULT false,
     closing_rule TEXT DEFAULT 'manual', -- 'manual', 'fixed_day', 'last_sunday'
     closing_day INTEGER DEFAULT 1,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -183,7 +195,22 @@ INSERT INTO app_settings (id, system_type, initial_value, penalty_value, penalty
 VALUES ('global', 'points', 1000, 50, 50, 50, 50, 50)
 ON CONFLICT (id) DO NOTHING;
 
--- 14. Manual Penalties
+-- 14. Score Profiles
+CREATE TABLE IF NOT EXISTS score_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    calculation_type TEXT NOT NULL DEFAULT 'fixed', -- 'fixed', 'per_workday', 'per_schedule'
+    base_value NUMERIC NOT NULL DEFAULT 1000,
+    penalty_start NUMERIC NOT NULL DEFAULT 50,
+    penalty_end NUMERIC NOT NULL DEFAULT 50,
+    penalty_fuel NUMERIC NOT NULL DEFAULT 50,
+    penalty_yard NUMERIC NOT NULL DEFAULT 50,
+    closing_rule TEXT DEFAULT 'manual', -- 'manual', 'fixed_day', 'last_sunday'
+    closing_value TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 15. Manual Penalties
 CREATE TABLE IF NOT EXISTS manual_penalties (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
@@ -197,6 +224,7 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE routes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE checklist_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vehicle_modalities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE checklist_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE checklist_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE driver_performance ENABLE ROW LEVEL SECURITY;
@@ -206,6 +234,7 @@ ALTER TABLE schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trailers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE baits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE score_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE manual_penalties ENABLE ROW LEVEL SECURITY;
 
 -- Helper to check if current user is admin safely
@@ -248,11 +277,17 @@ CREATE POLICY "Admin Manage" ON trailers FOR ALL USING (is_admin());
 CREATE POLICY "Public Read" ON checklist_types FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admin Manage" ON checklist_types FOR ALL USING (is_admin());
 
+CREATE POLICY "Public Read" ON vehicle_modalities FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admin Manage" ON vehicle_modalities FOR ALL USING (is_admin());
+
 CREATE POLICY "Public Read" ON checklist_items FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admin Manage" ON checklist_items FOR ALL USING (is_admin());
 
 CREATE POLICY "Public Read" ON manual_penalties FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Admin Manage" ON manual_penalties FOR ALL USING (is_admin()) WITH CHECK (is_admin());
+
+CREATE POLICY "Public Read" ON score_profiles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admin Manage" ON score_profiles FOR ALL USING (is_admin()) WITH CHECK (is_admin());
 
 -- Submissions Policies
 CREATE POLICY "Drivers can see own submissions" ON checklist_submissions FOR SELECT USING (auth.uid() = driver_id);

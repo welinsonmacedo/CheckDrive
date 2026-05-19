@@ -7,26 +7,29 @@ export default function VehiclesTab() {
   const [trailers, setTrailers] = useState<any[]>([]);
   const [types, setTypes] = useState<any[]>([]);
   const [models, setModels] = useState<any[]>([]);
+  const [modalities, setModalities] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  const [vehicleForm, setVehicleForm] = useState({ id: '', plate: '', model: '', type: '', requires_trailer: false });
+  const [vehicleForm, setVehicleForm] = useState({ id: '', plate: '', model: '', type: '', requires_trailer: false, modality_id: '' });
   const [trailerForm, setTrailerForm] = useState({ id: '', plate: '' });
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vRes, tRes, typesRes, modelsRes] = await Promise.all([
-        supabase.from('vehicles').select('*').order('plate'),
+      const [vRes, tRes, typesRes, modelsRes, modRes] = await Promise.all([
+        supabase.from('vehicles').select('*, vehicle_modalities(name)').order('plate'),
         supabase.from('trailers').select('*').order('plate'),
         supabase.from('vehicle_types').select('*').order('name'),
-        supabase.from('vehicle_models').select('*').order('name')
+        supabase.from('vehicle_models').select('*').order('name'),
+        supabase.from('vehicle_modalities').select('*').order('name')
       ]);
       setVehicles(vRes.data || []);
       setTrailers(tRes.data || []);
       setTypes(typesRes.data || []);
       setModels(modelsRes.data || []);
+      setModalities(modRes.data || []);
     } catch (error) {
       console.error('Error fetching vehicles:', error);
     } finally {
@@ -47,7 +50,8 @@ export default function VehiclesTab() {
           plate: vehicleForm.plate,
           model: vehicleForm.model,
           type: vehicleForm.type,
-          requires_trailer: vehicleForm.requires_trailer
+          requires_trailer: vehicleForm.requires_trailer,
+          modality_id: vehicleForm.modality_id || null
         }).eq('id', vehicleForm.id);
         if (error) throw error;
       } else {
@@ -55,11 +59,12 @@ export default function VehiclesTab() {
           plate: vehicleForm.plate,
           model: vehicleForm.model,
           type: vehicleForm.type,
-          requires_trailer: vehicleForm.requires_trailer
+          requires_trailer: vehicleForm.requires_trailer,
+          modality_id: vehicleForm.modality_id || null
         }]);
         if (error) throw error;
       }
-      setVehicleForm({ id: '', plate: '', model: '', type: '', requires_trailer: false });
+      setVehicleForm({ id: '', plate: '', model: '', type: '', requires_trailer: false, modality_id: '' });
       fetchData();
     } catch (error: any) {
       alert('Erro: ' + error.message);
@@ -131,6 +136,7 @@ export default function VehiclesTab() {
                   <tr>
                     <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">Placa</th>
                     <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">Modelo / Tipo</th>
+                    <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">Modalidade</th>
                     <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">Reboque</th>
                     <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right">Ações</th>
                   </tr>
@@ -144,6 +150,9 @@ export default function VehiclesTab() {
                         <div className="text-[9px] text-text-muted uppercase font-black tracking-widest">{v.type || 'N/A'}</div>
                       </td>
                       <td className="px-5 py-4">
+                        <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{v.vehicle_modalities?.name || 'Não definida'}</span>
+                      </td>
+                      <td className="px-5 py-4">
                         {v.requires_trailer ? (
                           <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-700 text-[8px] font-black uppercase">Obrigatório</span>
                         ) : (
@@ -153,7 +162,7 @@ export default function VehiclesTab() {
                       <td className="px-5 py-4 text-right flex items-center justify-end gap-2">
                          <button
                            onClick={() => {
-                             setVehicleForm({ id: v.id, plate: v.plate || '', model: v.model || '', type: v.type || '', requires_trailer: v.requires_trailer || false });
+                             setVehicleForm({ id: v.id, plate: v.plate || '', model: v.model || '', type: v.type || '', requires_trailer: v.requires_trailer || false, modality_id: v.modality_id || '' });
                              window.scrollTo({ top: 0, behavior: 'smooth' });
                            }}
                            className="p-1.5 rounded-lg hover:bg-zinc-100 text-text-muted hover:text-primary transition-colors"
@@ -274,6 +283,18 @@ export default function VehiclesTab() {
                 ))}
               </select>
             </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Modalidade do Veículo</label>
+              <select 
+                className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary"
+                value={vehicleForm.modality_id}
+                onChange={e => setVehicleForm({...vehicleForm, modality_id: e.target.value})}
+              >
+                <option value="">Nenhuma / Geral</option>
+                {modalities.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+            
             <div className="flex items-center gap-3 pt-2">
               <input 
                 type="checkbox" 
@@ -290,7 +311,7 @@ export default function VehiclesTab() {
               {vehicleForm.id && (
                  <button
                    type="button"
-                   onClick={() => setVehicleForm({ id: '', plate: '', model: '', type: '', requires_trailer: false })}
+                   onClick={() => setVehicleForm({ id: '', plate: '', model: '', type: '', requires_trailer: false, modality_id: '' })}
                    className="flex-1 h-12 bg-app-bg text-text-main border border-app-border font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-100 transition-all shadow-sm"
                  >
                    Cancelar

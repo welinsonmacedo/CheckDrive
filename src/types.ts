@@ -6,6 +6,12 @@ export interface User {
   name: string;
   role: Role | null; // 🔥 ESSENCIAL
   isInternal: boolean;
+  modality_ids?: string[];
+}
+
+export interface VehicleModality {
+  id: string;
+  name: string;
 }
 
 export interface Vehicle {
@@ -13,6 +19,7 @@ export interface Vehicle {
   plate: string;
   model: string;
   type?: string;
+  modality_id?: string;
   requires_trailer?: boolean;
   active: boolean;
 }

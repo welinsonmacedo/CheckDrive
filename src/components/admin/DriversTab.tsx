@@ -4,6 +4,8 @@ import { CheckCircle2, Search, X, Plus } from 'lucide-react';
 
 export default function DriversTab() {
   const [users, setUsers] = useState<any[]>([]);
+  const [modalities, setModalities] = useState<any[]>([]);
+  const [scoreProfiles, setScoreProfiles] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -17,7 +19,9 @@ export default function DriversTab() {
     role: 'driver',
     password: '',
     driverType: 'Interno/Pátio',
-    participatesInRanking: true
+    participatesInRanking: true,
+    modalityIds: [] as string[],
+    scoreProfileId: ''
   });
 const openCreateForm = () => {
   setUserForm({
@@ -27,20 +31,34 @@ const openCreateForm = () => {
     role: 'driver',
     password: '',
     driverType: 'Interno/Pátio',
-    participatesInRanking: true
+    participatesInRanking: true,
+    modalityIds: [],
+    scoreProfileId: ''
   });
   setShowForm(true);
 };
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('role', 'driver')
-        .order('full_name');
+      const [{ data }, { data: modData }, { data: scoreProfilesData }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('*, score_profiles(name)')
+          .eq('role', 'driver')
+          .order('full_name'),
+        supabase
+          .from('vehicle_modalities')
+          .select('*')
+          .order('name'),
+        supabase
+          .from('score_profiles')
+          .select('*')
+          .order('name')
+      ]);
 
       setUsers(data || []);
+      setModalities(modData || []);
+      setScoreProfiles(scoreProfilesData || []);
     } catch (error) {
       console.error('Error fetching drivers data:', error);
     } finally {
@@ -63,7 +81,9 @@ const openCreateForm = () => {
       full_name: parsedName,
       role: userForm.role,
       driver_type: userForm.driverType,
-      participates_in_ranking: userForm.participatesInRanking
+      participates_in_ranking: userForm.participatesInRanking,
+      modality_ids: userForm.modalityIds,
+      score_profile_id: userForm.scoreProfileId || null
     };
 
     try {
@@ -133,7 +153,8 @@ const openCreateForm = () => {
         role: 'driver',
         password: '',
         driverType: 'Interno/Pátio',
-        participatesInRanking: true
+        participatesInRanking: true,
+        modalityIds: []
       });
 
       setShowForm(false);
@@ -276,6 +297,12 @@ const openCreateForm = () => {
                         >
                           {user.driver_type || 'Interno/Pátio'}
                         </span>
+
+                        {user.score_profiles && (
+                          <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-700">
+                            {user.score_profiles.name}
+                          </span>
+                        )}
                         
                         {!user.participates_in_ranking && (
                           <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-500">
@@ -296,7 +323,9 @@ const openCreateForm = () => {
                               role: 'driver',
                               password: '',
                               driverType: user.driver_type || 'Interno/Pátio',
-                              participatesInRanking: user.participates_in_ranking !== false
+                              participatesInRanking: user.participates_in_ranking !== false,
+                              modalityIds: user.modality_ids || [],
+                              scoreProfileId: user.score_profile_id || ''
                             });
 
                             setShowForm(true);
@@ -419,6 +448,43 @@ const openCreateForm = () => {
           <option value="Distribuição">Distribuição</option>
           <option value="Transferência">Transferência</option>
         </select>
+
+        <select
+          value={userForm.scoreProfileId}
+          onChange={e =>
+            setUserForm({ ...userForm, scoreProfileId: e.target.value })
+          }
+          className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
+          required
+        >
+          <option value="">Selecione um Perfil de Pontuação</option>
+          {scoreProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+
+        {modalities.length > 0 && (
+          <div className="space-y-2 p-3 bg-zinc-50 rounded-xl border border-app-border">
+             <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Modalidades Permitidas</span>
+             <div className="grid grid-cols-2 gap-3 mt-2">
+               {modalities.map(mod => (
+                 <label key={mod.id} className="flex items-center gap-2 cursor-pointer">
+                   <input 
+                     type="checkbox"
+                     className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary"
+                     checked={userForm.modalityIds.includes(mod.id)}
+                     onChange={e => {
+                       if (e.target.checked) {
+                         setUserForm({ ...userForm, modalityIds: [...userForm.modalityIds, mod.id] });
+                       } else {
+                         setUserForm({ ...userForm, modalityIds: userForm.modalityIds.filter(id => id !== mod.id) });
+                       }
+                     }}
+                   />
+                   <span className="text-xs font-bold text-text-main">{mod.name}</span>
+                 </label>
+               ))}
+             </div>
+          </div>
+        )}
 
         <label className="flex items-center gap-3 text-sm text-text-muted">
           <input
