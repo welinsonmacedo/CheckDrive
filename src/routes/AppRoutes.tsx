@@ -13,6 +13,7 @@ import ChecklistFlow from '../pages/ChecklistFlow';
 import AdminDashboard from '../pages/AdminDashboard';
 import Documentation from '../pages/Documentation';
 import AppLayout from '../components/layout/AppLayout';
+import ResetPassword from '../pages/ResetPassword';
 
 export default function AppRoutes() {
   const { user, logout } = useAuth();
@@ -21,6 +22,7 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       
       <Route path="/dashboard" element={
         <ProtectedRoute>

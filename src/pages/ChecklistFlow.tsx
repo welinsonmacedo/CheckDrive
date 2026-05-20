@@ -35,7 +35,8 @@ export default function ChecklistFlow() {
       front: null as File | null,
       back: null as File | null,
       left: null as File | null,
-      right: null as File | null
+      right: null as File | null,
+      receipt: null as File | null
     },
     itemValues: {} as Record<string, 'normal' | 'defect'>,
     defects: {} as Record<string, Array<{ description: string, photo: File | null }>>
@@ -512,8 +513,9 @@ export default function ChecklistFlow() {
               
             if (profile && profile.participates_in_ranking !== false) {
                const scoreProfile: any = profile.score_profiles;
-               let newScore = Array.isArray(profile.driver_performance) ? profile.driver_performance[0]?.score ?? 0 : profile.driver_performance?.score ?? 0; 
-               let currentTotal = Array.isArray(profile.driver_performance) ? profile.driver_performance[0]?.total_checklists ?? 0 : profile.driver_performance?.total_checklists ?? 0;
+               const perf = profile.driver_performance as any;
+               let newScore = Array.isArray(perf) ? perf[0]?.score ?? 0 : perf?.score ?? 0; 
+               let currentTotal = Array.isArray(perf) ? perf[0]?.total_checklists ?? 0 : perf?.total_checklists ?? 0;
                
                const baseValue = Number(scoreProfile?.base_value || 0);
                

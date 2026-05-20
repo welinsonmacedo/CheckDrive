@@ -49,13 +49,15 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
 
         const ranked = drivers
           .filter(driver => driver.participates_in_ranking !== false)
-          .map(driver => ({
+          .map(driver => {
+          const perf = driver.driver_performance as any;
+          return {
           id: driver.id,
           full_name: driver.full_name,
           profile_name: (driver.score_profiles as any)?.name || 'Sem Perfil',
-          score: Array.isArray(driver.driver_performance) ? driver.driver_performance[0]?.score ?? 0 : driver.driver_performance?.score ?? 0,
-          total_checklists: Array.isArray(driver.driver_performance) ? driver.driver_performance[0]?.total_checklists ?? 0 : driver.driver_performance?.total_checklists ?? 0
-        })).sort((a, b) => {
+          score: Array.isArray(perf) ? perf[0]?.score ?? 0 : perf?.score ?? 0,
+          total_checklists: Array.isArray(perf) ? perf[0]?.total_checklists ?? 0 : perf?.total_checklists ?? 0
+        }}).sort((a, b) => {
           if (b.score !== a.score) return b.score - a.score;
           // Se empatar na pontuação, ganha quem fez mais escalas
           return (b.total_checklists || 0) - (a.total_checklists || 0);
@@ -135,14 +137,16 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
               acc[name].push(curr);
               return acc;
             }, {} as Record<string, any[]>)
-          ).map(([groupName, groupDrivers]) => (
+          ).map(([groupName, groupDriversRaw]) => {
+            const groupDrivers = groupDriversRaw as any[];
+            return (
             <div key={groupName} className="bento-card !p-0 overflow-hidden shadow-sm">
               <div className="bg-zinc-50/80 border-b border-app-border px-4 py-3 flex items-center justify-between">
                 <h3 className="text-xs font-black text-text-main uppercase tracking-widest">{groupName}</h3>
                 <span className="text-[10px] font-bold text-text-muted px-2 py-1 bg-white border border-app-border rounded-lg">{groupDrivers.length} Motorista(s)</span>
               </div>
               <div className="divide-y divide-app-border">
-                {groupDrivers.map((item, index) => {
+                {groupDrivers.map((item: any, index: number) => {
                   const isTop3 = index < 3;
                   const colors = ['text-yellow-500', 'text-zinc-400', 'text-amber-600'];
                   const bgColors = ['bg-yellow-50', 'bg-zinc-50', 'bg-amber-50'];
@@ -184,7 +188,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
                 })}
               </div>
             </div>
-          ))
+          );})
         )}
       </div>
 

@@ -154,7 +154,8 @@ const openCreateForm = () => {
         password: '',
         driverType: 'Interno/Pátio',
         participatesInRanking: true,
-        modalityIds: []
+        modalityIds: [],
+        scoreProfileId: ''
       });
 
       setShowForm(false);
