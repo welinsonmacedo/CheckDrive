@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { CheckCircle2, Search, X, Plus } from 'lucide-react';
+import { CheckCircle2, Search, X, Plus, Key } from 'lucide-react';
 
 export default function DriversTab() {
   const [users, setUsers] = useState<any[]>([]);
@@ -169,6 +169,27 @@ const openCreateForm = () => {
     }
   };
 
+  const handleResetPassword = async (email: string) => {
+    if (!email) {
+      alert('Usuário não possui e-mail cadastrado.');
+      return;
+    }
+    if (!window.confirm(`Deseja enviar um e-mail de redefinição de senha para ${email}?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/reset-password',
+      });
+      if (error) throw error;
+      alert(`E-mail de redefinição enviado para ${email}.`);
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      alert('Erro ao enviar e-mail de redefinição. Detalhes: ' + error.message);
+    }
+  };
+
   const toggleStatus = async (id: string, currentStatus: boolean) => {
     if (
       !window.confirm(
@@ -313,6 +334,14 @@ const openCreateForm = () => {
                       </td>
 
                       <td className="px-5 py-4 text-right flex gap-2 justify-end">
+
+                        <button
+                          onClick={() => handleResetPassword(user.email)}
+                          title="Redefinir Senha"
+                          className="p-1.5 rounded-lg text-text-muted hover:bg-zinc-100 hover:text-primary transition-colors"
+                        >
+                          <Key size={16} />
+                        </button>
 
                         <button
                           onClick={() => {
