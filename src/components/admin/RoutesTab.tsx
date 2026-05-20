@@ -4,6 +4,7 @@ import { CheckCircle2, Search, X } from 'lucide-react';
 
 export default function RoutesTab() {
   const [routes, setRoutes] = useState<any[]>([]);
+  const [modalities, setModalities] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -13,10 +14,14 @@ export default function RoutesTab() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from('routes').select('*').order('origin');
-      setRoutes(data || []);
+      const [rRes, mRes] = await Promise.all([
+        supabase.from('routes').select('*').order('origin'),
+        supabase.from('vehicle_modalities').select('*').order('name')
+      ]);
+      setRoutes(rRes.data || []);
+      setModalities(mRes.data || []);
     } catch (error) {
-      console.error('Error fetching routes:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
@@ -104,9 +109,9 @@ export default function RoutesTab() {
                   <tr key={r.id} className="hover:bg-app-bg/30">
                     <td className="px-5 py-4 text-xs font-bold">{r.origin}</td>
                     <td className="px-5 py-4 text-[10px] text-text-muted font-medium">
-                      {r.stops?.length > 0 ? (
+                      {r.stops?.filter((s: string) => !s.startsWith('__MODALITY:')).length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {r.stops.map((stop: string, idx: number) => (
+                          {r.stops.filter((s: string) => !s.startsWith('__MODALITY:')).map((stop: string, idx: number) => (
                             <span key={idx} className="bg-app-bg px-2 py-0.5 rounded border border-app-border">{stop}</span>
                           ))}
                         </div>
@@ -166,7 +171,7 @@ export default function RoutesTab() {
               </button>
             </div>
             <div className="space-y-2">
-              {routeForm.stops.map((stop, idx) => (
+              {routeForm.stops.filter(s => !s.startsWith('__MODALITY:')).map((stop, idx, filteredArray) => (
                 <div key={idx} className="flex gap-2">
                   <input 
                     required
@@ -174,16 +179,19 @@ export default function RoutesTab() {
                     placeholder={`Parada ${idx + 1}`}
                     value={stop}
                     onChange={e => {
-                      const newStops = [...routeForm.stops];
-                      newStops[idx] = e.target.value;
-                      setRouteForm({...routeForm, stops: newStops});
+                      const newVal = e.target.value;
+                      const realIdx = routeForm.stops.indexOf(stop);
+                      if (realIdx !== -1) {
+                        const newStops = [...routeForm.stops];
+                        newStops[realIdx] = newVal;
+                        setRouteForm({...routeForm, stops: newStops});
+                      }
                     }}
                   />
                   <button 
                     type="button"
                     onClick={() => {
-                      const newStops = routeForm.stops.filter((_, i) => i !== idx);
-                      setRouteForm({...routeForm, stops: newStops});
+                      setRouteForm({...routeForm, stops: routeForm.stops.filter(s => s !== stop)});
                     }}
                     className="w-9 h-9 border border-app-border rounded-lg flex items-center justify-center text-text-muted hover:text-danger bg-app-bg"
                   >
@@ -203,6 +211,37 @@ export default function RoutesTab() {
               value={routeForm.destination}
               onChange={e => setRouteForm({...routeForm, destination: e.target.value})}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Restringir a Modalidades Visuais</label>
+            <div className="p-3 border border-app-border rounded-xl bg-app-bg space-y-2 max-h-32 overflow-y-auto">
+               {modalities.length === 0 ? (
+                 <p className="text-[10px] text-text-muted italic">Nenhuma modalidade cadastrada.</p>
+               ) : (
+                 modalities.map(m => {
+                   const token = `__MODALITY:${m.id}`;
+                   const isChecked = routeForm.stops.includes(token);
+                   return (
+                     <label key={m.id} className="flex items-center gap-2 cursor-pointer">
+                       <input 
+                         type="checkbox" 
+                         className="rounded text-primary focus:ring-primary w-3 h-3"
+                         checked={isChecked}
+                         onChange={(e) => {
+                           if (e.target.checked) {
+                             setRouteForm({...routeForm, stops: [...routeForm.stops, token]});
+                           } else {
+                             setRouteForm({...routeForm, stops: routeForm.stops.filter(s => s !== token)});
+                           }
+                         }}
+                       />
+                       <span className="text-[10px] font-bold text-text-main">{m.name}</span>
+                     </label>
+                   )
+                 })
+               )}
+            </div>
           </div>
 
           <div className="space-y-1.5">

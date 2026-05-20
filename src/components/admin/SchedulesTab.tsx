@@ -195,8 +195,11 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       message += `*VEÍCULO:* ${sch.vehicles?.type || 'Não definido'}\n`;
       message += `*PLACA:* ${sch.vehicles?.plate}${sch.trailers?.plate ? ` | REB: ${sch.trailers.plate}` : ''}\n`;
       let routeText = `${sch.routes?.origin} → ${sch.routes?.destination}`;
-      if (Array.isArray(sch.routes?.stops) && sch.routes.stops.length > 0) {
-        routeText = `${sch.routes.origin} → ${sch.routes.stops.join(' → ')} → ${sch.routes.destination}`;
+      if (Array.isArray(sch.routes?.stops)) {
+        const validStops = sch.routes.stops.filter(s => !s.startsWith('__MODALITY:'));
+        if (validStops.length > 0) {
+          routeText = `${sch.routes.origin} → ${validStops.join(' → ')} → ${sch.routes.destination}`;
+        }
       }
       message += `*ROTA:* ${routeText}\n`;
       message += `*SAÍDA:* ${start}\n`;
@@ -417,8 +420,14 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
               className="text-xs font-bold"
               placeholder="Selecionar rota..."
               isClearable
-              options={routes.map(r => ({ value: r.id, label: `${r.origin} → ${r.destination} ${r.stops && r.stops.length > 0 ? `(Paradas: ${r.stops.join(', ')})` : ''}` }))}
-              value={routes.map(r => ({ value: r.id, label: `${r.origin} → ${r.destination} ${r.stops && r.stops.length > 0 ? `(Paradas: ${r.stops.join(', ')})` : ''}` })).find(o => o.value === scheduleForm.route_id) || null}
+              options={routes.map(r => {
+                const validStops = r.stops?.filter((s: string) => !s.startsWith('__MODALITY:')) || [];
+                return { value: r.id, label: `${r.origin} → ${r.destination} ${validStops.length > 0 ? `(Paradas: ${validStops.join(', ')})` : ''}` };
+              })}
+              value={routes.map(r => {
+                const validStops = r.stops?.filter((s: string) => !s.startsWith('__MODALITY:')) || [];
+                return { value: r.id, label: `${r.origin} → ${r.destination} ${validStops.length > 0 ? `(Paradas: ${validStops.join(', ')})` : ''}` };
+              }).find(o => o.value === scheduleForm.route_id) || null}
               onChange={(selected) => setScheduleForm({...scheduleForm, route_id: selected?.value || ''})}
               styles={{
                 control: (base, state) => ({ ...base, minHeight: '44px', borderRadius: '0.75rem', borderColor: state.isFocused ? '#0ea5e9' : '#e5e7eb', boxShadow: 'none' })

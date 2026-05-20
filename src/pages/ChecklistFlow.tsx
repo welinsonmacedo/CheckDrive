@@ -122,10 +122,20 @@ export default function ChecklistFlow() {
       ]);
 
       let availableVehicles = vRes.data || [];
+      let availableRoutes = rRes.data || [];
       if (userProfile && userProfile.modality_ids && userProfile.modality_ids.length > 0) {
         availableVehicles = availableVehicles.filter(v => 
           !v.modality_id || userProfile.modality_ids.indexOf(v.modality_id) !== -1
         );
+        availableRoutes = availableRoutes.filter((r: any) => {
+          if (!r.stops || r.stops.length === 0) return true;
+          const routeModalityTokens = r.stops.filter((s: string) => s.startsWith('__MODALITY:'));
+          if (routeModalityTokens.length === 0) return true;
+          return routeModalityTokens.some((token: string) => {
+            const mId = token.replace('__MODALITY:', '');
+            return userProfile.modality_ids.indexOf(mId) !== -1;
+          });
+        });
       }
 
       if (settingsRes.data && settingsRes.data.require_external_photos !== undefined) {
@@ -193,7 +203,7 @@ export default function ChecklistFlow() {
 
       setOptions({
         vehicles: availableVehicles,
-        routes: rRes.data || [],
+        routes: availableRoutes,
         trailers: tRes.data || [],
         items: checklistItems
       });
@@ -677,12 +687,15 @@ export default function ChecklistFlow() {
                           onChange={e => setFormData({...formData, routeId: e.target.value})}
                         >
                           <option value="">Selecione a rota</option>
-                          {options.routes.map(r => (
-                            <option key={r.id} value={r.id}>
-                              {r.origin} &#8594; {r.destination} 
-                              {r.stops?.length > 0 ? ` (via ${r.stops.join(', ')})` : ''}
-                            </option>
-                          ))}
+                          {options.routes.map(r => {
+                            const validStops = r.stops?.filter((s: string) => !s.startsWith('__MODALITY:')) || [];
+                            return (
+                              <option key={r.id} value={r.id}>
+                                {r.origin} &#8594; {r.destination} 
+                                {validStops.length > 0 ? ` (via ${validStops.join(', ')})` : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                         <MapPin size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
                         <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted rotate-90 pointer-events-none" />
