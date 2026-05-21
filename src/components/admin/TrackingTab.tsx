@@ -8,6 +8,7 @@ export default function TrackingTab() {
   const [baits, setBaits] = useState<any[]>([]);
   const [issuesCount, setIssuesCount] = useState<Record<string, number>>({});
   const [schedulesMap, setSchedulesMap] = useState<Record<string, any>>({});
+  const [latestOdometer, setLatestOdometer] = useState<Record<string, number>>({});
   
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,6 +40,23 @@ export default function TrackingTab() {
         iCount[i.vehicle_id] = (iCount[i.vehicle_id] || 0) + 1;
       });
       setIssuesCount(iCount);
+
+      // Fetch latest odometer for vehicles
+      const odometerMap: Record<string, number> = {};
+      const odoPromises = vData.map(async (v: any) => {
+         const { data } = await supabase.from('checklist_submissions')
+           .select('odometer')
+           .eq('vehicle_id', v.id)
+           .not('odometer', 'is', null)
+           .order('created_at', { ascending: false })
+           .limit(1)
+           .maybeSingle();
+         if (data && data.odometer) {
+             odometerMap[v.id] = data.odometer;
+         }
+      });
+      await Promise.all(odoPromises);
+      setLatestOdometer(odometerMap);
 
       // Fetch upcoming/recent schedules to determine automatic state
       const lastWeek = new Date();
@@ -254,9 +272,14 @@ export default function TrackingTab() {
         <div className="space-y-3">
           <div className="flex items-start gap-3 p-3 bg-zinc-50 rounded-xl border border-app-border/50">
             <Navigation size={16} className="text-primary shrink-0 mt-0.5" />
-            <div>
+            <div className="flex-1">
               <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-0.5">Localização e Destino</p>
               <p className="text-sm font-bold text-text-main leading-tight">{state.location}</p>
+              {type === 'vehicle' && latestOdometer[item.id] !== undefined && (
+                <p className="text-xs font-bold text-text-muted mt-1 whitespace-nowrap">
+                  KM Atual: <span className="text-text-main">{latestOdometer[item.id]}</span>
+                </p>
+              )}
               {state.isManual && (
                 <p className="text-[9px] font-black text-purple-600 mt-1 uppercase tracking-widest bg-purple-100 inline-block px-1.5 py-0.5 rounded">Sobrescrito Manualmente</p>
               )}
