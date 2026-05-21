@@ -1,6 +1,10 @@
 import { supabase } from './supabase';
 
+let isAuditing = false;
+
 export const runSilentAudit = async () => {
+  if (isAuditing) return;
+  isAuditing = true;
   try {
     // Threshold: 1 hour after end_at
     const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
@@ -105,5 +109,7 @@ export const runSilentAudit = async () => {
     }
   } catch (err) {
     // Silently fail on background audit
+  } finally {
+    isAuditing = false;
   }
 };
