@@ -67,7 +67,7 @@ export default function DriverHome() {
       
       const { data: fetchedSchedules, error: scheduleError } = await supabase
         .from('schedules')
-        .select('id, start_at, end_at, start_checklist_id, end_checklist_id, fuel_checklist_id, vehicles(plate, requires_trailer), routes(origin, destination)')
+        .select('id, start_at, end_at, start_checklist_id, end_checklist_id, fuel_checklist_id, requires_fueling, vehicles(plate, requires_trailer), routes(origin, destination)')
         .eq('driver_id', user.id)
         .gte('end_at', thirtyMinsAgo.toISOString())
         .order('start_at', { ascending: true })
@@ -96,11 +96,15 @@ export default function DriverHome() {
     }
   };
 
-  const checklistTypes = [
+  const originalChecklistTypes = [
     { id: 'start', label: 'Início de Viagem', icon: ClipboardCheck, color: 'text-primary', bg: 'bg-blue-50', desc: 'Registre o início', field: 'start_checklist_id' },
     { id: 'fuel', label: 'Abastecimento', icon: Fuel, color: 'text-warning', bg: 'bg-orange-50', desc: 'Litragem e KM', field: 'fuel_checklist_id' },
     { id: 'end', label: 'Fim de Viagem', icon: CheckCircle2, color: 'text-success', bg: 'bg-green-50', desc: 'Encerre jornada', field: 'end_checklist_id' },
   ];
+
+  const checklistTypes = activeSchedule?.requires_fueling === false 
+    ? originalChecklistTypes.filter(t => t.id !== 'fuel') 
+    : originalChecklistTypes;
 
   const internalTypes = [
     { id: 'yard', label: 'Checklist de Pátio', icon: ClipboardCheck, color: 'text-primary', bg: 'bg-blue-50', desc: 'Inspeção interna de frota' },

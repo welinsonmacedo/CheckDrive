@@ -25,7 +25,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
 
   const [scheduleForm, setScheduleForm] = useState({ 
     id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '',
-    bait1_id: '', bait2_id: '', bait3_id: ''
+    bait1_id: '', bait2_id: '', bait3_id: '', requires_fueling: true
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -102,7 +102,8 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
         bait2_id: scheduleForm.bait2_id || null,
         bait3_id: scheduleForm.bait3_id || null,
         start_at: parseLocal(scheduleForm.start_at),
-        end_at: parseLocal(scheduleForm.end_at)
+        end_at: parseLocal(scheduleForm.end_at),
+        requires_fueling: scheduleForm.requires_fueling
       };
 
       if (scheduleForm.id) {
@@ -139,7 +140,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
         alert('Escala agendada!');
       }
       
-      setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '', bait1_id: '', bait2_id: '', bait3_id: '' });
+      setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '', bait1_id: '', bait2_id: '', bait3_id: '', requires_fueling: true });
       fetchData();
     } catch (error: any) {
       alert('Erro: ' + error.message);
@@ -173,7 +174,8 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       bait2_id: sch.bait2_id || '',
       bait3_id: sch.bait3_id || '',
       start_at: formatForInput(sch.start_at),
-      end_at: formatForInput(sch.end_at)
+      end_at: formatForInput(sch.end_at),
+      requires_fueling: sch.requires_fueling ?? true
     });
   };
 
@@ -499,23 +501,34 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
             </div>
           </div>
 
-          <div className="pt-2 flex gap-3 flex-col sm:flex-row">
-            {scheduleForm.id && (
+          <div className="pt-2 flex flex-col gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                className="w-4 h-4 rounded text-primary focus:ring-primary"
+                checked={scheduleForm.requires_fueling}
+                onChange={e => setScheduleForm({...scheduleForm, requires_fueling: e.target.checked})}
+              />
+              <span className="text-xs font-bold text-text-main">Exige Abastecimento nesta escala</span>
+            </label>
+            <div className="flex gap-3 flex-col sm:flex-row">
+              {scheduleForm.id && (
+                <button 
+                  type="button" 
+                  onClick={() => setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '', bait1_id: '', bait2_id: '', bait3_id: '', requires_fueling: true })}
+                  className="flex-1 h-12 bg-zinc-100 text-text-muted font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-200 transition-all font-mono"
+                >
+                  Cancelar
+                </button>
+              )}
               <button 
-                type="button" 
-                onClick={() => setScheduleForm({ id: '', driver_id: '', vehicle_id: '', trailer_id: '', route_id: '', start_at: '', end_at: '', bait1_id: '', bait2_id: '', bait3_id: '' })}
-                className="flex-1 h-12 bg-zinc-100 text-text-muted font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-200 transition-all font-mono"
+                type="submit" 
+                disabled={saving}
+                className="flex-1 h-12 bg-primary text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-primary-hover hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/25 disabled:opacity-50"
               >
-                Cancelar
+                {saving ? 'Processando...' : (scheduleForm.id ? 'Salvar Alteração' : 'Agendar Escala')}
               </button>
-            )}
-            <button 
-              type="submit" 
-              disabled={saving}
-              className="flex-1 h-12 bg-primary text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-primary-hover hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/25 disabled:opacity-50"
-            >
-              {saving ? 'Processando...' : (scheduleForm.id ? 'Salvar Alteração' : 'Agendar Escala')}
-            </button>
+            </div>
           </div>
         </form>
       </div>

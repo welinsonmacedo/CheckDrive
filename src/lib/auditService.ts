@@ -31,7 +31,7 @@ export const runSilentAudit = async () => {
 
       const missingStart = !schedule.start_checklist_id;
       const missingEnd = !schedule.end_checklist_id;
-      const missingFuel = !schedule.fuel_checklist_id;
+      const missingFuel = schedule.requires_fueling !== false && !schedule.fuel_checklist_id;
 
       if (missingStart || missingEnd || missingFuel) {
         // Check if penalties apply (defaults to true if undefined)

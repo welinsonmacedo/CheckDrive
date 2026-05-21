@@ -165,6 +165,7 @@ CREATE TABLE IF NOT EXISTS schedules (
     start_checklist_id UUID REFERENCES checklist_submissions(id),
     end_checklist_id UUID REFERENCES checklist_submissions(id),
     fuel_checklist_id UUID REFERENCES checklist_submissions(id),
+    requires_fueling BOOLEAN DEFAULT true,
     bait1_id UUID REFERENCES baits(id),
     bait2_id UUID REFERENCES baits(id),
     bait3_id UUID REFERENCES baits(id),
