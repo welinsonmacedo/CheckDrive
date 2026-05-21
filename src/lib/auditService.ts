@@ -85,9 +85,9 @@ export const runSilentAudit = async () => {
 
         // Build detailed reason
         const missingItems = [];
-        if (missingStart) missingItems.push('inicial');
-        if (missingEnd) missingItems.push('final');
-        if (missingFuel) missingItems.push('abastecimento');
+        if (missingStart && applyStart) missingItems.push('inicial');
+        if (missingEnd && applyEnd) missingItems.push('final');
+        if (missingFuel && applyFuel) missingItems.push('abastecimento');
         
         const reason = `Penalidade automática: Falta de checklist ${missingItems.join(', ').replace(/, ([^,]*)$/, ' e $1')} na escala.`;
 
