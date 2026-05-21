@@ -5,6 +5,7 @@ import { BarChart3, AlertTriangle, FileText, CheckCircle2, Search, Calendar, Che
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Printer } from 'lucide-react';
+import DefectPrintModal from './DefectPrintModal';
 
 export default function ReportsTab() {
   const [activeReport, setActiveReport] = useState<'scores' | 'defects'>('defects');
@@ -14,6 +15,7 @@ export default function ReportsTab() {
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   
   const [loading, setLoading] = useState(false);
+  const [selectedDefectToPrint, setSelectedDefectToPrint] = useState<any | null>(null);
   
   // Defects Data
   const [defectsData, setDefectsData] = useState<any[]>([]);
@@ -267,11 +269,12 @@ export default function ReportsTab() {
                               <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Veículo</th>
                               <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Defeito</th>
                               <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Status</th>
+                              <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest print:hidden text-right">Ação</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-app-border">
                             {defectsData.length === 0 ? (
-                               <tr><td colSpan={5} className="text-center py-8 text-xs text-text-muted uppercase tracking-widest font-bold">Sem dados para exibir</td></tr>
+                               <tr><td colSpan={6} className="text-center py-8 text-xs text-text-muted uppercase tracking-widest font-bold">Sem dados para exibir</td></tr>
                             ) : defectsData.map((d) => (
                               <tr key={d.id} className="hover:bg-zinc-50/50">
                                 <td className="px-4 py-3 text-xs font-bold text-text-muted">
@@ -292,6 +295,15 @@ export default function ReportsTab() {
                                   }`}>
                                     {d.status === 'resolved' ? 'Resolvido' : 'Pendente'}
                                   </span>
+                                </td>
+                                <td className="px-4 py-3 text-right print:hidden">
+                                  <button
+                                    onClick={() => setSelectedDefectToPrint(d)}
+                                    title="Imprimir Ficha"
+                                    className="p-2 text-zinc-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-colors inline-flex"
+                                  >
+                                    <Printer size={16} />
+                                  </button>
                                 </td>
                               </tr>
                             ))}
@@ -376,6 +388,13 @@ export default function ReportsTab() {
              </div>
           )}
         </motion.div>
+      )}
+
+      {selectedDefectToPrint && (
+        <DefectPrintModal 
+          defect={selectedDefectToPrint} 
+          onClose={() => setSelectedDefectToPrint(null)} 
+        />
       )}
     </div>
   );
