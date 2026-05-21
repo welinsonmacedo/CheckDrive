@@ -9,6 +9,7 @@ export default function ScoreProfilesSettingsSection() {
   const [form, setForm] = useState({
     id: '', name: '', calculation_type: 'fixed', base_value: '1000',
     penalty_start: '50', penalty_end: '50', penalty_fuel: '50', penalty_yard: '50',
+    apply_penalty_start: true, apply_penalty_end: true, apply_penalty_fuel: true, apply_penalty_yard: true,
     closing_rule: 'manual', closing_value: ''
   });
 
@@ -38,6 +39,10 @@ export default function ScoreProfilesSettingsSection() {
         penalty_end: Number(form.penalty_end),
         penalty_fuel: Number(form.penalty_fuel),
         penalty_yard: Number(form.penalty_yard),
+        apply_penalty_start: form.apply_penalty_start,
+        apply_penalty_end: form.apply_penalty_end,
+        apply_penalty_fuel: form.apply_penalty_fuel,
+        apply_penalty_yard: form.apply_penalty_yard,
         closing_rule: form.closing_rule,
         closing_value: form.closing_value || null
       };
@@ -75,7 +80,12 @@ export default function ScoreProfilesSettingsSection() {
         </h3>
         <button 
           onClick={() => {
-            setForm({ id: '', name: '', calculation_type: 'fixed', base_value: '1000', penalty_start: '50', penalty_end: '50', penalty_fuel: '50', penalty_yard: '50', closing_rule: 'manual', closing_value: '' });
+            setForm({ 
+              id: '', name: '', calculation_type: 'fixed', base_value: '1000', 
+              penalty_start: '50', penalty_end: '50', penalty_fuel: '50', penalty_yard: '50', 
+              apply_penalty_start: true, apply_penalty_end: true, apply_penalty_fuel: true, apply_penalty_yard: true,
+              closing_rule: 'manual', closing_value: '' 
+            });
             setShowForm(!showForm);
           }}
           className="px-4 py-2 bg-primary/10 text-primary rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-colors flex items-center gap-2"
@@ -110,20 +120,32 @@ export default function ScoreProfilesSettingsSection() {
                   <input required type="number" min="0" value={form.base_value} onChange={e => setForm({...form, base_value: e.target.value})} className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary" />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Desconto Inicial</label>
-                  <input required type="number" min="0" value={form.penalty_start} onChange={e => setForm({...form, penalty_start: e.target.value})} className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary text-danger" />
+                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex items-center justify-between">
+                    Desconto Inicial
+                    <input type="checkbox" checked={form.apply_penalty_start} onChange={e => setForm({...form, apply_penalty_start: e.target.checked})} className="accent-danger" />
+                  </label>
+                  <input required type="number" min="0" disabled={!form.apply_penalty_start} value={form.penalty_start} onChange={e => setForm({...form, penalty_start: e.target.value})} className={`w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary ${form.apply_penalty_start ? 'text-danger' : 'text-zinc-300'}`} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Desconto Final</label>
-                  <input required type="number" min="0" value={form.penalty_end} onChange={e => setForm({...form, penalty_end: e.target.value})} className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary text-danger" />
+                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex items-center justify-between">
+                    Desconto Final
+                    <input type="checkbox" checked={form.apply_penalty_end} onChange={e => setForm({...form, apply_penalty_end: e.target.checked})} className="accent-danger" />
+                  </label>
+                  <input required type="number" min="0" disabled={!form.apply_penalty_end} value={form.penalty_end} onChange={e => setForm({...form, penalty_end: e.target.value})} className={`w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary ${form.apply_penalty_end ? 'text-danger' : 'text-zinc-300'}`} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Desc. Abastecimento</label>
-                  <input required type="number" min="0" value={form.penalty_fuel} onChange={e => setForm({...form, penalty_fuel: e.target.value})} className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary text-danger" />
+                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex items-center justify-between">
+                    Desc. Abastecimento
+                    <input type="checkbox" checked={form.apply_penalty_fuel} onChange={e => setForm({...form, apply_penalty_fuel: e.target.checked})} className="accent-danger" />
+                  </label>
+                  <input required type="number" min="0" disabled={!form.apply_penalty_fuel} value={form.penalty_fuel} onChange={e => setForm({...form, penalty_fuel: e.target.value})} className={`w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary ${form.apply_penalty_fuel ? 'text-danger' : 'text-zinc-300'}`} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest">Desc. Pátio</label>
-                  <input required type="number" min="0" value={form.penalty_yard} onChange={e => setForm({...form, penalty_yard: e.target.value})} className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary text-danger" />
+                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex items-center justify-between">
+                    Desc. Pátio
+                    <input type="checkbox" checked={form.apply_penalty_yard} onChange={e => setForm({...form, apply_penalty_yard: e.target.checked})} className="accent-danger" />
+                  </label>
+                  <input required type="number" min="0" disabled={!form.apply_penalty_yard} value={form.penalty_yard} onChange={e => setForm({...form, penalty_yard: e.target.value})} className={`w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary ${form.apply_penalty_yard ? 'text-danger' : 'text-zinc-300'}`} />
                 </div>
               </div>
             </div>
@@ -181,6 +203,10 @@ export default function ScoreProfilesSettingsSection() {
                            id: p.id, name: p.name, calculation_type: p.calculation_type || 'fixed',
                            base_value: p.base_value.toString(),
                            penalty_start: p.penalty_start.toString(), penalty_end: p.penalty_end.toString(), penalty_fuel: p.penalty_fuel.toString(), penalty_yard: (p.penalty_yard || 50).toString(),
+                           apply_penalty_start: p.apply_penalty_start ?? true,
+                           apply_penalty_end: p.apply_penalty_end ?? true,
+                           apply_penalty_fuel: p.apply_penalty_fuel ?? true,
+                           apply_penalty_yard: p.apply_penalty_yard ?? true,
                            closing_rule: p.closing_rule || 'manual', closing_value: p.closing_value || ''
                          });
                          setShowForm(true);

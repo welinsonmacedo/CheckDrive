@@ -6,11 +6,11 @@ export const runSilentAudit = async () => {
     const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
     
     // Check if the user is authenticated and has permission implicitly by attempting fetch
-    const { data: expired, error } = await supabase
-      .from('schedules')
-      .select('*, profiles(participates_in_ranking, score_profiles(penalty_start, penalty_end, penalty_fuel, penalty_yard, base_value, calculation_type))')
-      .lt('end_at', oneHourAgo)
-      .eq('penalty_applied', false);
+      const { data: expired, error } = await supabase
+        .from('schedules')
+        .select('*, profiles(participates_in_ranking, score_profiles(penalty_start, penalty_end, penalty_fuel, penalty_yard, apply_penalty_start, apply_penalty_end, apply_penalty_fuel, apply_penalty_yard, base_value, calculation_type))')
+        .lt('end_at', oneHourAgo)
+        .eq('penalty_applied', false);
 
     // If RLS prevents it or no records, just silently exit
     if (error || !expired || expired.length === 0) {
@@ -34,14 +34,25 @@ export const runSilentAudit = async () => {
       const missingFuel = !schedule.fuel_checklist_id;
 
       if (missingStart || missingEnd || missingFuel) {
-        const pStart = Number(profileInfo.penalty_start ?? appSettings.penalty_start ?? 50);
-        const pEnd = Number(profileInfo.penalty_end ?? appSettings.penalty_end ?? 50);
-        const pFuel = Number(profileInfo.penalty_fuel ?? appSettings.penalty_fuel ?? 50);
+        // Check if penalties apply (defaults to true if undefined)
+        const applyStart = profileInfo.apply_penalty_start !== false;
+        const applyEnd = profileInfo.apply_penalty_end !== false;
+        const applyFuel = profileInfo.apply_penalty_fuel !== false;
+
+        const pStart = applyStart ? Number(profileInfo.penalty_start ?? appSettings.penalty_start ?? 50) : 0;
+        const pEnd = applyEnd ? Number(profileInfo.penalty_end ?? appSettings.penalty_end ?? 50) : 0;
+        const pFuel = applyFuel ? Number(profileInfo.penalty_fuel ?? appSettings.penalty_fuel ?? 50) : 0;
         
         let totalPenalty = 0;
-        if (missingStart) totalPenalty += pStart;
-        if (missingEnd) totalPenalty += pEnd;
-        if (missingFuel) totalPenalty += pFuel;
+        if (missingStart && applyStart) totalPenalty += pStart;
+        if (missingEnd && applyEnd) totalPenalty += pEnd;
+        if (missingFuel && applyFuel) totalPenalty += pFuel;
+
+        // If total penalty is 0, we can just mark as audited and continue
+        if (totalPenalty === 0) {
+           await supabase.from('schedules').update({ penalty_applied: true }).eq('id', schedule.id);
+           continue;
+        }
 
         // Apply penalty to performance
         const { data: perf } = await supabase

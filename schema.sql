@@ -205,6 +205,10 @@ CREATE TABLE IF NOT EXISTS score_profiles (
     penalty_end NUMERIC NOT NULL DEFAULT 50,
     penalty_fuel NUMERIC NOT NULL DEFAULT 50,
     penalty_yard NUMERIC NOT NULL DEFAULT 50,
+    apply_penalty_start BOOLEAN DEFAULT true,
+    apply_penalty_end BOOLEAN DEFAULT true,
+    apply_penalty_fuel BOOLEAN DEFAULT true,
+    apply_penalty_yard BOOLEAN DEFAULT true,
     closing_rule TEXT DEFAULT 'manual', -- 'manual', 'fixed_day', 'last_sunday'
     closing_value TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
