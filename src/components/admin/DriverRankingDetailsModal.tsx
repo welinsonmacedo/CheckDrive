@@ -82,7 +82,7 @@ export default function DriverRankingDetailsModal({ driver, month, appSettings, 
   };
 
   const calculateNotDone = () => {
-     return auditLogs.filter(a => a.type === 'penalty').length;
+     return auditLogs.filter(a => a.type === 'penalty' || a.type === 'manual').length;
   };
 
   return (
@@ -179,8 +179,8 @@ export default function DriverRankingDetailsModal({ driver, month, appSettings, 
                     <AlertTriangle size={16} className="text-red-500" /> Penalidades e Omissões (Não Realizado)
                  </h3>
                  <div className="border border-app-border rounded-xl p-4 bg-zinc-50/50 space-y-4">
-                    {auditLogs.filter(a => a.type === 'penalty').length > 0 ? (
-                       auditLogs.filter(a => a.type === 'penalty').map(audit => (
+                    {auditLogs.filter(a => a.type === 'penalty' || a.type === 'manual').length > 0 ? (
+                       auditLogs.filter(a => a.type === 'penalty' || a.type === 'manual').map(audit => (
                           <div key={audit.id} className="bg-white border border-red-100 p-3 rounded-lg flex items-start gap-3">
                              <div className="mt-0.5"><AlertTriangle size={16} className="text-red-500" /></div>
                              <div>
