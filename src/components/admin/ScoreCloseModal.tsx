@@ -38,6 +38,21 @@ export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: Sc
       
       if (closingErr) throw closingErr;
 
+      // Ensure full end date including time
+      const endDateTime = new Date(`${endDate}T23:59:59.999`).toISOString();
+      const startDateTime = new Date(`${startDate}T00:00:00`).toISOString();
+
+      const { data: schedules } = await supabase
+        .from('schedules')
+        .select('driver_id')
+        .gte('start_at', startDateTime)
+        .lte('start_at', endDateTime);
+
+      const scheduleCounts = schedules?.reduce((acc: any, s: any) => {
+         if (s.driver_id) acc[s.driver_id] = (acc[s.driver_id] || 0) + 1;
+         return acc;
+      }, {}) || {};
+
       // 2. Fetch current drivers performance
       const { data: drivers } = await supabase.from('profiles').select('id, participates_in_ranking, score_profile_id, score_profiles(base_value, calculation_type), driver_performance(*)').eq('role', 'driver');
       
@@ -63,7 +78,7 @@ export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: Sc
                  closing_id: closingRec.id,
                  driver_id: d.id,
                  score: perf.score,
-                 total_checklists: perf.total_checklists || 0
+                 total_checklists: scheduleCounts[d.id] || 0
              });
 
              resetsToUpsert.push({

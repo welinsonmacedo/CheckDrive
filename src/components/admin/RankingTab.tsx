@@ -38,7 +38,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
       if (selectedPeriod === 'current') {
         const { data: drivers } = await supabase
           .from('profiles')
-          .select('id, full_name, role, participates_in_ranking, score_profiles(name), driver_performance(score, total_checklists)')
+          .select('id, full_name, role, participates_in_ranking, score_profiles(name), driver_performance(score)')
           .eq('role', 'driver');
 
         if (!drivers) {
@@ -46,6 +46,18 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
           setLoading(false);
           return;
         }
+
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const { data: schedules } = await supabase
+          .from('schedules')
+          .select('driver_id')
+          .gte('start_at', startOfMonth);
+
+        const scheduleCounts = schedules?.reduce((acc: any, s: any) => {
+           if (s.driver_id) acc[s.driver_id] = (acc[s.driver_id] || 0) + 1;
+           return acc;
+        }, {}) || {};
 
         const ranked = drivers
           .filter(driver => driver.participates_in_ranking !== false)
@@ -56,7 +68,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
           full_name: driver.full_name,
           profile_name: (driver.score_profiles as any)?.name || 'Sem Perfil',
           score: Array.isArray(perf) ? perf[0]?.score ?? 0 : perf?.score ?? 0,
-          total_checklists: Array.isArray(perf) ? perf[0]?.total_checklists ?? 0 : perf?.total_checklists ?? 0
+          total_checklists: scheduleCounts[driver.id] || 0
         }}).sort((a, b) => {
           if (b.score !== a.score) return b.score - a.score;
           // Se empatar na pontuação, ganha quem fez mais escalas

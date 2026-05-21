@@ -28,11 +28,23 @@ export default function Ranking() {
       const { data: settings } = await supabase.from('app_settings').select('system_type').single();
       if (settings) setSystemType(settings.system_type);
 
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const { data: schedules } = await supabase
+        .from('schedules')
+        .select('driver_id')
+        .gte('start_at', startOfMonth);
+
+      const scheduleCounts = schedules?.reduce((acc: any, s: any) => {
+         if (s.driver_id) acc[s.driver_id] = (acc[s.driver_id] || 0) + 1;
+         return acc;
+      }, {}) || {};
+
       let query = supabase
         .from('driver_performance')
         .select(`
+          driver_id,
           score,
-          total_checklists,
           profiles!inner(
             full_name,
             role,
@@ -55,6 +67,10 @@ export default function Ranking() {
       // Filter out non-participating drivers and internal drivers, sort by score and then total_checklists, then limit
       const filtered = (data || [])
         .filter((item: any) => item.profiles?.participates_in_ranking !== false && !item.profiles?.full_name?.endsWith('//INTERNO'))
+        .map((item: any) => ({
+           ...item,
+           total_checklists: scheduleCounts[item.driver_id] || 0
+        }))
         .sort((a: any, b: any) => {
           if (b.score !== a.score) return b.score - a.score;
           return (b.total_checklists || 0) - (a.total_checklists || 0);
