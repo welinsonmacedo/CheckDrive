@@ -15,6 +15,7 @@ export default function DriverRankingDetailsModal({ driver, month, appSettings, 
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
+  const [scoreProfile, setScoreProfile] = useState<any>(null);
 
   useEffect(() => {
     fetchDriverDetails();
@@ -26,6 +27,15 @@ export default function DriverRankingDetailsModal({ driver, month, appSettings, 
       const [yearStr, monthStr] = month.split('-');
       const startOfMonth = new Date(parseInt(yearStr), parseInt(monthStr) - 1, 1).toISOString();
       const endOfMonth = new Date(parseInt(yearStr), parseInt(monthStr), 0, 23, 59, 59, 999).toISOString();
+
+      // Fetch driver score profile setting
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*, score_profiles(*)')
+        .eq('id', driver.id)
+        .single();
+      
+      setScoreProfile(profileData?.score_profiles || null);
 
       // Fetch Submissions
       const { data: subs } = await supabase
@@ -192,9 +202,13 @@ export default function DriverRankingDetailsModal({ driver, month, appSettings, 
                  </h3>
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {schedules.length > 0 ? schedules.map(s => {
-                       const missingStart = !s.start_checklist_id;
-                       const missingEnd = !s.end_checklist_id;
-                       const missingFuel = !s.fuel_checklist_id;
+                       const applyStart = scoreProfile?.apply_penalty_start !== false;
+                       const applyEnd = scoreProfile?.apply_penalty_end !== false;
+                       const applyFuel = scoreProfile?.apply_penalty_fuel !== false;
+
+                       const missingStart = applyStart && !s.start_checklist_id;
+                       const missingEnd = applyEnd && !s.end_checklist_id;
+                       const missingFuel = applyFuel && s.requires_fueling !== false && !s.fuel_checklist_id;
                        const isOk = !missingStart && !missingEnd && !missingFuel;
 
                        return (
