@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, LogOut, Home, Trophy } from 'lucide-react';
+import { BookOpen, LogOut, Home, Trophy, AlertTriangle } from 'lucide-react';
 import { User } from '../../types';
 
 interface AppLayoutProps {
@@ -48,6 +48,20 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
               <Trophy size={20} />
               <span className="text-[10px] font-bold uppercase tracking-wider">
                 Ranking
+              </span>
+            </Link>
+          )}
+
+          {!user?.isInternal && (
+            <Link
+              to="/penalties"
+              className={`flex flex-col items-center gap-1 transition-colors ${
+                location.pathname === '/penalties' ? 'text-primary' : 'text-zinc-400'
+              }`}
+            >
+              <AlertTriangle size={20} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">
+                Descontos
               </span>
             </Link>
           )}

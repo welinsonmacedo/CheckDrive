@@ -15,6 +15,9 @@ import Documentation from '../pages/Documentation';
 import AppLayout from '../components/layout/AppLayout';
 import ResetPassword from '../pages/ResetPassword';
 
+import DriverRankingDetailsModal from '../components/admin/DriverRankingDetailsModal'; // if unused, doesn't matter
+import DriverPenalties from '../pages/DriverPenalties';
+
 export default function AppRoutes() {
   const { user, logout } = useAuth();
   
@@ -44,6 +47,14 @@ export default function AppRoutes() {
         <ProtectedRoute role="driver">
           <AppLayout user={user} onLogout={logout}>
             <Ranking />
+          </AppLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/penalties" element={
+        <ProtectedRoute role="driver">
+          <AppLayout user={user} onLogout={logout}>
+            <DriverPenalties />
           </AppLayout>
         </ProtectedRoute>
       } />
