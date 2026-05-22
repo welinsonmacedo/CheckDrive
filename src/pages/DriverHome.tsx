@@ -10,7 +10,8 @@ export default function DriverHome() {
   const { user } = useAuth();
   const [driverInfo, setDriverInfo] = useState({ name: 'Carregando...', score: 0, checklists: 0, participates_in_ranking: true });
   const [systemType, setSystemType] = useState('points');
-  const [activeSchedule, setActiveSchedule] = useState<any>(null);
+  const [schedulesToday, setSchedulesToday] = useState<any[]>([]);
+  const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDriverStats();
@@ -41,7 +42,8 @@ export default function DriverHome() {
         console.error('Error fetching performance:', perfError);
       } else if (!perf) {
         // Record missing. Driver cannot insert due to RLS, so default locally.
-        score = 1000;
+        const { data: sp } = await supabase.from('score_profiles').select('base_value').eq('id', profile?.score_profile_id).maybeSingle();
+        score = sp?.base_value || 1000;
       } else {
         score = perf.score;
       }
@@ -60,35 +62,24 @@ export default function DriverHome() {
         participates_in_ranking: profile?.participates_in_ranking !== false
       });
 
-      // Fetch relevant schedule (Active or Next Upcoming)
-      // We look for schedules that haven't expired for more than 30 mins
-      const now = new Date();
-      const thirtyMinsAgo = new Date(now.getTime() - 30 * 60 * 1000);
+      // Fetch relevant schedules that overlap with today
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(startOfDay);
+      endOfDay.setHours(23, 59, 59, 999);
       
       const { data: fetchedSchedules, error: scheduleError } = await supabase
         .from('schedules')
         .select('id, start_at, end_at, start_checklist_id, end_checklist_id, fuel_checklist_id, requires_fueling, vehicles(plate, requires_trailer), routes(origin, destination)')
         .eq('driver_id', user.id)
-        .gte('end_at', thirtyMinsAgo.toISOString())
-        .order('start_at', { ascending: true })
-        .limit(5);
+        .gte('end_at', startOfDay.toISOString())
+        .lte('start_at', endOfDay.toISOString())
+        .order('start_at', { ascending: true });
 
       if (scheduleError) {
         console.error('Error fetching schedules:', scheduleError);
-      } else if (fetchedSchedules && fetchedSchedules.length > 0) {
-        // Find the most appropriate one to show:
-        const active = fetchedSchedules.find(s => 
-          new Date(s.start_at) <= now && new Date(s.end_at) >= thirtyMinsAgo
-        );
-        
-        if (active) {
-          setActiveSchedule(active);
-        } else {
-          // If no active, show the one with the closest start date
-          setActiveSchedule(fetchedSchedules[0]);
-        }
       } else {
-        setActiveSchedule(null);
+        setSchedulesToday(fetchedSchedules || []);
       }
 
     } catch (error) {
@@ -102,30 +93,24 @@ export default function DriverHome() {
     { id: 'end', label: 'Fim de Viagem', icon: CheckCircle2, color: 'text-success', bg: 'bg-green-50', desc: 'Encerre jornada', field: 'end_checklist_id' },
   ];
 
-  const checklistTypes = activeSchedule?.requires_fueling === false 
-    ? originalChecklistTypes.filter(t => t.id !== 'fuel') 
-    : originalChecklistTypes;
-
   const internalTypes = [
     { id: 'yard', label: 'Checklist de Pátio', icon: ClipboardCheck, color: 'text-primary', bg: 'bg-blue-50', desc: 'Inspeção interna de frota' },
   ];
 
-  const displayedTypes = user?.isInternal ? internalTypes : checklistTypes;
+  const displayedTypes = user?.isInternal ? internalTypes : originalChecklistTypes;
 
-  const [showScheduleOptions, setShowScheduleOptions] = useState(false);
-
-  const isTypeDone = (typeId: string) => {
-    if (!activeSchedule) return false;
-    if (typeId === 'start') return !!activeSchedule.start_checklist_id;
-    if (typeId === 'end') return !!activeSchedule.end_checklist_id;
-    if (typeId === 'fuel') return !!activeSchedule.fuel_checklist_id;
+  const isTypeDone = (schedule: any, typeId: string) => {
+    if (!schedule) return false;
+    if (typeId === 'start') return !!schedule.start_checklist_id;
+    if (typeId === 'end') return !!schedule.end_checklist_id;
+    if (typeId === 'fuel') return !!schedule.fuel_checklist_id;
     return false;
   };
 
   const isTypeLocked = (typeId: string) => {
     if (user?.isInternal) return false;
-    // Se há escala ativa, os cards normais ficam totalmente inativos
-    if (activeSchedule) return true;
+    // Se há escalas para hoje, bloqueia chamadas avulsas
+    if (schedulesToday.length > 0) return true;
     return false;
   };
 
@@ -184,13 +169,28 @@ export default function DriverHome() {
       </button>
 
       {/* Active Schedule Alert */}
-      {!user?.isInternal && activeSchedule && (
+      {!user?.isInternal && schedulesToday.map((schedule) => {
+        const isFinished = schedule.start_checklist_id && schedule.end_checklist_id;
+        const nowMs = new Date().getTime();
+        const endMs = new Date(schedule.end_at).getTime();
+        const isTimeExpired = nowMs > endMs + 30 * 60 * 1000;
+        const isActiveOrUpcoming = !isFinished && !isTimeExpired;
+        const isExpanded = expandedScheduleId === schedule.id;
+
+        const scheduleTypes = schedule.requires_fueling === false 
+          ? originalChecklistTypes.filter(t => t.id !== 'fuel') 
+          : originalChecklistTypes;
+
+        return (
         <div 
-          onClick={() => setShowScheduleOptions(!showScheduleOptions)}
-          className={`border rounded-2xl p-5 flex flex-col gap-4 text-white shadow-lg overflow-hidden relative cursor-pointer transition-colors ${
-            activeSchedule.start_checklist_id && activeSchedule.end_checklist_id 
+          key={schedule.id}
+          onClick={() => setExpandedScheduleId(isExpanded ? null : schedule.id)}
+          className={`border rounded-2xl p-5 flex flex-col gap-4 text-white shadow-lg overflow-hidden relative cursor-pointer transition-colors mb-4 ${
+            isFinished 
               ? 'bg-success border-success/20' 
-              : 'bg-primary border-primary/20'
+              : isTimeExpired 
+                ? 'bg-gray-500 border-gray-600'
+                : 'bg-primary border-primary/20'
           }`}
         >
           <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
@@ -199,19 +199,22 @@ export default function DriverHome() {
           <div className="relative z-10 flex items-start justify-between">
             <div>
               <span className="inline-flex px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-widest mb-3">
-                {new Date() >= new Date(activeSchedule.start_at) ? 'Escala Ativa' : 'Próxima Escala'}
+                {isFinished ? 'Concluída' : isTimeExpired ? 'Expirada' : new Date() >= new Date(schedule.start_at) ? 'Escala Ativa' : 'Próxima Escala'}
               </span>
-              <h3 className="text-xl font-black tracking-tight">{activeSchedule.routes?.origin} &#8594; {activeSchedule.routes?.destination}</h3>
-              <p className="text-white/80 text-sm font-medium mt-1">Veículo: <span className="font-mono">{activeSchedule.vehicles?.plate}</span></p>
+              <h3 className="text-xl font-black tracking-tight">{schedule.routes?.origin} &#8594; {schedule.routes?.destination}</h3>
+              <p className="text-white/80 text-sm font-medium mt-1">Veículo: <span className="font-mono">{schedule.vehicles?.plate}</span></p>
+              <p className="text-white/80 text-xs font-bold mt-1">
+                Data: {new Date(schedule.start_at).toLocaleDateString('pt-BR')} | {new Date(schedule.start_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit'})} às {new Date(schedule.end_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit'})}
+              </p>
             </div>
-            <motion.div animate={{ rotate: showScheduleOptions ? 180 : 0 }}>
+            <motion.div animate={{ rotate: isExpanded ? 180 : 0 }}>
               <ChevronRight size={24} className="text-white/80 transform rotate-90" />
             </motion.div>
           </div>
           
           <div className="relative z-10">
             <AnimatePresence>
-              {showScheduleOptions ? (
+              {isExpanded ? (
                 <motion.div 
                   initial={{ opacity: 0, height: 0 }} 
                   animate={{ opacity: 1, height: 'auto' }} 
@@ -219,17 +222,18 @@ export default function DriverHome() {
                   className="flex flex-col gap-3 mt-4" 
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {checklistTypes.map((type) => {
-                    const done = isTypeDone(type.id);
+                  {scheduleTypes.map((type) => {
+                    const done = isTypeDone(schedule, type.id);
+                    const disabled = done || (isTimeExpired && !done);
                     return (
                       <button
                         key={type.id}
-                        disabled={done}
+                        disabled={disabled}
                         onClick={() => {
-                          if (!done) navigate(`/checklist/${type.id}?schedule=${activeSchedule.id}`);
+                          if (!disabled) navigate(`/checklist/${type.id}?schedule=${schedule.id}`);
                         }}
                         className={`w-full h-14 rounded-xl flex items-center px-4 gap-3 font-black text-sm uppercase tracking-widest shadow-sm transition-all ${
-                          done ? 'bg-[#299c5e] text-white border border-[#30b56d] cursor-default opacity-90' : 'bg-white text-primary hover:bg-zinc-50'
+                          done ? 'bg-[#299c5e] text-white border border-[#30b56d] cursor-default opacity-90' : isTimeExpired ? 'bg-gray-200 text-gray-500 cursor-not-allowed opacity-80' : 'bg-white text-primary hover:bg-zinc-50'
                         }`}
                       >
                         <type.icon size={20} />
@@ -242,15 +246,18 @@ export default function DriverHome() {
               ) : (
                 <div className="pt-2 flex items-center justify-between text-xs font-bold text-white/80 uppercase tracking-widest border-t border-white/20">
                   <span>Clique para opções de checklist</span>
-                  {activeSchedule.start_checklist_id && activeSchedule.end_checklist_id && (
+                  {isFinished && (
                     <span className="bg-white/20 px-2 py-0.5 rounded">Concluída</span>
+                  )}
+                  {isTimeExpired && !isFinished && (
+                    <span className="bg-white/20 px-2 py-0.5 rounded">Expirada</span>
                   )}
                 </div>
               )}
             </AnimatePresence>
           </div>
         </div>
-      )}
+      )})}
 
       {/* Checklist Grid */}
       <div className="space-y-4">
@@ -260,7 +267,7 @@ export default function DriverHome() {
         </div>
         <div className="grid gap-4">
           {displayedTypes.map((type) => {
-            const done = isTypeDone(type.id);
+            const done = isTypeDone(null, type.id);
             const locked = isTypeLocked(type.id);
             
             return (
@@ -268,7 +275,7 @@ export default function DriverHome() {
                 key={type.id}
                 whileTap={locked ? {} : { scale: 0.98 }}
                 disabled={locked}
-                onClick={() => navigate(activeSchedule ? `/checklist/${type.id}?schedule=${activeSchedule.id}` : `/checklist/${type.id}`)}
+                onClick={() => navigate(`/checklist/${type.id}`)}
                 className={`w-full bento-card !p-4 flex-row items-center gap-5 group transition-all ${
                   locked 
                     ? 'opacity-60 grayscale cursor-not-allowed border-dashed bg-gray-50/50' 
