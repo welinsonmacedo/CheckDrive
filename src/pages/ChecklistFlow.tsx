@@ -74,6 +74,44 @@ export default function ChecklistFlow() {
         .eq('vehicle_id', vehicleId);
       if (!error && data) {
          setExistingIssues(data);
+         
+         // Auto-fill form data with existing issues so driver doesn't have to report them again manually
+         setFormData(prev => {
+            const newItemValues = { ...prev.itemValues };
+            const newDefects = { ...prev.defects };
+            let updated = false;
+            
+            data.forEach(issue => {
+               // options.items should be populated by now as fetchOptions sets vehicleId which triggers this
+               const item = options.items.find((i: any) => i.title === issue.item_title);
+               if (item) {
+                 if (newItemValues[item.id] !== 'defect') {
+                    newItemValues[item.id] = 'defect';
+                    updated = true;
+                 }
+                 
+                 if (!newDefects[item.id]) {
+                    newDefects[item.id] = [];
+                 }
+                 
+                 // If the issue was already pushed to the array (avoid duplicates if triggered multiple times)
+                 const exists = newDefects[item.id].some((d: any) => d.description === issue.description);
+                 if (!exists) {
+                    newDefects[item.id].push({ description: issue.description || 'Pendente de verificação', photo: null });
+                    updated = true;
+                 }
+               }
+            });
+            
+            if (updated) {
+               return {
+                  ...prev,
+                  itemValues: newItemValues,
+                  defects: newDefects
+               };
+            }
+            return prev;
+         });
       }
     } catch (e) {
       console.error('Error fetching existing issues', e);
