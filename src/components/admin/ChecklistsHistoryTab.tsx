@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Trash2, AlertTriangle, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ChecklistsHistoryTabProps {
   onViewDetails: (sub: any) => void;
 }
 
 export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistoryTabProps) {
+  const { user: currentUser } = useAuth();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [deletingItem, setDeletingItem] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchSubmissions();
@@ -26,6 +30,40 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
       console.error('Erro ao buscar checklists:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingItem) return;
+    setIsDeleting(true);
+    try {
+      // Check if this checklist is linked to any schedule and nullify it
+      if (deletingItem.schedule_id) {
+        const fieldMap: Record<string, string> = {
+          'start': 'start_checklist_id',
+          'end': 'end_checklist_id',
+          'fuel': 'fuel_checklist_id'
+        };
+        const field = fieldMap[deletingItem.type];
+        if (field) {
+          const updates: any = {};
+          updates[field] = null;
+          await supabase.from('schedules').update(updates).eq('id', deletingItem.schedule_id);
+        }
+      }
+
+      const { error } = await supabase.from('checklist_submissions').delete().eq('id', deletingItem.id);
+      if (error) {
+        console.error('Erro ao excluir checklist:', error);
+        alert('Erro ao excluir checklist. Pode estar vinculado a outros registros.');
+      } else {
+        setSubmissions(s => s.filter(x => x.id !== deletingItem.id));
+      }
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
+    } finally {
+      setIsDeleting(false);
+      setDeletingItem(null);
     }
   };
 
@@ -76,11 +114,20 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
                         {sub.type === 'start' ? 'Início de Viagem' : sub.type === 'end' ? 'Fim de Viagem' : sub.type === 'fuel' ? 'Abastecimento' : sub.type === 'yard' ? 'Pátio' : sub.type}
                        </span>
                     </td>
-                    <td className="px-5 py-4 text-right">
+                    <td className="px-5 py-4 text-right flex items-center justify-end gap-2">
                        <button 
                          onClick={() => onViewDetails(sub)}
                          className="px-3 py-1.5 bg-zinc-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-black transition-colors"
                        >Detalhes</button>
+                       {currentUser?.isAdmin && (
+                         <button 
+                           onClick={() => setDeletingItem(sub)}
+                           className="p-1.5 text-danger/70 hover:text-danger hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-danger/20"
+                           title="Excluir checklist"
+                         >
+                           <Trash2 size={14} />
+                         </button>
+                       )}
                     </td>
                   </tr>
                 )) : (
@@ -90,6 +137,52 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
             </table>
           </div>
         </div>
-      </div>
+
+      {/* Delete Confirmation Modal */}
+      {deletingItem && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 text-danger">
+                  <AlertTriangle size={20} className="fill-danger/20" />
+                  <h3 className="text-sm font-black uppercase tracking-wider">Excluir Checklist</h3>
+                </div>
+                <button
+                  onClick={() => setDeletingItem(null)}
+                  className="text-text-muted hover:text-text-main transition-colors"
+                  disabled={isDeleting}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <p className="text-sm text-text-muted font-medium mb-6">
+                Tem certeza que deseja excluir o checklist de <strong>{deletingItem.profiles?.full_name}</strong> para o veículo <strong className="font-mono">{deletingItem.vehicles?.plate}</strong>?
+                <br /><br />
+                <span className="text-xs text-danger uppercase tracking-widest font-black">Esta ação não pode ser desfeita.</span>
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeletingItem(null)}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2 bg-app-bg text-text-main text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-zinc-200 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2 bg-danger text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center"
+                >
+                  {isDeleting ? 'Excluindo...' : 'Sim, Excluir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
