@@ -119,7 +119,7 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
                          onClick={() => onViewDetails(sub)}
                          className="px-3 py-1.5 bg-zinc-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-black transition-colors"
                        >Detalhes</button>
-                       {currentUser?.isAdmin && (
+                       {currentUser?.role === 'admin' && (
                          <button 
                            onClick={() => setDeletingItem(sub)}
                            className="p-1.5 text-danger/70 hover:text-danger hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-danger/20"
