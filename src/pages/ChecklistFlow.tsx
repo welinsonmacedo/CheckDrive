@@ -56,22 +56,32 @@ export default function ChecklistFlow() {
   }, [type]);
 
   useEffect(() => {
-    if (formData.vehicleId) {
-      fetchLastKm(formData.vehicleId);
-      fetchExistingIssues(formData.vehicleId);
+    if (formData.vehicleId || formData.trailerId) {
+      if (formData.vehicleId) fetchLastKm(formData.vehicleId);
+      
+      // options.items may not be ready initially, so we check it
+      if (options.items && options.items.length > 0) {
+        fetchExistingIssues(formData.vehicleId, formData.trailerId, options.items);
+      }
     } else {
       setLastKm(null);
       setExistingIssues([]);
     }
-  }, [formData.vehicleId]);
+  }, [formData.vehicleId, formData.trailerId, options.items]);
 
-  const fetchExistingIssues = async (vehicleId: string) => {
+  const fetchExistingIssues = async (vehicleId: string, trailerId: string, availableItems: any[]) => {
     try {
-      const { data, error } = await supabase
-        .from('checklist_issues')
-        .select('*')
-        .eq('status', 'pending')
-        .eq('vehicle_id', vehicleId);
+      let query = supabase.from('checklist_issues').select('*').eq('status', 'pending');
+      
+      if (vehicleId && trailerId) {
+        query = query.or(`vehicle_id.eq.${vehicleId},trailer_id.eq.${trailerId}`);
+      } else if (vehicleId) {
+        query = query.eq('vehicle_id', vehicleId);
+      } else if (trailerId) {
+        query = query.eq('trailer_id', trailerId);
+      }
+
+      const { data, error } = await query;
       if (!error && data) {
          setExistingIssues(data);
          
@@ -82,8 +92,7 @@ export default function ChecklistFlow() {
             let updated = false;
             
             data.forEach(issue => {
-               // options.items should be populated by now as fetchOptions sets vehicleId which triggers this
-               const item = options.items.find((i: any) => i.title === issue.item_title);
+               const item = availableItems.find((i: any) => i.title === issue.item_title);
                if (item) {
                  if (newItemValues[item.id] !== 'defect') {
                     newItemValues[item.id] = 'defect';
@@ -430,6 +439,7 @@ export default function ChecklistFlow() {
           issuesToInsert.push({
             submission_id: submission.id,
             vehicle_id: (isInternal && isTrailerOnly) ? null : formData.vehicleId,
+            trailer_id: formData.trailerId || null,
             driver_id: user.id,
             item_title: itemTitle,
             description: subDefect.description,
@@ -442,11 +452,19 @@ export default function ChecklistFlow() {
       // Insert or update issues into dedicated table
       if (issuesToInsert.length > 0) {
         for (const newIssue of issuesToInsert) {
-           const { data: existings } = await supabase.from('checklist_issues')
+           let query = supabase.from('checklist_issues')
                .select('*')
-               .eq('vehicle_id', newIssue.vehicle_id)
                .eq('status', 'pending')
                .eq('item_title', newIssue.item_title);
+
+           if (newIssue.vehicle_id) query = query.eq('vehicle_id', newIssue.vehicle_id);
+           else query = query.is('vehicle_id', null);
+
+           if (newIssue.trailer_id) query = query.eq('trailer_id', newIssue.trailer_id);
+           // We don't strictly filter by trailer_id IS NULL if it's not provided, but to be exact we should:
+           else query = query.is('trailer_id', null);
+
+           const { data: existings } = await query;
 
            if (existings && existings.length > 0) {
               const ex = existings[0];
@@ -469,7 +487,6 @@ export default function ChecklistFlow() {
                  
               if (updateError) {
                   console.error("Failed to update report_count. Falling back to insert.", updateError);
-                  // If column doesn't exist yet, we just insert a new one
                   await supabase.from('checklist_issues').insert(newIssue);
               }
            } else {
