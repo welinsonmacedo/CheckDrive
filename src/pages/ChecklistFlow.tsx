@@ -616,6 +616,50 @@ export default function ChecklistFlow() {
     }
   };
 
+  const renderItemInput = (item: any) => {
+    const isText = item.input_type === 'text';
+    const isNumeric = item.input_type === 'number' || (!item.input_type && type === 'fuel');
+
+    if (isNumeric || isText) {
+      return (
+        <input 
+          type={isNumeric ? "number" : "text"}
+          step={isNumeric ? "0.01" : undefined}
+          placeholder={isNumeric ? "Valor numérico..." : "Digite aqui..."}
+          className="w-32 h-9 px-3 rounded-lg border border-app-border bg-white text-xs font-bold outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+          value={formData.itemValues[item.id] || ''}
+          onChange={(e) => setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: e.target.value }}))}
+        />
+      );
+    }
+    
+    // boolean fallback
+    return (
+      <div className="flex gap-2">
+        <button 
+          onClick={() => {
+            setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: 'normal' }}));
+            const newDefects = { ...formData.defects };
+            delete newDefects[item.id];
+            setFormData(prev => ({ ...prev, defects: newDefects }));
+          }}
+          className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${formData.itemValues[item.id] === 'normal' ? (item.is_trailer_item ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100' : 'bg-primary text-white border-primary') : 'bg-white text-text-muted'}`}>NORMAL</button>
+        <button 
+         onClick={() => {
+           setFormData(prev => ({
+             ...prev, 
+             itemValues: {...prev.itemValues, [item.id]: 'defect' },
+             defects: {
+               ...prev.defects,
+               [item.id]: (prev.defects[item.id] || [{ description: '', photo: null }])
+             }
+           }));
+         }}
+         className={`px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${formData.itemValues[item.id] === 'defect' ? 'bg-danger text-white border-danger shadow-md shadow-danger/20' : 'bg-red-50 text-danger'}`}>DEFEITO</button>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-xl mx-auto min-h-[calc(100vh-64px)] bg-app-bg flex flex-col p-4 sm:p-6 pb-36">
       
@@ -847,40 +891,7 @@ export default function ChecklistFlow() {
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-text-main flex-1 mr-4">{item.title}</span>
                             
-                            {type === 'fuel' ? (
-                              <input 
-                                type="number"
-                                step="0.01"
-                                placeholder="Valor numérico..."
-                                className="w-32 h-9 px-3 rounded-lg border border-app-border bg-white text-xs font-bold outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                                value={formData.itemValues[item.id] || ''}
-                                onChange={(e) => setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: e.target.value }}))}
-                              />
-                            ) : (
-                              <div className="flex gap-2">
-                                <button 
-                                  onClick={() => {
-                                    setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: 'normal' }}));
-                                    // Clear defect data if reverting
-                                    const newDefects = { ...formData.defects };
-                                    delete newDefects[item.id];
-                                    setFormData(prev => ({ ...prev, defects: newDefects }));
-                                  }}
-                                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${formData.itemValues[item.id] === 'normal' ? 'bg-primary text-white border-primary' : 'bg-white text-text-muted'}`}>NORMAL</button>
-                                <button 
-                                 onClick={() => {
-                                   setFormData(prev => ({
-                                     ...prev, 
-                                     itemValues: {...prev.itemValues, [item.id]: 'defect' },
-                                     defects: {
-                                       ...prev.defects,
-                                       [item.id]: (prev.defects[item.id] || [{ description: '', photo: null }])
-                                     }
-                                   }));
-                                 }}
-                                 className={`px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${formData.itemValues[item.id] === 'defect' ? 'bg-danger text-white border-danger shadow-md shadow-danger/20' : 'bg-red-50 text-danger'}`}>DEFEITO</button>
-                              </div>
-                            )}
+                            {renderItemInput(item)}
                           </div>
                           
                           {/* Defeitos Conhecidos / Existentes */}
@@ -997,29 +1008,8 @@ export default function ChecklistFlow() {
                       {options.items.filter(i => i.is_trailer_item).length > 0 ? options.items.filter(i => i.is_trailer_item).map(item => (
                         <React.Fragment key={item.id}>
                           <div className="p-4 rounded-xl border border-app-border bg-app-bg flex items-center justify-between group hover:bg-white hover:border-orange-200 transition-all">
-                            <span className="text-xs font-bold text-text-main">{item.title}</span>
-                            <div className="flex gap-2">
-                              <button 
-                                onClick={() => {
-                                  setFormData(prev => ({...prev, itemValues: {...prev.itemValues, [item.id]: 'normal' }}));
-                                  const newDefects = { ...formData.defects };
-                                  delete newDefects[item.id];
-                                  setFormData(prev => ({ ...prev, defects: newDefects }));
-                                }}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${formData.itemValues[item.id] === 'normal' ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100' : 'bg-white text-text-muted'}`}>NORMAL</button>
-                              <button 
-                               onClick={() => {
-                                 setFormData(prev => ({
-                                   ...prev, 
-                                   itemValues: {...prev.itemValues, [item.id]: 'defect' },
-                                   defects: {
-                                     ...prev.defects,
-                                     [item.id]: (prev.defects[item.id] || [{ description: '', photo: null }])
-                                   }
-                                 }));
-                               }}
-                               className={`px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${formData.itemValues[item.id] === 'defect' ? 'bg-danger text-white border-danger shadow-md shadow-danger/20' : 'bg-red-50 text-danger'}`}>DEFEITO</button>
-                            </div>
+                            <span className="text-xs font-bold text-text-main flex-1 mr-4">{item.title}</span>
+                            {renderItemInput(item)}
                           </div>
                           
                           {formData.itemValues[item.id] === 'defect' && (

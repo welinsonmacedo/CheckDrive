@@ -145,7 +145,7 @@ export default function RoutesTab() {
             </table>
           </div>
       </div>
-      <div className="xl:col-span-4 bento-card">
+      <div className="xl:col-span-4 bento-card xl:sticky xl:top-24 self-start">
         <h3 className="text-sm font-black text-text-main mb-6 uppercase tracking-tight">{routeForm.id ? 'Editar Rota' : 'Nova Rota'}</h3>
         <form onSubmit={handleSaveRoute} className="space-y-4">
           <div className="space-y-1.5">

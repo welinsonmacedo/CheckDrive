@@ -123,7 +123,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
         <ClosingHistoryTab />
       ) : (
         <>
-          <div className="bento-card bg-zinc-50 border-app-border flex items-center justify-between py-2 px-3">
+          <div className="bento-card bg-zinc-50 border-app-border flex items-center justify-between py-2 px-3 sticky top-0 md:top-20 z-20 shadow-sm">
             <div className="space-y-1">
               <h3 className="text-sm font-black text-text-main uppercase tracking-tight">Auditoria Automática</h3>
             </div>

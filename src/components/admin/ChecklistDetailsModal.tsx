@@ -468,7 +468,7 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                               </div>
                               
                               {/* Foto do defeito */}
-                              {imageUrl ? (
+                              {imageUrl && (
                                 <div className="space-y-2">
                                   <span className="text-[10px] font-bold text-red-600 uppercase">Foto do Defeito:</span>
                                   <div className="flex gap-2">
@@ -482,14 +482,6 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                                         e.currentTarget.src = 'https://placehold.co/400x300/e2e8f0/94a3b8?text=Erro';
                                       }}
                                     />
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="space-y-2">
-                                  <span className="text-[10px] font-bold text-gray-400 uppercase">Foto do Defeito:</span>
-                                  <div className="w-32 h-32 rounded-lg bg-gray-100 flex flex-col items-center justify-center gap-1 border border-gray-200">
-                                    <ImageIcon size={24} className="text-gray-400" />
-                                    <span className="text-[9px] text-gray-400">Nenhuma foto anexada</span>
                                   </div>
                                 </div>
                               )}

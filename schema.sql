@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS checklist_items (
     title TEXT NOT NULL,
     is_trailer_item BOOLEAN DEFAULT false,
     order_index INTEGER DEFAULT 0,
+    input_type TEXT DEFAULT 'boolean',
+    appears_in_manual BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

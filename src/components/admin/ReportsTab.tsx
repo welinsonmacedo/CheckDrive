@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'motion/react';
-import { BarChart3, AlertTriangle, FileText, CheckCircle2, Search, Calendar, ChevronRight } from 'lucide-react';
+import { BarChart3, AlertTriangle, FileText, CheckCircle2, Search, Calendar, ChevronRight, Truck } from 'lucide-react';
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Printer } from 'lucide-react';
 import DefectPrintModal from './DefectPrintModal';
 
 export default function ReportsTab() {
-  const [activeReport, setActiveReport] = useState<'scores' | 'defects'>('defects');
+  const [activeReport, setActiveReport] = useState<'scores' | 'defects' | 'mileage'>('defects');
   
   // Date filters
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
@@ -26,11 +26,16 @@ export default function ReportsTab() {
   const [selectedClosure, setSelectedClosure] = useState<string>('');
   const [closureItems, setClosureItems] = useState<any[]>([]);
 
+  // Mileage Data
+  const [mileageData, setMileageData] = useState<any[]>([]);
+
   useEffect(() => {
     if (activeReport === 'defects') {
       fetchDefectsReport();
-    } else {
+    } else if (activeReport === 'scores') {
       fetchClosures();
+    } else if (activeReport === 'mileage') {
+      fetchMileageReport();
     }
   }, [activeReport, startDate, endDate]);
 
@@ -75,6 +80,58 @@ export default function ReportsTab() {
       if (!error && data) {
         setClosureItems(data);
       }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMileageReport = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('checklist_submissions')
+        .select('id, odometer, type, created_at, profiles(full_name), vehicles(plate)')
+        .not('odometer', 'is', null)
+        .gte('created_at', `${startDate}T00:00:00Z`)
+        .lte('created_at', `${endDate}T23:59:59Z`)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      
+      // Calculate mileage per vehicle/driver combination
+      const mileageStats: Record<string, any> = {};
+      
+      if (data) {
+        data.forEach((sub: any) => {
+           if (!sub.vehicles?.plate || !sub.profiles?.full_name || !sub.odometer) return;
+           
+           const key = `${sub.vehicles.plate}-${sub.profiles.full_name}`;
+           if (!mileageStats[key]) {
+              mileageStats[key] = {
+                 vehiclePlate: sub.vehicles.plate,
+                 driverName: sub.profiles.full_name,
+                 minOdometer: sub.odometer,
+                 maxOdometer: sub.odometer,
+                 submissionsCount: 1,
+                 distance: 0
+              };
+           } else {
+              mileageStats[key].submissionsCount += 1;
+              if (sub.odometer < mileageStats[key].minOdometer) {
+                 mileageStats[key].minOdometer = sub.odometer;
+              }
+              if (sub.odometer > mileageStats[key].maxOdometer) {
+                 mileageStats[key].maxOdometer = sub.odometer;
+              }
+              mileageStats[key].distance = mileageStats[key].maxOdometer - mileageStats[key].minOdometer;
+           }
+        });
+      }
+
+      const results = Object.values(mileageStats).sort((a: any, b: any) => b.distance - a.distance);
+      setMileageData(results);
     } catch (err) {
       console.error(err);
     } finally {
@@ -140,6 +197,14 @@ export default function ReportsTab() {
                <BarChart3 size={16} /> Pontuação por Período
              </div>
            </button>
+           <button
+             onClick={() => setActiveReport('mileage')}
+             className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${activeReport === 'mileage' ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-main'}`}
+           >
+             <div className="flex items-center gap-2">
+               <Truck size={16} /> KM Rodado
+             </div>
+           </button>
          </div>
 
          <div className="flex items-center gap-3 w-full md:w-auto">
@@ -166,11 +231,17 @@ export default function ReportsTab() {
       </div>
 
       <div className="hidden print:block mb-8">
-        <h1 className="text-2xl font-black text-text-main uppercase tracking-widest">{activeReport === 'defects' ? 'Relatório de Defeitos' : 'Pontuação por Período'}</h1>
+        <h1 className="text-2xl font-black text-text-main uppercase tracking-widest">
+           {activeReport === 'defects' ? 'Relatório de Defeitos' : 
+            activeReport === 'scores' ? 'Pontuação por Período' : 
+            'Relatório de KM Rodado'}
+        </h1>
         <p className="text-sm font-bold text-text-muted mt-2">
-           {activeReport === 'defects' 
+           {activeReport === 'defects' || activeReport === 'mileage'
              ? `Período: ${format(parseISO(startDate), 'dd/MM/yyyy')} até ${format(parseISO(endDate), 'dd/MM/yyyy')}`
-             : `Fechamento: ${closures.find(c => c.id === selectedClosure)?.period_start ? format(parseISO(closures.find(c => c.id === selectedClosure)!.period_start), 'dd/MM/yyyy') : ''}`
+             : (closures && selectedClosure && closures.find(c => c.id === selectedClosure)?.period_start) 
+                 ? `Fechamento: ${format(parseISO(closures.find(c => c.id === selectedClosure)!.period_start), 'dd/MM/yyyy')}` 
+                 : ''
            }
         </p>
       </div>
@@ -387,6 +458,59 @@ export default function ReportsTab() {
                 </div>
              </div>
           )}
+
+           {activeReport === 'mileage' && (
+             <div className="space-y-6">
+                 <div className="bg-white rounded-2xl border border-app-border shadow-sm overflow-hidden min-h-[400px] flex flex-col print:shadow-none print:border-none print:overflow-visible print:min-h-0 print:h-auto">
+                   <div className="p-4 border-b border-app-border bg-zinc-50/50">
+                     <h3 className="text-sm font-black text-text-main tracking-tight flex items-center gap-2">
+                       <Truck size={18} className="text-primary"/>
+                       Relatório de KM Rodado
+                     </h3>
+                   </div>
+                   <div className="flex-1 overflow-auto print:overflow-visible">
+                     <table className="w-full text-left border-collapse">
+                       <thead className="bg-zinc-50/80 sticky top-0 border-b border-app-border">
+                         <tr>
+                           <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Motorista</th>
+                           <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Veículo</th>
+                           <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Checklists (Qtd)</th>
+                           <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">KM Inicial</th>
+                           <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">KM Final</th>
+                           <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right">Distância (KM)</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-app-border">
+                         {mileageData.length === 0 ? (
+                           <tr><td colSpan={6} className="text-center py-8 text-xs text-text-muted uppercase tracking-widest font-bold">Nenhum dado encontrado no período</td></tr>
+                         ) : mileageData.map((item: any, idx: number) => (
+                           <tr key={idx} className="hover:bg-zinc-50/50">
+                             <td className="px-5 py-4 text-xs font-black text-text-main">
+                               {item.driverName}
+                             </td>
+                             <td className="px-5 py-4 text-xs font-black text-text-main">
+                               {item.vehiclePlate}
+                             </td>
+                             <td className="px-5 py-4 text-xs font-bold text-text-muted">
+                               {item.submissionsCount}
+                             </td>
+                             <td className="px-5 py-4 text-xs font-mono font-medium text-text-muted">
+                               {item.minOdometer.toLocaleString('pt-BR')}
+                             </td>
+                             <td className="px-5 py-4 text-xs font-mono font-medium text-text-muted">
+                               {item.maxOdometer.toLocaleString('pt-BR')}
+                             </td>
+                             <td className="px-5 py-4 text-right">
+                               <span className="text-sm font-black text-primary">{item.distance.toLocaleString('pt-BR')}</span>
+                             </td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                 </div>
+             </div>
+           )}
         </motion.div>
       )}
 

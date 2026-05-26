@@ -239,7 +239,7 @@ export default function VehiclesTab() {
             </div>
         </div>
       </div>
-      <div className="xl:col-span-4 space-y-6">
+      <div className="xl:col-span-4 space-y-6 xl:sticky xl:top-24 self-start">
         <div className="bento-card">
           <h3 className="text-sm font-black text-text-main mb-6 uppercase tracking-tight">{vehicleForm.id ? 'Editar Veículo' : 'Novo Veículo'}</h3>
           <form onSubmit={handleSaveVehicle} className="space-y-4">

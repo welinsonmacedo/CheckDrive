@@ -116,7 +116,7 @@ export default function BaitsTab() {
       </div>
 
        {/* Form */}
-       <div className="xl:col-span-4 bento-card border-none bg-primary/5">
+       <div className="xl:col-span-4 bento-card border-none bg-primary/5 xl:sticky xl:top-24 self-start">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-black text-primary uppercase tracking-widest flex items-center gap-2">
