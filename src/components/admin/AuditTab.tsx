@@ -17,6 +17,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
 
   const [contestingLog, setContestingLog] = useState<any>(null);
   const [contestReason, setContestReason] = useState('');
+  const [contestPointsAmount, setContestPointsAmount] = useState<number>(0);
   const [isSavingContest, setIsSavingContest] = useState(false);
 
   useEffect(() => {
@@ -58,12 +59,16 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
   };
 
   const handleContestLog = async () => {
-    if (!contestReason.trim() || !contestingLog) return;
+    if (!contestReason.trim() || !contestingLog || contestPointsAmount <= 0 || contestPointsAmount > contestingLog.amount) return;
     
     setIsSavingContest(true);
     try {
       // 1. Update the old log reason to mark it as contested
-      const newReason = `[CONTESTADO] ${contestingLog.reason}`;
+      const prefix = contestPointsAmount < contestingLog.amount ? '[CONTESTADO PARCIALMENTE]' : '[CONTESTADO]';
+      const newReason = contestingLog.reason.includes('[CONTESTADO') 
+          ? contestingLog.reason 
+          : `${prefix} ${contestingLog.reason}`;
+          
       await supabase.from('audit_logs').update({ reason: newReason }).eq('id', contestingLog.id);
       
       // 2. Add points back to performance (if driver is selected, though global might be null)
@@ -73,7 +78,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
         
         await supabase.from('driver_performance').upsert({
            driver_id: contestingLog.driver_id,
-           score: currentScore + Number(contestingLog.amount),
+           score: currentScore + Number(contestPointsAmount),
            updated_at: new Date().toISOString()
         });
       }
@@ -82,12 +87,13 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
       await supabase.from('audit_logs').insert({
          driver_id: contestingLog.driver_id,
          type: 'reversal',
-         amount: contestingLog.amount,
+         amount: Number(contestPointsAmount),
          reason: `Reversão/Contestação: ${contestReason}`
       });
       
       setContestingLog(null);
       setContestReason('');
+      setContestPointsAmount(0);
       fetchAuditLogs();
     } catch (err: any) {
       alert('Erro ao contestar: ' + err.message);
@@ -181,7 +187,10 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
                         <td className="px-5 py-4 text-right">
                           {isDeduction && !isContested ? (
                              <button
-                               onClick={() => setContestingLog(log)}
+                               onClick={() => {
+                                 setContestingLog(log);
+                                 setContestPointsAmount(log.amount);
+                               }}
                                className="px-3 py-1.5 bg-zinc-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-black transition-colors"
                              >
                                Contestar
@@ -231,6 +240,19 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
               <div className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">
+                    Pontos a Reverter (Máx: {contestingLog.amount})
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={contestingLog.amount}
+                    value={contestPointsAmount}
+                    onChange={(e) => setContestPointsAmount(Number(e.target.value))}
+                    className="w-full px-4 py-3 bg-app-bg border border-app-border rounded-xl text-lg font-black text-text-main focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all mb-4"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">
                     Motivo da Contestação
                   </label>
                   <textarea
@@ -252,7 +274,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
                 </button>
                 <button
                   onClick={handleContestLog}
-                  disabled={isSavingContest || !contestReason.trim()}
+                  disabled={isSavingContest || !contestReason.trim() || contestPointsAmount <= 0 || contestPointsAmount > contestingLog.amount}
                   className="flex-1 px-4 py-3 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-primary-hover transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isSavingContest ? 'Gerando Reversão...' : (
