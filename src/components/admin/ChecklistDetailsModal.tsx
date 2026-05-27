@@ -501,6 +501,72 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
               </div>
             )}
 
+            {/* Histórico de Edições */}
+            {selectedSub.details?.edit_history && selectedSub.details.edit_history.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    Histórico de Edições Manuais
+                  </h4>
+                  <span className="text-[9px] font-bold bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">
+                    {selectedSub.details.edit_history.length} edições
+                  </span>
+                </div>
+                
+                <div className="space-y-3">
+                  {selectedSub.details.edit_history.map((history: any, idx: number) => {
+                    const changedItems = Object.keys(history.new_items || {}).filter(
+                      k => history.new_items[k] !== history.previous_items?.[k]
+                    );
+                    const kmChanged = history.new_odometer !== history.previous_odometer;
+
+                    return (
+                      <div key={idx} className="bg-orange-50/50 border border-orange-100 rounded-xl p-4 space-y-3">
+                        <div className="flex justify-between items-center pb-2 border-b border-orange-100/50">
+                          <span className="text-xs font-black text-orange-800">Edição {idx + 1}</span>
+                          <span className="text-[9px] font-bold text-orange-600/70">{new Date(history.edited_at).toLocaleString()}</span>
+                        </div>
+                        
+                        {kmChanged && (
+                          <div className="flex items-center gap-4 text-xs font-medium text-gray-600">
+                            <span className="w-20 font-bold text-[10px] text-gray-400 uppercase tracking-widest">KM:</span>
+                            <span className="line-through opacity-70">{history.previous_odometer || 'N/A'}</span>
+                            <span>→</span>
+                            <span className="font-bold text-orange-600">{history.new_odometer}</span>
+                          </div>
+                        )}
+
+                        {changedItems.length > 0 && (
+                          <div className="space-y-2">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Itens Alterados:</span>
+                            {changedItems.map(itemId => {
+                              const title = selectedSub.details.itemTitles?.[itemId] || `Item ${itemId}`;
+                              const oldVal = history.previous_items?.[itemId] || 'N/A';
+                              const newVal = history.new_items?.[itemId] || 'N/A';
+                              return (
+                                <div key={itemId} className="flex gap-4 items-center text-xs text-gray-600 bg-white p-2 rounded-lg border border-orange-100/50">
+                                  <span className="flex-1 font-bold text-gray-800">{title}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="line-through opacity-70 uppercase text-[9px] font-bold">{oldVal}</span>
+                                    <span>→</span>
+                                    <span className="font-bold text-orange-600 uppercase text-[9px]">{newVal}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        {!kmChanged && changedItems.length === 0 && (
+                          <span className="text-xs text-gray-400 italic">Nenhuma mudança identificável registrada.</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Botão para carregar fotos do veículo */}
             {hasPhotos && !loadPhotos && (
               <div className="flex justify-center">

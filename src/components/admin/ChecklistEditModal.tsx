@@ -45,12 +45,24 @@ export default function ChecklistEditModal({ submission, onClose, onSaved }: Che
          }
       }
 
+      const oldDetails = submission.details || {};
+      const editHistoryEntry = {
+        edited_at: new Date().toISOString(),
+        previous_odometer: submission.odometer,
+        new_odometer: parseInt(odometer) || 0,
+        previous_items: oldDetails.itemValues || {},
+        new_items: itemValues,
+        previous_defects: oldDetails.defects || {},
+        new_defects: updatedDefects
+      };
+
       const updatedDetails = {
-        ...submission.details,
+        ...oldDetails,
         itemValues,
         defects: updatedDefects,
         is_edited: true,
-        edited_at: new Date().toISOString()
+        edited_at: editHistoryEntry.edited_at,
+        edit_history: [...(oldDetails.edit_history || []), editHistoryEntry]
       };
 
       const { error } = await supabase.from('checklist_submissions')
@@ -128,7 +140,14 @@ export default function ChecklistEditModal({ submission, onClose, onSaved }: Che
     }
   };
 
+  const getPhotoUrl = (path: string) => {
+    if (!path) return null;
+    const { data } = supabase.storage.from('checklist-photos').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
   const titles = submission.details?.itemTitles || {};
+  const hasPhotos = submission.photos && Object.keys(submission.photos).length > 0;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -149,6 +168,26 @@ export default function ChecklistEditModal({ submission, onClose, onSaved }: Che
         </div>
 
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6">
+          {hasPhotos && (
+            <div className="space-y-4">
+              <h4 className="text-sm font-black text-text-main uppercase tracking-widest border-b border-app-border pb-2">Fotos do Checklist</h4>
+              <div className="flex gap-4 overflow-x-auto pb-2 snap-x">
+                {Object.entries(submission.photos).map(([key, path]) => {
+                  const url = getPhotoUrl(path as string);
+                  if (!url) return null;
+                  return (
+                    <div key={key} className="relative min-w-[120px] h-[120px] rounded-xl overflow-hidden border border-app-border bg-zinc-50 shrink-0 snap-start group">
+                       <img src={url} alt={key} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                       <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+                          <p className="text-[10px] font-bold text-white uppercase tracking-widest">{key === 'receipt' ? 'Comprovante' : key === 'front' ? 'Frente' : key === 'back' ? 'Traseira' : key === 'left' ? 'Lateral Esq' : key === 'right' ? 'Lateral Dir' : key}</p>
+                       </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4">
             <h4 className="text-sm font-black text-text-main uppercase tracking-widest border-b border-app-border pb-2">Informações Gerais</h4>
             
