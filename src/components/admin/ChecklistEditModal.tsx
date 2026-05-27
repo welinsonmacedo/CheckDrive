@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Save, AlertCircle, Camera } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -15,22 +15,76 @@ export default function ChecklistEditModal({ submission, onClose, onSaved }: Che
   const [odometer, setOdometer] = useState(submission.odometer?.toString() || '');
   const [itemValues, setItemValues] = useState<Record<string, string>>(submission.details?.itemValues || {});
   
-  // defects structure matches ChecklistFlow: Record<itemId, Array<{ description, photoUrl?, photoFile? }>>
-  const [defectData, setDefectData] = useState<Record<string, Array<{ description: string, photoUrl?: string | null, photoFile?: File | null }>>>(() => {
-    const data: Record<string, Array<{ description: string, photoUrl?: string | null, photoFile?: File | null }>> = {};
+  // defects structure matches ChecklistFlow: Record<itemId, Array<{ description, photoUrl?, photoFile?, issueId? }>>
+  const [defectData, setDefectData] = useState<Record<string, Array<{ description: string, photoUrl?: string | null, photoFile?: File | null, issueId?: string }>>>(() => {
+    const data: Record<string, Array<{ description: string, photoUrl?: string | null, photoFile?: File | null, issueId?: string }>> = {};
     if (submission.details?.defects) {
       for (const [itemId, rawDefectInfo] of Object.entries(submission.details.defects)) {
          if (!rawDefectInfo) continue;
-         const defArr = Array.isArray(rawDefectInfo) ? rawDefectInfo : [rawDefectInfo];
-         data[itemId] = defArr.map((d: any) => ({
-            description: d.description || '',
-            photoUrl: d.photoUrl || null,
-            photoFile: null
-         }));
+          let arr = [];
+         if (typeof rawDefectInfo === 'string') {
+            arr = [{ description: rawDefectInfo, photoUrl: null, photoFile: null }];
+         } else {
+            const defArr = Array.isArray(rawDefectInfo) ? rawDefectInfo : [rawDefectInfo];
+            arr = defArr.map((d: any) => ({
+               description: d.description || '',
+               photoUrl: d.photoUrl || null,
+               photoFile: null
+            }));
+         }
+         data[itemId] = arr;
       }
     }
     return data;
   });
+
+  // Fetch actual issues from DB to ensure we have the most accurate and up-to-date descriptions/photos
+  useEffect(() => {
+    async function fetchIssues() {
+       if (!submission.id || submission.type === 'fuel') return;
+       const { data, error } = await supabase.from('checklist_issues').select('*').eq('submission_id', submission.id);
+       if (!error && data && data.length > 0) {
+          setDefectData(prev => {
+             const newData = { ...prev };
+             
+             // Group issues by trying to match their title back to the itemId
+             // Since we only have itemTitle in checklist_issues, we match via itemTitles from details
+             const titleToId: Record<string, string> = {};
+             if (submission.details?.itemTitles) {
+                for (const [id, title] of Object.entries(submission.details.itemTitles)) {
+                   titleToId[title as string] = id;
+                }
+             }
+
+             // Rebuild from issues if they exist
+             const grouped: Record<string, any[]> = {};
+             data.forEach(issue => {
+                // Remove suffix like " (1)" to find the base title
+                const baseTitle = issue.item_title.replace(/\s\(\d+\)$/, '');
+                const itemId = titleToId[baseTitle];
+                
+                if (itemId) {
+                   if (!grouped[itemId]) grouped[itemId] = [];
+                   grouped[itemId].push({
+                      description: issue.description || '',
+                      photoUrl: issue.photo_url || null,
+                      photoFile: null,
+                      issueId: issue.id
+                   });
+                }
+             });
+
+             // Merge items that got found in the issues table
+             for (const [itemId, arr] of Object.entries(grouped)) {
+                newData[itemId] = arr;
+             }
+
+             return newData;
+          });
+       }
+    }
+    fetchIssues();
+  }, [submission.id, submission.type]);
 
   const getPhotoUrl = (path: string) => {
     if (!path) return null;
