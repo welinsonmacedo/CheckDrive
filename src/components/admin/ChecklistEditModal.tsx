@@ -231,29 +231,54 @@ export default function ChecklistEditModal({ submission, onClose, onSaved }: Che
                     <div key={itemId} className="flex flex-col gap-2 p-3 rounded-xl border border-app-border bg-app-bg/50">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <span className="text-xs font-bold text-text-main">{title}</span>
-                        <select
-                          value={value}
-                          onChange={e => setItemValues(prev => ({ ...prev, [itemId]: e.target.value }))}
-                          className={`h-9 px-3 rounded-lg text-xs font-bold uppercase tracking-widest outline-none border transition-colors ${
-                            value === 'conform' ? 'bg-green-50 border-green-200 text-green-700' :
-                            value === 'defect' ? 'bg-red-50 border-red-200 text-red-700' :
-                            'bg-zinc-100 border-zinc-200 text-zinc-600'
-                          }`}
-                        >
-                          <option value="conform">Conforme</option>
-                          <option value="defect">Defeito</option>
-                          <option value="not_applicable">N/A</option>
-                        </select>
+                        <div className="flex gap-2">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setItemValues(prev => ({ ...prev, [itemId]: 'normal' }));
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${value === 'normal' || value === 'conform' ? 'bg-primary text-white border-primary' : 'bg-white text-text-muted'}`}
+                          >
+                            NORMAL
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setItemValues(prev => ({ ...prev, [itemId]: 'defect' }));
+                            }}
+                            className={`px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${value === 'defect' ? 'bg-danger text-white border-danger shadow-md shadow-danger/20' : 'bg-red-50 text-danger'}`}
+                          >
+                            DEFEITO
+                          </button>
+                        </div>
                       </div>
                       
                       {value === 'defect' && (
-                        <div className="mt-2 animate-in fade-in slide-in-from-top-2">
+                        <div className="mt-2 animate-in fade-in slide-in-from-top-2 space-y-3">
                           <textarea
                             placeholder="Descreva detalhadamente o defeito..."
                             value={defectDescriptions[itemId] || ''}
                             onChange={e => setDefectDescriptions(prev => ({ ...prev, [itemId]: e.target.value }))}
                             className="w-full min-h-[80px] p-3 rounded-xl text-xs font-medium outline-none border bg-white border-red-200 text-red-900 placeholder-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all resize-y"
                           />
+                          {(() => {
+                            const rawInfo = submission.details?.defects?.[itemId];
+                            if (!rawInfo) return null;
+                            const defArr = Array.isArray(rawInfo) ? rawInfo : [rawInfo];
+                            const pUrl = defArr[0]?.photoUrl ? getPhotoUrl(defArr[0].photoUrl) : null;
+                            if (!pUrl) return null;
+                            return (
+                              <div className="flex items-center gap-3 p-3 bg-red-50/50 rounded-xl border border-red-100">
+                                <div className="w-16 h-16 rounded-lg overflow-hidden border border-red-200 shrink-0 bg-zinc-100">
+                                  <img src={pUrl} alt="Defeito" className="w-full h-full object-cover" />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-[10px] font-bold text-red-800 uppercase tracking-widest">Foto do Defeito</p>
+                                  <p className="text-xs text-red-600 mt-0.5">Esta foto será mantida ao salvar as alterações.</p>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
