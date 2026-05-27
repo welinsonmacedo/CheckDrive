@@ -264,9 +264,15 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
               <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight flex items-center gap-2">
                 <ClipboardCheck size={18} className="text-primary" />
                 Detalhes do Checklist
+                {selectedSub.details?.is_edited && (
+                  <span className="ml-2 px-2 py-0.5 bg-orange-100 text-orange-600 rounded text-[9px] font-black uppercase tracking-widest">
+                    Editado
+                  </span>
+                )}
               </h3>
               <p className="text-[10px] font-bold text-gray-400 uppercase">
                 Nº {selectedSub.id?.split('-')[0]} • {new Date(selectedSub.created_at).toLocaleString()}
+                {selectedSub.details?.is_edited && ` • Editado em ${new Date(selectedSub.details.edited_at).toLocaleString()}`}
               </p>
             </div>
             <div className="flex items-center gap-3">

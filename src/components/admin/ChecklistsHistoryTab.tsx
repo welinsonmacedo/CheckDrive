@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Trash2, AlertTriangle, X } from 'lucide-react';
+import { Search, Trash2, AlertTriangle, X, Edit3 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import ChecklistEditModal from './ChecklistEditModal';
 
 interface ChecklistsHistoryTabProps {
   onViewDetails: (sub: any) => void;
@@ -14,6 +15,7 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
   const [loading, setLoading] = useState(true);
   const [deletingItem, setDeletingItem] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editingSub, setEditingSub] = useState<any>(null);
 
   useEffect(() => {
     fetchSubmissions();
@@ -110,9 +112,16 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
                     <td className="px-5 py-4 text-xs font-bold">{sub.profiles?.full_name}</td>
                     <td className="px-5 py-4 text-xs font-mono">{sub.vehicles?.plate}</td>
                     <td className="px-5 py-4">
-                       <span className="px-2 py-1 bg-app-bg rounded text-[10px] font-bold uppercase tracking-widest text-text-muted">
-                        {sub.type === 'start' ? 'Início de Viagem' : sub.type === 'end' ? 'Fim de Viagem' : sub.type === 'fuel' ? 'Abastecimento' : sub.type === 'yard' ? 'Pátio' : sub.type}
-                       </span>
+                       <div className="flex items-center gap-2">
+                         <span className="px-2 py-1 bg-app-bg rounded text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                          {sub.type === 'start' ? 'Início de Viagem' : sub.type === 'end' ? 'Fim de Viagem' : sub.type === 'fuel' ? 'Abastecimento' : sub.type === 'yard' ? 'Pátio' : sub.type}
+                         </span>
+                         {sub.details?.is_edited && (
+                           <span className="px-2 py-1 bg-orange-50 text-orange-600 rounded text-[9px] font-black uppercase tracking-widest" title={`Editado em ${new Date(sub.details.edited_at).toLocaleString()}`}>
+                             Editado
+                           </span>
+                         )}
+                       </div>
                     </td>
                     <td className="px-5 py-4 text-right flex items-center justify-end gap-2">
                        <button 
@@ -120,13 +129,22 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
                          className="px-3 py-1.5 bg-zinc-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg hover:bg-black transition-colors"
                        >Detalhes</button>
                        {currentUser?.role === 'admin' && (
-                         <button 
-                           onClick={() => setDeletingItem(sub)}
-                           className="p-1.5 text-danger/70 hover:text-danger hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-danger/20"
-                           title="Excluir checklist"
-                         >
-                           <Trash2 size={14} />
-                         </button>
+                         <>
+                           <button 
+                             onClick={() => setEditingSub(sub)}
+                             className="p-1.5 text-text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors border border-transparent hover:border-primary/20"
+                             title="Editar checklist"
+                           >
+                             <Edit3 size={14} />
+                           </button>
+                           <button 
+                             onClick={() => setDeletingItem(sub)}
+                             className="p-1.5 text-danger/70 hover:text-danger hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-danger/20"
+                             title="Excluir checklist"
+                           >
+                             <Trash2 size={14} />
+                           </button>
+                         </>
                        )}
                     </td>
                   </tr>
@@ -140,7 +158,7 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
 
       {/* Delete Confirmation Modal */}
       {deletingItem && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -182,6 +200,18 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingSub && (
+        <ChecklistEditModal 
+          submission={editingSub} 
+          onClose={() => setEditingSub(null)} 
+          onSaved={() => {
+            setEditingSub(null);
+            fetchSubmissions();
+          }} 
+        />
       )}
     </div>
   );
