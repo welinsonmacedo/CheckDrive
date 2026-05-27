@@ -415,7 +415,22 @@ export default function ChecklistFlow() {
       const defectEntries = Object.entries(formData.defects) as [string, Array<{ description: string, photo: File | null }>][];
       for (const [itemId, subDefects] of defectEntries) {
         defectData[itemId] = [];
-        const itemTitle = options.items.find((i: any) => i.id === itemId)?.title || 'Item Desconhecido';
+        const itemOption = options.items.find((i: any) => i.id === itemId);
+        const itemTitle = itemOption?.title || 'Item Desconhecido';
+        const isTrailerItem = itemOption?.is_trailer_item || false;
+
+        let issueVehicleId = null;
+        let issueTrailerId = null;
+
+        if (isInternal && isTrailerOnly) {
+           issueTrailerId = formData.trailerId || null;
+        } else {
+           if (isTrailerItem) {
+               issueTrailerId = formData.trailerId || null;
+           } else {
+               issueVehicleId = formData.vehicleId || null;
+           }
+        }
 
         for (let i = 0; i < subDefects.length; i++) {
           const subDefect = subDefects[i];
@@ -438,8 +453,8 @@ export default function ChecklistFlow() {
 
           issuesToInsert.push({
             submission_id: submission.id,
-            vehicle_id: (isInternal && isTrailerOnly) ? null : formData.vehicleId,
-            trailer_id: formData.trailerId || null,
+            vehicle_id: issueVehicleId,
+            trailer_id: issueTrailerId,
             driver_id: user.id,
             item_title: itemTitle,
             description: subDefect.description,
@@ -461,7 +476,6 @@ export default function ChecklistFlow() {
            else query = query.is('vehicle_id', null);
 
            if (newIssue.trailer_id) query = query.eq('trailer_id', newIssue.trailer_id);
-           // We don't strictly filter by trailer_id IS NULL if it's not provided, but to be exact we should:
            else query = query.is('trailer_id', null);
 
            const { data: existings } = await query;
