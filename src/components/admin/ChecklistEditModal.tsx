@@ -13,14 +13,42 @@ export default function ChecklistEditModal({ submission, onClose, onSaved }: Che
   const [loading, setLoading] = useState(false);
   const [odometer, setOdometer] = useState(submission.odometer?.toString() || '');
   const [itemValues, setItemValues] = useState<Record<string, string>>(submission.details?.itemValues || {});
+  const [defectDescriptions, setDefectDescriptions] = useState<Record<string, string>>(() => {
+    const descs: Record<string, string> = {};
+    if (submission.details?.defects) {
+      for (const [itemId, rawDefectInfo] of Object.entries(submission.details.defects)) {
+         if (!rawDefectInfo) continue;
+         const defArr = Array.isArray(rawDefectInfo) ? rawDefectInfo : [rawDefectInfo];
+         if (defArr.length > 0 && defArr[0]?.description) {
+            descs[itemId] = defArr[0].description;
+         }
+      }
+    }
+    return descs;
+  });
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      const updatedDefects = { ...submission.details?.defects };
+      
+      if (submission.type !== 'fuel') {
+         for (const [itemId, val] of Object.entries(itemValues)) {
+            if (val === 'defect') {
+               const currentDesc = defectDescriptions[itemId] || '[Editado Manualmente] Defeito adicionado/alterado';
+               const existingArr = Array.isArray(updatedDefects[itemId]) ? updatedDefects[itemId] : [updatedDefects[itemId] || {}];
+               updatedDefects[itemId] = [{ ...existingArr[0], description: currentDesc }];
+            } else {
+               delete updatedDefects[itemId];
+            }
+         }
+      }
+
       const updatedDetails = {
         ...submission.details,
         itemValues,
+        defects: updatedDefects,
         is_edited: true,
         edited_at: new Date().toISOString()
       };
@@ -34,43 +62,61 @@ export default function ChecklistEditModal({ submission, onClose, onSaved }: Che
 
       if (error) throw error;
 
-      // Handle checklist_issues sync (extremely basic to prevent ghost defects)
-      for (const [itemId, val] of Object.entries(itemValues)) {
-         const oldVal = submission.details?.itemValues?.[itemId];
-         if (oldVal === 'defect' && val !== 'defect') {
-            const title = submission.details?.itemTitles?.[itemId] || `Item ${itemId}`;
-            const { data: existingIssues } = await supabase.from('checklist_issues')
-               .select('id')
-               .eq('submission_id', submission.id);
-            
-            // Note: Since item_title in issues may have index suffix if multiple of same name, 
-            // we will just delete any unresolved matched issues roughly. For robust setup, 
-            // we delete by submission_id if we change everything.
-            await supabase.from('checklist_issues')
-               .delete()
-               .eq('submission_id', submission.id)
-               .ilike('item_title', `${title}%`);
-         } else if (oldVal !== 'defect' && val === 'defect') {
-            const title = submission.details?.itemTitles?.[itemId] || `Item ${itemId}`;
-            // Check if already exists just in case
-            const { data: ex } = await supabase.from('checklist_issues')
-               .select('id')
-               .eq('submission_id', submission.id)
-               .ilike('item_title', `${title}%`);
-            
-            if (!ex || ex.length === 0) {
-               await supabase.from('checklist_issues').insert({
-                  submission_id: submission.id,
-                  vehicle_id: submission.vehicle_id,
-                  trailer_id: submission.trailer_id,
-                  driver_id: submission.driver_id,
-                  item_title: title,
-                  status: 'pending',
-                  description: '[Editado Manualmente] Defeito adicionado após envio',
-                  report_count: 1
-               });
-            }
-         }
+      // Handle checklist_issues sync 
+      if (submission.type !== 'fuel') {
+        // Fetch existing issues for this submission once to match
+        const { data: existingIssues } = await supabase.from('checklist_issues')
+          .select('id, item_title')
+          .eq('submission_id', submission.id);
+
+        for (const [itemId, val] of Object.entries(itemValues)) {
+           const oldVal = submission.details?.itemValues?.[itemId];
+           const titleBase = submission.details?.itemTitles?.[itemId] || `Item ${itemId}`;
+           const newDesc = defectDescriptions[itemId] || '[Editado Manualmente] Defeito adicionado/alterado';
+           
+           // Find matching existing issue by title (prefix match since titles might have " (1)" suffix)
+           const matchingIssue = existingIssues?.find(issue => issue.item_title.startsWith(titleBase));
+
+           if (oldVal === 'defect' && val !== 'defect') {
+              if (matchingIssue) {
+                 await supabase.from('checklist_issues')
+                    .delete()
+                    .eq('id', matchingIssue.id);
+              }
+           } else if (oldVal !== 'defect' && val === 'defect') {
+              if (!matchingIssue) {
+                 await supabase.from('checklist_issues').insert({
+                    submission_id: submission.id,
+                    vehicle_id: submission.vehicle_id,
+                    trailer_id: submission.trailer_id,
+                    driver_id: submission.driver_id,
+                    item_title: titleBase,
+                    status: 'pending',
+                    description: newDesc,
+                    report_count: 1
+                 });
+              }
+           } else if (oldVal === 'defect' && val === 'defect') {
+              // Simply update the description
+              if (matchingIssue) {
+                 await supabase.from('checklist_issues')
+                    .update({ description: newDesc })
+                    .eq('id', matchingIssue.id);
+              } else {
+                 // if it somehow didn't exist in DB but did in oldVal
+                 await supabase.from('checklist_issues').insert({
+                    submission_id: submission.id,
+                    vehicle_id: submission.vehicle_id,
+                    trailer_id: submission.trailer_id,
+                    driver_id: submission.driver_id,
+                    item_title: titleBase,
+                    status: 'pending',
+                    description: newDesc,
+                    report_count: 1
+                 });
+              }
+           }
+        }
       }
 
       onSaved();
@@ -126,27 +172,51 @@ export default function ChecklistEditModal({ submission, onClose, onSaved }: Che
                 {Object.keys(titles).map(itemId => {
                   const title = titles[itemId];
                   const value = itemValues[itemId];
-                  if (!value) return null;
+                  if (value === undefined) return null;
 
-                  // Ignorar litragem (fuel) pois não é 'conform/defect'
-                  if (submission.type === 'fuel') return null;
+                  if (submission.type === 'fuel') {
+                    return (
+                      <div key={itemId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-app-border bg-app-bg/50">
+                        <span className="text-xs font-bold text-text-main">{title}</span>
+                        <input
+                          type="text"
+                          value={value}
+                          onChange={e => setItemValues(prev => ({ ...prev, [itemId]: e.target.value }))}
+                          className="w-full sm:w-1/2 h-9 px-3 rounded-lg text-xs font-bold outline-none border bg-white border-zinc-200 text-zinc-800 focus:border-primary transition-colors"
+                        />
+                      </div>
+                    );
+                  }
 
                   return (
-                    <div key={itemId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-app-border bg-app-bg/50">
-                      <span className="text-xs font-bold text-text-main">{title}</span>
-                      <select
-                        value={value}
-                        onChange={e => setItemValues(prev => ({ ...prev, [itemId]: e.target.value }))}
-                        className={`h-9 px-3 rounded-lg text-xs font-bold uppercase tracking-widest outline-none border transition-colors ${
-                          value === 'conform' ? 'bg-green-50 border-green-200 text-green-700' :
-                          value === 'defect' ? 'bg-red-50 border-red-200 text-red-700' :
-                          'bg-zinc-100 border-zinc-200 text-zinc-600'
-                        }`}
-                      >
-                        <option value="conform">Conforme</option>
-                        <option value="defect">Defeito</option>
-                        <option value="not_applicable">N/A</option>
-                      </select>
+                    <div key={itemId} className="flex flex-col gap-2 p-3 rounded-xl border border-app-border bg-app-bg/50">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <span className="text-xs font-bold text-text-main">{title}</span>
+                        <select
+                          value={value}
+                          onChange={e => setItemValues(prev => ({ ...prev, [itemId]: e.target.value }))}
+                          className={`h-9 px-3 rounded-lg text-xs font-bold uppercase tracking-widest outline-none border transition-colors ${
+                            value === 'conform' ? 'bg-green-50 border-green-200 text-green-700' :
+                            value === 'defect' ? 'bg-red-50 border-red-200 text-red-700' :
+                            'bg-zinc-100 border-zinc-200 text-zinc-600'
+                          }`}
+                        >
+                          <option value="conform">Conforme</option>
+                          <option value="defect">Defeito</option>
+                          <option value="not_applicable">N/A</option>
+                        </select>
+                      </div>
+                      
+                      {value === 'defect' && (
+                        <div className="mt-2 animate-in fade-in slide-in-from-top-2">
+                          <textarea
+                            placeholder="Descreva detalhadamente o defeito..."
+                            value={defectDescriptions[itemId] || ''}
+                            onChange={e => setDefectDescriptions(prev => ({ ...prev, [itemId]: e.target.value }))}
+                            className="w-full min-h-[80px] p-3 rounded-xl text-xs font-medium outline-none border bg-white border-red-200 text-red-900 placeholder-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all resize-y"
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}
