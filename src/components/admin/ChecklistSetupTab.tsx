@@ -11,7 +11,8 @@ export default function ChecklistSetupTab() {
     is_trailer_item: false,
     selectedTypes: [] as string[],
     appears_in_manual: false,
-    input_type: 'boolean'
+    input_type: 'boolean',
+    is_required: true
   });
   
   const [saving, setSaving] = useState(false);
@@ -48,13 +49,14 @@ export default function ChecklistSetupTab() {
 
   // Group items by title and is_trailer_item
   const groupedItems = checklistItems.reduce((acc, current) => {
-    const key = `${current.title.toLowerCase().trim()}_${current.is_trailer_item}_${current.input_type || 'boolean'}`;
+    const key = `${current.title.toLowerCase().trim()}_${current.is_trailer_item}_${current.input_type || 'boolean'}_${current.order_index}`;
     if (!acc[key]) {
       acc[key] = {
         title: current.title,
         is_trailer_item: current.is_trailer_item,
         appears_in_manual: current.appears_in_manual || false,
         input_type: current.input_type || 'boolean',
+        is_required: current.order_index !== 0,
         types: [],
         ids: [] // Store IDs so we can delete all of them
       };
@@ -81,7 +83,7 @@ export default function ChecklistSetupTab() {
         is_trailer_item: itemForm.is_trailer_item,
         appears_in_manual: itemForm.appears_in_manual,
         input_type: itemForm.input_type,
-        order_index: 0 // Simplification since order will now be global
+        order_index: itemForm.is_required ? 1 : 0
       }));
 
       // Se estiver editando, remove os antigos antes de inserir os novos
@@ -98,7 +100,7 @@ export default function ChecklistSetupTab() {
           title: itemForm.title,
           is_trailer_item: itemForm.is_trailer_item,
           input_type: itemForm.input_type,
-          order_index: 0
+          order_index: itemForm.is_required ? 1 : 0
         }));
         const { error: err2 } = await supabase.from('checklist_items').insert(fallbackInserts);
         if (err2) {
@@ -107,13 +109,13 @@ export default function ChecklistSetupTab() {
                type_id: typeId,
                title: itemForm.title,
                is_trailer_item: itemForm.is_trailer_item,
-               order_index: 0
+               order_index: itemForm.is_required ? 1 : 0
             }));
             await supabase.from('checklist_items').insert(finalFallback);
         }
       }
       
-      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean' });
+      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true });
       setEditingItemIds([]);
       fetchData();
     } catch (error: any) {
@@ -152,7 +154,8 @@ export default function ChecklistSetupTab() {
       is_trailer_item: item.is_trailer_item,
       selectedTypes: item.types,
       appears_in_manual: item.appears_in_manual || false,
-      input_type: item.input_type || 'boolean'
+      input_type: item.input_type || 'boolean',
+      is_required: item.is_required
     });
     setEditingItemIds(item.ids);
   };
@@ -257,7 +260,17 @@ export default function ChecklistSetupTab() {
                     checked={itemForm.appears_in_manual}
                     onChange={e => setItemForm({...itemForm, appears_in_manual: e.target.checked})}
                   />
-                  <span className="text-xs font-black text-text-muted uppercase tracking-widest">Aparece em Pendência Manual</span>
+                  <span className="text-xs font-black text-text-muted uppercase tracking-widest">Aparece em Pendência</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary"
+                    checked={itemForm.is_required}
+                    onChange={e => setItemForm({...itemForm, is_required: e.target.checked})}
+                  />
+                  <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Obrigatório</span>
                 </label>
               </div>
                 
@@ -267,7 +280,7 @@ export default function ChecklistSetupTab() {
                     type="button"
                     onClick={() => {
                       setEditingItemIds([]);
-                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean' });
+                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true });
                     }}
                     className="h-10 px-4 bg-zinc-200 text-zinc-700 flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:bg-zinc-300 transition-colors"
                   >
@@ -295,7 +308,8 @@ export default function ChecklistSetupTab() {
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Tipo de Equip.</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Resposta</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Aparece em</th>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Manual?</th>
+                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Pendência Manual?</th>
+                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Obrigatório?</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right border-y border-app-border">Ações</th>
                 </tr>
               </thead>
@@ -329,6 +343,13 @@ export default function ChecklistSetupTab() {
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Não</span>
                       )}
                     </td>
+                    <td className="px-5 py-4">
+                      {item.is_required ? (
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Sim</span>
+                      ) : (
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Não</span>
+                      )}
+                    </td>
                     <td className="px-5 py-4 text-right">
                        <div className="flex items-center justify-end gap-2">
                          <button onClick={() => startEditingItem(item)} className="text-text-muted hover:text-primary p-2 transition-colors rounded-lg hover:bg-blue-50"><Edit2 size={16}/></button>
@@ -337,7 +358,7 @@ export default function ChecklistSetupTab() {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-text-muted italic">Nenhum item cadastrado ainda.</td></tr>
+                  <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-text-muted italic">Nenhum item cadastrado ainda.</td></tr>
                 )}
               </tbody>
             </table>

@@ -326,9 +326,9 @@ export default function ChecklistFlow() {
     }
     if (currentStep === 2) {
       if (type === 'fuel') {
-         return options.items.every((i: any) => formData.itemValues[i.id] && formData.itemValues[i.id].trim() !== '');
+         return options.items.every((i: any) => i.order_index !== 0 ? (formData.itemValues[i.id] && formData.itemValues[i.id].trim() !== '') : true);
       }
-      return options.items.filter(i => (isInternal && isTrailerOnly) ? i.is_trailer_item : true).every((i: any) => formData.itemValues[i.id]);
+      return options.items.filter(i => (isInternal && isTrailerOnly) ? i.is_trailer_item : true).every((i: any) => i.order_index !== 0 ? !!formData.itemValues[i.id] : true);
     }
     return true;
   };
@@ -903,7 +903,10 @@ export default function ChecklistFlow() {
                       <React.Fragment key={item.id}>
                         <div className="p-4 rounded-xl border border-app-border bg-app-bg flex flex-col group hover:bg-white hover:border-primary/20 transition-all">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-text-main flex-1 mr-4">{item.title}</span>
+                            <span className="text-xs font-bold text-text-main flex-1 mr-4">
+                              {item.title}
+                              {item.order_index === 0 && <span className="ml-2 text-[9px] font-medium text-text-muted">(Opcional)</span>}
+                            </span>
                             
                             {renderItemInput(item)}
                           </div>
@@ -1022,7 +1025,10 @@ export default function ChecklistFlow() {
                       {options.items.filter(i => i.is_trailer_item).length > 0 ? options.items.filter(i => i.is_trailer_item).map(item => (
                         <React.Fragment key={item.id}>
                           <div className="p-4 rounded-xl border border-app-border bg-app-bg flex items-center justify-between group hover:bg-white hover:border-orange-200 transition-all">
-                            <span className="text-xs font-bold text-text-main flex-1 mr-4">{item.title}</span>
+                            <span className="text-xs font-bold text-text-main flex-1 mr-4">
+                              {item.title}
+                              {item.order_index === 0 && <span className="ml-2 text-[9px] font-medium text-text-muted">(Opcional)</span>}
+                            </span>
                             {renderItemInput(item)}
                           </div>
                           
