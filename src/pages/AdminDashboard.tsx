@@ -184,12 +184,10 @@ export default function AdminDashboard() {
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50 print:h-auto print:overflow-visible flex-col md:flex-row relative">
       {/* Sidebar */}
-      <aside className="group w-72 flex-shrink-0 bg-white/95 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl flex flex-col h-full print:hidden md:fixed md:left-0 md:top-0 md:bottom-0 md:z-50 transition-transform duration-300 md:-translate-x-full md:hover:translate-x-0">
+      <aside className="group w-72 flex-shrink-0 bg-white/95 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl flex flex-col h-full print:hidden md:fixed md:left-0 md:top-0 md:bottom-0 md:z-50 transition-transform duration-300 md:-translate-x-[calc(100%-16px)] md:hover:translate-x-0">
         
-        {/* Hover trigger zone */}
-        <div className="hidden md:flex absolute top-0 -right-6 w-6 h-full items-center justify-center bg-transparent cursor-pointer group-hover:pointer-events-none">
-          <div className="w-1.5 h-12 bg-gray-300/50 rounded-full group-hover:opacity-0 transition-opacity" />
-        </div>
+        {/* Grab handle indicator (visible when closed) */}
+        <div className="hidden md:flex absolute top-1/2 -translate-y-1/2 right-1.5 w-1 h-12 bg-gray-300 rounded-full group-hover:opacity-0 transition-opacity duration-200" />
      
         
 
