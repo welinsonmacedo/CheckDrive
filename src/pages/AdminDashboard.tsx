@@ -60,7 +60,7 @@ export default function AdminDashboard() {
   const [appSettings, setAppSettings] = useState({ system_type: 'points', initial_value: 1000, penalty_start: 50, penalty_end: 50, penalty_fuel: 50, penalty_yard: 50 });
   const [loading, setLoading] = useState(true);
   const [vehiclesWithPending, setVehiclesWithPending] = useState<any[]>([]);
-  const [openDropdowns, setOpenDropdowns] = useState<string[]>(['cadastros']);
+  const [openDropdowns, setOpenDropdowns] = useState<string[]>([]);
 
 
   const [selectedSub, setSelectedSub] = useState<any | null>(null);
@@ -183,31 +183,31 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50 print:h-auto print:overflow-visible flex-col md:flex-row relative">
-      {/* Sidebar */}
-      <aside className="group w-72 flex-shrink-0 bg-white/95 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl flex flex-col h-full print:hidden md:fixed md:left-0 md:top-0 md:bottom-0 md:z-50 transition-transform duration-300 md:-translate-x-[calc(100%-16px)] md:hover:translate-x-0">
-        
-        {/* Grab handle indicator (visible when closed) */}
-        <div className="hidden md:flex absolute top-1/2 -translate-y-1/2 right-1.5 w-1 h-12 bg-gray-300 rounded-full group-hover:opacity-0 transition-opacity duration-200" />
-     
-        
+      {/* Spacer for sidebar to avoid layout shift */}
+      <div className="hidden md:block w-20 flex-shrink-0" />
 
+      {/* Sidebar */}
+      <aside className="group w-full md:absolute md:left-0 md:top-0 md:bottom-0 md:w-20 md:hover:w-72 flex-shrink-0 bg-white/95 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl flex flex-col print:hidden transition-[width] duration-300 z-50 overflow-x-hidden overflow-y-auto md:overflow-y-hidden">
+        
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto overflow-x-hidden md:hide-scrollbar">
           {navItems.map((item) => (
             <motion.button
               key={item.id}
               whileHover={{ x: 5 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group/item ${
                 activeTab === item.id 
                   ? `bg-gradient-to-r ${item.color} text-white shadow-lg` 
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <item.icon size={20} className={activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-gray-600'} />
-              <span className="text-sm font-semibold flex-1 text-left">{item.label}</span>
-              {activeTab === item.id && <ChevronRight size={16} className="text-white/70" />}
+              <div className="min-w-[20px] flex items-center justify-center">
+                <item.icon size={20} className={activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover/item:text-gray-600'} />
+              </div>
+              <span className="text-sm font-semibold flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">{item.label}</span>
+              {activeTab === item.id && <ChevronRight size={16} className="text-white/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 min-w-[16px]" />}
             </motion.button>
           ))}
 
@@ -217,17 +217,20 @@ export default function AdminDashboard() {
               <motion.button
                 whileTap={{ scale: 0.98 }}
                 onClick={() => toggleDropdown('cadastros')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group/item ${
                   registerItems.some(item => item.id === activeTab)
                     ? 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-800 shadow-sm' 
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                <Database size={20} className={registerItems.some(item => item.id === activeTab) ? 'text-primary' : 'text-gray-400 group-hover:text-gray-600'} />
-                <span className="text-sm font-semibold flex-1 text-left">Cadastros</span>
+                <div className="min-w-[20px] flex items-center justify-center">
+                  <Database size={20} className={registerItems.some(item => item.id === activeTab) ? 'text-primary' : 'text-gray-400 group-hover/item:text-gray-600'} />
+                </div>
+                <span className="text-sm font-semibold flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">Cadastros</span>
                 <motion.div
                   animate={{ rotate: openDropdowns.includes('cadastros') ? 180 : 0 }}
                   transition={{ duration: 0.2 }}
+                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 min-w-[16px]"
                 >
                   <ChevronDown size={16} className="text-gray-400" />
                 </motion.div>
@@ -240,7 +243,7 @@ export default function AdminDashboard() {
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="ml-6 mt-1 space-y-1 overflow-hidden"
+                    className="ml-2 md:ml-6 mt-1 space-y-1 overflow-hidden"
                   >
                     {registerItems.map((item) => (
                       <motion.button
@@ -248,15 +251,17 @@ export default function AdminDashboard() {
                         whileHover={{ x: 5 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={() => setActiveTab(item.id)}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group ${
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group/sub ${
                           activeTab === item.id 
                             ? `bg-gradient-to-r ${item.color} text-white shadow-md` 
                             : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
                         }`}
                       >
-                        <item.icon size={18} className={activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-gray-600'} />
-                        <span className="text-xs font-semibold flex-1 text-left">{item.label}</span>
-                        {activeTab === item.id && <ChevronRight size={14} className="text-white/70" />}
+                        <div className="min-w-[18px] flex items-center justify-center">
+                          <item.icon size={18} className={activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover/sub:text-gray-600'} />
+                        </div>
+                        <span className="text-xs font-semibold flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">{item.label}</span>
+                        {activeTab === item.id && <ChevronRight size={14} className="text-white/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 min-w-[14px]" />}
                       </motion.button>
                     ))}
                   </motion.div>
@@ -267,26 +272,28 @@ export default function AdminDashboard() {
         </nav>
 
         {/* Botão Logout */}
-        <div className="p-4 border-t border-gray-100 bg-white/95">
+        <div className="p-4 border-t border-gray-100 bg-white/95 whitespace-nowrap overflow-hidden">
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 transition-all duration-200 group"
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-red-50 hover:bg-red-100 transition-all duration-200 group/logout"
           >
-            <LogOut size={20} className="text-red-600" />
-            <span className="text-sm font-semibold flex-1 text-left text-red-700">Sair do Sistema</span>
-            <div className="w-6 h-6 rounded-full bg-red-200/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="min-w-[20px] flex items-center justify-center">
+              <LogOut size={20} className="text-red-600" />
+            </div>
+            <span className="text-sm font-semibold flex-1 text-left text-red-700 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">Sair do Sistema</span>
+            <div className="w-6 h-6 rounded-full bg-red-200/50 flex items-center justify-center opacity-0 group-hover/logout:opacity-100 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 min-w-[24px]">
               <ChevronRight size={14} className="text-red-600" />
             </div>
           </motion.button>
           
-          <div className="mt-4 p-3 bg-gray-50 rounded-xl">
+          <div className="mt-4 p-3 bg-gray-50 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold text-gray-400 uppercase">Sistema</span>
               <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Online</span>
             </div>
-            <p className="text-xs text-gray-500">Desenvolvido Welinson Macedo.</p>
+            <p className="text-xs text-gray-500 whitespace-nowrap">Desenvolvido Welinson Macedo.</p>
           </div>
         </div>
       </aside>

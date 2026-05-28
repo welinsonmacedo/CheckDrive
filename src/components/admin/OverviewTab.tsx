@@ -3,11 +3,14 @@ import { supabase } from '../../lib/supabase';
 import { Trophy, Search, CheckCircle2, AlertCircle, Filter, Plus, Map as MapIcon, ClipboardCheck, Truck, Users, Wrench, Activity, AlertTriangle, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+
 export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTab: (tab: string) => void, appSettings: any }) {
   const [stats, setStats] = useState<any[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [rankings, setRankings] = useState<any[]>([]);
   const [vehiclesWithPending, setVehiclesWithPending] = useState<any[]>([]);
+  const [frequentDefects, setFrequentDefects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingVehicles, setLoadingVehicles] = useState(true);
 
@@ -123,14 +126,36 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
 
       console.log(`Checklists com itens defeituosos: ${checklistsWithDefects.length}`);
 
+      // Fetch checklists items titles
+      const { data: allItems } = await supabase.from('checklist_items').select('id, title');
+      const itemTitleMap: { [key: string]: string } = {};
+      if (allItems) {
+        allItems.forEach((i: any) => {
+          itemTitleMap[i.id] = i.title;
+        });
+      }
+
       const defectCountByVehicle: { [key: string]: number } = {};
+      const itemDefectCounts: { [key: string]: number } = {};
       
       checklistsWithDefects.forEach(c => {
         const vehicleId = c.vehicle_id;
         if (vehicleId) {
           defectCountByVehicle[vehicleId] = (defectCountByVehicle[vehicleId] || 0) + 1;
         }
+
+        if (c.details && c.details.itemValues) {
+          Object.entries(c.details.itemValues).forEach(([itemId, value]) => {
+            if (value === 'defect' || value === 'defeito') {
+               const title = itemTitleMap[itemId] || 'Desconhecido';
+               itemDefectCounts[title] = (itemDefectCounts[title] || 0) + 1;
+            }
+          });
+        }
       });
+
+      const frequent = Object.entries(itemDefectCounts).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count).slice(0, 5);
+      setFrequentDefects(frequent);
 
       console.log('Defeitos por veículo:', defectCountByVehicle);
 
@@ -309,11 +334,65 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
             <div className="text-3xl font-black text-text-main tracking-tighter tabular-nums">{stat.value}</div>
           </div>
         ))}
-        
-      
-      
+        {/* Frequent Defects Chart */}
+        <div className="xl:col-span-12 bg-white rounded-2xl border border-gray-200 p-6 flex flex-col h-[420px] xl:row-span-3 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                <Activity size={20} className="text-primary" />
+                Principais Reincidências
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">Itens com maior número de defeitos relatados nos checklists</p>
+            </div>
+          </div>
 
-        
+          {loadingVehicles ? (
+            <div className="flex-1 flex flex-col items-center justify-center space-y-4">
+              <div className="w-8 h-8 border-4 border-gray-200 border-t-primary rounded-full animate-spin" />
+              <span className="text-xs font-bold text-gray-400">Carregando dados...</span>
+            </div>
+          ) : frequentDefects.length > 0 ? (
+            <div className="flex-1 w-full min-h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={frequentDefects} layout="vertical" margin={{ top: 0, right: 30, left: 100, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E5E7EB" />
+                  <XAxis 
+                    type="number"
+                    allowDecimals={false}
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fill: '#6B7280', fontWeight: 600 }}
+                  />
+                  <YAxis 
+                    type="category"
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fill: '#374151', fontWeight: 600 }}
+                    width={150}
+                  />
+                  <Tooltip 
+                    cursor={{ fill: '#F3F4F6', opacity: 0.4 }}
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', padding: '12px' }}
+                    itemStyle={{ fontSize: '14px', fontWeight: 700, color: '#111827' }}
+                  />
+                  <Bar dataKey="count" name="Ocorrências" barSize={32} radius={[0, 6, 6, 0]}>
+                    {frequentDefects.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={index === 0 ? '#EF4444' : index === 1 ? '#F97316' : '#3B82F6'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-sm text-text-muted font-medium bg-gray-50 rounded-xl border border-dashed border-gray-200">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm mb-3 text-green-500">
+                <CheckCircle2 size={24} />
+              </div>
+              Nenhuma reincidência registrada no momento
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
