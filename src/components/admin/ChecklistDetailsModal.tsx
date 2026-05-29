@@ -1,15 +1,32 @@
 // components/admin/ChecklistDetailsModal.tsx
-import { motion, AnimatePresence } from 'motion/react';
-import { X, ClipboardCheck, Eye, EyeOff, Image as ImageIcon, AlertCircle, ChevronDown, ChevronUp, ZoomIn, ZoomOut, Download, AlertOctagon, Fuel } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from "motion/react";
+import {
+  X,
+  ClipboardCheck,
+  Eye,
+  EyeOff,
+  Image as ImageIcon,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  ZoomIn,
+  ZoomOut,
+  Download,
+  AlertOctagon,
+  Fuel,
+} from "lucide-react";
+import { supabase } from "../../lib/supabase";
+import { useState, useEffect } from "react";
 
 interface ChecklistDetailsModalProps {
   selectedSub: any | null;
   onClose: () => void;
 }
 
-export default function ChecklistDetailsModal({ selectedSub, onClose }: ChecklistDetailsModalProps) {
+export default function ChecklistDetailsModal({
+  selectedSub,
+  onClose,
+}: ChecklistDetailsModalProps) {
   const [loadPhotos, setLoadPhotos] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -18,17 +35,20 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [defectItems, setDefectItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  
+
   const [manualPenalties, setManualPenalties] = useState<any[]>([]);
   const [showPenaltyForm, setShowPenaltyForm] = useState(false);
-  const [selectedPenaltyId, setSelectedPenaltyId] = useState('');
+  const [selectedPenaltyId, setSelectedPenaltyId] = useState("");
   const [applyingPenalty, setApplyingPenalty] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
 
   useEffect(() => {
     const fetchPenalties = async () => {
       try {
-        const { data, error } = await supabase.from('manual_penalties').select('*').order('name');
+        const { data, error } = await supabase
+          .from("manual_penalties")
+          .select("*")
+          .order("name");
         if (!error && data) {
           setManualPenalties(data);
         }
@@ -46,11 +66,11 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
   // Buscar os issues relacionados a este submission - mesma lógica do MaintenanceTab
   async function fetchIssuesFromSubmission() {
     if (!selectedSub) return;
-    
+
     setLoading(true);
     try {
-      console.log('Buscando issues para o submission:', selectedSub.id);
-      
+      console.log("Buscando issues para o submission:", selectedSub.id);
+
       const { data: issuesData, error } = await supabase
         .from("checklist_issues")
         .select("*")
@@ -58,17 +78,19 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error('Erro ao buscar issues:', error);
+        console.error("Erro ao buscar issues:", error);
         setDefectItems([]);
         setLoading(false);
         return;
       }
 
-      console.log('Issues encontradas:', issuesData);
+      console.log("Issues encontradas:", issuesData);
 
       if (issuesData && issuesData.length > 0) {
         // Buscar informações do veículo e motorista
-        const vehicleIds = [...new Set(issuesData.map((i: any) => i.vehicle_id))];
+        const vehicleIds = [
+          ...new Set(issuesData.map((i: any) => i.vehicle_id)),
+        ];
         const driverIds = [...new Set(issuesData.map((i: any) => i.driver_id))];
 
         const { data: vehicles } = await supabase
@@ -83,24 +105,23 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
 
         const issuesWithRelations = issuesData.map((issue: any) => ({
           ...issue,
-          vehicles: vehicles?.find(v => v.id === issue.vehicle_id),
-          profiles: drivers?.find(d => d.id === issue.driver_id)
+          vehicles: vehicles?.find((v) => v.id === issue.vehicle_id),
+          profiles: drivers?.find((d) => d.id === issue.driver_id),
         }));
 
         setDefectItems(issuesWithRelations);
-        
+
         // Expandir o primeiro item automaticamente
         if (issuesWithRelations.length > 0 && expandedItems.length === 0) {
           setExpandedItems([issuesWithRelations[0].id]);
         }
       } else {
         // Se não encontrar issues, tenta extrair dos details (fallback)
-        console.log('Nenhuma issue encontrada, tentando fallback para details');
+        console.log("Nenhuma issue encontrada, tentando fallback para details");
         extractDefectsFromDetails();
       }
-      
     } catch (error) {
-      console.error('Erro:', error);
+      console.error("Erro:", error);
       extractDefectsFromDetails();
     } finally {
       setLoading(false);
@@ -110,33 +131,43 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
   // Fallback: extrair defeitos dos details (caso não exista na tabela checklist_issues)
   function extractDefectsFromDetails() {
     const items: any[] = [];
-    
+
     if (selectedSub?.details?.itemValues) {
-      for (const [itemId, val] of Object.entries(selectedSub.details.itemValues)) {
-        if (val === 'defect' || val === 'defeito') {
+      for (const [itemId, val] of Object.entries(
+        selectedSub.details.itemValues,
+      )) {
+        if (val === "defect" || val === "defeito") {
           const rawDefectInfo = selectedSub.details.defects?.[itemId];
-          
+
           // Handle both old single object and new array of objects
-          const subDefects = Array.isArray(rawDefectInfo) 
-            ? rawDefectInfo 
-            : [rawDefectInfo || { description: 'Nenhuma descrição fornecida', photoUrl: null }];
-          
+          const subDefects = Array.isArray(rawDefectInfo)
+            ? rawDefectInfo
+            : [
+                rawDefectInfo || {
+                  description: "Nenhuma descrição fornecida",
+                  photoUrl: null,
+                },
+              ];
+
           subDefects.forEach((defectInfo: any, index: number) => {
-            const titleSuffix = subDefects.length > 1 ? ` (${index + 1})` : '';
+            const titleSuffix = subDefects.length > 1 ? ` (${index + 1})` : "";
             items.push({
               id: `${itemId}_${index}`,
-              item_title: (selectedSub.details.itemTitles?.[itemId] || `Item ${itemId}`) + titleSuffix,
-              description: defectInfo?.description || 'Nenhuma descrição fornecida',
+              item_title:
+                (selectedSub.details.itemTitles?.[itemId] || `Item ${itemId}`) +
+                titleSuffix,
+              description:
+                defectInfo?.description || "Nenhuma descrição fornecida",
               photo_url: defectInfo?.photoUrl || null,
               vehicles: selectedSub.vehicles,
               profiles: selectedSub.profiles,
-              created_at: selectedSub.created_at
+              created_at: selectedSub.created_at,
             });
           });
         }
       }
     }
-    
+
     setDefectItems(items);
     if (items.length > 0 && expandedItems.length === 0) {
       setExpandedItems([items[0].id]);
@@ -145,50 +176,59 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
 
   const handleApplyManualPenalty = async () => {
     if (!selectedPenaltyId) return;
-    const penalty = manualPenalties.find(p => p.id === selectedPenaltyId);
+    const penalty = manualPenalties.find((p) => p.id === selectedPenaltyId);
     if (!penalty || !selectedSub.driver_id) return;
-    
+
     setApplyingPenalty(true);
     try {
       // 1. Get current performance
       const { data: perf } = await supabase
-        .from('driver_performance')
-        .select('score')
-        .eq('driver_id', selectedSub.driver_id)
+        .from("driver_performance")
+        .select("score")
+        .eq("driver_id", selectedSub.driver_id)
         .maybeSingle();
 
       const { data: profileArgs } = await supabase
-        .from('profiles')
-        .select('score_profiles(base_value)')
-        .eq('id', selectedSub.driver_id)
+        .from("profiles")
+        .select("score_profiles(base_value)")
+        .eq("id", selectedSub.driver_id)
         .maybeSingle();
-      
+
       const sp: any = profileArgs?.score_profiles;
       const defaultScore = Number(sp?.base_value || 1000);
       const newScore = (perf?.score || defaultScore) - penalty.points;
 
       // 2. Upsert performance
-      const { error: perfError } = await supabase.from('driver_performance').upsert({ 
-        driver_id: selectedSub.driver_id, 
-        score: newScore,
-        updated_at: new Date().toISOString()
-      });
+      const { error: perfError } = await supabase
+        .from("driver_performance")
+        .upsert({
+          driver_id: selectedSub.driver_id,
+          score: newScore,
+          updated_at: new Date().toISOString(),
+        });
       if (perfError) throw perfError;
 
+      const routeStr = selectedSub.routes
+        ? `${selectedSub.routes.origin} ➔ ${selectedSub.routes.destination}`
+        : "Rota não definida";
+      const vehicleStr = selectedSub.vehicles
+        ? selectedSub.vehicles.plate
+        : "Sem veículo";
+
       // 3. Create audit log
-      const { error: auditError } = await supabase.from('audit_logs').insert({
+      const { error: auditError } = await supabase.from("audit_logs").insert({
         driver_id: selectedSub.driver_id,
-        type: 'manual',
+        type: "manual",
         amount: penalty.points,
-        reason: `Penalidade Manual (Checklist ${selectedSub.id?.split('-')[0]}): ${penalty.name}`
+        reason: `Penalidade Manual (Checklist ${selectedSub.id?.split("-")[0]}): ${penalty.name}. Rota: ${routeStr}. Veículo: ${vehicleStr}.`,
       });
       if (auditError) throw auditError;
 
-      alert('Penalidade aplicada com sucesso!');
+      alert("Penalidade aplicada com sucesso!");
       setShowPenaltyForm(false);
-      setSelectedPenaltyId('');
+      setSelectedPenaltyId("");
     } catch (error: any) {
-      alert('Erro ao aplicar penalidade: ' + error.message);
+      alert("Erro ao aplicar penalidade: " + error.message);
     } finally {
       setApplyingPenalty(false);
     }
@@ -198,18 +238,19 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
 
   const getPhotoUrl = (path: string) => {
     if (!path) return null;
-    const { data } = supabase.storage.from('checklist-photos').getPublicUrl(path);
+    const { data } = supabase.storage
+      .from("checklist-photos")
+      .getPublicUrl(path);
     return data.publicUrl;
   };
 
   const openImageModal = (issue: any) => {
     if (!issue?.photo_url) return;
-    
-    const publicUrl = supabase
-      .storage
+
+    const publicUrl = supabase.storage
       .from("checklist-photos")
       .getPublicUrl(issue.photo_url).data.publicUrl;
-    
+
     setSelectedImage(publicUrl);
     setSelectedIssue(issue);
     setZoom(1);
@@ -217,14 +258,16 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
 
   const downloadImage = async () => {
     if (!selectedImage || !selectedIssue) return;
-    
+
     const response = await fetch(selectedImage);
     const blob = await response.blob();
-    
+
     const plate = selectedIssue.vehicles?.plate || "veiculo";
-    const date = new Date(selectedIssue.created_at).toLocaleDateString("pt-BR").replace(/\//g, "-");
+    const date = new Date(selectedIssue.created_at)
+      .toLocaleDateString("pt-BR")
+      .replace(/\//g, "-");
     const fileName = `${plate}_${selectedIssue.item_title}_${date}.jpg`;
-    
+
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = fileName;
@@ -232,7 +275,8 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
   };
 
   const hasDefects = defectItems.length > 0;
-  const hasPhotos = selectedSub.photos && Object.keys(selectedSub.photos).length > 0;
+  const hasPhotos =
+    selectedSub.photos && Object.keys(selectedSub.photos).length > 0;
   const photosCount = hasPhotos ? Object.keys(selectedSub.photos).length : 0;
 
   const handleLoadPhotos = async () => {
@@ -245,14 +289,14 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
 
   return (
     <AnimatePresence>
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       >
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -271,103 +315,134 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                 )}
               </h3>
               <p className="text-[10px] font-bold text-gray-400 uppercase">
-                Nº {selectedSub.id?.split('-')[0]} • {new Date(selectedSub.created_at).toLocaleString()}
-                {selectedSub.details?.is_edited && ` • Editado em ${new Date(selectedSub.details.edited_at).toLocaleString()}`}
+                Nº {selectedSub.id?.split("-")[0]} •{" "}
+                {new Date(selectedSub.created_at).toLocaleString()}
+                {selectedSub.details?.is_edited &&
+                  ` • Editado em ${new Date(selectedSub.details.edited_at).toLocaleString()}`}
               </p>
             </div>
             <div className="flex items-center gap-3">
               {selectedSub.driver_id && (
                 <div className="relative">
-                  <button 
+                  <button
                     onClick={() => {
-                        if (manualPenalties.length === 0) {
-                            alert('Nenhuma penalidade manual cadastrada. Vá em "Configurações > Penalidades Manuais" para cadastrar.');
-                            return;
-                        }
-                        setShowPenaltyForm(!showPenaltyForm)
+                      if (manualPenalties.length === 0) {
+                        alert(
+                          'Nenhuma penalidade manual cadastrada. Vá em "Configurações > Penalidades Manuais" para cadastrar.',
+                        );
+                        return;
+                      }
+                      setShowPenaltyForm(!showPenaltyForm);
                     }}
-                    className={`h-10 px-4 border rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors ${manualPenalties.length > 0 ? 'bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100' : 'bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100'}`}
+                    className={`h-10 px-4 border rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors ${manualPenalties.length > 0 ? "bg-orange-50 border-orange-200 text-orange-600 hover:bg-orange-100" : "bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100"}`}
                   >
                     <AlertOctagon size={16} />
                     Aplicar Penalidade
                   </button>
                   {showPenaltyForm && manualPenalties.length > 0 && (
-                     <div className="absolute right-0 top-12 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-20">
-                       <h4 className="text-[10px] font-black text-gray-800 uppercase mb-3">Penalidade Manual</h4>
-                       <div className="space-y-3">
-                         <select 
-                           className="w-full h-10 px-3 rounded-lg border border-gray-200 text-[11px] font-bold outline-none focus:border-primary"
-                           value={selectedPenaltyId}
-                           onChange={e => setSelectedPenaltyId(e.target.value)}
-                         >
-                           <option value="">Selecione...</option>
-                           {manualPenalties.map(p => <option key={p.id} value={p.id}>{p.name} (-{p.points} pts)</option>)}
-                         </select>
-                         <button 
-                           onClick={handleApplyManualPenalty}
-                           disabled={!selectedPenaltyId || applyingPenalty}
-                           className="w-full h-10 bg-orange-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
-                         >
-                           {applyingPenalty ? 'Aplicando...' : 'Confirmar'}
-                         </button>
-                       </div>
-                     </div>
+                    <div className="absolute right-0 top-12 w-72 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-20">
+                      <h4 className="text-[10px] font-black text-gray-800 uppercase mb-3">
+                        Penalidade Manual
+                      </h4>
+                      <div className="space-y-3">
+                        <select
+                          className="w-full h-10 px-3 rounded-lg border border-gray-200 text-[11px] font-bold outline-none focus:border-primary"
+                          value={selectedPenaltyId}
+                          onChange={(e) => setSelectedPenaltyId(e.target.value)}
+                        >
+                          <option value="">Selecione...</option>
+                          {manualPenalties.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} (-{p.points} pts)
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={handleApplyManualPenalty}
+                          disabled={!selectedPenaltyId || applyingPenalty}
+                          className="w-full h-10 bg-orange-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                        >
+                          {applyingPenalty ? "Aplicando..." : "Confirmar"}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
-              <button 
-                onClick={onClose} 
+              <button
+                onClick={onClose}
                 className="h-10 w-10 bg-white border border-gray-200 rounded-xl flex items-center justify-center shadow-sm hover:bg-gray-50 hover:shadow-md transition-all"
               >
                 <X size={18} className="text-gray-400" />
               </button>
             </div>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-8 space-y-10">
             {/* Informações básicas */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Motorista</span>
-                <p className="text-sm font-black text-gray-800">{selectedSub.profiles?.full_name || 'N/A'}</p>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  Motorista
+                </span>
+                <p className="text-sm font-black text-gray-800">
+                  {selectedSub.profiles?.full_name || "N/A"}
+                </p>
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Veículo / Placa</span>
-                <p className="text-sm font-black text-gray-800">{selectedSub.vehicles?.plate || 'N/A'}</p>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  Veículo / Placa
+                </span>
+                <p className="text-sm font-black text-gray-800">
+                  {selectedSub.vehicles?.plate || "N/A"}
+                </p>
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status / KM</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  Status / KM
+                </span>
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
-                    selectedSub.status === 'concluded' || selectedSub.status === 'com_defeitos' || selectedSub.status === 'concluido'
-                      ? 'bg-green-50 text-green-600 border border-green-100' 
-                      : 'bg-red-50 text-red-600 border border-red-100'
-                  }`}>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
+                      selectedSub.status === "concluded" ||
+                      selectedSub.status === "com_defeitos" ||
+                      selectedSub.status === "concluido"
+                        ? "bg-green-50 text-green-600 border border-green-100"
+                        : "bg-red-50 text-red-600 border border-red-100"
+                    }`}
+                  >
                     {selectedSub.status}
                   </span>
                   <span className="text-sm font-mono font-bold text-gray-700">
-                    {selectedSub.odometer !== null && selectedSub.odometer !== undefined ? `${selectedSub.odometer} KM` : 'N/A'}
+                    {selectedSub.odometer !== null &&
+                    selectedSub.odometer !== undefined
+                      ? `${selectedSub.odometer} KM`
+                      : "N/A"}
                   </span>
                 </div>
               </div>
-              
+
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Localização</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  Localização
+                </span>
                 {selectedSub.latitude && selectedSub.longitude ? (
-                  <button 
+                  <button
                     onClick={() => setShowMapModal(true)}
                     className="flex items-center gap-1.5 text-sm font-black text-primary hover:text-primary-hover hover:underline"
                   >
                     Ver no Mapa
                   </button>
                 ) : (
-                  <p className="text-sm font-bold text-gray-400">Não registrada</p>
+                  <p className="text-sm font-bold text-gray-400">
+                    Não registrada
+                  </p>
                 )}
               </div>
             </div>
 
             {/* Defeitos Encontrados ou Abastecimento */}
-            {selectedSub.type === 'fuel' ? (
+            {selectedSub.type === "fuel" ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-gray-100">
                   <div className="flex items-center gap-2">
@@ -378,21 +453,33 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-4">
-                  {selectedSub.details?.itemTitles && Object.keys(selectedSub.details.itemTitles).length > 0 ? (
-                    Object.keys(selectedSub.details.itemTitles).map(itemId => {
-                      const title = selectedSub.details.itemTitles[itemId];
-                      const value = selectedSub.details.itemValues?.[itemId];
-                      if (!value) return null;
-                      const displayValue = value === 'defect' ? 'N/A' : value;
-                      return (
-                        <div key={itemId} className="flex flex-col bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 min-w-[120px]">
-                          <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">{title}</span>
-                          <span className="text-lg font-bold text-primary mt-1">{displayValue}</span>
-                        </div>
-                      )
-                    })
+                  {selectedSub.details?.itemTitles &&
+                  Object.keys(selectedSub.details.itemTitles).length > 0 ? (
+                    Object.keys(selectedSub.details.itemTitles).map(
+                      (itemId) => {
+                        const title = selectedSub.details.itemTitles[itemId];
+                        const value = selectedSub.details.itemValues?.[itemId];
+                        if (!value) return null;
+                        const displayValue = value === "defect" ? "N/A" : value;
+                        return (
+                          <div
+                            key={itemId}
+                            className="flex flex-col bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 min-w-[120px]"
+                          >
+                            <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">
+                              {title}
+                            </span>
+                            <span className="text-lg font-bold text-primary mt-1">
+                              {displayValue}
+                            </span>
+                          </div>
+                        );
+                      },
+                    )
                   ) : (
-                    <span className="text-[10px] text-text-muted italic p-4">Sem detalhes adicionais</span>
+                    <span className="text-[10px] text-text-muted italic p-4">
+                      Sem detalhes adicionais
+                    </span>
                   )}
                 </div>
               </div>
@@ -405,16 +492,19 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                       Defeitos Encontrados
                     </h4>
                     <span className="text-[9px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
-                      {defectItems.length} {defectItems.length === 1 ? 'defeito' : 'defeitos'}
+                      {defectItems.length}{" "}
+                      {defectItems.length === 1 ? "defeito" : "defeitos"}
                     </span>
                   </div>
                 </div>
-                
+
                 {loading ? (
                   <div className="text-center py-8">
                     <div className="flex items-center justify-center gap-2">
                       <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
-                      <span className="text-xs text-gray-500">Carregando defeitos...</span>
+                      <span className="text-xs text-gray-500">
+                        Carregando defeitos...
+                      </span>
                     </div>
                   </div>
                 ) : !hasDefects ? (
@@ -423,60 +513,84 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                       <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
                         <ClipboardCheck size={24} className="text-green-600" />
                       </div>
-                      <p className="text-sm font-medium text-green-700">Nenhum defeito encontrado!</p>
-                      <p className="text-xs text-green-600">Todos os itens do checklist estão normais.</p>
+                      <p className="text-sm font-medium text-green-700">
+                        Nenhum defeito encontrado!
+                      </p>
+                      <p className="text-xs text-green-600">
+                        Todos os itens do checklist estão normais.
+                      </p>
                     </div>
                   </div>
                 ) : (
                   <div className="grid gap-4">
                     {defectItems.map((item) => {
                       const isExpanded = expandedItems.includes(item.id);
-                      const imageUrl = item.photo_url ? getPhotoUrl(item.photo_url) : null;
-                      
+                      const imageUrl = item.photo_url
+                        ? getPhotoUrl(item.photo_url)
+                        : null;
+
                       return (
-                        <div key={item.id} className="flex flex-col p-4 rounded-xl bg-red-50/30 border border-red-200">
-                          <div 
+                        <div
+                          key={item.id}
+                          className="flex flex-col p-4 rounded-xl bg-red-50/30 border border-red-200"
+                        >
+                          <div
                             className="flex items-center justify-between cursor-pointer"
                             onClick={() => {
-                              setExpandedItems(prev => 
-                                prev.includes(item.id) 
-                                  ? prev.filter(i => i !== item.id)
-                                  : [...prev, item.id]
+                              setExpandedItems((prev) =>
+                                prev.includes(item.id)
+                                  ? prev.filter((i) => i !== item.id)
+                                  : [...prev, item.id],
                               );
                             }}
                           >
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-gray-800">{item.item_title}</span>
+                              <span className="text-sm font-bold text-gray-800">
+                                {item.item_title}
+                              </span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest bg-red-100 text-red-700">
                                 DEFEITO
                               </span>
-                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              {isExpanded ? (
+                                <ChevronUp size={16} />
+                              ) : (
+                                <ChevronDown size={16} />
+                              )}
                             </div>
                           </div>
-                          
+
                           {isExpanded && (
-                            <motion.div 
+                            <motion.div
                               initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
+                              animate={{ opacity: 1, height: "auto" }}
                               exit={{ opacity: 0, height: 0 }}
                               className="mt-4 pt-4 border-t border-red-200"
                             >
                               {/* Descrição */}
                               <div className="space-y-2 mb-4">
-                                <span className="text-[10px] font-bold text-red-600 uppercase">Descrição Reportada:</span>
-                                <div className={`p-3 rounded-lg ${item.description ? 'bg-white' : 'bg-gray-50'}`}>
-                                  <p className={`text-xs font-medium ${item.description ? 'text-gray-600' : 'text-gray-400 italic'}`}>
-                                    {item.description || 'Nenhuma descrição fornecida'}
+                                <span className="text-[10px] font-bold text-red-600 uppercase">
+                                  Descrição Reportada:
+                                </span>
+                                <div
+                                  className={`p-3 rounded-lg ${item.description ? "bg-white" : "bg-gray-50"}`}
+                                >
+                                  <p
+                                    className={`text-xs font-medium ${item.description ? "text-gray-600" : "text-gray-400 italic"}`}
+                                  >
+                                    {item.description ||
+                                      "Nenhuma descrição fornecida"}
                                   </p>
                                 </div>
                               </div>
-                              
+
                               {/* Foto do defeito */}
                               {imageUrl && (
                                 <div className="space-y-2">
-                                  <span className="text-[10px] font-bold text-red-600 uppercase">Foto do Defeito:</span>
+                                  <span className="text-[10px] font-bold text-red-600 uppercase">
+                                    Foto do Defeito:
+                                  </span>
                                   <div className="flex gap-2">
                                     <img
                                       src={imageUrl}
@@ -484,8 +598,12 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                                       onClick={() => openImageModal(item)}
                                       alt="Defeito"
                                       onError={(e) => {
-                                        console.error('Erro ao carregar imagem:', e);
-                                        e.currentTarget.src = 'https://placehold.co/400x300/e2e8f0/94a3b8?text=Erro';
+                                        console.error(
+                                          "Erro ao carregar imagem:",
+                                          e,
+                                        );
+                                        e.currentTarget.src =
+                                          "https://placehold.co/400x300/e2e8f0/94a3b8?text=Erro";
                                       }}
                                     />
                                   </div>
@@ -502,70 +620,108 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
             )}
 
             {/* Histórico de Edições */}
-            {selectedSub.details?.edit_history && selectedSub.details.edit_history.length > 0 && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                    Histórico de Edições Manuais
-                  </h4>
-                  <span className="text-[9px] font-bold bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">
-                    {selectedSub.details.edit_history.length} edições
-                  </span>
-                </div>
-                
-                <div className="space-y-3">
-                  {selectedSub.details.edit_history.map((history: any, idx: number) => {
-                    const changedItems = Object.keys(history.new_items || {}).filter(
-                      k => history.new_items[k] !== history.previous_items?.[k]
-                    );
-                    const kmChanged = history.new_odometer !== history.previous_odometer;
+            {selectedSub.details?.edit_history &&
+              selectedSub.details.edit_history.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                      Histórico de Edições Manuais
+                    </h4>
+                    <span className="text-[9px] font-bold bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">
+                      {selectedSub.details.edit_history.length} edições
+                    </span>
+                  </div>
 
-                    return (
-                      <div key={idx} className="bg-orange-50/50 border border-orange-100 rounded-xl p-4 space-y-3">
-                        <div className="flex justify-between items-center pb-2 border-b border-orange-100/50">
-                          <span className="text-xs font-black text-orange-800">Edição {idx + 1}</span>
-                          <span className="text-[9px] font-bold text-orange-600/70">{new Date(history.edited_at).toLocaleString()}</span>
-                        </div>
-                        
-                        {kmChanged && (
-                          <div className="flex items-center gap-4 text-xs font-medium text-gray-600">
-                            <span className="w-20 font-bold text-[10px] text-gray-400 uppercase tracking-widest">KM:</span>
-                            <span className="line-through opacity-70">{history.previous_odometer || 'N/A'}</span>
-                            <span>→</span>
-                            <span className="font-bold text-orange-600">{history.new_odometer}</span>
-                          </div>
-                        )}
+                  <div className="space-y-3">
+                    {selectedSub.details.edit_history.map(
+                      (history: any, idx: number) => {
+                        const changedItems = Object.keys(
+                          history.new_items || {},
+                        ).filter(
+                          (k) =>
+                            history.new_items[k] !==
+                            history.previous_items?.[k],
+                        );
+                        const kmChanged =
+                          history.new_odometer !== history.previous_odometer;
 
-                        {changedItems.length > 0 && (
-                          <div className="space-y-2">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Itens Alterados:</span>
-                            {changedItems.map(itemId => {
-                              const title = selectedSub.details.itemTitles?.[itemId] || `Item ${itemId}`;
-                              const oldVal = history.previous_items?.[itemId] || 'N/A';
-                              const newVal = history.new_items?.[itemId] || 'N/A';
-                              return (
-                                <div key={itemId} className="flex gap-4 items-center text-xs text-gray-600 bg-white p-2 rounded-lg border border-orange-100/50">
-                                  <span className="flex-1 font-bold text-gray-800">{title}</span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="line-through opacity-70 uppercase text-[9px] font-bold">{oldVal}</span>
-                                    <span>→</span>
-                                    <span className="font-bold text-orange-600 uppercase text-[9px]">{newVal}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                        return (
+                          <div
+                            key={idx}
+                            className="bg-orange-50/50 border border-orange-100 rounded-xl p-4 space-y-3"
+                          >
+                            <div className="flex justify-between items-center pb-2 border-b border-orange-100/50">
+                              <span className="text-xs font-black text-orange-800">
+                                Edição {idx + 1}
+                              </span>
+                              <span className="text-[9px] font-bold text-orange-600/70">
+                                {new Date(history.edited_at).toLocaleString()}
+                              </span>
+                            </div>
+
+                            {kmChanged && (
+                              <div className="flex items-center gap-4 text-xs font-medium text-gray-600">
+                                <span className="w-20 font-bold text-[10px] text-gray-400 uppercase tracking-widest">
+                                  KM:
+                                </span>
+                                <span className="line-through opacity-70">
+                                  {history.previous_odometer || "N/A"}
+                                </span>
+                                <span>→</span>
+                                <span className="font-bold text-orange-600">
+                                  {history.new_odometer}
+                                </span>
+                              </div>
+                            )}
+
+                            {changedItems.length > 0 && (
+                              <div className="space-y-2">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                  Itens Alterados:
+                                </span>
+                                {changedItems.map((itemId) => {
+                                  const title =
+                                    selectedSub.details.itemTitles?.[itemId] ||
+                                    `Item ${itemId}`;
+                                  const oldVal =
+                                    history.previous_items?.[itemId] || "N/A";
+                                  const newVal =
+                                    history.new_items?.[itemId] || "N/A";
+                                  return (
+                                    <div
+                                      key={itemId}
+                                      className="flex gap-4 items-center text-xs text-gray-600 bg-white p-2 rounded-lg border border-orange-100/50"
+                                    >
+                                      <span className="flex-1 font-bold text-gray-800">
+                                        {title}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="line-through opacity-70 uppercase text-[9px] font-bold">
+                                          {oldVal}
+                                        </span>
+                                        <span>→</span>
+                                        <span className="font-bold text-orange-600 uppercase text-[9px]">
+                                          {newVal}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {!kmChanged && changedItems.length === 0 && (
+                              <span className="text-xs text-gray-400 italic">
+                                Nenhuma mudança identificável registrada.
+                              </span>
+                            )}
                           </div>
-                        )}
-                        
-                        {!kmChanged && changedItems.length === 0 && (
-                          <span className="text-xs text-gray-400 italic">Nenhuma mudança identificável registrada.</span>
-                        )}
-                      </div>
-                    );
-                  })}
+                        );
+                      },
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* Botão para carregar fotos do veículo */}
             {hasPhotos && !loadPhotos && (
@@ -595,12 +751,14 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
               <div className="space-y-4">
                 <div className="flex justify-between items-center pb-2 border-b border-gray-100">
                   <div className="flex items-center gap-2">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Fotos do Veículo</h4>
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                      Fotos do Veículo
+                    </h4>
                     <span className="text-[9px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                      {photosCount} {photosCount === 1 ? 'foto' : 'fotos'}
+                      {photosCount} {photosCount === 1 ? "foto" : "fotos"}
                     </span>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setLoadPhotos(false)}
                     className="flex items-center gap-1.5 text-[10px] font-bold bg-gray-100 text-gray-600 px-3 py-1.5 rounded-xl hover:bg-gray-200 transition-colors"
                   >
@@ -608,7 +766,7 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                     Ocultar Imagens
                   </button>
                 </div>
-                
+
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {Object.entries(selectedSub.photos).map(([pos, url]: any) => {
                     const photoUrl = getPhotoUrl(url);
@@ -617,33 +775,40 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                       item_title: `Foto ${pos}`,
                       vehicles: selectedSub.vehicles,
                       created_at: selectedSub.created_at,
-                      description: null
+                      description: null,
                     };
                     return (
                       <div key={pos} className="space-y-2">
                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center block">
-                          {selectedSub.type === 'fuel' ? (
-                             pos === 'front' ? 'Tacógrafo' :
-                             pos === 'receipt' ? 'Cupom Fiscal' : pos
-                          ) : (
-                             pos === 'front' ? 'Dianteira' : 
-                             pos === 'back' ? 'Traseira' :
-                             pos === 'left' ? 'Lateral Esquerda' :
-                             pos === 'right' ? 'Lateral Direita' : pos
-                          )}
+                          {selectedSub.type === "fuel"
+                            ? pos === "front"
+                              ? "Tacógrafo"
+                              : pos === "receipt"
+                                ? "Cupom Fiscal"
+                                : pos
+                            : pos === "front"
+                              ? "Dianteira"
+                              : pos === "back"
+                                ? "Traseira"
+                                : pos === "left"
+                                  ? "Lateral Esquerda"
+                                  : pos === "right"
+                                    ? "Lateral Direita"
+                                    : pos}
                         </span>
-                        <div 
+                        <div
                           className="aspect-[4/3] rounded-xl overflow-hidden border border-gray-200 bg-gray-50 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                           onClick={() => openImageModal(fakeIssue)}
                         >
-                          <img 
-                            src={photoUrl} 
-                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" 
-                            referrerPolicy="no-referrer" 
+                          <img
+                            src={photoUrl}
+                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                            referrerPolicy="no-referrer"
                             alt={`Foto ${pos}`}
                             onError={(e) => {
                               console.error(`Erro ao carregar foto ${pos}:`, e);
-                              e.currentTarget.src = 'https://placehold.co/400x300/e2e8f0/94a3b8?text=Erro';
+                              e.currentTarget.src =
+                                "https://placehold.co/400x300/e2e8f0/94a3b8?text=Erro";
                             }}
                           />
                         </div>
@@ -659,8 +824,14 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
 
       {/* Modal de Imagem Ampliada - Igual ao MaintenanceTab */}
       {selectedImage && (
-        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center" onClick={() => setSelectedImage(null)}>
-          <div className="relative max-w-5xl" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div
+            className="relative max-w-5xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <img
               src={selectedImage}
               style={{ transform: `scale(${zoom})` }}
@@ -672,12 +843,17 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
               <div className="absolute bottom-4 left-4 right-4 bg-black/70 backdrop-blur-sm rounded-lg p-3 text-white">
                 <div className="flex items-center justify-between text-sm">
                   <div>
-                    <span className="font-bold">{selectedIssue.vehicles?.plate || selectedSub.vehicles?.plate}</span>
+                    <span className="font-bold">
+                      {selectedIssue.vehicles?.plate ||
+                        selectedSub.vehicles?.plate}
+                    </span>
                     <span className="mx-2">•</span>
                     <span>{selectedIssue.item_title}</span>
                   </div>
                   <div className="text-xs">
-                    {new Date(selectedIssue.created_at || selectedSub.created_at).toLocaleString()}
+                    {new Date(
+                      selectedIssue.created_at || selectedSub.created_at,
+                    ).toLocaleString()}
                   </div>
                 </div>
                 {selectedIssue.description && (
@@ -693,25 +869,25 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
                 onClick={() => setZoom(zoom + 0.2)}
                 className="bg-white p-2 rounded-lg hover:bg-gray-100 transition-colors shadow-md"
               >
-                <ZoomIn size={18}/>
+                <ZoomIn size={18} />
               </button>
               <button
                 onClick={() => setZoom(Math.max(1, zoom - 0.2))}
                 className="bg-white p-2 rounded-lg hover:bg-gray-100 transition-colors shadow-md"
               >
-                <ZoomOut size={18}/>
+                <ZoomOut size={18} />
               </button>
               <button
                 onClick={downloadImage}
                 className="bg-white p-2 rounded-lg hover:bg-gray-100 transition-colors shadow-md"
               >
-                <Download size={18}/>
+                <Download size={18} />
               </button>
               <button
                 onClick={() => setSelectedImage(null)}
                 className="bg-red-500 text-white p-2 rounded-lg hover:bg-red-600 transition-colors shadow-md"
               >
-                <X size={18}/>
+                <X size={18} />
               </button>
             </div>
           </div>
@@ -721,7 +897,7 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
       {/* Map Modal */}
       {showMapModal && selectedSub?.latitude && selectedSub?.longitude && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 pb-20 sm:pb-6">
-          <div 
+          <div
             className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             onClick={() => setShowMapModal(false)}
           />
@@ -733,10 +909,15 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
           >
             <div className="p-4 border-b border-app-border flex items-center justify-between">
               <div>
-                <h3 className="font-black text-lg text-text-main">Localização no Mapa</h3>
-                <p className="text-xs text-text-muted">Latitude: {selectedSub.latitude}, Longitude: {selectedSub.longitude}</p>
+                <h3 className="font-black text-lg text-text-main">
+                  Localização no Mapa
+                </h3>
+                <p className="text-xs text-text-muted">
+                  Latitude: {selectedSub.latitude}, Longitude:{" "}
+                  {selectedSub.longitude}
+                </p>
               </div>
-              <button 
+              <button
                 onClick={() => setShowMapModal(false)}
                 className="p-2 hover:bg-zinc-100 rounded-xl transition-colors text-text-muted hover:text-text-main"
               >
@@ -744,13 +925,13 @@ export default function ChecklistDetailsModal({ selectedSub, onClose }: Checklis
               </button>
             </div>
             <div className="flex-1 w-full h-full bg-zinc-100">
-              <iframe 
+              <iframe
                 src={`https://maps.google.com/maps?q=${selectedSub.latitude},${selectedSub.longitude}&z=15&output=embed`}
-                width="100%" 
-                height="100%" 
-                style={{ border: 0 }} 
-                allowFullScreen={true} 
-                loading="lazy" 
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen={true}
+                loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
                 title="Google Maps"
               ></iframe>
