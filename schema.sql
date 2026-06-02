@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     participates_in_ranking BOOLEAN DEFAULT true,
     active BOOLEAN DEFAULT true,
     modality_ids UUID[] DEFAULT '{}',
+    visible_tabs TEXT[] DEFAULT NULL,
     score_profile_id UUID REFERENCES score_profiles(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -29,6 +30,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
     modality_id UUID REFERENCES vehicle_modalities(id),
     requires_trailer BOOLEAN DEFAULT false,
     active BOOLEAN DEFAULT true,
+    visible_tabs TEXT[] DEFAULT NULL,
     manual_location TEXT,
     manual_status TEXT,
     last_status_update TIMESTAMP WITH TIME ZONE,

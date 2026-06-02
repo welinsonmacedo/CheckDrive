@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Search, MapPin, Truck, AlertTriangle, User, Navigation, Edit2, X, RefreshCw } from 'lucide-react';
+import { Search, MapPin, Truck, AlertTriangle, User, Navigation, Edit2, X, RefreshCw, Eye } from 'lucide-react';
+import VehicleDetailsModal from './VehicleDetailsModal';
+import DriverRankingDetailsModal from './DriverRankingDetailsModal';
 
 export default function TrackingTab() {
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -16,12 +18,23 @@ export default function TrackingTab() {
   const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers' | 'baits'>('vehicles');
   
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+  const [selectedDriver, setSelectedDriver] = useState<any>(null);
+  const [closings, setClosings] = useState<any[]>([]);
+  const [appSettings, setAppSettings] = useState<any>(null);
   const [editForm, setEditForm] = useState({ manual_location: '', manual_status: '' });
   const [saving, setSaving] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Fetch closings and settings for modal
+      const { data: cData } = await supabase.from('score_closings').select('*').order('created_at', { ascending: false });
+      if (cData) setClosings(cData);
+
+      const { data: settingsData } = await supabase.from('app_settings').select('*').single();
+      if (settingsData) setAppSettings(settingsData);
+
       // Fetch vehicles, drivers, baits
       const [vRes, dRes, bRes] = await Promise.all([
         supabase.from('vehicles').select('*').eq('active', true).order('plate'),
@@ -311,19 +324,40 @@ export default function TrackingTab() {
         </div>
 
         {type === 'vehicle' && (
-          <button 
-            onClick={() => {
-              setEditingVehicle(item);
-              setEditForm({
-                manual_location: item.manual_location || state.location,
-                manual_status: item.manual_status || state.status
-              });
-            }}
-            className="absolute bottom-4 right-4 p-2 bg-white border border-app-border hover:border-primary text-text-muted hover:text-primary rounded-xl translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all shadow-sm"
-            title="Corrigir Manualmente"
-          >
-            <Edit2 size={16} />
-          </button>
+          <div className="absolute bottom-4 right-4 flex gap-2 translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
+            <button 
+              onClick={() => setSelectedVehicle(item)}
+              className="p-2 bg-white border border-app-border hover:border-indigo-500 text-indigo-500 rounded-xl shadow-sm transition-colors"
+              title="Resumo do Veículo"
+            >
+              <Eye size={16} />
+            </button>
+            <button 
+              onClick={() => {
+                setEditingVehicle(item);
+                setEditForm({
+                  manual_location: item.manual_location || state.location,
+                  manual_status: item.manual_status || state.status
+                });
+              }}
+              className="p-2 bg-white border border-app-border hover:border-primary text-text-muted hover:text-primary rounded-xl shadow-sm transition-colors"
+              title="Corrigir Manualmente"
+            >
+              <Edit2 size={16} />
+            </button>
+          </div>
+        )}
+
+        {type === 'driver' && (
+          <div className="absolute bottom-4 right-4 flex gap-2 translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
+            <button 
+              onClick={() => setSelectedDriver(item)}
+              className="p-2 bg-white border border-app-border hover:border-indigo-500 text-indigo-500 rounded-xl shadow-sm transition-colors"
+              title="Resumo do Motorista"
+            >
+              <Eye size={16} />
+            </button>
+          </div>
         )}
       </div>
     );
@@ -409,6 +443,20 @@ export default function TrackingTab() {
       </div>
 
       {/* Manual Override Modal */}
+      {selectedVehicle && (
+        <VehicleDetailsModal vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} />
+      )}
+
+      {selectedDriver && appSettings && (
+        <DriverRankingDetailsModal
+          driver={selectedDriver}
+          initialPeriodId="current"
+          closings={closings}
+          appSettings={appSettings}
+          onClose={() => setSelectedDriver(null)}
+        />
+      )}
+
       {editingVehicle && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">

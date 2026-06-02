@@ -1,15 +1,27 @@
-import React from 'react';
-import { X, Printer, AlertTriangle, FileText, Calendar, User, Truck, CheckCircle2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import React from "react";
+import {
+  X,
+  Printer,
+  AlertTriangle,
+  FileText,
+  Calendar,
+  User,
+  Truck,
+  CheckCircle2,
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface DefectPrintModalProps {
   defect: any;
   onClose: () => void;
 }
 
-export default function DefectPrintModal({ defect, onClose }: DefectPrintModalProps) {
+export default function DefectPrintModal({
+  defect,
+  onClose,
+}: DefectPrintModalProps) {
   if (!defect) return null;
 
   const handlePrint = () => {
@@ -61,16 +73,24 @@ export default function DefectPrintModal({ defect, onClose }: DefectPrintModalPr
                 </p>
               </div>
               <div className="text-right">
-                <span className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Status</span>
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border ${
-                  defect.status === 'resolved' 
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                    : 'bg-red-50 text-red-700 border-red-200'
-                }`}>
-                  {defect.status === 'resolved' ? (
-                    <><CheckCircle2 size={14} /> Resolvido</>
+                <span className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">
+                  Status
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border ${
+                    defect.status === "resolved"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-red-50 text-red-700 border-red-200"
+                  }`}
+                >
+                  {defect.status === "resolved" ? (
+                    <>
+                      <CheckCircle2 size={14} /> Resolvido
+                    </>
                   ) : (
-                    <><AlertTriangle size={14} /> Pendente</>
+                    <>
+                      <AlertTriangle size={14} /> Pendente
+                    </>
                   )}
                 </span>
               </div>
@@ -83,15 +103,23 @@ export default function DefectPrintModal({ defect, onClose }: DefectPrintModalPr
                   <Calendar size={12} /> Data da Ocorrência
                 </p>
                 <p className="text-lg font-bold text-zinc-900">
-                  {format(parseISO(defect.created_at), "dd 'de' MMMM 'de' yyyy, 'às' HH:mm", { locale: ptBR })}
+                  {format(
+                    parseISO(defect.created_at),
+                    "dd 'de' MMMM 'de' yyyy, 'às' HH:mm",
+                    { locale: ptBR },
+                  )}
                 </p>
               </div>
               <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200">
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1 flex items-center gap-1">
-                  <Truck size={12} /> Veículo Envolvido
+                  <Truck size={12} /> Veículo / Reboque Envolvido
                 </p>
                 <p className="text-lg font-bold text-zinc-900">
-                  {defect.vehicles?.plate || 'Não Registrado'}
+                  {defect.vehicles?.plate
+                    ? defect.trailers?.plate
+                      ? `${defect.vehicles.plate} / ${defect.trailers.plate}`
+                      : defect.vehicles.plate
+                    : defect.trailers?.plate || "Não Registrado"}
                 </p>
               </div>
               <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 col-span-2">
@@ -99,7 +127,7 @@ export default function DefectPrintModal({ defect, onClose }: DefectPrintModalPr
                   <User size={12} /> Motorista Responsável
                 </p>
                 <p className="text-lg font-bold text-zinc-900">
-                  {defect.profiles?.full_name || 'Desconhecido'}
+                  {defect.profiles?.full_name || "Desconhecido"}
                 </p>
               </div>
             </div>
@@ -109,53 +137,81 @@ export default function DefectPrintModal({ defect, onClose }: DefectPrintModalPr
               <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-2 flex items-center gap-1">
                 <FileText size={12} /> Título do Defeito Detectado
               </p>
-              <h3 className="text-xl font-bold text-zinc-900 mb-4">{defect.item_title}</h3>
-              
+              <h3 className="text-xl font-bold text-zinc-900 mb-4">
+                {defect.item_title}
+              </h3>
+
               <div className="pt-4 border-t border-red-50">
-                <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-2">Descrição / Observações do Motorista</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-2">
+                  Descrição / Observações do Motorista
+                </p>
                 <p className="text-sm font-medium text-zinc-700 whitespace-pre-wrap leading-relaxed">
-                  {defect.description || <span className="italic text-zinc-400">Nenhuma observação detalhada.</span>}
+                  {defect.description || (
+                    <span className="italic text-zinc-400">
+                      Nenhuma observação detalhada.
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
 
             {/* Resolution Block */}
-            {defect.status === 'resolved' && (
+            {defect.status === "resolved" && (
               <div className="mb-8 p-6 bg-emerald-50 border-2 border-emerald-100 rounded-xl">
-                 <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2 flex items-center gap-1">
-                   <CheckCircle2 size={12} /> Dados da Resolução
-                 </p>
-                 <div className="space-y-4">
-                    {defect.resolved_at && (
-                       <div>
-                         <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Data da Resolução</p>
-                         <p className="text-sm font-bold text-zinc-900">{format(parseISO(defect.resolved_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
-                       </div>
-                    )}
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2 flex items-center gap-1">
+                  <CheckCircle2 size={12} /> Dados da Resolução
+                </p>
+                <div className="space-y-4">
+                  {defect.resolved_at && (
                     <div>
-                       <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Notas do Mecânico / Responsável</p>
-                       <p className="text-sm font-medium text-zinc-700 whitespace-pre-wrap leading-relaxed">
-                         {defect.resolution_notes || <span className="italic text-zinc-400">Resolvido sem notas adicionais.</span>}
-                       </p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                        Data da Resolução
+                      </p>
+                      <p className="text-sm font-bold text-zinc-900">
+                        {format(
+                          parseISO(defect.resolved_at),
+                          "dd/MM/yyyy HH:mm",
+                          { locale: ptBR },
+                        )}
+                      </p>
                     </div>
-                 </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                      Notas do Mecânico / Responsável
+                    </p>
+                    <p className="text-sm font-medium text-zinc-700 whitespace-pre-wrap leading-relaxed">
+                      {defect.resolution_notes || (
+                        <span className="italic text-zinc-400">
+                          Resolvido sem notas adicionais.
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Signatures */}
             <div className="mt-16 pt-8 border-t border-zinc-200 grid grid-cols-2 gap-12">
-               <div className="text-center">
-                 <div className="w-full border-b border-zinc-400 mb-2"></div>
-                 <p className="text-xs font-bold text-zinc-600 uppercase tracking-widest">Assinatura do Motorista</p>
-               </div>
-               <div className="text-center">
-                 <div className="w-full border-b border-zinc-400 mb-2"></div>
-                 <p className="text-xs font-bold text-zinc-600 uppercase tracking-widest">Assinatura da Manutenção</p>
-               </div>
+              <div className="text-center">
+                <div className="w-full border-b border-zinc-400 mb-2"></div>
+                <p className="text-xs font-bold text-zinc-600 uppercase tracking-widest">
+                  Assinatura do Motorista
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="w-full border-b border-zinc-400 mb-2"></div>
+                <p className="text-xs font-bold text-zinc-600 uppercase tracking-widest">
+                  Assinatura da Manutenção
+                </p>
+              </div>
             </div>
-            
+
             <div className="mt-8 text-center print:block">
-               <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Gerado em: {format(new Date(), "dd/MM/yyyy HH:mm:ss")}</p>
+              <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
+                Gerado em: {format(new Date(), "dd/MM/yyyy HH:mm:ss")}
+              </p>
             </div>
           </div>
         </motion.div>

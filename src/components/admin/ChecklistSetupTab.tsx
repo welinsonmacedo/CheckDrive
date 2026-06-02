@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Edit2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { encodeItemTitle, decodeItemTitle } from '../../lib/maskUtils';
 
 export default function ChecklistSetupTab() {
   const [checklistTypes, setChecklistTypes] = useState<any[]>([]);
@@ -12,7 +13,8 @@ export default function ChecklistSetupTab() {
     selectedTypes: [] as string[],
     appears_in_manual: false,
     input_type: 'boolean',
-    is_required: true
+    is_required: true,
+    mask: 'none'
   });
   
   const [saving, setSaving] = useState(false);
@@ -49,10 +51,13 @@ export default function ChecklistSetupTab() {
 
   // Group items by title and is_trailer_item
   const groupedItems = checklistItems.reduce((acc, current) => {
+    const { title: decodedTitle, mask } = decodeItemTitle(current.title);
+
     const key = `${current.title.toLowerCase().trim()}_${current.is_trailer_item}_${current.input_type || 'boolean'}_${current.order_index}`;
     if (!acc[key]) {
       acc[key] = {
-        title: current.title,
+        title: decodedTitle,
+        mask: mask || 'none',
         is_trailer_item: current.is_trailer_item,
         appears_in_manual: current.appears_in_manual || false,
         input_type: current.input_type || 'boolean',
@@ -76,10 +81,12 @@ export default function ChecklistSetupTab() {
     }
     setSaving(true);
     try {
+      const encodedTitle = encodeItemTitle(itemForm.title, itemForm.mask);
+
       // Create an array of inserts
       const inserts = itemForm.selectedTypes.map(typeId => ({
         type_id: typeId,
-        title: itemForm.title,
+        title: encodedTitle,
         is_trailer_item: itemForm.is_trailer_item,
         appears_in_manual: itemForm.appears_in_manual,
         input_type: itemForm.input_type,
@@ -97,7 +104,7 @@ export default function ChecklistSetupTab() {
         // Fallback for appears_in_manual column missing
         const fallbackInserts = itemForm.selectedTypes.map(typeId => ({
           type_id: typeId,
-          title: itemForm.title,
+          title: encodedTitle,
           is_trailer_item: itemForm.is_trailer_item,
           input_type: itemForm.input_type,
           order_index: itemForm.is_required ? 1 : 0
@@ -107,7 +114,7 @@ export default function ChecklistSetupTab() {
             // fallback if input_type fails
             const finalFallback = itemForm.selectedTypes.map(typeId => ({
                type_id: typeId,
-               title: itemForm.title,
+               title: encodedTitle,
                is_trailer_item: itemForm.is_trailer_item,
                order_index: itemForm.is_required ? 1 : 0
             }));
@@ -115,7 +122,7 @@ export default function ChecklistSetupTab() {
         }
       }
       
-      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true });
+      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none' });
       setEditingItemIds([]);
       fetchData();
     } catch (error: any) {
@@ -155,7 +162,8 @@ export default function ChecklistSetupTab() {
       selectedTypes: item.types,
       appears_in_manual: item.appears_in_manual || false,
       input_type: item.input_type || 'boolean',
-      is_required: item.is_required
+      is_required: item.is_required,
+      mask: item.mask || 'none'
     });
     setEditingItemIds(item.ids);
   };
@@ -231,7 +239,7 @@ export default function ChecklistSetupTab() {
                       Normal / Defeito
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-text-main">
-                      <input type="radio" value="number" checked={itemForm.input_type === 'number'} onChange={e => setItemForm({...itemForm, input_type: 'number'})} className="text-primary focus:ring-primary" />
+                      <input type="radio" value="number" checked={itemForm.input_type === 'number'} onChange={e => setItemForm({...itemForm, input_type: 'number', mask: 'decimal'})} className="text-primary focus:ring-primary" />
                       Numérico
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-text-main">
@@ -239,6 +247,26 @@ export default function ChecklistSetupTab() {
                       Texto Livre
                     </label>
                  </div>
+
+                 {itemForm.input_type === 'number' && (
+                   <div className="mt-3 pt-3 border-t border-app-border">
+                     <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2 block">Mascara do Campo (Opcional):</span>
+                     <div className="flex items-center gap-4">
+                       <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-text-main">
+                         <input type="radio" value="none" checked={itemForm.mask === 'none' || !itemForm.mask} onChange={e => setItemForm({...itemForm, mask: 'none'})} className="text-primary focus:ring-primary" />
+                         Sem Máscara
+                       </label>
+                       <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-text-main">
+                         <input type="radio" value="decimal" checked={itemForm.mask === 'decimal'} onChange={e => setItemForm({...itemForm, mask: 'decimal'})} className="text-primary focus:ring-primary" />
+                         Decimal (ex: 1.000,50)
+                       </label>
+                       <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-text-main">
+                         <input type="radio" value="currency" checked={itemForm.mask === 'currency'} onChange={e => setItemForm({...itemForm, mask: 'currency'})} className="text-primary focus:ring-primary" />
+                         Moeda (ex: R$ 1.000,50)
+                       </label>
+                     </div>
+                   </div>
+                 )}
               </div>
 
               <div className="flex items-center gap-4 mt-1">
@@ -280,7 +308,7 @@ export default function ChecklistSetupTab() {
                     type="button"
                     onClick={() => {
                       setEditingItemIds([]);
-                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true });
+                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none' });
                     }}
                     className="h-10 px-4 bg-zinc-200 text-zinc-700 flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:bg-zinc-300 transition-colors"
                   >
@@ -323,8 +351,10 @@ export default function ChecklistSetupTab() {
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <span className="text-[10px] font-black text-text-muted uppercase tracking-widest bg-zinc-100 px-2 py-1 rounded-md border border-app-border">
-                        {item.input_type === 'number' ? 'Numérico' : item.input_type === 'text' ? 'Texto' : 'Normal / Defeito'}
+                      <span className="text-[10px] font-black text-text-muted uppercase tracking-widest bg-zinc-100 px-2 py-1 rounded-md border border-app-border inline-block whitespace-nowrap">
+                        {item.input_type === 'number' 
+                          ? `Numérico${item.mask === 'currency' ? ' (Moeda)' : item.mask === 'decimal' ? ' (Decimal)' : ''}` 
+                          : item.input_type === 'text' ? 'Texto' : 'Normal / Defeito'}
                       </span>
                     </td>
                     <td className="px-5 py-4">

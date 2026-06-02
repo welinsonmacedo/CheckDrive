@@ -10,6 +10,8 @@ import {
   CheckCircle,
   Plus,
   Eye,
+  Undo,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ManualIssueModal from "./ManualIssueModal";
@@ -150,13 +152,14 @@ export default function MaintenanceTab() {
                 : issue.description;
             }
           } else {
-            issue.report_count = 1;
+            // Preserve the actual report_count from the database!
+            // issue.report_count = 1;
             issue.grouped_ids = [issue.id];
             issue.grouped_issues = [{ ...issue }];
             pendingGroups[key] = { ...issue };
           }
         } else {
-          issue.report_count = 1;
+          // Preserve the actual report_count from the database
           issue.grouped_ids = [issue.id];
           issue.grouped_issues = [issue];
           groupedIssues.push(issue);
@@ -216,6 +219,44 @@ export default function MaintenanceTab() {
       alert("Erro ao resolver. Tente novamente.");
     } finally {
       setIsResolving(false);
+    }
+  }
+
+  async function handleDeleteIssue(issue: any) {
+    if (!confirm("Deseja realmente excluir esta pendência permanentemente?"))
+      return;
+    try {
+      const idsToUpdate = issue.grouped_ids || [issue.id];
+      const { error } = await supabase
+        .from("checklist_issues")
+        .delete()
+        .in("id", idsToUpdate);
+      if (error) throw error;
+      fetchIssues();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao excluir pendência.");
+    }
+  }
+
+  async function handleRevertIssue(issue: any) {
+    if (!confirm("Deseja reabrir esta pendência?")) return;
+    try {
+      const idsToUpdate = issue.grouped_ids || [issue.id];
+      const { error } = await supabase
+        .from("checklist_issues")
+        .update({
+          status: "pending",
+          resolution_notes: null,
+          resolved_at: null,
+          resolved_by: null,
+        })
+        .in("id", idsToUpdate);
+      if (error) throw error;
+      fetchIssues();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao reabrir pendência.");
     }
   }
 
@@ -469,37 +510,58 @@ export default function MaintenanceTab() {
                         )}
                       </td>
 
-                      <td className="px-5 py-4 text-right">
+                      <td className="px-5 py-4">
                         {issue.status === "pending" && (
-                          <button
-                            onClick={() => openResolveModal(issue)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg flex items-center gap-1 text-xs font-semibold transition-colors"
-                          >
-                            <CheckCircle2 size={14} />
-                            Resolver
-                          </button>
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => openResolveModal(issue)}
+                              className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg flex items-center gap-1 text-xs font-semibold transition-colors"
+                            >
+                              <CheckCircle2 size={14} />
+                              Resolver
+                            </button>
+                          </div>
                         )}
 
                         {issue.status === "resolved" && (
-                          <div className="text-left">
-                            <div className="text-sm text-green-600 font-semibold flex items-center gap-1">
-                              <CheckCircle size={14} />
-                              Resolvido
+                          <div className="flex items-start justify-end gap-6 text-left">
+                            <div>
+                              <div className="text-sm text-green-600 font-semibold flex items-center gap-1">
+                                <CheckCircle size={14} />
+                                Resolvido
+                              </div>
+
+                              {issue.resolution_notes && (
+                                <div className="text-text-muted text-xs mt-1 max-w-xs">
+                                  {issue.resolution_notes}
+                                </div>
+                              )}
+
+                              {issue.resolved_at && (
+                                <div className="text-[10px] text-gray-400 mt-1">
+                                  {new Date(
+                                    issue.resolved_at,
+                                  ).toLocaleDateString()}
+                                </div>
+                              )}
                             </div>
 
-                            {issue.resolution_notes && (
-                              <div className="text-text-muted text-xs mt-1 max-w-xs">
-                                {issue.resolution_notes}
-                              </div>
-                            )}
-
-                            {issue.resolved_at && (
-                              <div className="text-[10px] text-gray-400 mt-1">
-                                {new Date(
-                                  issue.resolved_at,
-                                ).toLocaleDateString()}
-                              </div>
-                            )}
+                            <div className="flex flex-col gap-2">
+                              <button
+                                onClick={() => handleRevertIssue(issue)}
+                                title="Reabrir pendência"
+                                className="w-8 h-8 flex items-center justify-center bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-lg transition-colors"
+                              >
+                                <Undo size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteIssue(issue)}
+                                title="Excluir"
+                                className="w-8 h-8 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </div>
                         )}
                       </td>

@@ -5,6 +5,7 @@ import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 
 // Pages
 import LandingPage from '../pages/LandingPage';
+import Privacy from '../pages/Privacy';
 import Login from '../pages/Login';
 import DriverHome from '../pages/DriverHome';
 import DriverManual from '../pages/DriverManual';
@@ -17,6 +18,7 @@ import ResetPassword from '../pages/ResetPassword';
 
 import DriverRankingDetailsModal from '../components/admin/DriverRankingDetailsModal'; // if unused, doesn't matter
 import DriverPenalties from '../pages/DriverPenalties';
+import DriverProfile from '../pages/DriverProfile';
 
 export default function AppRoutes() {
   const { user, logout } = useAuth();
@@ -24,6 +26,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/privacy" element={<Privacy />} />
       <Route path="/login" element={<Login />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       
@@ -72,6 +75,14 @@ export default function AppRoutes() {
            <AppLayout user={user} onLogout={logout}>
              <Documentation />
            </AppLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/profile" element={
+        <ProtectedRoute role="driver">
+          <AppLayout user={user} onLogout={logout}>
+            <DriverProfile />
+          </AppLayout>
         </ProtectedRoute>
       } />
 

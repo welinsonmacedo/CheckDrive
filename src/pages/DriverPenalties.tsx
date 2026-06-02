@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Clock, MapPin } from 'lucide-react';
+import { AlertTriangle, Clock, MapPin, Trophy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -83,13 +83,17 @@ export default function DriverPenalties() {
             <span className="text-xs font-bold text-text-muted uppercase tracking-widest">Carregando descontos...</span>
           </div>
         ) : penalties.length === 0 ? (
-          <div className="text-center py-12 text-text-muted">
-            <div className="bg-zinc-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
-              <AlertTriangle size={24} className="text-zinc-300" />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center py-12 bento-card bg-green-50 border-green-200"
+          >
+            <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-sm">
+              <Trophy size={28} className="text-green-600" />
             </div>
-            <p className="text-sm font-bold text-text-main">Tudo certo por aqui!</p>
-            <p className="text-xs text-text-muted mt-1 font-medium">Pela nossa base, você não teve descontos neste mês.</p>
-          </div>
+            <p className="text-lg font-black text-green-800">Parabéns!</p>
+            <p className="text-sm text-green-700 mt-1 font-medium">Você não teve nenhum desconto neste mês. Excelente trabalho!</p>
+          </motion.div>
         ) : (
           <div className="grid gap-3">
             {penalties.map((item, index) => (

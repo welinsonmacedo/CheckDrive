@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { decodeItemTitle } from '../../lib/maskUtils';
 import { Trophy, Search, CheckCircle2, AlertCircle, Filter, Plus, Map as MapIcon, ClipboardCheck, Truck, Users, Wrench, Activity, AlertTriangle, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -131,7 +132,7 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
       const itemTitleMap: { [key: string]: string } = {};
       if (allItems) {
         allItems.forEach((i: any) => {
-          itemTitleMap[i.id] = i.title;
+          itemTitleMap[i.id] = decodeItemTitle(i.title).title;
         });
       }
 

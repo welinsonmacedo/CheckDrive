@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import imageCompression from "browser-image-compression";
 import { supabase } from "../lib/supabase";
+import { decodeItemTitle, applyNumberMask, parseMaskedValue } from "../lib/maskUtils";
 
 const STEPS = ["info", "external_photos", "items", "summary"];
 
@@ -51,7 +52,7 @@ export default function ChecklistFlow() {
     itemValues: {} as Record<string, "normal" | "defect">,
     defects: {} as Record<
       string,
-      Array<{ description: string; photo: File | null }>
+      Array<{ description: string; photo: File | null; existing_issue_id?: string }>
     >,
   });
 
@@ -131,14 +132,15 @@ export default function ChecklistFlow() {
                 newDefects[item.id] = [];
               }
 
-              // If the issue was already pushed to the array (avoid duplicates if triggered multiple times)
               const exists = newDefects[item.id].some(
-                (d: any) => d.description === issue.description,
+                (d: any) => d.existing_issue_id === issue.id,
               );
+              
               if (!exists) {
                 newDefects[item.id].push({
                   description: issue.description || "Pendente de verificação",
                   photo: null,
+                  existing_issue_id: issue.id,
                 });
                 updated = true;
               }
@@ -310,7 +312,11 @@ export default function ChecklistFlow() {
           .select("*")
           .eq("type_id", typeData.id)
           .order("order_index");
-        checklistItems = items || [];
+          
+        checklistItems = (items || []).map(item => {
+          const { title, mask } = decodeItemTitle(item.title);
+          return { ...item, title, mask };
+        });
       }
 
       setOptions({
@@ -321,7 +327,7 @@ export default function ChecklistFlow() {
       });
 
       // Init item defaults empty to enforce manual check
-      const defaults: Record<string, "normal" | "defect" | ""> = {};
+      const defaults: Record<string, "normal" | "defect"> = {};
 
       setFormData((prev) => ({
         ...prev,
@@ -572,6 +578,7 @@ export default function ChecklistFlow() {
             description: subDefect.description,
             photo_url: defectPhotoUrl,
             status: "pending",
+            existing_issue_id: (subDefect as any).existing_issue_id,
           });
         }
       }
@@ -579,21 +586,34 @@ export default function ChecklistFlow() {
       // Insert or update issues into dedicated table
       if (issuesToInsert.length > 0) {
         for (const newIssue of issuesToInsert) {
-          let query = supabase
-            .from("checklist_issues")
-            .select("*")
-            .eq("status", "pending")
-            .eq("item_title", newIssue.item_title);
+          let existings = null;
 
-          if (newIssue.vehicle_id)
-            query = query.eq("vehicle_id", newIssue.vehicle_id);
-          else query = query.is("vehicle_id", null);
+          if (newIssue.existing_issue_id) {
+            const { data } = await supabase
+              .from("checklist_issues")
+              .select("*")
+              .eq("id", newIssue.existing_issue_id)
+              .eq("status", "pending");
+            existings = data;
+          } else {
+            let query = supabase
+              .from("checklist_issues")
+              .select("*")
+              .eq("status", "pending")
+              .eq("item_title", newIssue.item_title)
+              .eq("description", newIssue.description);
 
-          if (newIssue.trailer_id)
-            query = query.eq("trailer_id", newIssue.trailer_id);
-          else query = query.is("trailer_id", null);
+            if (newIssue.vehicle_id)
+              query = query.eq("vehicle_id", newIssue.vehicle_id);
+            else query = query.is("vehicle_id", null);
 
-          const { data: existings } = await query;
+            if (newIssue.trailer_id)
+              query = query.eq("trailer_id", newIssue.trailer_id);
+            else query = query.is("trailer_id", null);
+
+            const { data } = await query;
+            existings = data;
+          }
 
           if (existings && existings.length > 0) {
             const ex = existings[0];
@@ -622,10 +642,12 @@ export default function ChecklistFlow() {
                 "Failed to update report_count. Falling back to insert.",
                 updateError,
               );
-              await supabase.from("checklist_issues").insert(newIssue);
+              const { existing_issue_id, ...issueDataToInsert } = newIssue;
+              await supabase.from("checklist_issues").insert(issueDataToInsert);
             }
           } else {
-            await supabase.from("checklist_issues").insert(newIssue);
+            const { existing_issue_id, ...issueDataToInsert } = newIssue;
+            await supabase.from("checklist_issues").insert(issueDataToInsert);
           }
         }
       }
@@ -784,19 +806,22 @@ export default function ChecklistFlow() {
       item.input_type === "number" || (!item.input_type && type === "fuel");
 
     if (isNumeric || isText) {
+      const hasMask = isNumeric && item.mask && item.mask !== "none";
       return (
         <input
-          type={isNumeric ? "number" : "text"}
-          step={isNumeric ? "0.01" : undefined}
+          type={hasMask ? "text" : (isNumeric ? "number" : "text")}
+          inputMode={hasMask ? "decimal" : undefined}
+          step={(!hasMask && isNumeric) ? "0.01" : undefined}
           placeholder={isNumeric ? "Valor numérico..." : "Digite aqui..."}
           className="w-32 h-9 px-3 rounded-lg border border-app-border bg-white text-xs font-bold outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          value={formData.itemValues[item.id] || ""}
-          onChange={(e) =>
+          value={hasMask ? applyNumberMask(formData.itemValues[item.id] || "", item.mask) : (formData.itemValues[item.id] || "")}
+          onChange={(e) => {
+            const val = hasMask ? parseMaskedValue(e.target.value, item.mask) : e.target.value;
             setFormData((prev) => ({
               ...prev,
-              itemValues: { ...prev.itemValues, [item.id]: e.target.value },
-            }))
-          }
+              itemValues: { ...prev.itemValues, [item.id]: val },
+            }));
+          }}
         />
       );
     }
@@ -1220,13 +1245,16 @@ export default function ChecklistFlow() {
                               animate={{ opacity: 1, y: 0 }}
                               className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-6"
                             >
-                              {(formData.defects[item.id] || []).map(
-                                (defect, index) => (
-                                  <div
-                                    key={index}
-                                    className="space-y-4 pb-4 border-b border-danger/10 last:border-0 last:pb-0 relative"
-                                  >
-                                    {index > 0 && (
+                              {(formData.defects[item.id] || [])
+                                .filter((defect) => !defect.existing_issue_id)
+                                .map((defect, filteredIdx) => {
+                                  const index = (formData.defects[item.id] || []).findIndex(d => d === defect);
+                                  return (
+                                    <div
+                                      key={index}
+                                      className="space-y-4 pb-4 border-b border-danger/10 last:border-0 last:pb-0 relative"
+                                    >
+                                      {filteredIdx > 0 && (
                                       <button
                                         onClick={() => {
                                           const newDefects = [
@@ -1249,9 +1277,9 @@ export default function ChecklistFlow() {
                                     )}
 
                                     <div className="space-y-1.5">
-                                      <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
+                                  <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
                                         <span>
-                                          Descrição do Problema #{index + 1}
+                                          Descrição do Problema #{filteredIdx + 1}
                                         </span>
                                       </label>
                                       <textarea
@@ -1336,9 +1364,9 @@ export default function ChecklistFlow() {
                                         </span>
                                       </div>
                                     </div>
-                                  </div>
-                                ),
-                              )}
+                                    </div>
+                                  );
+                                })}
 
                               <button
                                 onClick={() => {
@@ -1394,13 +1422,16 @@ export default function ChecklistFlow() {
                                   animate={{ opacity: 1, y: 0 }}
                                   className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-6"
                                 >
-                                  {(formData.defects[item.id] || []).map(
-                                    (defect, index) => (
+                                  {(formData.defects[item.id] || [])
+                                    .filter((defect) => !defect.existing_issue_id)
+                                    .map((defect, filteredIdx) => {
+                                      const index = (formData.defects[item.id] || []).findIndex(d => d === defect);
+                                      return (
                                       <div
                                         key={index}
                                         className="space-y-4 pb-4 border-b border-danger/10 last:border-0 last:pb-0 relative"
                                       >
-                                        {index > 0 && (
+                                        {filteredIdx > 0 && (
                                           <button
                                             onClick={() => {
                                               const newDefects = [
@@ -1426,7 +1457,7 @@ export default function ChecklistFlow() {
                                           <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
                                             <span>
                                               Descrição do Problema (Reboque) #
-                                              {index + 1}
+                                              {filteredIdx + 1}
                                             </span>
                                           </label>
                                           <textarea
@@ -1439,17 +1470,20 @@ export default function ChecklistFlow() {
                                                 ...(formData.defects[item.id] ||
                                                   []),
                                               ];
-                                              newDefects[index] = {
-                                                ...newDefects[index],
-                                                description: e.target.value,
-                                              };
-                                              setFormData((prev) => ({
-                                                ...prev,
-                                                defects: {
-                                                  ...prev.defects,
-                                                  [item.id]: newDefects,
-                                                },
-                                              }));
+                                              const unfilteredIndex = newDefects.findIndex(d => d === defect);
+                                              if (unfilteredIndex !== -1) {
+                                                newDefects[unfilteredIndex] = {
+                                                  ...newDefects[unfilteredIndex],
+                                                  description: e.target.value,
+                                                };
+                                                setFormData((prev) => ({
+                                                  ...prev,
+                                                  defects: {
+                                                    ...prev.defects,
+                                                    [item.id]: newDefects,
+                                                  },
+                                                }));
+                                              }
                                             }}
                                           />
                                         </div>
@@ -1510,8 +1544,8 @@ export default function ChecklistFlow() {
                                           </div>
                                         </div>
                                       </div>
-                                    ),
-                                  )}
+                                    );
+                                  })}
 
                                   <button
                                     onClick={() => {

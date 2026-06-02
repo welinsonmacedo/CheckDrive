@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, LogOut, Home, Trophy, AlertTriangle } from 'lucide-react';
+import { BookOpen, LogOut, Home, Trophy, AlertTriangle, User as UserIcon } from 'lucide-react';
 import { User } from '../../types';
 
 interface AppLayoutProps {
@@ -65,6 +65,18 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
               </span>
             </Link>
           )}
+
+          <Link
+            to="/profile"
+            className={`flex flex-col items-center gap-1 transition-colors ${
+              location.pathname === '/profile' ? 'text-primary' : 'text-zinc-400'
+            }`}
+          >
+            <UserIcon size={20} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">
+              Perfil
+            </span>
+          </Link>
 
           <button
             onClick={onLogout}

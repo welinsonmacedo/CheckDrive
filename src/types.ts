@@ -1,4 +1,4 @@
-export type Role = 'driver' | 'admin' | 'standard';
+export type Role = "driver" | "admin" | "standard";
 
 export interface User {
   id: string;
@@ -38,7 +38,7 @@ export interface DriveRoute {
 
 export interface ChecklistType {
   id: string;
-  name: 'Início de viagem' | 'Abastecimento' | 'Fim de viagem';
+  name: "Início de viagem" | "Abastecimento" | "Fim de viagem";
   active: boolean;
 }
 

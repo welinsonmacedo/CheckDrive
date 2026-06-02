@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Upload, Camera } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import imageCompression from 'browser-image-compression';
+import { decodeItemTitle } from '../../lib/maskUtils';
 
 interface ManualIssueModalProps {
   onClose: () => void;
@@ -40,7 +41,10 @@ export default function ManualIssueModal({ onClose, onSuccess }: ManualIssueModa
       
       if (typesRes.data) {
         const { data: items } = await supabase.from('checklist_items').select('*').eq('type_id', typesRes.data.id).order('title');
-        if (items) setManualItems(items);
+        if (items) {
+          const decoded = items.map(item => ({ ...item, title: decodeItemTitle(item.title).title }));
+          setManualItems(decoded);
+        }
       }
     } catch (err) {
       console.error(err);

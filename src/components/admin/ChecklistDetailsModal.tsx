@@ -14,6 +14,7 @@ import {
   Download,
   AlertOctagon,
   Fuel,
+  Printer,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useState, useEffect } from "react";
@@ -293,7 +294,7 @@ export default function ChecklistDetailsModal({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm print:static print:p-0 print:bg-white print:backdrop-blur-none print:items-start print:overflow-visible"
         onClick={onClose}
       >
         <motion.div
@@ -301,9 +302,9 @@ export default function ChecklistDetailsModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+          className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl print:static print:max-h-none print:shadow-none print:w-full print:max-w-none print:rounded-none"
         >
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white sticky top-0 z-10">
+          <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white sticky top-0 z-10 print:hidden">
             <div className="space-y-1">
               <h3 className="text-sm font-black text-gray-800 uppercase tracking-tight flex items-center gap-2">
                 <ClipboardCheck size={18} className="text-primary" />
@@ -322,6 +323,13 @@ export default function ChecklistDetailsModal({
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => window.print()}
+                className="h-10 px-4 bg-white border border-gray-200 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-600 hover:bg-gray-50 transition-colors shadow-sm print:hidden"
+              >
+                <Printer size={16} />
+                Imprimir
+              </button>
               {selectedSub.driver_id && (
                 <div className="relative">
                   <button
@@ -378,7 +386,17 @@ export default function ChecklistDetailsModal({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-8 space-y-10">
+          <div className="flex-1 overflow-y-auto p-8 space-y-10 print:overflow-visible print:p-0 print:block">
+            {/* Header Impressão */}
+            <div className="hidden print:block mb-8 border-b-2 border-zinc-200 pb-6 mt-4">
+              <h1 className="text-2xl font-black text-zinc-900 tracking-tight flex items-center gap-2 mb-2">
+                <ClipboardCheck className="text-primary" size={28} />
+                Detalhes do Checklist {selectedSub.id?.split("-")[0]}
+              </h1>
+              <p className="text-sm font-bold text-zinc-500 tracking-widest uppercase">
+                {new Date(selectedSub.created_at).toLocaleString()}
+              </p>
+            </div>
             {/* Informações básicas */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-1">
@@ -429,7 +447,7 @@ export default function ChecklistDetailsModal({
                 {selectedSub.latitude && selectedSub.longitude ? (
                   <button
                     onClick={() => setShowMapModal(true)}
-                    className="flex items-center gap-1.5 text-sm font-black text-primary hover:text-primary-hover hover:underline"
+                    className="flex items-center gap-1.5 text-sm font-black text-primary hover:text-primary-hover hover:underline print:pointer-events-none print:text-gray-800 print:no-underline"
                   >
                     Ver no Mapa
                   </button>
@@ -532,7 +550,7 @@ export default function ChecklistDetailsModal({
                       return (
                         <div
                           key={item.id}
-                          className="flex flex-col p-4 rounded-xl bg-red-50/30 border border-red-200"
+                          className="flex flex-col p-4 rounded-xl bg-red-50/30 border border-red-200 print:break-inside-avoid"
                         >
                           <div
                             className="flex items-center justify-between cursor-pointer"
@@ -554,63 +572,61 @@ export default function ChecklistDetailsModal({
                                 DEFEITO
                               </span>
                               {isExpanded ? (
-                                <ChevronUp size={16} />
+                                <ChevronUp size={16} className="print:hidden" />
                               ) : (
-                                <ChevronDown size={16} />
+                                <ChevronDown
+                                  size={16}
+                                  className="print:hidden"
+                                />
                               )}
                             </div>
                           </div>
 
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="mt-4 pt-4 border-t border-red-200"
-                            >
-                              {/* Descrição */}
-                              <div className="space-y-2 mb-4">
-                                <span className="text-[10px] font-bold text-red-600 uppercase">
-                                  Descrição Reportada:
-                                </span>
-                                <div
-                                  className={`p-3 rounded-lg ${item.description ? "bg-white" : "bg-gray-50"}`}
+                          <div
+                            className={`mt-4 pt-4 border-t border-red-200 ${isExpanded ? "block" : "hidden print:block"}`}
+                          >
+                            {/* Descrição */}
+                            <div className="space-y-2 mb-4">
+                              <span className="text-[10px] font-bold text-red-600 uppercase">
+                                Descrição Reportada:
+                              </span>
+                              <div
+                                className={`p-3 rounded-lg ${item.description ? "bg-white" : "bg-gray-50"}`}
+                              >
+                                <p
+                                  className={`text-xs font-medium ${item.description ? "text-gray-600" : "text-gray-400 italic"}`}
                                 >
-                                  <p
-                                    className={`text-xs font-medium ${item.description ? "text-gray-600" : "text-gray-400 italic"}`}
-                                  >
-                                    {item.description ||
-                                      "Nenhuma descrição fornecida"}
-                                  </p>
+                                  {item.description ||
+                                    "Nenhuma descrição fornecida"}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Foto do defeito */}
+                            {imageUrl && (
+                              <div className="space-y-2">
+                                <span className="text-[10px] font-bold text-red-600 uppercase">
+                                  Foto do Defeito:
+                                </span>
+                                <div className="flex gap-2">
+                                  <img
+                                    src={imageUrl}
+                                    className="w-32 h-32 object-cover rounded-lg cursor-pointer hover:opacity-80 hover:shadow-md transition-all border border-red-200"
+                                    onClick={() => openImageModal(item)}
+                                    alt="Defeito"
+                                    onError={(e) => {
+                                      console.error(
+                                        "Erro ao carregar imagem:",
+                                        e,
+                                      );
+                                      e.currentTarget.src =
+                                        "https://placehold.co/400x300/e2e8f0/94a3b8?text=Erro";
+                                    }}
+                                  />
                                 </div>
                               </div>
-
-                              {/* Foto do defeito */}
-                              {imageUrl && (
-                                <div className="space-y-2">
-                                  <span className="text-[10px] font-bold text-red-600 uppercase">
-                                    Foto do Defeito:
-                                  </span>
-                                  <div className="flex gap-2">
-                                    <img
-                                      src={imageUrl}
-                                      className="w-32 h-32 object-cover rounded-lg cursor-pointer hover:opacity-80 hover:shadow-md transition-all border border-red-200"
-                                      onClick={() => openImageModal(item)}
-                                      alt="Defeito"
-                                      onError={(e) => {
-                                        console.error(
-                                          "Erro ao carregar imagem:",
-                                          e,
-                                        );
-                                        e.currentTarget.src =
-                                          "https://placehold.co/400x300/e2e8f0/94a3b8?text=Erro";
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            </motion.div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -725,7 +741,7 @@ export default function ChecklistDetailsModal({
 
             {/* Botão para carregar fotos do veículo */}
             {hasPhotos && !loadPhotos && (
-              <div className="flex justify-center">
+              <div className="flex justify-center print:hidden">
                 <button
                   onClick={handleLoadPhotos}
                   disabled={loadingPhotos}
@@ -760,7 +776,7 @@ export default function ChecklistDetailsModal({
                   </div>
                   <button
                     onClick={() => setLoadPhotos(false)}
-                    className="flex items-center gap-1.5 text-[10px] font-bold bg-gray-100 text-gray-600 px-3 py-1.5 rounded-xl hover:bg-gray-200 transition-colors"
+                    className="flex items-center gap-1.5 text-[10px] font-bold bg-gray-100 text-gray-600 px-3 py-1.5 rounded-xl hover:bg-gray-200 transition-colors print:hidden"
                   >
                     <EyeOff size={12} />
                     Ocultar Imagens
