@@ -302,7 +302,7 @@ export default function ChecklistDetailsModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl print:static print:max-h-none print:shadow-none print:w-full print:max-w-none print:rounded-none"
+          className="bg-white w-full max-w-4xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl print:static print:max-h-none print:shadow-none print:w-full print:max-w-none print:rounded-none print:overflow-visible"
         >
           <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white sticky top-0 z-10 print:hidden">
             <div className="space-y-1">

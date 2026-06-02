@@ -208,8 +208,9 @@ export default function ReportsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Header & Tabs */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl shadow-sm border border-app-border print:hidden">
+      <div className={selectedDefectToPrint ? 'print:hidden' : ''}>
+        {/* Header & Tabs */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-2xl shadow-sm border border-app-border print:hidden">
         <div className="flex bg-zinc-100 p-1 rounded-xl">
           <button
             onClick={() => setActiveReport("defects")}
@@ -652,6 +653,7 @@ export default function ReportsTab() {
           )}
         </motion.div>
       )}
+      </div>
 
       {selectedDefectToPrint && (
         <DefectPrintModal
