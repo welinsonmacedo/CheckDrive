@@ -49,6 +49,7 @@ import ChecklistDetailsModal from "../components/admin/ChecklistDetailsModal";
 import RankingTab from "../components/admin/RankingTab";
 import DatabaseTab from "../components/admin/DatabaseTab";
 import ReportsTab from "../components/admin/ReportsTab";
+import AveragesTab from "../components/admin/AveragesTab";
 import ManualTab from "../components/admin/ManualTab";
 import FeedbackTab from "../components/admin/FeedbackTab";
 import { useAuth } from "../contexts/AuthContext";
@@ -219,6 +220,13 @@ export default function AdminDashboard() {
       color: "from-green-500 to-emerald-500",
     },
     {
+      id: "averages",
+      icon: Activity,
+      label: "Médias (Em Breve)",
+      color: "from-cyan-500 to-blue-500",
+      disabled: true,
+    },
+    {
       id: "schedules",
       icon: CalendarDays,
       label: "Escalas",
@@ -325,29 +333,34 @@ export default function AdminDashboard() {
           {navItems.map((item) => (
             <motion.button
               key={item.id}
-              whileHover={{ x: 5 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setActiveTab(item.id)}
+              whileHover={item.disabled ? {} : { x: 5 }}
+              whileTap={item.disabled ? {} : { scale: 0.98 }}
+              onClick={() => !item.disabled && setActiveTab(item.id)}
+              disabled={item.disabled}
               className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group/item ${
-                activeTab === item.id
-                  ? `bg-gradient-to-r ${item.color} text-white shadow-lg`
-                  : "text-gray-600 hover:bg-gray-100"
+                item.disabled
+                  ? "opacity-60 cursor-not-allowed bg-gray-50 text-gray-400"
+                  : activeTab === item.id
+                    ? `bg-gradient-to-r ${item.color} text-white shadow-lg`
+                    : "text-gray-600 hover:bg-gray-100"
               }`}
             >
               <div className="min-w-[20px] flex items-center justify-center">
                 <item.icon
                   size={20}
                   className={
-                    activeTab === item.id
-                      ? "text-white"
-                      : "text-gray-400 group-hover/item:text-gray-600"
+                    item.disabled
+                      ? "text-gray-400"
+                      : activeTab === item.id
+                        ? "text-white"
+                        : "text-gray-400 group-hover/item:text-gray-600"
                   }
                 />
               </div>
               <span className="text-sm font-semibold flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
                 {item.label}
               </span>
-              {activeTab === item.id && (
+              {activeTab === item.id && !item.disabled && (
                 <ChevronRight
                   size={16}
                   className="text-white/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 min-w-[16px]"
@@ -529,6 +542,7 @@ export default function AdminDashboard() {
               )}
               {activeTab === "maintenance" && <MaintenanceTab />}
               {activeTab === "abastecimentos" && <FuelTab />}
+              {activeTab === "averages" && <AveragesTab />}
               {activeTab === "schedules" && (
                 <SchedulesTab
                   onViewChecklist={async (subId: string) => {

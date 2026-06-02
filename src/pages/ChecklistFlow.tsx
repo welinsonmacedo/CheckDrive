@@ -119,31 +119,22 @@ export default function ChecklistFlow() {
           let updated = false;
 
           data.forEach((issue) => {
+            // Fix: correctly match trailer vs vehicle items
             const item = availableItems.find(
-              (i: any) => i.title === issue.item_title,
+              (i: any) => 
+                i.title === issue.item_title && 
+                i.is_trailer_item === (issue.trailer_id !== null)
             );
+
             if (item) {
               if (newItemValues[item.id] !== "defect") {
                 newItemValues[item.id] = "defect";
                 updated = true;
               }
 
-              if (!newDefects[item.id]) {
-                newDefects[item.id] = [];
-              }
-
-              const exists = newDefects[item.id].some(
-                (d: any) => d.existing_issue_id === issue.id,
-              );
-              
-              if (!exists) {
-                newDefects[item.id].push({
-                  description: issue.description || "Pendente de verificação",
-                  photo: null,
-                  existing_issue_id: issue.id,
-                });
-                updated = true;
-              }
+              // We no longer populate formData.defects with existing_issue_id to prevent 
+              // re-submitting them as new inputs or causing duplication.
+              // They will just be displayed as static read-only cards in the UI.
             }
           });
 
@@ -151,7 +142,6 @@ export default function ChecklistFlow() {
             return {
               ...prev,
               itemValues: newItemValues,
-              defects: newDefects,
             };
           }
           return prev;
@@ -803,7 +793,7 @@ export default function ChecklistFlow() {
   const renderItemInput = (item: any) => {
     const isText = item.input_type === "text";
     const isNumeric =
-      item.input_type === "number" || (!item.input_type && type === "fuel");
+      item.input_type === "number" || item.input_type === "fuel_liters" || (!item.input_type && type === "fuel");
 
     if (isNumeric || isText) {
       const hasMask = isNumeric && item.mask && item.mask !== "none";
@@ -1211,7 +1201,7 @@ export default function ChecklistFlow() {
 
                             {/* Defeitos Conhecidos / Existentes */}
                             {existingIssues.some(
-                              (issue) => issue.item_title === item.title,
+                              (issue) => issue.item_title === item.title && !issue.trailer_id,
                             ) && (
                               <div className="mt-3 pt-3 border-t border-app-border">
                                 <p className="text-[10px] font-black text-warning uppercase tracking-widest flex items-center gap-1 mb-2">
@@ -1219,7 +1209,7 @@ export default function ChecklistFlow() {
                                 </p>
                                 {existingIssues
                                   .filter(
-                                    (issue) => issue.item_title === item.title,
+                                    (issue) => issue.item_title === item.title && !issue.trailer_id,
                                   )
                                   .map((issue) => (
                                     <div
@@ -1415,6 +1405,35 @@ export default function ChecklistFlow() {
                                 </span>
                                 {renderItemInput(item)}
                               </div>
+
+                              {/* Defeitos Conhecidos / Existentes (Reboque) */}
+                              {existingIssues.some(
+                                (issue) => issue.item_title === item.title && issue.trailer_id !== null,
+                              ) && (
+                                <div className="mt-3 pt-3 border-t border-app-border">
+                                  <p className="text-[10px] font-black text-warning uppercase tracking-widest flex items-center gap-1 mb-2">
+                                    <AlertCircle size={12} /> Defeito Pendente
+                                  </p>
+                                  {existingIssues
+                                    .filter(
+                                      (issue) => issue.item_title === item.title && issue.trailer_id !== null,
+                                    )
+                                    .map((issue) => (
+                                      <div
+                                        key={issue.id}
+                                        className="text-xs text-text-muted italic bg-orange-50/50 p-2 rounded-lg border border-orange-100"
+                                      >
+                                        "{issue.description || "Sem descrição"}"
+                                        <div className="mt-1 text-[9px] font-bold text-orange-600 uppercase tracking-widest">
+                                          Reportado {issue.report_count || 1}{" "}
+                                          {issue.report_count === 1
+                                            ? "vez"
+                                            : "vezes"}
+                                        </div>
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
 
                               {formData.itemValues[item.id] === "defect" && (
                                 <motion.div

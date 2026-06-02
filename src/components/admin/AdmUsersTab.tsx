@@ -153,6 +153,7 @@ export default function AdmUsersTab() {
       alert("Usuário não possui e-mail cadastrado.");
       return;
     }
+
     if (
       !window.confirm(
         `Deseja enviar um e-mail de redefinição de senha para ${email}?`,

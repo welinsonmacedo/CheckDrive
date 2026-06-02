@@ -22,6 +22,7 @@ export default function MaintenanceTab() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"pending" | "resolved">("pending");
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
@@ -30,6 +31,7 @@ export default function MaintenanceTab() {
   const [resolvingIssueData, setResolvingIssueData] = useState<any | null>(
     null,
   );
+  const [modalActionType, setModalActionType] = useState<"resolve" | "delete">("resolve");
   const [selectedIdsToResolve, setSelectedIdsToResolve] = useState<string[]>(
     [],
   );
@@ -183,15 +185,39 @@ export default function MaintenanceTab() {
     setLoading(false);
   }
 
-  function openResolveModal(issue: any) {
+  function openResolveModal(issue: any, actionType: "resolve" | "delete" = "resolve") {
+    setModalActionType(actionType);
     setResolvingIssueData(issue);
     setResolvingIssueId(issue.grouped_ids || [issue.id]);
     setSelectedIdsToResolve(issue.grouped_ids || [issue.id]);
     setResolveNotes("");
   }
 
-  async function confirmResolveIssue() {
+  async function confirmModalAction() {
     if (!selectedIdsToResolve || selectedIdsToResolve.length === 0) return;
+
+    if (modalActionType === "delete") {
+      if (!confirm(`Deseja realmente excluir ${selectedIdsToResolve.length} pendência(s) permanentemente?`)) return;
+      setIsResolving(true);
+      try {
+        const { error } = await supabase
+          .from("checklist_issues")
+          .delete()
+          .in("id", selectedIdsToResolve);
+        if (error) throw error;
+
+        setResolvingIssueId(null);
+        setResolvingIssueData(null);
+        setSelectedIdsToResolve([]);
+        fetchIssues();
+      } catch (err) {
+        console.error(err);
+        alert("Erro ao excluir. Tente novamente.");
+      } finally {
+        setIsResolving(false);
+      }
+      return;
+    }
 
     setIsResolving(true);
     try {
@@ -236,6 +262,33 @@ export default function MaintenanceTab() {
     } catch (err) {
       console.error(err);
       alert("Erro ao excluir pendência.");
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedRows.length === 0) return;
+    if (!confirm(`Deseja realmente excluir ${selectedRows.length} pendências selecionadas permanentemente?`)) return;
+    
+    // gather all underlying ids from the selected row grouped_ids
+    const idsToDelete: string[] = [];
+    selectedRows.forEach(rowId => {
+       const row = issues.find(i => i.id === rowId);
+       if (row && row.grouped_ids) {
+          idsToDelete.push(...row.grouped_ids);
+       }
+    });
+
+    try {
+      const { error } = await supabase
+        .from("checklist_issues")
+        .delete()
+        .in("id", idsToDelete);
+      if (error) throw error;
+      setSelectedRows([]);
+      fetchIssues();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao excluir pendências selecionadas.");
     }
   }
 
@@ -316,7 +369,7 @@ export default function MaintenanceTab() {
         <div className="border-b border-app-border">
           <div className="flex">
             <button
-              onClick={() => setActiveTab("pending")}
+              onClick={() => { setActiveTab("pending"); setSelectedRows([]); }}
               className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
                 activeTab === "pending"
                   ? "text-primary border-b-2 border-primary bg-primary/5"
@@ -332,7 +385,7 @@ export default function MaintenanceTab() {
               )}
             </button>
             <button
-              onClick={() => setActiveTab("resolved")}
+              onClick={() => { setActiveTab("resolved"); setSelectedRows([]); }}
               className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
                 activeTab === "resolved"
                   ? "text-primary border-b-2 border-primary bg-primary/5"
@@ -361,6 +414,16 @@ export default function MaintenanceTab() {
           </span>
 
           <div className="flex items-center gap-4">
+            {selectedRows.length > 0 && activeTab === "pending" && (
+              <button
+                onClick={handleBulkDelete}
+                className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors uppercase tracking-wider"
+              >
+                <Trash2 size={14} />
+                Excluir ({selectedRows.length})
+              </button>
+            )}
+
             <button
               onClick={() => setIsManualModalOpen(true)}
               className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors uppercase tracking-wider"
@@ -421,6 +484,22 @@ export default function MaintenanceTab() {
             <table className="w-full text-left">
               <thead className="bg-app-bg/50">
                 <tr>
+                  {activeTab === "pending" && (
+                    <th className="px-5 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedRows.length === filteredIssues.length && filteredIssues.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedRows(filteredIssues.map(i => i.id));
+                          } else {
+                            setSelectedRows([]);
+                          }
+                        }}
+                        className="rounded border-gray-300 text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                      />
+                    </th>
+                  )}
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
                     Data
                   </th>
@@ -453,8 +532,24 @@ export default function MaintenanceTab() {
                   return (
                     <tr
                       key={issue.id}
-                      className="hover:bg-gray-50 transition-colors"
+                      className={`transition-colors ${selectedRows.includes(issue.id) ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-gray-50'}`}
                     >
+                      {activeTab === "pending" && (
+                        <td className="px-5 py-4 w-10">
+                          <input
+                            type="checkbox"
+                            checked={selectedRows.includes(issue.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedRows(prev => [...prev, issue.id]);
+                              } else {
+                                setSelectedRows(prev => prev.filter(id => id !== issue.id));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                          />
+                        </td>
+                      )}
                       <td className="px-5 py-4 text-xs">
                         {new Date(issue.created_at).toLocaleDateString()}
                         <div className="text-[10px] text-gray-400">
@@ -512,7 +607,14 @@ export default function MaintenanceTab() {
 
                       <td className="px-5 py-4">
                         {issue.status === "pending" && (
-                          <div className="flex justify-end">
+                          <div className="flex justify-end items-center gap-2">
+                            <button
+                              onClick={() => openResolveModal(issue, 'delete')}
+                              title="Excluir pendência"
+                              className="w-8 h-8 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                             <button
                               onClick={() => openResolveModal(issue)}
                               className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg flex items-center gap-1 text-xs font-semibold transition-colors"
@@ -555,7 +657,7 @@ export default function MaintenanceTab() {
                                 <Undo size={16} />
                               </button>
                               <button
-                                onClick={() => handleDeleteIssue(issue)}
+                                onClick={() => openResolveModal(issue, 'delete')}
                                 title="Excluir"
                                 className="w-8 h-8 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
                               >
@@ -682,7 +784,7 @@ export default function MaintenanceTab() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">
-              Resolver Pendência
+              {modalActionType === "resolve" ? "Resolver Pendência" : "Excluir Pendência"}
             </h3>
             <p className="text-sm text-gray-500 mb-4">
               {resolvingIssueData?.item_title}
@@ -692,7 +794,7 @@ export default function MaintenanceTab() {
                 resolvingIssueData.grouped_issues.length > 1 && (
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Selecione as ocorrências para resolver:
+                      {modalActionType === "resolve" ? "Selecione as ocorrências para resolver:" : "Selecione as ocorrências para excluir:"}
                     </label>
                     <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
                       {resolvingIssueData.grouped_issues.map((gi: any) => (
@@ -765,18 +867,20 @@ export default function MaintenanceTab() {
                   </div>
                 )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Observações da solução (opcional)
-                </label>
-                <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  rows={4}
-                  placeholder="Descreva como a pendência foi resolvida..."
-                  value={resolveNotes}
-                  onChange={(e) => setResolveNotes(e.target.value)}
-                />
-              </div>
+              {modalActionType === "resolve" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Observações da solução (opcional)
+                  </label>
+                  <textarea
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    rows={4}
+                    placeholder="Descreva como a pendência foi resolvida..."
+                    value={resolveNotes}
+                    onChange={(e) => setResolveNotes(e.target.value)}
+                  />
+                </div>
+              )}
               <div className="flex bg-gray-50 -mx-6 -mb-6 px-6 py-4 justify-end gap-3 rounded-b-xl border-t border-gray-200">
                 <button
                   type="button"
@@ -792,11 +896,11 @@ export default function MaintenanceTab() {
                 </button>
                 <button
                   type="button"
-                  onClick={confirmResolveIssue}
+                  onClick={confirmModalAction}
                   disabled={isResolving || selectedIdsToResolve.length === 0}
-                  className="px-4 py-2 text-sm font-medium bg-primary text-white hover:bg-primary-dark rounded-lg transition-colors disabled:opacity-50"
+                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${modalActionType === "resolve" ? "bg-primary hover:bg-primary-dark" : "bg-red-600 hover:bg-red-700"}`}
                 >
-                  {isResolving ? "Resolvendo..." : "Confirmar Resolução"}
+                  {isResolving ? (modalActionType === "resolve" ? "Resolvendo..." : "Excluindo...") : (modalActionType === "resolve" ? "Confirmar Resolução" : "Confirmar Exclusão")}
                 </button>
               </div>
             </div>

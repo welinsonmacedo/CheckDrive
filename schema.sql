@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS checklist_items (
     order_index INTEGER DEFAULT 0,
     input_type TEXT DEFAULT 'boolean',
     appears_in_manual BOOLEAN DEFAULT false,
+    is_fuel_liters BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
