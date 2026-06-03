@@ -126,9 +126,10 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-black text-text-main tracking-tight">
+      <div className={selectedDriver ? 'print:hidden' : 'space-y-6'}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-black text-text-main tracking-tight">
             Ranking Oficial
           </h2>
           <p className="text-xs font-semibold text-text-muted">
@@ -261,7 +262,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
             );
           })
         )}
-      </div>
+      </div></div>
 
       <AnimatePresence>
         {selectedDriver && (

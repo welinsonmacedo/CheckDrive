@@ -23,6 +23,7 @@ export default function ChecklistFlow() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [isStepLoading, setIsStepLoading] = useState(false);
   const [options, setOptions] = useState<{
     vehicles: any[];
     routes: any[];
@@ -331,16 +332,23 @@ export default function ChecklistFlow() {
     }
   };
 
-  const nextStep = () =>
-    setCurrentStep((prev) => {
-      if (type === "yard" && prev === 0) return 2;
-      return Math.min(prev + 1, STEPS.length - 1);
-    });
-  const prevStep = () =>
+  const nextStep = () => {
+    setIsStepLoading(true);
+    setTimeout(() => {
+      setCurrentStep((prev) => {
+        if (type === "yard" && prev === 0) return 2;
+        return Math.min(prev + 1, STEPS.length - 1);
+      });
+      setIsStepLoading(false);
+    }, 600); // simulated loading step
+  };
+
+  const prevStep = () => {
     setCurrentStep((prev) => {
       if (type === "yard" && prev === 2) return 0;
       return Math.max(prev - 1, 0);
     });
+  };
 
   const handlePhotoUpload = async (key: string, file: File) => {
     try {
@@ -883,8 +891,14 @@ export default function ChecklistFlow() {
       </div>
 
       <div className="flex-1">
-        <AnimatePresence mode="wait">
-          {currentStep === 0 && (
+        {isStepLoading ? (
+          <div className="flex flex-col items-center justify-center p-12 text-primary space-y-4 min-h-[300px]">
+            <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+            <p className="text-sm font-bold text-text-muted animate-pulse">Carregando próxima etapa...</p>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            {currentStep === 0 && (
             <motion.div
               key="step0"
               initial={{ opacity: 0, scale: 0.98 }}
@@ -1655,13 +1669,14 @@ export default function ChecklistFlow() {
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </div>
 
       {/* Footer Navigation */}
       <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 bg-white/80 backdrop-blur-md border-t border-app-border flex gap-3 z-[60] max-w-xl mx-auto rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
         {currentStep > 0 && currentStep < 3 && (
           <button
-            disabled={loading}
+            disabled={loading || isStepLoading}
             onClick={prevStep}
             className="flex-1 h-12 rounded-xl border border-app-border font-bold text-xs text-text-muted flex items-center justify-center gap-2 hover:bg-app-bg transition-all disabled:opacity-50"
           >
@@ -1671,12 +1686,12 @@ export default function ChecklistFlow() {
 
         {currentStep < 3 ? (
           <button
-            disabled={!isStepValid() || loading}
+            disabled={!isStepValid() || loading || isStepLoading}
             onClick={nextStep}
             className={`flex-[2] h-12 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-sm
               ${isStepValid() ? "bg-primary text-white hover:opacity-90" : "bg-app-bg text-text-muted cursor-not-allowed border border-app-border"}`}
           >
-            {loading ? (
+            {loading || isStepLoading ? (
               "Processando..."
             ) : (
               <>

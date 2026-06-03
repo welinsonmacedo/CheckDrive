@@ -166,8 +166,9 @@ export default function VehiclesTab() {
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      <div className="xl:col-span-8 space-y-6">
+    <>
+      <div className={`grid grid-cols-1 xl:grid-cols-12 gap-6 items-start ${selectedVehicle ? 'print:hidden' : ''}`}>
+        <div className="xl:col-span-8 space-y-6">
         <div className="bento-card !p-0">
           <div className="p-5 border-b border-app-border flex items-center justify-between">
             <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
@@ -615,6 +616,7 @@ export default function VehiclesTab() {
           </form>
         </div>
       </div>
+      </div>
 
       {selectedVehicle && (
         <VehicleDetailsModal
@@ -622,6 +624,6 @@ export default function VehiclesTab() {
           onClose={() => setSelectedVehicle(null)}
         />
       )}
-    </div>
+    </>
   );
 }

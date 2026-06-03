@@ -365,11 +365,12 @@ export default function TrackingTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-      
-          <p className="text-text-muted text-sm font-bold mt-1">Acompanhe a localização e status atual da frota</p>
-        </div>
+      <div className={(selectedVehicle || selectedDriver || editingVehicle) ? 'print:hidden' : 'space-y-6'}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+        
+            <p className="text-text-muted text-sm font-bold mt-1">Acompanhe a localização e status atual da frota</p>
+          </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto text-text-main">
           {activeTab === 'vehicles' && vehicleTypes.length > 0 && (
@@ -440,6 +441,7 @@ export default function TrackingTab() {
             <p className="font-bold text-sm">Nenhuma isca encontrada.</p>
           </div>
         )}
+      </div>
       </div>
 
       {/* Manual Override Modal */}

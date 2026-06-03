@@ -494,7 +494,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col h-full overflow-y-auto print:h-auto print:overflow-visible ${selectedSub ? 'print:hidden' : ''}`}>
+      <div className={`dashboard-scroll-area flex-1 flex flex-col h-full overflow-y-auto print:h-auto print:overflow-visible ${selectedSub ? 'print:hidden' : ''}`}>
         {/* Top Bar */}
         <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-8 py-4 flex items-center justify-between print:hidden">
           <div>

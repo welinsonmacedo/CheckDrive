@@ -133,13 +133,20 @@ export default function VehicleDetailsModal({
   const calculateResolvedIssues = () =>
     issues.filter((i) => i.status === "resolved").length;
 
+  useEffect(() => {
+    document.body.classList.add("modal-open-for-print");
+    return () => {
+      document.body.classList.remove("modal-open-for-print");
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-blur-none">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:p-0 print:bg-white print:backdrop-blur-none print:z-[99999] print:block">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden relative print:max-w-none print:max-h-none print:shadow-none print:rounded-none print:overflow-visible print:border-0"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl my-auto flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block"
       >
         {/* Header */}
         <div className="p-5 border-b border-app-border flex items-center justify-between bg-zinc-50 relative">
