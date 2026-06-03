@@ -9,6 +9,7 @@ import {
   Truck,
   Wrench,
   User,
+  Printer,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "../../lib/supabase";
@@ -133,12 +134,12 @@ export default function VehicleDetailsModal({
     issues.filter((i) => i.status === "resolved").length;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:p-0 print:bg-white print:backdrop-blur-none">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden relative"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden relative print:max-w-none print:max-h-none print:shadow-none print:rounded-none print:overflow-visible print:border-0"
       >
         {/* Header */}
         <div className="p-5 border-b border-app-border flex items-center justify-between bg-zinc-50 relative">
@@ -176,16 +177,25 @@ export default function VehicleDetailsModal({
               </select>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex flex-shrink-0 items-center justify-center rounded-xl bg-white border border-app-border text-text-muted hover:bg-zinc-50"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="w-8 h-8 flex flex-shrink-0 items-center justify-center rounded-xl bg-white border border-app-border text-text-muted hover:bg-zinc-50 print:hidden"
+              title="Imprimir"
+            >
+              <Printer size={16} />
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex flex-shrink-0 items-center justify-center rounded-xl bg-white border border-app-border text-text-muted hover:bg-zinc-50 print:hidden"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+        <div className="flex-1 overflow-y-auto p-6 space-y-8 print:overflow-visible print:h-auto">
           {loading ? (
             <div className="text-center py-20 animate-pulse text-sm font-bold text-text-muted uppercase">
               Carregando detalhes...
