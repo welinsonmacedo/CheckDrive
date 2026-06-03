@@ -148,8 +148,12 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
         if (c.details && c.details.itemValues) {
           Object.entries(c.details.itemValues).forEach(([itemId, value]) => {
             if (value === 'defect' || value === 'defeito') {
-               const title = itemTitleMap[itemId] || 'Desconhecido';
-               itemDefectCounts[title] = (itemDefectCounts[title] || 0) + 1;
+               const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(itemId);
+               const title = itemTitleMap[itemId] || (isUUID ? 'Desconhecido' : itemId);
+               
+               if (title !== 'Desconhecido') {
+                 itemDefectCounts[title] = (itemDefectCounts[title] || 0) + 1;
+               }
             }
           });
         }
