@@ -12,6 +12,21 @@ export default function DriverHome() {
   const [systemType, setSystemType] = useState('points');
   const [schedulesToday, setSchedulesToday] = useState<any[]>([]);
   const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
+  const [hiddenSchedules, setHiddenSchedules] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('hiddenSchedules');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const hideSchedule = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const next = [...hiddenSchedules, id];
+    setHiddenSchedules(next);
+    localStorage.setItem('hiddenSchedules', JSON.stringify(next));
+  };
 
   useEffect(() => {
     fetchDriverStats();
@@ -169,7 +184,7 @@ export default function DriverHome() {
       </button>
 
       {/* Active Schedule Alert */}
-      {!user?.isInternal && schedulesToday.map((schedule) => {
+      {!user?.isInternal && schedulesToday.filter(s => !hiddenSchedules.includes(s.id)).map((schedule) => {
         const isFinished = schedule.start_checklist_id && schedule.end_checklist_id;
         const nowMs = new Date().getTime();
         const endMs = new Date(schedule.end_at).getTime();
@@ -242,6 +257,15 @@ export default function DriverHome() {
                       </button>
                     );
                   })}
+                  
+                  {isFinished && (
+                    <button
+                      onClick={(e) => hideSchedule(e, schedule.id)}
+                      className="w-full h-10 rounded-xl flex items-center justify-center px-4 gap-2 font-bold text-xs uppercase tracking-widest bg-white/20 text-white hover:bg-white/30 transition-all mt-2 border border-white/20"
+                    >
+                      Remover Card da Tela
+                    </button>
+                  )}
                 </motion.div>
               ) : (
                 <div className="pt-2 flex items-center justify-between text-xs font-bold text-white/80 uppercase tracking-widest border-t border-white/20">

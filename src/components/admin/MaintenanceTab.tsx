@@ -14,9 +14,11 @@ import {
   Trash2,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
 import ManualIssueModal from "./ManualIssueModal";
 
 export default function MaintenanceTab() {
+  const { user } = useAuth();
   const [issues, setIssues] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
@@ -414,7 +416,7 @@ export default function MaintenanceTab() {
           </span>
 
           <div className="flex items-center gap-4">
-            {selectedRows.length > 0 && activeTab === "pending" && (
+            {selectedRows.length > 0 && activeTab === "pending" && user?.role === "admin" && (
               <button
                 onClick={handleBulkDelete}
                 className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors uppercase tracking-wider"
@@ -484,7 +486,7 @@ export default function MaintenanceTab() {
             <table className="w-full text-left">
               <thead className="bg-app-bg/50">
                 <tr>
-                  {activeTab === "pending" && (
+                  {activeTab === "pending" && user?.role === "admin" && (
                     <th className="px-5 py-3 w-10">
                       <input
                         type="checkbox"
@@ -534,7 +536,7 @@ export default function MaintenanceTab() {
                       key={issue.id}
                       className={`transition-colors ${selectedRows.includes(issue.id) ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-gray-50'}`}
                     >
-                      {activeTab === "pending" && (
+                      {activeTab === "pending" && user?.role === "admin" && (
                         <td className="px-5 py-4 w-10">
                           <input
                             type="checkbox"
@@ -608,13 +610,15 @@ export default function MaintenanceTab() {
                       <td className="px-5 py-4">
                         {issue.status === "pending" && (
                           <div className="flex justify-end items-center gap-2">
-                            <button
-                              onClick={() => openResolveModal(issue, 'delete')}
-                              title="Excluir pendência"
-                              className="w-8 h-8 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            {user?.role === "admin" && (
+                              <button
+                                onClick={() => openResolveModal(issue, 'delete')}
+                                title="Excluir pendência"
+                                className="w-8 h-8 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
                             <button
                               onClick={() => openResolveModal(issue)}
                               className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg flex items-center gap-1 text-xs font-semibold transition-colors"
@@ -656,13 +660,15 @@ export default function MaintenanceTab() {
                               >
                                 <Undo size={16} />
                               </button>
-                              <button
-                                onClick={() => openResolveModal(issue, 'delete')}
-                                title="Excluir"
-                                className="w-8 h-8 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {user?.role === "admin" && (
+                                <button
+                                  onClick={() => openResolveModal(issue, 'delete')}
+                                  title="Excluir"
+                                  className="w-8 h-8 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                             </div>
                           </div>
                         )}

@@ -264,12 +264,16 @@ export default function AdminDashboard() {
           },
         ]
       : []),
-    {
-      id: "feedback",
-      icon: MessageSquare,
-      label: "Feedback",
-      color: "from-pink-500 to-rose-500",
-    },
+    ...(user?.role === "admin"
+      ? [
+          {
+            id: "feedback",
+            icon: MessageSquare,
+            label: "Feedback",
+            color: "from-pink-500 to-rose-500",
+          },
+        ]
+      : []),
     ...(user?.role === "admin"
       ? [
           {
@@ -558,7 +562,7 @@ export default function AdminDashboard() {
               {activeTab === "audit" && user?.role === "admin" && (
                 <AuditTab appSettings={appSettings} />
               )}
-              {activeTab === "feedback" && <FeedbackTab />}
+              {activeTab === "feedback" && user?.role === "admin" && <FeedbackTab />}
               {activeTab === "database" && user?.role === "admin" && (
                 <DatabaseTab />
               )}
