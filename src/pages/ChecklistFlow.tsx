@@ -305,8 +305,8 @@ export default function ChecklistFlow() {
           .order("order_index");
           
         checklistItems = (items || []).map(item => {
-          const { title, mask } = decodeItemTitle(item.title);
-          return { ...item, title, mask };
+          const { title, mask, options } = decodeItemTitle(item.title);
+          return { ...item, title, mask, options };
         });
       }
 
@@ -1148,13 +1148,18 @@ export default function ChecklistFlow() {
                           }
                         />
                         <div
-                          className={`w-full h-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-2 text-center transition-all 
+                          className={`w-full h-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-2 text-center transition-all overflow-hidden relative
                           ${formData.photos[pos.id as keyof typeof formData.photos] ? "border-success bg-green-50" : "border-app-border hover:border-text-muted bg-app-bg"}`}
                         >
                           {formData.photos[
                             pos.id as keyof typeof formData.photos
                           ] ? (
-                            <CheckCircle2 className="text-success" size={20} />
+                            <>
+                              <img src={URL.createObjectURL(formData.photos[pos.id as keyof typeof formData.photos] as File)} className="absolute inset-0 w-full h-full object-cover" alt={pos.label} />
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <CheckCircle2 className="text-white" size={32} />
+                              </div>
+                            </>
                           ) : (
                             <>
                               <Camera
@@ -1247,18 +1252,77 @@ export default function ChecklistFlow() {
                             <motion.div
                               initial={{ opacity: 0, y: -10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-6"
+                              className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-4"
                             >
+                              {item.options && item.options.length > 0 && (
+                                <div className="space-y-2 mb-4">
+                                  <p className="text-[10px] font-bold text-danger uppercase tracking-widest pb-1 border-b border-danger/10">Pendências Mapeadas:</p>
+                                  {item.options.map((opt, i) => {
+                                      const defectIdx = (formData.defects[item.id] || []).findIndex(d => d.description === opt && !d.existing_issue_id);
+                                      const isSelected = defectIdx !== -1;
+                                      const defect = isSelected ? formData.defects[item.id][defectIdx] : null;
+                                      return (
+                                        <div key={i} className={`p-3 rounded-lg border ${isSelected ? 'border-danger bg-white' : 'border-app-border bg-white'} transition-colors`}>
+                                          <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-text-main">
+                                            <input 
+                                              type="checkbox" 
+                                              className="w-4 h-4 text-danger rounded border-danger/30"
+                                              checked={isSelected}
+                                              onChange={(e) => {
+                                                if (e.target.checked) {
+                                                   const newDefects = [...(formData.defects[item.id] || []), { description: opt, photo: null }];
+                                                   setFormData(p => ({ ...p, defects: { ...p.defects, [item.id]: newDefects }}));
+                                                } else {
+                                                   const newDefects = [...(formData.defects[item.id] || [])];
+                                                   newDefects.splice(defectIdx, 1);
+                                                   setFormData(p => ({ ...p, defects: { ...p.defects, [item.id]: newDefects }}));
+                                                }
+                                              }}
+                                            />
+                                            {opt}
+                                          </label>
+                                          {isSelected && defect && (
+                                            <div className="flex items-center gap-3 ml-7 pt-3 mt-3 border-t border-danger/10">
+                                              <div className="relative w-12 h-12 rounded-lg border border-red-200 bg-red-50 flex items-center justify-center overflow-hidden">
+                                                <input
+                                                  type="file"
+                                                  accept="image/*"
+                                                  capture="environment"
+                                                  className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                  onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) {
+                                                      imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: false }).then(compressed => {
+                                                        const newDefects = [...(formData.defects[item.id] || [])];
+                                                        newDefects[defectIdx] = { ...newDefects[defectIdx], photo: compressed };
+                                                        setFormData(p => ({ ...p, defects: { ...p.defects, [item.id]: newDefects } }));
+                                                      });
+                                                    }
+                                                  }}
+                                                />
+                                                {defect.photo ? (
+                                                  <img src={URL.createObjectURL(defect.photo)} className="w-full h-full object-cover" alt="Evidência" />
+                                                ) : <Camera size={16} className="text-danger/50" />}
+                                              </div>
+                                              <span className="text-[9px] font-bold text-danger uppercase tracking-widest">Foto Evidência</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                  })}
+                                </div>
+                              )}
+
                               {(formData.defects[item.id] || [])
-                                .filter((defect) => !defect.existing_issue_id)
-                                .map((defect, filteredIdx) => {
+                                .filter((defect) => !defect.existing_issue_id && (!item.options || !item.options.includes(defect.description)))
+                                .map((defect) => {
+                                  let filteredIdx = -1; // We only compute index properly for the array splice
                                   const index = (formData.defects[item.id] || []).findIndex(d => d === defect);
                                   return (
                                     <div
                                       key={index}
-                                      className="space-y-4 pb-4 border-b border-danger/10 last:border-0 last:pb-0 relative"
+                                      className="space-y-4 pt-4 pb-4 border-b border-danger/10 last:border-0 last:pb-0 relative"
                                     >
-                                      {filteredIdx > 0 && (
                                       <button
                                         onClick={() => {
                                           const newDefects = [
@@ -1274,16 +1338,15 @@ export default function ChecklistFlow() {
                                             },
                                           }));
                                         }}
-                                        className="absolute -right-2 -top-2 w-6 h-6 rounded-full bg-danger text-white flex items-center justify-center shadow-sm"
+                                        className="absolute -right-2 -top-2 w-6 h-6 rounded-full bg-danger text-white flex items-center justify-center shadow-sm z-10"
                                       >
                                         <X size={14} />
                                       </button>
-                                    )}
 
-                                    <div className="space-y-1.5">
+                                    <div className="space-y-1.5 mt-2">
                                   <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
                                         <span>
-                                          Descrição do Problema #{filteredIdx + 1}
+                                          Descrição do Problema (Outros)
                                         </span>
                                       </label>
                                       <textarea
@@ -1369,28 +1432,51 @@ export default function ChecklistFlow() {
                                         </span>
                                       </div>
                                     </div>
-                                    </div>
+                                  </div>
                                   );
                                 })}
 
-                              <button
-                                onClick={() => {
-                                  const newDefects = [
-                                    ...(formData.defects[item.id] || []),
-                                    { description: "", photo: null },
-                                  ];
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    defects: {
-                                      ...prev.defects,
-                                      [item.id]: newDefects,
-                                    },
-                                  }));
-                                }}
-                                className="w-full py-2 border-2 border-dashed border-danger/20 rounded-lg text-[9px] font-bold text-danger uppercase tracking-widest hover:bg-danger/5 transition-colors"
-                              >
-                                + Adicionar outro defeito para este item
-                              </button>
+                                {item.options && item.options.length > 0 && formData.defects[item.id]?.some(d => !item.options?.includes(d.description)) && (
+                                  <button
+                                    onClick={() => {
+                                      const newDefects = [
+                                        ...(formData.defects[item.id] || []),
+                                        { description: "", photo: null },
+                                      ];
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        defects: {
+                                          ...prev.defects,
+                                          [item.id]: newDefects,
+                                        },
+                                      }));
+                                    }}
+                                    className="w-full py-2 border-2 border-dashed border-danger/20 rounded-lg text-[9px] font-bold text-danger uppercase tracking-widest hover:bg-danger/5 transition-colors"
+                                  >
+                                    + Adicionar outro defeito (Outros)
+                                  </button>
+                                )}
+
+                              {(!item.options || item.options.length === 0 || (formData.defects[item.id] || []).filter(d => !item.options?.includes(d.description)).length === 0) && (
+                                <button
+                                  onClick={() => {
+                                    const newDefects = [
+                                      ...(formData.defects[item.id] || []),
+                                      { description: "", photo: null },
+                                    ];
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      defects: {
+                                        ...prev.defects,
+                                        [item.id]: newDefects,
+                                      },
+                                    }));
+                                  }}
+                                  className="w-full py-2 border-2 border-dashed border-danger/20 rounded-lg text-[9px] font-bold text-danger uppercase tracking-widest hover:bg-danger/5 transition-colors"
+                                >
+                                  + {item.options?.length > 0 ? 'Adicionar Outros' : 'Adicionar defeito para este item'}
+                                </button>
+                              )}
                             </motion.div>
                           )}
                         </React.Fragment>
@@ -1454,18 +1540,77 @@ export default function ChecklistFlow() {
                                 <motion.div
                                   initial={{ opacity: 0, y: -10 }}
                                   animate={{ opacity: 1, y: 0 }}
-                                  className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-6"
+                                  className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-4"
                                 >
+                                  {item.options && item.options.length > 0 && (
+                                    <div className="space-y-2 mb-4">
+                                      <p className="text-[10px] font-bold text-danger uppercase tracking-widest pb-1 border-b border-danger/10">Pendências Mapeadas:</p>
+                                      {item.options.map((opt, i) => {
+                                          const defectIdx = (formData.defects[item.id] || []).findIndex(d => d.description === opt && !d.existing_issue_id);
+                                          const isSelected = defectIdx !== -1;
+                                          const defect = isSelected ? formData.defects[item.id][defectIdx] : null;
+                                          return (
+                                            <div key={i} className={`p-3 rounded-lg border ${isSelected ? 'border-danger bg-white' : 'border-app-border bg-white'} transition-colors`}>
+                                              <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-text-main">
+                                                <input 
+                                                  type="checkbox" 
+                                                  className="w-4 h-4 text-danger rounded border-danger/30"
+                                                  checked={isSelected}
+                                                  onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                       const newDefects = [...(formData.defects[item.id] || []), { description: opt, photo: null }];
+                                                       setFormData(p => ({ ...p, defects: { ...p.defects, [item.id]: newDefects }}));
+                                                    } else {
+                                                       const newDefects = [...(formData.defects[item.id] || [])];
+                                                       newDefects.splice(defectIdx, 1);
+                                                       setFormData(p => ({ ...p, defects: { ...p.defects, [item.id]: newDefects }}));
+                                                    }
+                                                  }}
+                                                />
+                                                {opt}
+                                              </label>
+                                              {isSelected && defect && (
+                                                <div className="flex items-center gap-3 ml-7 pt-3 mt-3 border-t border-danger/10">
+                                                  <div className="relative w-12 h-12 rounded-lg border border-red-200 bg-red-50 flex items-center justify-center overflow-hidden">
+                                                    <input
+                                                      type="file"
+                                                      accept="image/*"
+                                                      capture="environment"
+                                                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                      onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                          imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 1200, useWebWorker: false }).then(compressed => {
+                                                            const newDefects = [...(formData.defects[item.id] || [])];
+                                                            newDefects[defectIdx] = { ...newDefects[defectIdx], photo: compressed };
+                                                            setFormData(p => ({ ...p, defects: { ...p.defects, [item.id]: newDefects } }));
+                                                          });
+                                                        }
+                                                      }}
+                                                    />
+                                                    {defect.photo ? (
+                                                      <img src={URL.createObjectURL(defect.photo)} className="w-full h-full object-cover" alt="Evidência" />
+                                                    ) : <Camera size={16} className="text-danger/50" />}
+                                                  </div>
+                                                  <span className="text-[9px] font-bold text-danger uppercase tracking-widest">Foto Evidência</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                      })}
+                                    </div>
+                                  )}
+
                                   {(formData.defects[item.id] || [])
-                                    .filter((defect) => !defect.existing_issue_id)
-                                    .map((defect, filteredIdx) => {
+                                    .filter((defect) => !defect.existing_issue_id && (!item.options || !item.options.includes(defect.description)))
+                                    .map((defect) => {
+                                      let filteredIdx = -1;
                                       const index = (formData.defects[item.id] || []).findIndex(d => d === defect);
                                       return (
                                       <div
                                         key={index}
-                                        className="space-y-4 pb-4 border-b border-danger/10 last:border-0 last:pb-0 relative"
+                                        className="space-y-4 pt-4 pb-4 border-b border-danger/10 last:border-0 last:pb-0 relative"
                                       >
-                                        {filteredIdx > 0 && (
                                           <button
                                             onClick={() => {
                                               const newDefects = [
@@ -1481,17 +1626,15 @@ export default function ChecklistFlow() {
                                                 },
                                               }));
                                             }}
-                                            className="absolute -right-2 -top-2 w-6 h-6 rounded-full bg-danger text-white flex items-center justify-center shadow-sm"
+                                            className="absolute -right-2 -top-2 w-6 h-6 rounded-full bg-danger text-white flex items-center justify-center shadow-sm z-10"
                                           >
                                             <X size={14} />
                                           </button>
-                                        )}
 
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-1.5 mt-2">
                                           <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
                                             <span>
-                                              Descrição do Problema (Reboque) #
-                                              {filteredIdx + 1}
+                                              Descrição do Problema (Outros - Reboque)
                                             </span>
                                           </label>
                                           <textarea
@@ -1582,6 +1725,7 @@ export default function ChecklistFlow() {
                                     );
                                   })}
 
+                                {item.options && item.options.length > 0 && formData.defects[item.id]?.some(d => !item.options?.includes(d.description)) && (
                                   <button
                                     onClick={() => {
                                       const newDefects = [
@@ -1598,9 +1742,30 @@ export default function ChecklistFlow() {
                                     }}
                                     className="w-full py-2 border-2 border-dashed border-danger/20 rounded-lg text-[9px] font-bold text-danger uppercase tracking-widest hover:bg-danger/5 transition-colors"
                                   >
-                                    + Adicionar outro defeito para este item
-                                    (Reboque)
+                                    + Adicionar outro defeito (Outros)
                                   </button>
+                                )}
+
+                              {(!item.options || item.options.length === 0 || (formData.defects[item.id] || []).filter(d => !item.options?.includes(d.description)).length === 0) && (
+                                <button
+                                  onClick={() => {
+                                    const newDefects = [
+                                      ...(formData.defects[item.id] || []),
+                                      { description: "", photo: null },
+                                    ];
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      defects: {
+                                        ...prev.defects,
+                                        [item.id]: newDefects,
+                                      },
+                                    }));
+                                  }}
+                                  className="w-full py-2 border-2 border-dashed border-danger/20 rounded-lg text-[9px] font-bold text-danger uppercase tracking-widest hover:bg-danger/5 transition-colors"
+                                >
+                                  + {item.options?.length > 0 ? 'Adicionar Outros Reboque' : 'Adicionar defeito para este item (Reboque)'}
+                                </button>
+                              )}
                                 </motion.div>
                               )}
                             </React.Fragment>

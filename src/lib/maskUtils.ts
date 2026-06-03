@@ -1,14 +1,32 @@
-export function encodeItemTitle(title: string, mask: string | null): string {
-  if (!mask || mask === 'none') return title;
-  return `${title}::mask=${mask}`;
+export function encodeItemTitle(title: string, mask: string | null, options: string[] = []): string {
+  let encoded = title;
+  if (mask && mask !== 'none') {
+    encoded += `::mask=${mask}`;
+  }
+  if (options && options.length > 0) {
+    encoded += `::options=${options.join('|')}`;
+  }
+  return encoded;
 }
 
-export function decodeItemTitle(rawTitle: string): { title: string, mask: string | null } {
-  if (rawTitle.includes('::mask=')) {
-    const parts = rawTitle.split('::mask=');
-    return { title: parts[0], mask: parts[1] };
+export function decodeItemTitle(rawTitle: string): { title: string, mask: string | null, options: string[] } {
+  let title = rawTitle;
+  let mask: string | null = null;
+  let options: string[] = [];
+
+  const optionsSplit = title.split('::options=');
+  if (optionsSplit.length > 1) {
+    title = optionsSplit[0];
+    options = optionsSplit[1].split('|').filter(Boolean);
   }
-  return { title: rawTitle, mask: null };
+
+  const maskSplit = title.split('::mask=');
+  if (maskSplit.length > 1) {
+    title = maskSplit[0];
+    mask = maskSplit[1];
+  }
+
+  return { title, mask, options };
 }
 
 export function applyNumberMask(value: string, mask: string | null): string {

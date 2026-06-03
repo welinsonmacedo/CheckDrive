@@ -15,7 +15,9 @@ export default function ChecklistSetupTab() {
     input_type: 'boolean',
     is_required: true,
     mask: 'none',
-    is_fuel_liters: false
+    is_fuel_liters: false,
+    options: [] as string[],
+    newOption: ''
   });
   
   const [saving, setSaving] = useState(false);
@@ -50,15 +52,15 @@ export default function ChecklistSetupTab() {
     setChecklistItems(items || []);
   };
 
-  // Group items by title and is_trailer_item
   const groupedItems = checklistItems.reduce((acc, current) => {
-    const { title: decodedTitle, mask } = decodeItemTitle(current.title);
+    const { title: decodedTitle, mask, options } = decodeItemTitle(current.title);
 
     const key = `${current.title.toLowerCase().trim()}_${current.is_trailer_item}_${current.input_type || 'boolean'}_${current.order_index}`;
     if (!acc[key]) {
       acc[key] = {
         title: decodedTitle,
         mask: mask || 'none',
+        options: options || [],
         is_trailer_item: current.is_trailer_item,
         appears_in_manual: current.appears_in_manual || false,
         input_type: current.input_type || 'boolean',
@@ -83,7 +85,7 @@ export default function ChecklistSetupTab() {
     }
     setSaving(true);
     try {
-      const encodedTitle = encodeItemTitle(itemForm.title, itemForm.mask);
+      const encodedTitle = encodeItemTitle(itemForm.title, itemForm.mask, itemForm.options);
 
       const finalInputType = itemForm.is_fuel_liters ? 'fuel_liters' : itemForm.input_type;
 
@@ -120,7 +122,7 @@ export default function ChecklistSetupTab() {
         }
       }
       
-      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false });
+      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
       setEditingItemIds([]);
       fetchData();
     } catch (error: any) {
@@ -162,7 +164,9 @@ export default function ChecklistSetupTab() {
       input_type: item.input_type === 'fuel_liters' ? 'number' : (item.input_type || 'boolean'),
       is_required: item.is_required,
       mask: item.mask || 'none',
-      is_fuel_liters: item.input_type === 'fuel_liters'
+      is_fuel_liters: item.input_type === 'fuel_liters',
+      options: item.options || [],
+      newOption: ''
     });
     setEditingItemIds(item.ids);
   };
@@ -268,6 +272,51 @@ export default function ChecklistSetupTab() {
                  )}
               </div>
 
+              <div className="flex flex-col gap-2 p-3 bg-zinc-50 border border-app-border rounded-xl mt-2">
+                 <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">Opções de Pendência (Defeito):</span>
+                 <div className="flex flex-col gap-2">
+                   {itemForm.options.map((opt, i) => (
+                     <div key={i} className="flex items-center justify-between p-2 bg-white border border-app-border rounded-lg shadow-sm">
+                       <span className="text-sm font-medium">{opt}</span>
+                       <button
+                         type="button"
+                         onClick={() => setItemForm({ ...itemForm, options: itemForm.options.filter((_, index) => index !== i) })}
+                         className="text-danger hover:bg-red-50 p-1 rounded transition-colors"
+                       >
+                         <X size={14} />
+                       </button>
+                     </div>
+                   ))}
+                   <div className="flex items-center gap-2">
+                     <input
+                       className="h-10 px-3 rounded-lg border border-app-border text-xs font-medium outline-none focus:border-primary flex-1 bg-white"
+                       placeholder="Nova pendência (ex: Pneu furado)"
+                       value={itemForm.newOption}
+                       onChange={e => setItemForm({ ...itemForm, newOption: e.target.value })}
+                       onKeyDown={e => {
+                         if (e.key === 'Enter') {
+                           e.preventDefault();
+                           if (itemForm.newOption.trim()) {
+                             setItemForm({ ...itemForm, options: [...itemForm.options, itemForm.newOption.trim()], newOption: '' });
+                           }
+                         }
+                       }}
+                     />
+                     <button
+                       type="button"
+                       onClick={() => {
+                         if (itemForm.newOption.trim()) {
+                           setItemForm({ ...itemForm, options: [...itemForm.options, itemForm.newOption.trim()], newOption: '' });
+                         }
+                       }}
+                       className="h-10 px-4 bg-zinc-200 text-zinc-700 rounded-lg text-xs font-bold hover:bg-zinc-300 transition-colors"
+                     >
+                       Adicionar
+                     </button>
+                   </div>
+                 </div>
+              </div>
+
               <div className="flex items-center gap-4 mt-1">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input 
@@ -317,7 +366,7 @@ export default function ChecklistSetupTab() {
                     type="button"
                     onClick={() => {
                       setEditingItemIds([]);
-                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false });
+                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
                     }}
                     className="h-10 px-4 bg-zinc-200 text-zinc-700 flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:bg-zinc-300 transition-colors"
                   >
