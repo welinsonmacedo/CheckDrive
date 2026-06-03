@@ -355,7 +355,7 @@ export default function ChecklistFlow() {
       const options = {
         maxSizeMB: 0.5,
         maxWidthOrHeight: 1200,
-        useWebWorker: true,
+        useWebWorker: false,
       };
       const compressedFile = await imageCompression(file, options);
       setFormData((prev) => ({
@@ -1140,7 +1140,6 @@ export default function ChecklistFlow() {
                         <input
                           type="file"
                           accept="image/*"
-                          capture="environment"
                           className="absolute inset-0 opacity-0 z-10 cursor-pointer"
                           onChange={(e) =>
                             e.target.files?.[0] &&
@@ -1320,13 +1319,14 @@ export default function ChecklistFlow() {
                                           <input
                                             type="file"
                                             accept="image/*"
-                                            capture="environment"
                                             className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                             onChange={(e) => {
                                               const file = e.target.files?.[0];
                                               if (file) {
                                                 imageCompression(file, {
                                                   maxSizeMB: 0.5,
+                                                  maxWidthOrHeight: 1200,
+                                                  useWebWorker: false,
                                                 }).then((compressed) => {
                                                   const newDefects = [
                                                     ...(formData.defects[
@@ -1530,7 +1530,6 @@ export default function ChecklistFlow() {
                                               <input
                                                 type="file"
                                                 accept="image/*"
-                                                capture="environment"
                                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                 onChange={(e) => {
                                                   const file =
@@ -1538,6 +1537,8 @@ export default function ChecklistFlow() {
                                                   if (file) {
                                                     imageCompression(file, {
                                                       maxSizeMB: 0.5,
+                                                      maxWidthOrHeight: 1200,
+                                                      useWebWorker: false,
                                                     }).then((compressed) => {
                                                       const newDefects = [
                                                         ...(formData.defects[
