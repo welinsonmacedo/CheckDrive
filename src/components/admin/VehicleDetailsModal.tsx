@@ -254,7 +254,12 @@ export default function VehicleDetailsModal({
                               </div>
                             </td>
                             <td className="px-4 py-3 text-xs font-bold text-text-main">
-                              {iss.item_title}
+                              <div>{iss.item_title}</div>
+                              {iss.description && (
+                                <div className="text-[10px] text-text-muted font-normal mt-0.5 max-w-[200px] whitespace-normal break-words">
+                                  {iss.description}
+                                </div>
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               {iss.status === "pending" ? (
