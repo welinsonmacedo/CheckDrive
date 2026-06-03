@@ -53,7 +53,7 @@ export default function ChecklistFlow() {
     itemValues: {} as Record<string, "normal" | "defect">,
     defects: {} as Record<
       string,
-      Array<{ description: string; photo: File | null; existing_issue_id?: string }>
+      Array<{ description: string; photo: File | null; existing_issue_id?: string; existing_photo_url?: string }>
     >,
   });
 
@@ -133,9 +133,18 @@ export default function ChecklistFlow() {
                 updated = true;
               }
 
-              // We no longer populate formData.defects with existing_issue_id to prevent 
-              // re-submitting them as new inputs or causing duplication.
-              // They will just be displayed as static read-only cards in the UI.
+              if (!newDefects[item.id]) {
+                newDefects[item.id] = [];
+              }
+              if (!newDefects[item.id].some(d => d.existing_issue_id === issue.id)) {
+                newDefects[item.id].push({
+                  description: issue.description || "",
+                  photo: null,
+                  existing_issue_id: issue.id,
+                  existing_photo_url: issue.photo_url || undefined
+                });
+                updated = true;
+              }
             }
           });
 
@@ -317,8 +326,13 @@ export default function ChecklistFlow() {
         items: checklistItems,
       });
 
-      // Init item defaults empty to enforce manual check
-      const defaults: Record<string, "normal" | "defect"> = {};
+      // Init item defaults to 'normal'
+      const defaults: Record<string, string> = {};
+      checklistItems.forEach(item => {
+        if (!item.input_type || item.input_type === 'boolean') {
+          defaults[item.id] = 'normal';
+        }
+      });
 
       setFormData((prev) => ({
         ...prev,
@@ -550,7 +564,7 @@ export default function ChecklistFlow() {
 
         for (let i = 0; i < subDefects.length; i++) {
           const subDefect = subDefects[i];
-          let defectPhotoUrl = null;
+          let defectPhotoUrl = (subDefect as any).existing_photo_url || null;
           if (subDefect.photo) {
             const path = `${user.id}/defects/${Date.now()}_${itemId}_${i}.jpg`;
             const { error: uploadError } = await supabase.storage
@@ -580,6 +594,8 @@ export default function ChecklistFlow() {
           });
         }
       }
+
+      const incrementedIssueIds = new Set<string>();
 
       // Insert or update issues into dedicated table
       if (issuesToInsert.length > 0) {
@@ -616,15 +632,20 @@ export default function ChecklistFlow() {
           if (existings && existings.length > 0) {
             const ex = existings[0];
             let currentAttachments = Array.isArray(ex.attachments)
-              ? ex.attachments
+              ? [...ex.attachments]
               : [];
-            currentAttachments.push({
-              description: newIssue.description,
-              photoUrl: newIssue.photo_url,
-              driver_id: newIssue.driver_id,
-              submission_id: newIssue.submission_id,
-              created_at: new Date().toISOString(),
-            });
+              
+            const isUnchanged = ex.description === newIssue.description && ex.photo_url === newIssue.photo_url;
+            
+            if (!isUnchanged) {
+              currentAttachments.push({
+                description: newIssue.description,
+                photoUrl: newIssue.photo_url,
+                driver_id: newIssue.driver_id,
+                submission_id: newIssue.submission_id,
+                created_at: new Date().toISOString(),
+              });
+            }
 
             const { error: updateError } = await supabase
               .from("checklist_issues")
@@ -642,12 +663,54 @@ export default function ChecklistFlow() {
               );
               const { existing_issue_id, ...issueDataToInsert } = newIssue;
               await supabase.from("checklist_issues").insert(issueDataToInsert);
+            } else {
+              incrementedIssueIds.add(ex.id);
             }
           } else {
             const { existing_issue_id, ...issueDataToInsert } = newIssue;
             await supabase.from("checklist_issues").insert(issueDataToInsert);
           }
         }
+      }
+
+      // Handle un-touched existing defects (resolve or increment)
+      const existingIssuesToResolve = [];
+      for (const issue of existingIssues) {
+        const item = options.items.find(
+          (i: any) =>
+            i.title === issue.item_title &&
+            i.is_trailer_item === (issue.trailer_id !== null),
+        );
+
+        if (item) {
+          const status = formData.itemValues[item.id];
+          if (status === "normal") {
+            existingIssuesToResolve.push(issue.id);
+          } else if (status === "defect") {
+            if (!incrementedIssueIds.has(issue.id)) {
+              await supabase
+                .from("checklist_issues")
+                .update({
+                  report_count: (issue.report_count || 1) + 1,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", issue.id);
+              incrementedIssueIds.add(issue.id);
+            }
+          }
+        }
+      }
+
+      if (existingIssuesToResolve.length > 0) {
+        await supabase
+          .from("checklist_issues")
+          .update({
+             status: "resolved",
+             resolved_at: new Date().toISOString(),
+             resolved_by: user.id,
+             resolution_notes: "Marcado como normal no checklist (automático)"
+          })
+          .in("id", existingIssuesToResolve);
       }
 
       // Update submission with defect data if needed
@@ -1219,7 +1282,7 @@ export default function ChecklistFlow() {
                             </div>
 
                             {/* Defeitos Conhecidos / Existentes */}
-                            {existingIssues.some(
+                            {formData.itemValues[item.id] !== "normal" && existingIssues.some(
                               (issue) => issue.item_title === item.title && !issue.trailer_id,
                             ) && (
                               <div className="mt-3 pt-3 border-t border-app-border">
@@ -1233,15 +1296,22 @@ export default function ChecklistFlow() {
                                   .map((issue) => (
                                     <div
                                       key={issue.id}
-                                      className="text-xs text-text-muted italic bg-orange-50/50 p-2 rounded-lg border border-orange-100"
+                                      className="text-xs text-text-muted italic bg-orange-50/50 p-2 rounded-lg border border-orange-100 flex items-start gap-2"
                                     >
-                                      "{issue.description || "Sem descrição"}"
-                                      <div className="mt-1 text-[9px] font-bold text-orange-600 uppercase tracking-widest">
-                                        Reportado {issue.report_count || 1}{" "}
-                                        {issue.report_count === 1
-                                          ? "vez"
-                                          : "vezes"}
+                                      <div className="flex-1">
+                                        "{issue.description || "Sem descrição"}"
+                                        <div className="mt-1 text-[9px] font-bold text-orange-600 uppercase tracking-widest">
+                                          Reportado {issue.report_count || 1}{" "}
+                                          {issue.report_count === 1
+                                            ? "vez"
+                                            : "vezes"}
+                                        </div>
                                       </div>
+                                      {issue.photo_url && (
+                                        <div className="w-12 h-12 rounded overflow-hidden shrink-0 border border-orange-200">
+                                          <img src={supabase.storage.from("checklist-photos").getPublicUrl(issue.photo_url).data.publicUrl} className="w-full h-full object-cover" alt="Foto Anterior" />
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                               </div>
@@ -1302,6 +1372,8 @@ export default function ChecklistFlow() {
                                                 />
                                                 {defect.photo ? (
                                                   <img src={URL.createObjectURL(defect.photo)} className="w-full h-full object-cover" alt="Evidência" />
+                                                ) : defect.existing_photo_url ? (
+                                                  <img src={supabase.storage.from("checklist-photos").getPublicUrl(defect.existing_photo_url).data.publicUrl} className="w-full h-full object-cover" alt="Evidência Anterior" />
                                                 ) : <Camera size={16} className="text-danger/50" />}
                                               </div>
                                               <span className="text-[9px] font-bold text-danger uppercase tracking-widest">Foto Evidência</span>
@@ -1508,7 +1580,7 @@ export default function ChecklistFlow() {
                               </div>
 
                               {/* Defeitos Conhecidos / Existentes (Reboque) */}
-                              {existingIssues.some(
+                              {formData.itemValues[item.id] !== "normal" && existingIssues.some(
                                 (issue) => issue.item_title === item.title && issue.trailer_id !== null,
                               ) && (
                                 <div className="mt-3 pt-3 border-t border-app-border">
@@ -1522,15 +1594,22 @@ export default function ChecklistFlow() {
                                     .map((issue) => (
                                       <div
                                         key={issue.id}
-                                        className="text-xs text-text-muted italic bg-orange-50/50 p-2 rounded-lg border border-orange-100"
+                                        className="text-xs text-text-muted italic bg-orange-50/50 p-2 rounded-lg border border-orange-100 flex items-start gap-2"
                                       >
-                                        "{issue.description || "Sem descrição"}"
-                                        <div className="mt-1 text-[9px] font-bold text-orange-600 uppercase tracking-widest">
-                                          Reportado {issue.report_count || 1}{" "}
-                                          {issue.report_count === 1
-                                            ? "vez"
-                                            : "vezes"}
+                                        <div className="flex-1">
+                                          "{issue.description || "Sem descrição"}"
+                                          <div className="mt-1 text-[9px] font-bold text-orange-600 uppercase tracking-widest">
+                                            Reportado {issue.report_count || 1}{" "}
+                                            {issue.report_count === 1
+                                              ? "vez"
+                                              : "vezes"}
+                                          </div>
                                         </div>
+                                        {issue.photo_url && (
+                                          <div className="w-12 h-12 rounded overflow-hidden shrink-0 border border-orange-200">
+                                            <img src={supabase.storage.from("checklist-photos").getPublicUrl(issue.photo_url).data.publicUrl} className="w-full h-full object-cover" alt="Foto Anterior" />
+                                          </div>
+                                        )}
                                       </div>
                                     ))}
                                 </div>
@@ -1590,6 +1669,8 @@ export default function ChecklistFlow() {
                                                     />
                                                     {defect.photo ? (
                                                       <img src={URL.createObjectURL(defect.photo)} className="w-full h-full object-cover" alt="Evidência" />
+                                                    ) : defect.existing_photo_url ? (
+                                                      <img src={supabase.storage.from("checklist-photos").getPublicUrl(defect.existing_photo_url).data.publicUrl} className="w-full h-full object-cover" alt="Evidência Anterior" />
                                                     ) : <Camera size={16} className="text-danger/50" />}
                                                   </div>
                                                   <span className="text-[9px] font-bold text-danger uppercase tracking-widest">Foto Evidência</span>
