@@ -446,6 +446,24 @@ export default function ChecklistFlow() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
+      // Validate that all "defect" items have at least one valid description or photo
+      const defectItems = Object.entries(formData.itemValues)
+        .filter(([_, value]) => value === "defect" || value === "defeito")
+        .map(([id]) => id);
+
+      for (const itemId of defectItems) {
+        const itemOption = options.items.find((i: any) => i.id === itemId);
+        const subDefects = formData.defects[itemId] || [];
+        const validDefects = subDefects.filter(
+          (d) => d.description?.trim() !== "" || d.photo || (d as any).existing_photo_url || (d as any).existing_issue_id
+        );
+        if (validDefects.length === 0) {
+          alert(`O item "${itemOption?.title?.split("::")[0]}" foi marcado como DEFEITO, mas nenhuma opção foi selecionada ou descrição fornecida.`);
+          setLoading(false);
+          return;
+        }
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -543,7 +561,7 @@ export default function ChecklistFlow() {
         string,
         Array<{ description: string; photo: File | null }>,
       ][];
-      for (const [itemId, subDefects] of defectEntries) {
+      for (const [itemId, subDefectsRaw] of defectEntries) {
         defectData[itemId] = [];
         const itemOption = options.items.find((i: any) => i.id === itemId);
         const itemTitle = itemOption?.title || "Item Desconhecido";
@@ -561,6 +579,10 @@ export default function ChecklistFlow() {
             issueVehicleId = formData.vehicleId || null;
           }
         }
+
+        const subDefects = subDefectsRaw.filter(
+          (d) => d.description?.trim() !== "" || d.photo || (d as any).existing_photo_url || (d as any).existing_issue_id
+        );
 
         for (let i = 0; i < subDefects.length; i++) {
           const subDefect = subDefects[i];
@@ -688,14 +710,23 @@ export default function ChecklistFlow() {
             existingIssuesToResolve.push(issue.id);
           } else if (status === "defect") {
             if (!incrementedIssueIds.has(issue.id)) {
-              await supabase
-                .from("checklist_issues")
-                .update({
-                  report_count: (issue.report_count || 1) + 1,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", issue.id);
-              incrementedIssueIds.add(issue.id);
+              const isStillInDefects = (formData.defects[item.id] || []).some(d => (d as any).existing_issue_id === issue.id);
+              if (issue.description?.trim() === "" && !issue.photo_url) {
+                // Kill empty issues by resolving them
+                existingIssuesToResolve.push(issue.id);
+              } else if (!isStillInDefects) {
+                // Driver unchecked or removed the existing issue! Resolved!
+                existingIssuesToResolve.push(issue.id);
+              } else {
+                await supabase
+                  .from("checklist_issues")
+                  .update({
+                    report_count: (issue.report_count || 1) + 1,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", issue.id);
+                incrementedIssueIds.add(issue.id);
+              }
             }
           }
         }
@@ -1328,7 +1359,7 @@ export default function ChecklistFlow() {
                                 <div className="space-y-2 mb-4">
                                   <p className="text-[10px] font-bold text-danger uppercase tracking-widest pb-1 border-b border-danger/10">Pendências Mapeadas:</p>
                                   {item.options.map((opt, i) => {
-                                      const defectIdx = (formData.defects[item.id] || []).findIndex(d => d.description === opt && !d.existing_issue_id);
+                                      const defectIdx = (formData.defects[item.id] || []).findIndex(d => d.description === opt);
                                       const isSelected = defectIdx !== -1;
                                       const defect = isSelected ? formData.defects[item.id][defectIdx] : null;
                                       return (
@@ -1625,7 +1656,7 @@ export default function ChecklistFlow() {
                                     <div className="space-y-2 mb-4">
                                       <p className="text-[10px] font-bold text-danger uppercase tracking-widest pb-1 border-b border-danger/10">Pendências Mapeadas:</p>
                                       {item.options.map((opt, i) => {
-                                          const defectIdx = (formData.defects[item.id] || []).findIndex(d => d.description === opt && !d.existing_issue_id);
+                                          const defectIdx = (formData.defects[item.id] || []).findIndex(d => d.description === opt);
                                           const isSelected = defectIdx !== -1;
                                           const defect = isSelected ? formData.defects[item.id][defectIdx] : null;
                                           return (

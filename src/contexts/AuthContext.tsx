@@ -81,7 +81,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (error) {
           console.error("Erro sessão:", error);
-          await supabase.auth.signOut();
+          await supabase.auth.signOut().catch(() => {});
           setUser(null);
           setLoading(false);
           return;
@@ -112,7 +112,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setLoading(false);
       } catch (err) {
         console.error("Erro crítico auth:", err);
-        await supabase.auth.signOut();
+        await supabase.auth.signOut().catch(() => {});
 
         if (mounted) {
           setUser(null);
@@ -191,7 +191,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user?.id, user?.name, user?.role]);
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut().catch(() => {});
     setUser(null);
   };
 
