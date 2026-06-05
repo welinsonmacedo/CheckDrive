@@ -182,7 +182,7 @@ export default function AdminDashboard() {
     );
   };
 
-  const navItems = [
+  const navItems: Array<{ id: string; icon: any; label: string; color: string; disabled?: boolean }> = [
     {
       id: "overview",
       icon: LayoutDashboard,

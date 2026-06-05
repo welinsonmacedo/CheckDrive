@@ -13,6 +13,7 @@ import {
   Car,
 } from "lucide-react";
 import imageCompression from "browser-image-compression";
+import localforage from "localforage";
 import { supabase } from "../lib/supabase";
 import { decodeItemTitle, applyNumberMask, parseMaskedValue } from "../lib/maskUtils";
 
@@ -50,7 +51,7 @@ export default function ChecklistFlow() {
       right: null as File | null,
       receipt: null as File | null,
     },
-    itemValues: {} as Record<string, "normal" | "defect">,
+    itemValues: {} as Record<string, "normal" | "defect" | string>,
     defects: {} as Record<
       string,
       Array<{ description: string; photo: File | null; existing_issue_id?: string; existing_photo_url?: string }>
@@ -66,9 +67,35 @@ export default function ChecklistFlow() {
   const [requireFuelReceiptPhoto, setRequireFuelReceiptPhoto] = useState(true);
   const [requireLocation, setRequireLocation] = useState(false);
 
+  const [dataRestored, setDataRestored] = useState(false);
+
   useEffect(() => {
-    fetchOptions();
+    async function init() {
+      try {
+        const savedData: any = await localforage.getItem(`checklist_state_${type || "start"}`);
+        if (savedData && savedData.formData) {
+          setFormData(savedData.formData);
+          if (savedData.currentStep !== undefined) {
+            setCurrentStep(savedData.currentStep);
+          }
+        }
+      } catch (err) {
+        console.error("Error restoring localforage state:", err);
+      } finally {
+        setDataRestored(true);
+        fetchOptions();
+      }
+    }
+    init();
   }, [type]);
+
+  useEffect(() => {
+    if (dataRestored) {
+      localforage.setItem(`checklist_state_${type || "start"}`, { formData, currentStep }).catch(err => {
+        console.error("Localforage save error:", err);
+      });
+    }
+  }, [formData, currentStep, type, dataRestored]);
 
   useEffect(() => {
     if (formData.vehicleId || formData.trailerId) {
@@ -128,10 +155,10 @@ export default function ChecklistFlow() {
             );
 
             if (item) {
-              if (newItemValues[item.id] !== "defect") {
+              /*if (newItemValues[item.id] !== "defect") {
                 newItemValues[item.id] = "defect";
                 updated = true;
-              }
+              }*/
 
               if (!newDefects[item.id]) {
                 newDefects[item.id] = [];
@@ -335,11 +362,17 @@ export default function ChecklistFlow() {
         }
       });
 
-      setFormData((prev) => ({
-        ...prev,
-        ...prefill,
-        itemValues: defaults,
-      }));
+      setFormData((prev) => {
+        // Build new defaults, but prefer any already-selected itemValues from previous localforage restore state
+        const mergedItemValues = { ...defaults, ...prev.itemValues };
+        return {
+          ...prev,
+          vehicleId: prev.vehicleId || prefill.vehicleId,
+          trailerId: prev.trailerId || prefill.trailerId,
+          routeId: prev.routeId || prefill.routeId,
+          itemValues: mergedItemValues,
+        };
+      });
     } catch (error) {
       console.error("Error loading options:", error);
     } finally {
@@ -447,22 +480,73 @@ export default function ChecklistFlow() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      // Validate that all "defect" items have at least one valid description or photo
-      const defectItems = Object.entries(formData.itemValues)
+      let itemValuesPayload = { ...formData.itemValues };
+      let newDefectsPayload = { ...formData.defects };
+      let formStateModified = false;
+      let promptEmptyFieldsOnce = false;
+      let userAgreedToCloseEmpty = false;
+
+      const defectItems = Object.entries(itemValuesPayload)
         .filter(([_, value]) => value === "defect" || value === "defeito")
         .map(([id]) => id);
 
       for (const itemId of defectItems) {
         const itemOption = options.items.find((i: any) => i.id === itemId);
-        const subDefects = formData.defects[itemId] || [];
+        const subDefects = newDefectsPayload[itemId] || [];
+        
+        const emptyDefects = subDefects.filter(
+          (d) => (!d.description || d.description.trim() === "") && !d.photo && !(d as any).existing_photo_url && !(d as any).existing_issue_id
+        );
+        
         const validDefects = subDefects.filter(
           (d) => d.description?.trim() !== "" || d.photo || (d as any).existing_photo_url || (d as any).existing_issue_id
         );
-        if (validDefects.length === 0) {
-          alert(`O item "${itemOption?.title?.split("::")[0]}" foi marcado como DEFEITO, mas nenhuma opção foi selecionada ou descrição fornecida.`);
-          setLoading(false);
-          return;
+
+        if (emptyDefects.length > 0) {
+          if (!promptEmptyFieldsOnce) {
+            promptEmptyFieldsOnce = true;
+            userAgreedToCloseEmpty = window.confirm(
+              "Existem campos de descrição de defeito abertos sem texto ou foto.\n\nDeseja fechar esses campos para salvar o check-list?"
+            );
+            if (!userAgreedToCloseEmpty) {
+              setLoading(false);
+              return; // Stop and let them write
+            }
+          }
+
+          if (userAgreedToCloseEmpty) {
+            // Remove the empty ones
+            newDefectsPayload[itemId] = validDefects;
+            formStateModified = true;
+          }
         }
+
+        // After cleaning (or if it was already 0 valid defects)
+        if (newDefectsPayload[itemId].length === 0) {
+          // If the user already agreed to close empty fields, we assume they implicitly agreed to make it NORMAL if zero are left.
+          // Or we ask them specifically.
+          const itemName = itemOption?.title?.split("::")[0] || "Desconhecido";
+          const revert = userAgreedToCloseEmpty || window.confirm(
+            `O item "${itemName}" foi marcado como DEFEITO, mas não possui nenhuma descrição ou foto válida.\n\nDeseja alterar este item para NORMAL e prosseguir com o envio?`
+          );
+          
+          if (revert) {
+            itemValuesPayload[itemId] = "normal";
+            delete newDefectsPayload[itemId];
+            formStateModified = true;
+          } else {
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      if (formStateModified) {
+         setFormData(prev => ({
+           ...prev,
+           itemValues: itemValuesPayload,
+           defects: newDefectsPayload
+         }));
       }
 
       const {
@@ -512,7 +596,7 @@ export default function ChecklistFlow() {
       }
 
       // 2. Create Submission
-      const itemValues = formData.itemValues;
+      const itemValues = itemValuesPayload;
       const itemTitles = options.items.reduce(
         (acc: any, item: any) => ({ ...acc, [item.id]: item.title }),
         {},
@@ -884,6 +968,7 @@ export default function ChecklistFlow() {
         }
       }
 
+      await localforage.removeItem(`checklist_state_${type || "start"}`);
       navigate("/dashboard");
     } catch (error) {
       console.error("Submission failed:", error);
@@ -943,9 +1028,7 @@ export default function ChecklistFlow() {
               itemValues: { ...prev.itemValues, [item.id]: "defect" },
               defects: {
                 ...prev.defects,
-                [item.id]: prev.defects[item.id] || [
-                  { description: "", photo: null },
-                ],
+                [item.id]: prev.defects[item.id] || [],
               },
             }));
           }}

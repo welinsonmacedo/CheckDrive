@@ -45,6 +45,8 @@ export default function DriverAverages() {
       
       const getLitersInfo = (details: any) => {
         let liters = 0;
+        let hasAdjustment = false;
+
         if (details?.itemTitles && details?.itemValues) {
           let entry = null;
           if (fuelLiterItems.length > 0) {
@@ -62,22 +64,39 @@ export default function DriverAverages() {
             liters = parseFloat(details.itemValues[entry[0]]?.toString().replace(',','.') || '0');
           }
         }
-        return liters;
+
+        if (details?.adjusted_liters !== undefined && details?.adjusted_liters !== null && details.adjusted_liters !== '') {
+          liters = parseFloat(details.adjusted_liters.toString());
+          hasAdjustment = true;
+        }
+
+        return { liters, hasAdjustment };
       };
 
       const byVehicle: Record<string, any[]> = {};
       submissions.forEach(sub => {
-        const vId = sub.vehicles?.id;
+        const v = Array.isArray(sub.vehicles) ? sub.vehicles[0] : sub.vehicles;
+        const vId = v?.id;
         if (!vId) return;
         if (!byVehicle[vId]) byVehicle[vId] = [];
-        byVehicle[vId].push({ ...sub });
+        byVehicle[vId].push({ 
+          ...sub, 
+          vehicles: v,
+          created_at: sub.details?.adjusted_date || sub.created_at,
+          odometer: sub.details?.adjusted_odometer !== undefined && sub.details?.adjusted_odometer !== null 
+            ? parseInt(sub.details.adjusted_odometer, 10) 
+            : sub.odometer
+        });
       });
 
       const enrichedSubmissions: any[] = [];
       Object.values(byVehicle).forEach(vehicleSubs => {
+        // Sort explicitly by the (potentially adjusted) time
+        vehicleSubs.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        
         let lastFuelSub: any = null;
         vehicleSubs.forEach((sub) => {
-          const liters = getLitersInfo(sub.details);
+          const { liters, hasAdjustment } = getLitersInfo(sub.details);
           if (liters > 0) {
             let distance = 0;
             let avg = 0;
@@ -88,6 +107,7 @@ export default function DriverAverages() {
             enrichedSubmissions.push({
               ...sub,
               liters,
+              hasAdjustment,
               distance,
               average: avg
             });
@@ -187,8 +207,9 @@ export default function DriverAverages() {
                     <span className="block text-[9px] uppercase tracking-widest text-text-muted font-bold mb-1">
                       Litros
                     </span>
-                    <span className="text-sm font-black text-text-main font-mono">
+                    <span className="text-sm font-black text-text-main font-mono relative">
                       {item.liters > 0 ? `${item.liters} L` : '-'}
+                      {item.hasAdjustment && <span className="text-amber-500 ml-1" title="Litros ajustados pelo gestor">*</span>}
                     </span>
                   </div>
                   <div className={`rounded-xl p-3 ${isPending ? 'bg-orange-50' : 'bg-primary/5'}`}>

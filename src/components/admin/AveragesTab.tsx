@@ -72,6 +72,8 @@ export default function AveragesTab() {
   const getLitersInfo = (details: any) => {
     let liters = 0;
     let litersId = null;
+    let hasAdjustment = false;
+
     if (details?.itemTitles && details?.itemValues) {
       let entry = null;
 
@@ -98,16 +100,32 @@ export default function AveragesTab() {
         liters = parseFloat(details.itemValues[entry[0]]?.toString().replace(',','.') || '0');
       }
     }
-    return { liters, litersId };
+
+    if (details?.adjusted_liters !== undefined && details?.adjusted_liters !== null && details.adjusted_liters !== '') {
+      liters = parseFloat(details.adjusted_liters.toString());
+      hasAdjustment = true;
+    }
+
+    return { liters, litersId, hasAdjustment };
   };
 
   // Process data to calculate distances and averages
   const processData = () => {
     const byVehicle: Record<string, any[]> = {};
+    const scheduleFuelMap: Record<string, any> = {};
     
     // Group by vehicle and sort by created_at (already sorted from DB)
     // Only fuel submissions matter for the interval loop
-    const fuelSubmissions = submissions.filter(s => s.type === 'fuel');
+    const mappedSubmissions = submissions.map(sub => ({
+      ...sub,
+      created_at: sub.details?.adjusted_date || sub.created_at,
+      odometer: sub.details?.adjusted_odometer !== undefined && sub.details?.adjusted_odometer !== null 
+        ? parseInt(sub.details.adjusted_odometer, 10) 
+        : sub.odometer
+    }));
+
+    mappedSubmissions.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const fuelSubmissions = mappedSubmissions.filter(s => s.type === 'fuel');
 
     fuelSubmissions.forEach(sub => {
       const vId = sub.vehicles?.id;
@@ -151,6 +169,7 @@ export default function AveragesTab() {
               if (endOdo > startOdo) {
                 scaleDistance += (endOdo - startOdo);
               }
+              scheduleFuelMap[s.id] = sub;
             });
 
             // Off-scale is simply whatever is left over
@@ -174,10 +193,12 @@ export default function AveragesTab() {
 
     // Re-sort enriched by created_at DESC for display
     enrichedSubmissions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return enrichedSubmissions;
+    return { list: enrichedSubmissions, map: scheduleFuelMap };
   };
 
-  const enrichedData = useMemo(() => processData(), [submissions, schedules, fuelLiterItems]);
+  const processed = useMemo(() => processData(), [submissions, schedules, fuelLiterItems]);
+  const enrichedData = processed.list;
+  const scheduleFuelMap = processed.map;
 
   const passesDateFilter = (dateString: string) => {
     if (!startDate && !endDate) return true;
@@ -253,21 +274,35 @@ export default function AveragesTab() {
     if (!editingId) return;
     
     try {
-      const subToUpdate = submissions.find(s => s.id === editingId);
+      const subToUpdate = scheduleFuelMap[editingId];
       if (!subToUpdate) return;
+      const fuelSubId = subToUpdate.id;
       
       const newDetails = { ...subToUpdate.details };
-      if (editData.litersId && newDetails.itemValues) {
-        newDetails.itemValues[editData.litersId] = editData.liters.toString();
+      // Instead of changing itemValues, we set adjusted_liters
+      if (editData.liters !== '') {
+        newDetails.adjusted_liters = editData.liters.toString();
+      } else {
+        newDetails.adjusted_liters = null; // reset to original
+      }
+      
+      if (editData.odometer !== '') {
+        newDetails.adjusted_odometer = editData.odometer.toString();
+      } else {
+        newDetails.adjusted_odometer = null;
+      }
+      
+      if (editData.date !== '') {
+        newDetails.adjusted_date = new Date(editData.date).toISOString();
+      } else {
+        newDetails.adjusted_date = null;
       }
 
       const { error } = await supabase.from('checklist_submissions')
         .update({
-          odometer: parseInt(editData.odometer, 10) || 0,
-          details: newDetails,
-          created_at: new Date(editData.date).toISOString()
+          details: newDetails
         })
-        .eq('id', editingId);
+        .eq('id', fuelSubId);
 
       if (error) throw error;
       
@@ -280,15 +315,23 @@ export default function AveragesTab() {
     }
   };
 
-  const startEditing = (sub: any) => {
-    setEditingId(sub.id);
-    let dDate = new Date(sub.created_at);
+  const startEditing = (s: any) => {
+    // s is now a schedule
+    const sub = scheduleFuelMap[s.id];
+    if (!sub) return;
+
+    setEditingId(s.id); // track editing by schedule 'id'
+    let dDate = new Date(sub.details?.adjusted_date || sub.created_at);
     dDate.setMinutes(dDate.getMinutes() - dDate.getTimezoneOffset());
     
+    const { liters, litersId } = getLitersInfo(sub.details);
+    
     setEditData({
-      odometer: sub.odometer?.toString() || '',
-      liters: sub.liters?.toString() || '',
-      litersId: sub.litersId,
+      odometer: sub.details?.adjusted_odometer !== undefined && sub.details?.adjusted_odometer !== null 
+        ? sub.details.adjusted_odometer.toString() 
+        : sub.odometer?.toString() || '',
+      liters: liters > 0 ? liters.toString() : '',
+      litersId: litersId,
       date: dDate.toISOString().slice(0, 16)
     });
   };
@@ -296,8 +339,7 @@ export default function AveragesTab() {
   const tabs = [
     { id: 'vehicles', label: 'Médias por Veículo' },
     { id: 'drivers', label: 'Médias por Motorista' },
-    { id: 'schedules', label: 'Médias por Escala' },
-    { id: 'edit', label: 'Gestão de Abastecimentos' }
+    { id: 'schedules', label: 'Médias por Escala (C/ Revisão)' }
   ];
 
   if (loading) {
@@ -444,24 +486,33 @@ export default function AveragesTab() {
 
         {activeTab === 'schedules' && (
           <div className="p-6">
-            <h3 className="text-xl font-black text-text-main mb-6">Média de Consumo (Por Escala)</h3>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-text-main">Média de Consumo (Por Escala)</h3>
+              <p className="text-xs text-zinc-500 flex items-center gap-2">
+                <AlertCircle size={14} className="text-amber-500"/>
+                Edite litros abastecidos sem alterar o check-list original do motorista.
+              </p>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead className="bg-app-bg text-[10px] uppercase tracking-widest text-text-muted font-black border-y border-app-border">
                   <tr>
                     <th className="py-3 px-4">Início da Escala</th>
                     <th className="py-3 px-4">Veículo</th>
-                    <th className="py-3 px-4">Motorista</th>
+                    <th className="py-3 px-4">Motorista Escala</th>
+                    <th className="py-3 px-4 bg-app-bg border-l border-r border-app-border">Info Abastecimento</th>
                     <th className="py-3 px-4">Km Escala</th>
-                    <th className="py-3 px-4">Km Acumulado</th>
-                    <th className="py-3 px-4">Litros</th>
+                    <th className="py-3 px-4">Km Acum.</th>
+                    <th className="py-3 px-4 border-r border-app-border">Litros</th>
                     <th className="py-3 px-4 text-primary">Média</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-app-border">
                   {filteredSchedules.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-sm text-zinc-500">
+                      <td colSpan={10} className="py-8 text-center text-sm text-zinc-500">
                         Nenhuma escala encontrada no período selecionado.
                       </td>
                     </tr>
@@ -471,14 +522,20 @@ export default function AveragesTab() {
                     const scheduleDistance = endOdo > startOdo ? endOdo - startOdo : 0;
                     
                     let liters = 0;
+                    let hasAdjustment = false;
                     let accumulatedDistance = 0;
                     let avg = '-';
+                    let fuelSub: any = null;
+                    const mappedFuelSub = scheduleFuelMap[s.id];
 
-                    if (s.fuel_checklist) {
-                       const { liters: L } = getLitersInfo(s.fuel_checklist.details);
+                    if (mappedFuelSub) {
+                       const { liters: L, hasAdjustment: hasAdj } = getLitersInfo(mappedFuelSub.details);
                        liters = L;
+                       hasAdjustment = hasAdj;
                        // Find global processed data for this fuel submission
-                       const globalSub = enrichedData.find(e => e.id === s.fuel_checklist.id);
+                       const globalSub = enrichedData.find(e => e.id === mappedFuelSub.id);
+                       fuelSub = mappedFuelSub;
+                       
                        if (globalSub) {
                          accumulatedDistance = globalSub.distance || 0;
                          if (globalSub.average > 0) {
@@ -488,123 +545,115 @@ export default function AveragesTab() {
                     }
 
                     return (
-                      <tr key={s.id}>
-                        <td className="py-3 px-4 font-mono text-sm text-text-main">
-                          {new Date(s.start_at || s.created_at).toLocaleString('pt-BR')}
+                      <tr key={s.id} className={editingId === s.id ? 'bg-blue-50/30' : ''}>
+                        <td className="py-3 px-4 font-mono text-sm text-text-main align-middle">
+                          {editingId === s.id ? (
+                            <input 
+                              type="datetime-local" 
+                              className="bg-white border border-zinc-300 rounded px-2 py-1 text-xs"
+                              value={editData.date}
+                              onChange={(e) => setEditData({...editData, date: e.target.value})}
+                            />
+                          ) : (
+                            new Date(s.start_at || s.created_at).toLocaleString('pt-BR')
+                          )}
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-sm text-text-main">{s.vehicles?.plate || '-'}</td>
                         <td className="py-3 px-4 font-bold text-sm text-text-main">{s.profiles?.full_name?.split(' ')[0] || '-'}</td>
-                        <td className="py-3 px-4 font-mono text-sm">{scheduleDistance > 0 ? `${scheduleDistance.toLocaleString('pt-BR')} km` : '-'}</td>
-                        <td className="py-3 px-4 font-mono text-sm text-amber-600 font-medium">{accumulatedDistance > 0 ? `${accumulatedDistance.toLocaleString('pt-BR')} km` : '-'}</td>
-                        <td className="py-3 px-4 font-mono text-sm">{liters > 0 ? `${liters.toFixed(2)} L` : '-'}</td>
+                        
+                        <td className="py-3 px-4 bg-app-bg/30 border-l border-r border-app-border">
+                          {fuelSub ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-mono text-text-main">
+                                {new Date(fuelSub.created_at).toLocaleString('pt-BR')}
+                              </span>
+                              <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">
+                                Por: <span className="text-primary">{fuelSub.profiles?.full_name?.split(' ')[0] || '-'}</span>
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-zinc-400">-</span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4 font-mono text-sm">
+                          {editingId === s.id ? ( // for layout consistency, only edit odometer on fuel_sub? Actually odometer we might just want to edit fuel odometer not schedule
+                            scheduleDistance > 0 ? `${scheduleDistance.toLocaleString('pt-BR')} km` : '-'
+                          ) : (
+                            scheduleDistance > 0 ? `${scheduleDistance.toLocaleString('pt-BR')} km` : '-'
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4 font-mono text-sm text-amber-600 font-medium">
+                          {editingId === s.id ? (
+                            <input 
+                              type="number" 
+                              className="w-24 bg-white border border-zinc-300 rounded px-2 py-1 text-xs text-text-main"
+                              value={editData.odometer}
+                              onChange={(e) => setEditData({...editData, odometer: e.target.value})}
+                              placeholder="Odo Abast."
+                              title="Hodômetro do abastecimento"
+                            />
+                          ) : (
+                            accumulatedDistance > 0 ? `${accumulatedDistance.toLocaleString('pt-BR')} km` : '-'
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4 font-mono text-sm relative border-r border-app-border">
+                           {editingId === s.id && mappedFuelSub ? (
+                             <input 
+                               type="number" 
+                               step="0.01"
+                               className="w-20 bg-white border border-zinc-300 rounded px-2 py-1 text-xs"
+                               value={editData.liters}
+                               onChange={(e) => setEditData({...editData, liters: e.target.value})}
+                               placeholder="Lt."
+                             />
+                           ) : (
+                             <span className="flex items-center gap-1">
+                               {liters > 0 ? `${liters.toFixed(2)} L` : '-'}
+                               {hasAdjustment && <span className="text-[10px] text-amber-500 font-black" title="Litros ajustados manualmente">*</span>}
+                             </span>
+                           )}
+                        </td>
                         <td className="py-3 px-4 font-mono font-black text-primary text-sm">
                            {avg} {avg !== '-' && <span className="text-[10px] text-zinc-500 font-normal">Km/L</span>}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {mappedFuelSub && (
+                            <button
+                              onClick={() => toggleReviewStatus(mappedFuelSub)}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors ${
+                                mappedFuelSub.details?.average_status === 'reviewed' 
+                                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
+                                  : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                              }`}
+                            >
+                              {mappedFuelSub.details?.average_status === 'reviewed' ? (
+                                <><CheckCircle2 size={12} /> Revisado</>
+                              ) : (
+                                <><Clock size={12} /> Aguardando</>
+                              )}
+                            </button>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          {mappedFuelSub && (
+                            editingId === s.id ? (
+                              <div className="flex gap-2">
+                                <button onClick={handleSaveEdit} className="p-1.5 bg-primary text-white rounded hover:bg-primary-hover" title="Salvar"><Save size={14}/></button>
+                                <button onClick={() => setEditingId(null)} className="p-1.5 bg-zinc-200 text-zinc-700 rounded hover:bg-zinc-300" title="Cancelar"><X size={14}/></button>
+                              </div>
+                            ) : (
+                              <button onClick={() => startEditing(s)} className="p-1.5 bg-zinc-100 text-zinc-600 rounded hover:bg-zinc-200" title="Ajustar Abastecimento">
+                                <Edit2 size={14}/>
+                              </button>
+                            )
+                          )}
                         </td>
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'edit' && (
-          <div className="p-6">
-            <h3 className="text-xl font-black text-text-main mb-4">Gestão de Abastecimentos</h3>
-            <p className="text-xs text-zinc-500 mb-6 flex items-center gap-2">
-              <AlertCircle size={14} className="text-amber-500"/>
-              Edite as linhas de abastecimento para ajustar as margens de cálculo das médias (limitado ao filtro).
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-app-bg text-[10px] uppercase tracking-widest text-text-muted font-black border-y border-app-border">
-                  <tr>
-                    <th className="py-3 px-4">Data/Hora</th>
-                    <th className="py-3 px-4">Veículo</th>
-                    <th className="py-3 px-4">Motorista</th>
-                    <th className="py-3 px-4">Hodômetro</th>
-                    <th className="py-3 px-4">Litros Info</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-app-border">
-                  {filteredEnrichedData.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-sm text-zinc-500">
-                        Nenhum abastecimento encontrado no período selecionado.
-                      </td>
-                    </tr>
-                  ) : filteredEnrichedData.map((sub: any) => (
-                    <tr key={sub.id} className={editingId === sub.id ? 'bg-blue-50/30' : ''}>
-                      <td className="py-3 px-4 text-xs font-mono text-text-main align-middle">
-                        {editingId === sub.id ? (
-                          <input 
-                            type="datetime-local" 
-                            className="bg-white border border-zinc-300 rounded px-2 py-1 text-xs"
-                            value={editData.date}
-                            onChange={(e) => setEditData({...editData, date: e.target.value})}
-                          />
-                        ) : (
-                          new Date(sub.created_at).toLocaleString('pt-BR')
-                        )}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-xs text-text-main">{sub.vehicles?.plate}</td>
-                      <td className="py-3 px-4 font-bold text-xs text-text-main">{sub.profiles?.full_name?.split(' ')[0]}</td>
-                      <td className="py-3 px-4 font-mono text-xs">
-                         {editingId === sub.id ? (
-                           <input 
-                             type="number" 
-                             className="w-24 bg-white border border-zinc-300 rounded px-2 py-1"
-                             value={editData.odometer}
-                             onChange={(e) => setEditData({...editData, odometer: e.target.value})}
-                           />
-                         ) : (
-                           sub.odometer ? `${sub.odometer} km` : '-'
-                         )}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-xs">
-                         {editingId === sub.id && sub.litersId ? (
-                           <input 
-                             type="number" 
-                             step="0.01"
-                             className="w-20 bg-white border border-zinc-300 rounded px-2 py-1"
-                             value={editData.liters}
-                             onChange={(e) => setEditData({...editData, liters: e.target.value})}
-                           />
-                         ) : (
-                           sub.liters > 0 ? `${sub.liters} L` : '-'
-                         )}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => toggleReviewStatus(sub)}
-                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors ${
-                            sub.details?.average_status === 'reviewed' 
-                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
-                              : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                          }`}
-                        >
-                          {sub.details?.average_status === 'reviewed' ? (
-                            <><CheckCircle2 size={12} /> Revisado</>
-                          ) : (
-                            <><Clock size={12} /> Aguardando</>
-                          )}
-                        </button>
-                      </td>
-                      <td className="py-3 px-4">
-                        {editingId === sub.id ? (
-                          <div className="flex gap-2">
-                            <button onClick={handleSaveEdit} className="p-1.5 bg-primary text-white rounded hover:bg-primary-hover"><Save size={14}/></button>
-                            <button onClick={() => setEditingId(null)} className="p-1.5 bg-zinc-200 text-zinc-700 rounded hover:bg-zinc-300"><X size={14}/></button>
-                          </div>
-                        ) : (
-                          <button onClick={() => startEditing(sub)} className="p-1.5 bg-zinc-100 text-zinc-600 rounded hover:bg-zinc-200" title="Editar Abastecimento"><Edit2 size={14}/></button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>

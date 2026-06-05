@@ -15,7 +15,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function DriverProfile() {
-  const { user, signOut } = useAuth();
+  const { user, logout } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [closings, setClosings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -340,7 +340,7 @@ export default function DriverProfile() {
       </div>
 
       <button
-        onClick={() => signOut()}
+        onClick={() => logout()}
         className="w-full mt-6 h-14 border border-danger/20 text-danger bg-red-50 text-[11px] font-black uppercase tracking-widest rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
       >
         <LogOut size={18} />
