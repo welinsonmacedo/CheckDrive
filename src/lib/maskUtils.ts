@@ -63,7 +63,7 @@ export function parseMaskedValue(value: string, mask: string | null): string {
   if (mask === 'decimal' || mask === 'currency') {
      let numeric = value.replace(/[^0-9]/g, '');
      if (!numeric) return '';
-     return (parseInt(numeric, 10) / 100).toString();
+     return (parseInt(numeric, 10) / 100).toFixed(2);
   }
   if (mask === 'integer') {
      return value.replace(/[^0-9]/g, '');

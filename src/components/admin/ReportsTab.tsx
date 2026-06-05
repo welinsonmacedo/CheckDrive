@@ -34,6 +34,8 @@ export default function ReportsTab() {
     any | null
   >(null);
 
+  const [printMode, setPrintMode] = useState<"all" | "pending" | "resolved">("all");
+
   // Defects Data
   const [defectsData, setDefectsData] = useState<any[]>([]);
   const [defectsStats, setDefectsStats] = useState({
@@ -286,13 +288,36 @@ export default function ReportsTab() {
         </p>
       </div>
 
-      <div className="flex justify-end print:hidden">
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-text-main text-xs font-bold rounded-xl transition-colors"
-        >
-          <Printer size={16} /> Imprimir / PDF
-        </button>
+      <div className="flex flex-wrap justify-end gap-2 print:hidden">
+        {activeReport === "defects" ? (
+          <>
+            <button
+              onClick={() => { setPrintMode("pending"); setTimeout(() => window.print(), 100); }}
+              className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-danger text-xs font-bold rounded-xl transition-colors"
+            >
+              <Printer size={16} /> Somente Pendentes
+            </button>
+            <button
+              onClick={() => { setPrintMode("resolved"); setTimeout(() => window.print(), 100); }}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-xs font-bold rounded-xl transition-colors"
+            >
+              <Printer size={16} /> Somente Resolvidas
+            </button>
+            <button
+              onClick={() => { setPrintMode("all"); setTimeout(() => window.print(), 100); }}
+              className="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-text-main text-xs font-bold rounded-xl transition-colors"
+            >
+              <Printer size={16} /> Imprimir Ambas
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-text-main text-xs font-bold rounded-xl transition-colors"
+          >
+            <Printer size={16} /> Imprimir / PDF
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -382,96 +407,166 @@ export default function ReportsTab() {
                   </div>
                 </div>
 
-                {/* Defects List */}
-                <div className="lg:col-span-2 bg-white rounded-2xl border border-app-border shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible">
-                  <div className="p-5 border-b border-app-border bg-zinc-50/50">
-                    <h3 className="text-sm font-black text-text-main tracking-tight flex items-center gap-2">
-                      <FileText size={18} className="text-primary" />
-                      Listagem de Ocorrências
-                    </h3>
-                  </div>
-                  <div className="flex-1 overflow-auto max-h-[400px] print:max-h-none print:overflow-visible">
-                    <table className="w-full text-left border-collapse">
-                      <thead className="bg-zinc-50/80 sticky top-0 border-b border-app-border">
-                        <tr>
-                          <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                            Data
-                          </th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                            Motorista
-                          </th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                            Veículo/Reboque
-                          </th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                            Defeito
-                          </th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                            Status
-                          </th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest print:hidden text-right">
-                            Ação
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-app-border">
-                        {defectsData.length === 0 ? (
+                {/* Defects Lists Container */}
+                <div className="lg:col-span-3 space-y-6">
+                  {/* Pending Defects List */}
+                  <div className={`bg-white rounded-2xl border border-app-border shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible ${printMode === 'resolved' ? 'print:hidden' : ''}`}>
+                    <div className="p-5 border-b border-app-border bg-red-50/50">
+                      <h3 className="text-sm font-black text-danger tracking-tight flex items-center gap-2">
+                        <AlertTriangle size={18} />
+                        Pendências em Aberto
+                      </h3>
+                    </div>
+                    <div className="flex-1 overflow-auto max-h-[400px] print:max-h-none print:overflow-visible">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-zinc-50/80 sticky top-0 border-b border-app-border">
                           <tr>
-                            <td
-                              colSpan={6}
-                              className="text-center py-8 text-xs text-text-muted uppercase tracking-widest font-bold"
-                            >
-                              Sem dados para exibir
-                            </td>
+                            <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest whitespace-nowrap">
+                              Data
+                            </th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Veículo/Reboque
+                            </th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest w-1/3">
+                              Defeito / Descrição
+                            </th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest print:hidden text-right">
+                              Ação
+                            </th>
                           </tr>
-                        ) : (
-                          defectsData.map((d) => (
-                            <tr key={d.id} className="hover:bg-zinc-50/50">
-                              <td className="px-4 py-3 text-xs font-bold text-text-muted">
-                                {format(parseISO(d.created_at), "dd/MM/yyyy", {
-                                  locale: ptBR,
-                                })}
-                              </td>
-                              <td className="px-4 py-3 text-xs font-black text-text-main">
-                                {d.profiles?.full_name || "-"}
-                              </td>
-                              <td className="px-4 py-3 text-xs font-black text-text-main">
-                                {d.vehicles?.plate
-                                  ? d.trailers?.plate
-                                    ? `${d.vehicles.plate} / ${d.trailers.plate}`
-                                    : d.vehicles.plate
-                                  : d.trailers?.plate || "-"}
-                              </td>
-                              <td className="px-4 py-3 text-xs font-medium text-text-main">
-                                {d.item_title}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span
-                                  className={`inline-flex items-center px-1.5 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                                    d.status === "resolved"
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-red-100 text-red-700"
-                                  }`}
-                                >
-                                  {d.status === "resolved"
-                                    ? "Resolvido"
-                                    : "Pendente"}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right print:hidden">
-                                <button
-                                  onClick={() => setSelectedDefectToPrint(d)}
-                                  title="Imprimir Ficha"
-                                  className="p-2 text-zinc-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-colors inline-flex"
-                                >
-                                  <Printer size={16} />
-                                </button>
+                        </thead>
+                        <tbody className="divide-y divide-app-border">
+                          {defectsData.filter(d => d.status === "pending").length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={4}
+                                className="text-center py-8 text-xs text-text-muted uppercase tracking-widest font-bold"
+                              >
+                                Nenhuma pendência em aberto
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            defectsData.filter(d => d.status === "pending").map((d) => (
+                              <tr key={d.id} className="hover:bg-zinc-50/50">
+                                <td className="px-4 py-3 text-xs font-bold text-text-muted whitespace-nowrap">
+                                  {format(parseISO(d.created_at), "dd/MM/yyyy", {
+                                    locale: ptBR,
+                                  })}
+                                </td>
+                                <td className="px-4 py-3 text-xs font-black text-text-main whitespace-nowrap">
+                                  {d.vehicles?.plate
+                                    ? d.trailers?.plate
+                                      ? `${d.vehicles.plate} / ${d.trailers.plate}`
+                                      : d.vehicles.plate
+                                    : d.trailers?.plate || "-"}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="text-xs font-black text-text-main">
+                                    {d.item_title}
+                                  </div>
+                                  <div className="text-[11px] text-text-muted mt-0.5 line-clamp-2 print:line-clamp-none">
+                                    {d.description || "Sem descrição"}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-right print:hidden whitespace-nowrap">
+                                  <button
+                                    onClick={() => setSelectedDefectToPrint(d)}
+                                    title="Imprimir Ficha"
+                                    className="p-2 text-zinc-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-colors inline-flex"
+                                  >
+                                    <Printer size={16} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Resolved Defects List */}
+                  <div className={`bg-white rounded-2xl border border-app-border shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible ${printMode === 'pending' ? 'print:hidden' : ''}`}>
+                    <div className="p-5 border-b border-app-border bg-emerald-50/50">
+                      <h3 className="text-sm font-black text-emerald-600 tracking-tight flex items-center gap-2">
+                        <CheckCircle2 size={18} />
+                        Pendências Resolvidas
+                      </h3>
+                    </div>
+                    <div className="flex-1 overflow-auto max-h-[400px] print:max-h-none print:overflow-visible">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-zinc-50/80 sticky top-0 border-b border-app-border">
+                          <tr>
+                            <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest whitespace-nowrap">
+                              Data da Pendência
+                            </th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest whitespace-nowrap">
+                              Data da Resolução
+                            </th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Veículo/Reboque
+                            </th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest w-1/3">
+                              Defeito / Descrição
+                            </th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest print:hidden text-right">
+                              Ação
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-app-border">
+                          {defectsData.filter(d => d.status === "resolved").length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={5}
+                                className="text-center py-8 text-xs text-text-muted uppercase tracking-widest font-bold"
+                              >
+                                Nenhuma pendência resolvida
+                              </td>
+                            </tr>
+                          ) : (
+                            defectsData.filter(d => d.status === "resolved").map((d) => (
+                              <tr key={d.id} className="hover:bg-zinc-50/50">
+                                <td className="px-4 py-3 text-xs font-bold text-text-muted whitespace-nowrap">
+                                  {format(parseISO(d.created_at), "dd/MM/yyyy", {
+                                    locale: ptBR,
+                                  })}
+                                </td>
+                                <td className="px-4 py-3 text-xs font-bold text-emerald-600 whitespace-nowrap">
+                                  {d.resolved_at ? format(parseISO(d.resolved_at), "dd/MM/yyyy", {
+                                    locale: ptBR,
+                                  }) : "-"}
+                                </td>
+                                <td className="px-4 py-3 text-xs font-black text-text-main whitespace-nowrap">
+                                  {d.vehicles?.plate
+                                    ? d.trailers?.plate
+                                      ? `${d.vehicles.plate} / ${d.trailers.plate}`
+                                      : d.vehicles.plate
+                                    : d.trailers?.plate || "-"}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="text-xs font-black text-text-main">
+                                    {d.item_title}
+                                  </div>
+                                  <div className="text-[11px] text-text-muted mt-0.5 line-clamp-2 print:line-clamp-none">
+                                    {d.description || "Sem descrição"}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-right print:hidden whitespace-nowrap">
+                                  <button
+                                    onClick={() => setSelectedDefectToPrint(d)}
+                                    title="Imprimir Ficha"
+                                    className="p-2 text-zinc-400 hover:text-primary hover:bg-primary/10 rounded-xl transition-colors inline-flex"
+                                  >
+                                    <Printer size={16} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               </div>

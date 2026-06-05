@@ -152,6 +152,7 @@ export default function ChecklistFlow() {
             return {
               ...prev,
               itemValues: newItemValues,
+              defects: newDefects,
             };
           }
           return prev;

@@ -222,9 +222,8 @@ export default function AdminDashboard() {
     {
       id: "averages",
       icon: Activity,
-      label: "Médias (Em Breve)",
+      label: "Médias",
       color: "from-cyan-500 to-blue-500",
-      disabled: true,
     },
     {
       id: "schedules",

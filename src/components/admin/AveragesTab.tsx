@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'motion/react';
-import { Save, Edit2, X, AlertCircle, Filter } from 'lucide-react';
+import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock } from 'lucide-react';
 
 export default function AveragesTab() {
   const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers' | 'schedules' | 'edit'>('vehicles');
@@ -230,6 +230,24 @@ export default function AveragesTab() {
       return acc;
     }, {});
   }, [filteredEnrichedData]);
+
+  const toggleReviewStatus = async (sub: any) => {
+    try {
+      const newDetails = { ...sub.details };
+      const newStatus = newDetails.average_status === 'reviewed' ? 'pending' : 'reviewed';
+      newDetails.average_status = newStatus;
+      
+      const { error } = await supabase.from('checklist_submissions')
+        .update({ details: newDetails })
+        .eq('id', sub.id);
+        
+      if (!error) {
+        fetchData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleSaveEdit = async () => {
     if (!editingId) return;
@@ -507,6 +525,7 @@ export default function AveragesTab() {
                     <th className="py-3 px-4">Motorista</th>
                     <th className="py-3 px-4">Hodômetro</th>
                     <th className="py-3 px-4">Litros Info</th>
+                    <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4">Ações</th>
                   </tr>
                 </thead>
@@ -557,6 +576,22 @@ export default function AveragesTab() {
                          ) : (
                            sub.liters > 0 ? `${sub.liters} L` : '-'
                          )}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          onClick={() => toggleReviewStatus(sub)}
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors ${
+                            sub.details?.average_status === 'reviewed' 
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
+                              : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                          }`}
+                        >
+                          {sub.details?.average_status === 'reviewed' ? (
+                            <><CheckCircle2 size={12} /> Revisado</>
+                          ) : (
+                            <><Clock size={12} /> Aguardando</>
+                          )}
+                        </button>
                       </td>
                       <td className="py-3 px-4">
                         {editingId === sub.id ? (

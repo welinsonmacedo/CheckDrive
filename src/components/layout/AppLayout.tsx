@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, LogOut, Home, Trophy, AlertTriangle, User as UserIcon } from 'lucide-react';
+import { BookOpen, LogOut, Home, Trophy, AlertTriangle, User as UserIcon, Droplets } from 'lucide-react';
 import { User } from '../../types';
 
 interface AppLayoutProps {
@@ -37,6 +37,20 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
               Início
             </span>
           </Link>
+
+          {!user?.isInternal && (
+            <Link
+              to="/medias"
+              className={`flex flex-col items-center gap-1 transition-colors ${
+                location.pathname === '/medias' ? 'text-primary' : 'text-zinc-400'
+              }`}
+            >
+              <Droplets size={20} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">
+                Médias
+              </span>
+            </Link>
+          )}
 
           {!user?.isInternal && (
             <Link
@@ -77,16 +91,6 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
               Perfil
             </span>
           </Link>
-
-          <button
-            onClick={onLogout}
-            className="flex flex-col items-center gap-1 text-zinc-400"
-          >
-            <LogOut size={20} />
-            <span className="text-[10px] font-bold uppercase tracking-wider">
-              Sair
-            </span>
-          </button>
 
         </nav>
       )}
