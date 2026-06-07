@@ -613,7 +613,7 @@ export default function ChecklistFlow() {
         return;
       }
 
-      if (!navigator.onLine) {
+      const saveOfflineAndExit = async () => {
         setLoading(true);
         const { fileToBase64 } = await import('../lib/offlineSubmitHelper');
         const { queueSubmission } = await import('../lib/offlineQueue');
@@ -654,11 +654,16 @@ export default function ChecklistFlow() {
           }
         });
 
-        alert("Sem conexão com a internet. O Checklist foi salvo localmente como pendente e será enviado quando houver rede.");
+        alert("Checklist salvo localmente, e será enviado automaticamente quando houver conexão.");
         await localforage.removeItem(`checklist_state_${type || "start"}`);
         navigate("/dashboard");
+      };
+
+      if (!navigator.onLine) {
+        await saveOfflineAndExit();
         return;
       }
+
 
       // 1. Upload external photos
       const photoUrls: Record<string, string> = {};
@@ -1049,9 +1054,22 @@ export default function ChecklistFlow() {
 
       await localforage.removeItem(`checklist_state_${type || "start"}`);
       navigate("/dashboard");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Submission failed:", error);
-      alert("Falha ao enviar checklist. Verifique conexão e tente novamente.");
+      if (
+        !navigator.onLine ||
+        error?.message?.toLowerCase().includes("fetch") ||
+        error?.message?.toLowerCase().includes("network") ||
+        error?.message?.toLowerCase().includes("timeout") ||
+        error?.message?.toLowerCase().includes("offline")
+      ) {
+        await saveOfflineAndExit();
+      } else {
+        alert(
+          "Falha ao enviar checklist. Tente novamente. Se o problema persistir tire o aplicativo do ar ou tente novamente offline.\nErro: " +
+            (error?.message || "Desconhecido"),
+        );
+      }
     } finally {
       setLoading(false);
     }
