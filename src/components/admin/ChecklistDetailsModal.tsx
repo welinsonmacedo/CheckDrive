@@ -288,6 +288,13 @@ export default function ChecklistDetailsModal({
     }, 500);
   };
 
+  const titleToId: Record<string, string> = {};
+  if (selectedSub?.details?.itemTitles) {
+    for (const [id, title] of Object.entries(selectedSub.details.itemTitles)) {
+      titleToId[title as string] = id;
+    }
+  }
+
   return (
     <AnimatePresence>
       <motion.div
@@ -479,6 +486,15 @@ export default function ChecklistDetailsModal({
                         const value = selectedSub.details.itemValues?.[itemId];
                         if (!value) return null;
                         const displayValue = value === "defect" ? "N/A" : value;
+                        let oldDisplayValue = null;
+
+                        if (selectedSub?.details?.is_edited && selectedSub.details.edit_history && selectedSub.details.edit_history.length > 0) {
+                          const oldVal = selectedSub.details.edit_history[0].previous_items?.[itemId];
+                          if (oldVal && oldVal !== value) {
+                            oldDisplayValue = oldVal === "defect" ? "N/A" : oldVal;
+                          }
+                        }
+
                         return (
                           <div
                             key={itemId}
@@ -487,9 +503,21 @@ export default function ChecklistDetailsModal({
                             <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">
                               {title}
                             </span>
-                            <span className="text-lg font-bold text-primary mt-1">
-                              {displayValue}
-                            </span>
+                            {oldDisplayValue ? (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-sm font-bold text-gray-400 line-through">
+                                      {oldDisplayValue}
+                                    </span>
+                                    <span className="text-xs text-gray-400">➔</span>
+                                    <span className="text-lg font-bold text-primary">
+                                      {displayValue}
+                                    </span>
+                                </div>
+                            ) : (
+                                <span className="text-lg font-bold text-primary mt-1">
+                                  {displayValue}
+                                </span>
+                            )}
                           </div>
                         );
                       },
@@ -547,6 +575,39 @@ export default function ChecklistDetailsModal({
                         ? getPhotoUrl(item.photo_url)
                         : null;
 
+                      let originalDescription = null;
+                      const baseTitle = item.item_title.replace(/\s\(\d+\)$/, "");
+                      const itemId = titleToId[baseTitle];
+
+                      if (
+                        itemId &&
+                        selectedSub?.details?.is_edited &&
+                        selectedSub.details.edit_history &&
+                        selectedSub.details.edit_history.length > 0
+                      ) {
+                        const history = selectedSub.details.edit_history;
+                        const firstEdit = history[0];
+                        if (
+                          firstEdit?.previous_defects &&
+                          firstEdit.previous_defects[itemId]
+                        ) {
+                          let defIndex = 0;
+                          const match = item.item_title.match(/\((\d+)\)$/);
+                          if (match) {
+                            defIndex = parseInt(match[1]) - 1;
+                          }
+                          const prevDefectsArray =
+                            firstEdit.previous_defects[itemId];
+                          if (
+                            prevDefectsArray &&
+                            prevDefectsArray[defIndex]
+                          ) {
+                            originalDescription =
+                              prevDefectsArray[defIndex].description;
+                          }
+                        }
+                      }
+
                       return (
                         <div
                           key={item.id}
@@ -585,20 +646,33 @@ export default function ChecklistDetailsModal({
                           <div
                             className={`mt-4 pt-4 border-t border-red-200 ${isExpanded ? "block" : "hidden print:block"}`}
                           >
-                            {/* Descrição */}
-                            <div className="space-y-2 mb-4">
-                              <span className="text-[10px] font-bold text-red-600 uppercase">
-                                Descrição Reportada:
-                              </span>
-                              <div
-                                className={`p-3 rounded-lg ${item.description ? "bg-white" : "bg-gray-50"}`}
-                              >
-                                <p
-                                  className={`text-xs font-medium ${item.description ? "text-gray-600" : "text-gray-400 italic"}`}
+                            <div className="space-y-4 mb-4">
+                              {originalDescription !== null && (
+                                <div className="space-y-2 opacity-60">
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1">
+                                    Descrição Anterior:
+                                  </span>
+                                  <div className="p-3 rounded-lg bg-gray-100 border border-gray-200">
+                                    <p className="text-xs font-medium text-gray-500 line-through">
+                                      {originalDescription || "Nenhuma descrição fornecida"}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="space-y-2">
+                                <span className="text-[10px] font-bold text-red-600 uppercase">
+                                  {originalDescription !== null ? "Nova Descrição Reportada:" : "Descrição Reportada:"}
+                                </span>
+                                <div
+                                  className={`p-3 rounded-lg ${item.description ? "bg-white border border-red-100 shadow-sm" : "bg-gray-50 border border-gray-100"}`}
                                 >
-                                  {item.description ||
-                                    "Nenhuma descrição fornecida"}
-                                </p>
+                                  <p
+                                    className={`text-xs font-medium ${item.description ? "text-gray-800" : "text-gray-400 italic"}`}
+                                  >
+                                    {item.description ||
+                                      "Nenhuma descrição fornecida"}
+                                  </p>
+                                </div>
                               </div>
                             </div>
 

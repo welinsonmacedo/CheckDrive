@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import { Search, MessageCircle } from 'lucide-react';
 import Select from 'react-select';
 
@@ -11,6 +12,7 @@ interface SchedulesTabProps {
 
 export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
   const { user } = useAuth();
+  const { showConfirm } = useConfirm();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -154,13 +156,14 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       alert('Não é possível excluir uma escala que já tem checklist iniciado.');
       return;
     }
-    if (!window.confirm('Tem certeza que deseja excluir?')) return;
-    try {
-      await supabase.from('schedules').delete().eq('id', id);
-      fetchData();
-    } catch (error: any) {
-      alert('Erro: ' + error.message);
-    }
+    showConfirm('Tem certeza que deseja excluir esta escala?', async () => {
+      try {
+        await supabase.from('schedules').delete().eq('id', id);
+        fetchData();
+      } catch (error: any) {
+        alert('Erro: ' + error.message);
+      }
+    }, { isDanger: true });
   };
 
   const handleEdit = (sch: any) => {

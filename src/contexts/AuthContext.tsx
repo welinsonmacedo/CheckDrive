@@ -90,15 +90,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const session = data.session;
 
         if (session) {
-          // 🔥 seta usuário imediato (sem travar)
+          // 🔥 seta usuário imediato
           setUserSafe(session);
 
-          // 🔥 carrega profile em background
-          fetchProfile(session.user.id, session.user.email || "").then(
-            (profile) => {
-              if (profile) setUserSafe(session, profile);
-            },
+          // 🔥 carrega profile e aguarda para não piscar a tela
+          const profile = await fetchProfile(
+            session.user.id,
+            session.user.email || "",
           );
+          if (profile && mounted) setUserSafe(session, profile);
 
           // 🔥 Roda rotina automática de fechamento em background
           supabase.rpc("run_auto_score_closing").then(({ error }) => {
@@ -106,10 +106,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               console.error("Erro na rotina de fechamento automático:", error);
           });
         } else {
-          setUser(null);
+          if (mounted) setUser(null);
         }
 
-        setLoading(false);
+        if (mounted) setLoading(false);
       } catch (err) {
         console.error("Erro crítico auth:", err);
         await supabase.auth.signOut().catch(() => {});
@@ -131,16 +131,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (session) {
         setUserSafe(session);
 
-        fetchProfile(session.user.id, session.user.email || "").then(
-          (profile) => {
-            if (profile) setUserSafe(session, profile);
-          },
+        const profile = await fetchProfile(
+          session.user.id,
+          session.user.email || "",
         );
+        if (profile && mounted) setUserSafe(session, profile);
       } else {
-        setUser(null);
+        if (mounted) setUser(null);
       }
 
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
     return () => {

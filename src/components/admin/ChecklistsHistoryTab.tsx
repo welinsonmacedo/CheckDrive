@@ -16,6 +16,8 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
   const [deletingItem, setDeletingItem] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingSub, setEditingSub] = useState<any>(null);
+  const [linkedSchedulesToUnlink, setLinkedSchedulesToUnlink] = useState<any[]>([]);
+  const [unlinkChecked, setUnlinkChecked] = useState(false);
 
   useEffect(() => {
     fetchSubmissions();
@@ -35,22 +37,41 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
     }
   };
 
+  const handleOpenDelete = async (sub: any) => {
+    setDeletingItem(sub);
+    setUnlinkChecked(false);
+    setLinkedSchedulesToUnlink([]);
+    try {
+      const { data: linkedSch } = await supabase.from('schedules')
+        .select('id')
+        .or(`start_checklist_id.eq.${sub.id},end_checklist_id.eq.${sub.id},fuel_checklist_id.eq.${sub.id}`);
+      if (linkedSch && linkedSch.length > 0) {
+        setLinkedSchedulesToUnlink(linkedSch);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar vínculos com escalas', e);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deletingItem) return;
     setIsDeleting(true);
     try {
-      // Check if this checklist is linked to any schedule and nullify it
-      if (deletingItem.schedule_id) {
-        const fieldMap: Record<string, string> = {
-          'start': 'start_checklist_id',
-          'end': 'end_checklist_id',
-          'fuel': 'fuel_checklist_id'
-        };
-        const field = fieldMap[deletingItem.type];
-        if (field) {
-          const updates: any = {};
-          updates[field] = null;
-          await supabase.from('schedules').update(updates).eq('id', deletingItem.schedule_id);
+      if (linkedSchedulesToUnlink.length > 0) {
+        if (!unlinkChecked) {
+           alert("Você precisa marcar a opção de desvincular a escala para prosseguir com a exclusão.");
+           setIsDeleting(false);
+           return;
+        }
+        for (const sch of linkedSchedulesToUnlink) {
+            const { data: q } = await supabase.from('schedules').select('start_checklist_id,end_checklist_id,fuel_checklist_id').eq('id', sch.id).single();
+            const updates: any = {};
+            if (q?.start_checklist_id === deletingItem.id) updates.start_checklist_id = null;
+            if (q?.end_checklist_id === deletingItem.id) updates.end_checklist_id = null;
+            if (q?.fuel_checklist_id === deletingItem.id) updates.fuel_checklist_id = null;
+            if (Object.keys(updates).length > 0) {
+                await supabase.from('schedules').update(updates).eq('id', sch.id);
+            }
         }
       }
 
@@ -138,7 +159,7 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
                              <Edit3 size={14} />
                            </button>
                            <button 
-                             onClick={() => setDeletingItem(sub)}
+                             onClick={() => handleOpenDelete(sub)}
                              className="p-1.5 text-danger/70 hover:text-danger hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-danger/20"
                              title="Excluir checklist"
                            >
@@ -180,6 +201,23 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
                 <br /><br />
                 <span className="text-xs text-danger uppercase tracking-widest font-black">Esta ação não pode ser desfeita.</span>
               </p>
+              
+              {linkedSchedulesToUnlink.length > 0 && (
+                <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <p className="text-xs font-bold text-orange-800 mb-2">Atenção: Este checklist está vinculado a uma ou mais escalas.</p>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="mt-0.5 rounded text-orange-600 focus:ring-orange-500 bg-white border-orange-300"
+                      checked={unlinkChecked}
+                      onChange={(e) => setUnlinkChecked(e.target.checked)}
+                    />
+                    <span className="text-xs text-orange-900 font-medium leading-relaxed">
+                      Desvincular o checklist das referidas escalas para permitir a exclusão.
+                    </span>
+                  </label>
+                </div>
+              )}
               
               <div className="flex gap-3">
                 <button
