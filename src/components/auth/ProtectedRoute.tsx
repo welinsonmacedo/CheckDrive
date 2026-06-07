@@ -11,7 +11,9 @@ interface ProtectedRouteProps {
 export const ProtectedRoute = ({ children, role }: ProtectedRouteProps) => {
   const { user, isAuthenticated, loading } = useAuth();
 
-  if (loading)
+  const isProfileLoading = isAuthenticated && !user?.role;
+
+  if (loading || isProfileLoading)
     return (
       <div className="fixed inset-0 min-h-screen flex flex-col items-center justify-center bg-zinc-50 z-[9999]">
         <div className="w-48 h-1 bg-zinc-200 rounded-full overflow-hidden mb-4">

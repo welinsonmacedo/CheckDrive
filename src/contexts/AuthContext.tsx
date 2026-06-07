@@ -93,12 +93,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           // 🔥 seta usuário imediato
           setUserSafe(session);
 
-          // 🔥 carrega profile e aguarda para não piscar a tela
-          const profile = await fetchProfile(
-            session.user.id,
-            session.user.email || "",
-          );
-          if (profile && mounted) setUserSafe(session, profile);
+          // 🔥 carrega profile em background
+          fetchProfile(session.user.id, session.user.email || "").then((profile) => {
+            if (profile && mounted) setUserSafe(session, profile);
+          });
 
           // 🔥 Roda rotina automática de fechamento em background
           supabase.rpc("run_auto_score_closing").then(({ error }) => {
@@ -131,11 +129,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (session) {
         setUserSafe(session);
 
-        const profile = await fetchProfile(
-          session.user.id,
-          session.user.email || "",
-        );
-        if (profile && mounted) setUserSafe(session, profile);
+        fetchProfile(session.user.id, session.user.email || "").then((profile) => {
+          if (profile && mounted) setUserSafe(session, profile);
+        });
       } else {
         if (mounted) setUser(null);
       }
