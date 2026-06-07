@@ -13,8 +13,10 @@ CheckDrive PWA is a application focused on fleet management, allowing drivers to
 - **Routing**: React Router DOM (v6+)
 
 ## Project Structure
-- **/src/components**: Reusable, modular UI components divided by domain (admin, driver, generic).
-- **/src/pages**: Main view components representing routes (e.g., Admin Dashboard, Driver Home, Checklist Flow, Documentations).
+- **/src/components**: Reusable, modular UI components divided by domain (admin, driver, generic, auth).
+- **/src/contexts**: React Contexts for global state management (`AuthContext`, `AlertContext`, `ConfirmContext`).
+- **/src/pages**: Main view components representing routes (e.g., Admin Dashboard, Driver Home, Checklist Flow).
+- **/src/routes**: Application routing setup (`AppRoutes.tsx`).
 - **/src/lib**: Utilities and external service initialization (e.g., `supabase.ts`).
 - **/src/types**: Global TypeScript types mirroring our database schema.
 
@@ -35,6 +37,11 @@ CheckDrive PWA is a application focused on fleet management, allowing drivers to
 
 ## Security & Database
 - **Row Level Security (RLS)** is enforced in Supabase, meaning drivers can only see and write checklists assigned to them, while administrative actions require the user role 'admin'.
+
+## Global UI/UX
+- **Alert System**: We intercept native `window.alert` internally through `AlertContext` to provide visually consistent, non-blocking animated alert dialogs, enhancing the user experience without refactoring every existing native alert.
+- **Confirmations**: `ConfirmContext` provides modern dialogue to replace `window.confirm`.
+- **Loading State**: A dedicated loading screen (`ProtectedRoute`) intercepts access while the Auth state and User Profiles are being fully hydrated, preventing unwanted Layout-Shifts and premature redirection into wrong user roles.
 
 ## Deployment
 Built as a progressive web app with a responsive mobile-first UI for truck drivers, scaling up to an advanced management view for desktop-using admins.

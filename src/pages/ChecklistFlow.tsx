@@ -231,16 +231,36 @@ export default function ChecklistFlow() {
         }
       }
 
-      const [vRes, rRes, tRes, settingsRes] = await Promise.all([
-        supabase.from("vehicles").select("*").eq("active", true),
-        supabase.from("routes").select("*").eq("active", true),
-        supabase.from("trailers").select("*").eq("active", true),
-        supabase
-          .from("app_settings")
-          .select("*")
-          .eq("id", "global")
-          .maybeSingle(),
-      ]);
+      let vRes, rRes, tRes, settingsRes;
+      try {
+        [vRes, rRes, tRes, settingsRes] = await Promise.all([
+          supabase.from("vehicles").select("*").eq("active", true),
+          supabase.from("routes").select("*").eq("active", true),
+          supabase.from("trailers").select("*").eq("active", true),
+          supabase
+            .from("app_settings")
+            .select("*")
+            .eq("id", "global")
+            .maybeSingle(),
+        ]);
+        
+        await localforage.setItem('cache_vehicles', vRes.data);
+        await localforage.setItem('cache_routes', rRes.data);
+        await localforage.setItem('cache_trailers', tRes.data);
+        await localforage.setItem('cache_app_settings', settingsRes.data);
+      } catch (err) {
+        console.error('Fetch options failed, using offline cache', err);
+        const [cv, cr, ct, cs] = await Promise.all([
+           localforage.getItem('cache_vehicles'),
+           localforage.getItem('cache_routes'),
+           localforage.getItem('cache_trailers'),
+           localforage.getItem('cache_app_settings')
+        ]);
+        vRes = { data: cv || [] };
+        rRes = { data: cr || [] };
+        tRes = { data: ct || [] };
+        settingsRes = { data: cs || {} };
+      }
 
       let availableVehicles = vRes.data || [];
       let availableRoutes = rRes.data || [];
@@ -294,16 +314,16 @@ export default function ChecklistFlow() {
         const urlParams = new URLSearchParams(window.location.search);
         const scheduleId = urlParams.get("schedule");
 
+      let scheduleRes;
+      try {
         let query = supabase
           .from("schedules")
           .select("vehicle_id, trailer_id, route_id")
-          .eq("driver_id", user.id);
+          .eq("driver_id", user?.id);
 
-        if (scheduleId) {
-          query = query.eq("id", scheduleId);
+        if (urlParams.get("schedule")) {
+          query = query.eq("id", urlParams.get("schedule"));
         } else {
-          // Look for currently active or upcoming schedule (start_at <= now AND end_at >= now-12h)
-          // We use a window to catch schedules that might have just "expired" in UTC but are still relevant to the driver
           const now = new Date();
           const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
           query = query
@@ -313,35 +333,53 @@ export default function ChecklistFlow() {
             .order("start_at", { ascending: false });
         }
 
-        const { data: schedule } = await query.limit(1).maybeSingle();
-
-        if (schedule) {
-          prefill = {
-            vehicleId: schedule.vehicle_id || "",
-            trailerId: schedule.trailer_id || "",
-            routeId: schedule.route_id || "",
-          };
-          setIsScheduled(true);
-        } else {
-          setIsScheduled(false);
-        }
+        scheduleRes = await query.limit(1).maybeSingle();
+        await localforage.setItem('cache_schedules', scheduleRes.data);
+      } catch (e) {
+        scheduleRes = { data: await localforage.getItem('cache_schedules') };
       }
 
-      const { data: typeData } = await supabase
-        .from("checklist_types")
-        .select("id")
-        .eq("slug", type || "start")
-        .single();
+      const schedule = scheduleRes.data;
+
+      if (schedule) {
+        prefill = {
+          vehicleId: schedule.vehicle_id || "",
+          trailerId: schedule.trailer_id || "",
+          routeId: schedule.route_id || "",
+        };
+        setIsScheduled(true);
+      } else {
+        setIsScheduled(false);
+      }
+      } // end if (user)
+
+      let typeData, itemsData;
+      try {
+        const typeRes = await supabase
+          .from("checklist_types")
+          .select("id")
+          .eq("slug", type || "start")
+          .single();
+        typeData = typeRes.data;
+        
+        if (typeData) {
+          const itemsRes = await supabase
+            .from("checklist_items")
+            .select("*")
+            .eq("type_id", typeData.id)
+            .order("order_index");
+          itemsData = itemsRes.data;
+        }
+        await localforage.setItem(`cache_type_${type}`, typeData);
+        await localforage.setItem(`cache_items_${type}`, itemsData);
+      } catch (e) {
+        typeData = await localforage.getItem(`cache_type_${type}`);
+        itemsData = await localforage.getItem(`cache_items_${type}`);
+      }
 
       let checklistItems: any[] = [];
       if (typeData) {
-        const { data: items } = await supabase
-          .from("checklist_items")
-          .select("*")
-          .eq("type_id", typeData.id)
-          .order("order_index");
-          
-        checklistItems = (items || []).map(item => {
+        checklistItems = (itemsData || []).map((item: any) => {
           const { title, mask, options } = decodeItemTitle(item.title);
           return { ...item, title, mask, options };
         });
@@ -572,6 +610,53 @@ export default function ChecklistFlow() {
           "É obrigatório permitir e obter a localização GPS para salvar o checklist. Verifique as permissões do seu navegador e seu sinal GPS.",
         );
         setLoading(false);
+        return;
+      }
+
+      if (!navigator.onLine) {
+        setLoading(true);
+        const { fileToBase64 } = await import('../lib/offlineSubmitHelper');
+        const { queueSubmission } = await import('../lib/offlineQueue');
+
+        const photoB64: any = {};
+        for (const [key, file] of Object.entries(formData.photos)) {
+          if (file) photoB64[key] = await fileToBase64(file as File);
+        }
+
+        const defectsB64 = { ...formData.defects } as any;
+        for (const [itemId, subDefectsRaw] of Object.entries(defectsB64)) {
+           for (let i = 0; i < (subDefectsRaw as any[]).length; i++) {
+              const d = (subDefectsRaw as any)[i];
+              if (d.photo) d.photoB64 = await fileToBase64(d.photo);
+              d.photo = null; // remove file obj
+           }
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const scheduleId = urlParams.get("schedule");
+
+        const itemTitles = options.items.reduce((acc: any, item: any) => ({ ...acc, [item.id]: item.title }), {});
+
+        await queueSubmission({
+          type,
+          scheduleId,
+          isInternal,
+          isTrailerOnly,
+          itemTitles,
+          formData: {
+            ...formData,
+            itemValues: itemValuesPayload,
+            defects: defectsB64,
+            photos: photoB64,
+            latitude,
+            longitude,
+            itemsList: options.items,
+          }
+        });
+
+        alert("Sem conexão com a internet. O Checklist foi salvo localmente como pendente e será enviado quando houver rede.");
+        await localforage.removeItem(`checklist_state_${type || "start"}`);
+        navigate("/dashboard");
         return;
       }
 

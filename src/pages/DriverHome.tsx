@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Car, Fuel, Route, ClipboardCheck, Trophy, AlertTriangle, ChevronRight, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { cacheData, getCachedData } from '../lib/offlineQueue';
 
 export default function DriverHome() {
   const navigate = useNavigate();
@@ -93,12 +94,17 @@ export default function DriverHome() {
 
       if (scheduleError) {
         console.error('Error fetching schedules:', scheduleError);
+        const cached = await getCachedData('schedulesToday');
+        if (cached) setSchedulesToday(cached);
       } else {
         setSchedulesToday(fetchedSchedules || []);
+        await cacheData('schedulesToday', fetchedSchedules || []);
       }
 
     } catch (error) {
       console.error('Error fetching driver stats:', error);
+      const cached = await getCachedData('schedulesToday');
+      if (cached) setSchedulesToday(cached);
     }
   };
 
