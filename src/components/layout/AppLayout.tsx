@@ -18,13 +18,13 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
 
     
 
-      <main className={`flex-1 overflow-x-hidden ${isDriver && !location.pathname.includes('/checklist') ? 'pb-20 sm:pb-0' : ''}`}>
+      <main className={`flex-1 overflow-x-hidden ${isDriver && !location.pathname.includes('/checklist') ? 'pb-24 sm:pb-0' : ''}`}>
         {children}
       </main>
 
       {/* Bottom Navigation for Drivers */}
       {isDriver && !location.pathname.includes('/checklist') && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 h-16 flex items-center justify-around z-50 sm:hidden">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 h-[84px] pb-8 pt-1 flex items-center justify-around z-50 sm:hidden pb-safe">
 
           <Link
             to="/dashboard"

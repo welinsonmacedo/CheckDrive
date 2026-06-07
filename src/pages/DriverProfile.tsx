@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   User as UserIcon,
@@ -15,6 +16,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function DriverProfile() {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [closings, setClosings] = useState<any[]>([]);
@@ -340,7 +342,10 @@ export default function DriverProfile() {
       </div>
 
       <button
-        onClick={() => logout()}
+        onClick={async () => {
+          await logout();
+          navigate('/login');
+        }}
         className="w-full mt-6 h-14 border border-danger/20 text-danger bg-red-50 text-[11px] font-black uppercase tracking-widest rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
       >
         <LogOut size={18} />

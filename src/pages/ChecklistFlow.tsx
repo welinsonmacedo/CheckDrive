@@ -425,16 +425,10 @@ export default function ChecklistFlow() {
       const trailerRequired = selectedVehicle?.requires_trailer;
 
       const currentKm = parseInt(formData.km);
-      let isKmValid = true;
-      if (type !== "yard") {
-        isKmValid =
-          !!formData.km &&
-          !isNaN(currentKm) &&
-          (lastKm === null || currentKm >= lastKm);
-      } else if (formData.km) {
-        isKmValid =
-          !isNaN(currentKm) && (lastKm === null || currentKm >= lastKm);
-      }
+      let isKmValid =
+        !!formData.km &&
+        !isNaN(currentKm) &&
+        (lastKm === null || currentKm >= lastKm);
 
       return (
         formData.vehicleId &&
@@ -1006,7 +1000,7 @@ export default function ChecklistFlow() {
 
     // boolean fallback
     return (
-      <div className="flex gap-2">
+      <div className="flex gap-2 shrink-0">
         <button
           onClick={() => {
             setFormData((prev) => ({
@@ -1017,7 +1011,7 @@ export default function ChecklistFlow() {
             delete newDefects[item.id];
             setFormData((prev) => ({ ...prev, defects: newDefects }));
           }}
-          className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${formData.itemValues[item.id] === "normal" ? (item.is_trailer_item ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100" : "bg-primary text-white border-primary") : "bg-white text-text-muted"}`}
+          className={`min-w-[80px] flex items-center justify-center px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-app-border ${formData.itemValues[item.id] === "normal" ? (item.is_trailer_item ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100" : "bg-primary text-white border-primary") : "bg-white text-text-muted"}`}
         >
           NORMAL
         </button>
@@ -1050,7 +1044,7 @@ export default function ChecklistFlow() {
               };
             });
           }}
-          className={`px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${formData.itemValues[item.id] === "defect" ? "bg-danger text-white border-danger shadow-md shadow-danger/20" : "bg-red-50 text-danger"}`}
+          className={`min-w-[80px] flex items-center justify-center px-3 py-1.5 rounded-lg border border-danger/20 text-[9px] font-black uppercase tracking-widest ${formData.itemValues[item.id] === "defect" ? "bg-danger text-white border-danger shadow-md shadow-danger/20" : "bg-red-50 text-danger"}`}
         >
           DEFEITO
         </button>
@@ -1059,7 +1053,7 @@ export default function ChecklistFlow() {
   };
 
   return (
-    <div className="max-w-xl mx-auto min-h-[calc(100vh-64px)] bg-app-bg flex flex-col p-4 sm:p-6 pb-36">
+    <div className="max-w-xl mx-auto min-h-[calc(100vh-64px)] bg-app-bg flex flex-col p-4 sm:p-6 pb-48">
       {/* progress card - Bento style */}
       <div className="bg-card-bg border border-app-border rounded-2xl p-4 mb-6 shadow-sm flex items-center justify-between">
         <div className="flex gap-1.5 flex-1">
@@ -1201,12 +1195,7 @@ export default function ChecklistFlow() {
                   {(!isInternal || !isTrailerOnly) && (
                     <div className="space-y-1.5">
                       <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                        KM Atual{" "}
-                        {type === "yard" && (
-                          <span className="normal-case text-primary font-medium">
-                            (Opcional)
-                          </span>
-                        )}
+                        KM Atual
                       </label>
                       <div className="relative">
                         <input
@@ -1891,7 +1880,7 @@ export default function ChecklistFlow() {
       </div>
 
       {/* Footer Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 sm:p-6 bg-white/80 backdrop-blur-md border-t border-app-border flex gap-3 z-[60] max-w-xl mx-auto rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+      <div className="fixed bottom-0 left-0 right-0 p-4 pb-12 sm:p-6 sm:pb-8 bg-white/80 backdrop-blur-md border-t border-app-border flex gap-3 z-[60] max-w-xl mx-auto rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.05)] pt-4">
         {currentStep > 0 && currentStep < 3 && (
           <button
             disabled={loading || isStepLoading}
