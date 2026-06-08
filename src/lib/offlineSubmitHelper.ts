@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from '@/src/lib/supabase';
 
 // Convert File to Base64
 export const fileToBase64 = (file: File): Promise<string> => {

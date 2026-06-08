@@ -1,26 +1,21 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { ProtectedRoute } from '../components/auth/ProtectedRoute';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
+import { DriverGuard, CompanyGuard, SuperAdminGuard } from '@/src/modules/shared/components/auth/Guards';
+import { ProtectedRoute } from '@/src/modules/shared/components/auth/ProtectedRoute';
 
 // Pages
-import LandingPage from '../pages/LandingPage';
-import Privacy from '../pages/Privacy';
-import Login from '../pages/Login';
-import DriverHome from '../pages/DriverHome';
-import DriverManual from '../pages/DriverManual';
-import Ranking from '../pages/Ranking';
-import ChecklistFlow from '../pages/ChecklistFlow';
-import AdminDashboard from '../pages/AdminDashboard';
-import Documentation from '../pages/Documentation';
-import AppLayout from '../components/layout/AppLayout';
-import ResetPassword from '../pages/ResetPassword';
-import SuperAdminDashboard from '../pages/SuperAdminDashboard';
+import LandingPage from '@/src/modules/shared/pages/LandingPage';
+import Privacy from '@/src/modules/shared/pages/Privacy';
+import Login from '@/src/modules/shared/pages/Login';
+import ResetPassword from '@/src/modules/shared/pages/ResetPassword';
+import Documentation from '@/src/modules/shared/pages/Documentation';
 
-import DriverRankingDetailsModal from '../components/admin/DriverRankingDetailsModal'; // if unused, doesn't matter
-import DriverPenalties from '../pages/DriverPenalties';
-import DriverProfile from '../pages/DriverProfile';
-import DriverAverages from '../pages/DriverAverages';
+// Module Routes
+import DriverRoutes from '@/src/modules/driver/routes/DriverRoutes';
+import CompanyRoutes from '@/src/modules/company/routes/CompanyRoutes';
+import SuperAdminRoutes from '@/src/modules/superadmin/routes/SuperAdminRoutes';
+import AppLayout from '@/src/modules/shared/layouts/AppLayout';
 
 export default function AppRoutes() {
   const { user, logout } = useAuth();
@@ -32,85 +27,72 @@ export default function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <AppLayout user={user} onLogout={logout}>
-            {user?.role === 'superadmin' ? (
-              user?.company_id ? <AdminDashboard /> : <Navigate to="/saas" replace />
-            ) : (user?.role === 'admin' || user?.role === 'standard') ? (
-              <AdminDashboard />
-            ) : (
-              <DriverHome />
-            )}
-          </AppLayout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/saas" element={
-        <ProtectedRoute>
-          <AppLayout user={user} onLogout={logout}>
-            {user?.role === 'superadmin' ? <SuperAdminDashboard user={user} /> : <Navigate to="/dashboard" replace />}
-          </AppLayout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/checklist/:type" element={
-        <ProtectedRoute role="driver">
-          <AppLayout user={user} onLogout={logout}>
-            <ChecklistFlow />
-          </AppLayout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/ranking" element={
-        <ProtectedRoute role="driver">
-          <AppLayout user={user} onLogout={logout}>
-            <Ranking />
-          </AppLayout>
-        </ProtectedRoute>
+      {/* Module independent root routes */}
+      <Route path="/driver/*" element={
+        <DriverGuard>
+          <DriverRoutes />
+        </DriverGuard>
       } />
       
-      <Route path="/medias" element={
-        <ProtectedRoute role="driver">
-          <AppLayout user={user} onLogout={logout}>
-            <DriverAverages />
-          </AppLayout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/penalties" element={
-        <ProtectedRoute role="driver">
-          <AppLayout user={user} onLogout={logout}>
-            <DriverPenalties />
-          </AppLayout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/driver-manual" element={
-        <ProtectedRoute role="driver">
-          <AppLayout user={user} onLogout={logout}>
-            <DriverManual />
-          </AppLayout>
-        </ProtectedRoute>
+      <Route path="/admin/*" element={
+        <CompanyGuard>
+          <CompanyRoutes />
+        </CompanyGuard>
       } />
       
+      <Route path="/sa/*" element={
+        <SuperAdminGuard>
+          <SuperAdminRoutes />
+        </SuperAdminGuard>
+      } />
+
       <Route path="/docs" element={
         <ProtectedRoute>
-           <AppLayout user={user} onLogout={logout}>
-             <Documentation />
-           </AppLayout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/profile" element={
-        <ProtectedRoute role="driver">
           <AppLayout user={user} onLogout={logout}>
-            <DriverProfile />
+            <Documentation />
           </AppLayout>
         </ProtectedRoute>
       } />
+
+      {/* Backward Compatibility Redirects */}
+      <Route path="/dashboard" element={<RouteRedirector />} />
+      <Route path="/saas" element={<Navigate to="/sa/dashboard" replace />} />
+      
+      <Route path="/checklist/:type" element={<ChecklistRedirector />} />
+      <Route path="/ranking" element={<Navigate to="/driver/ranking" replace />} />
+      <Route path="/medias" element={<Navigate to="/driver/history" replace />} />
+      <Route path="/penalties" element={<Navigate to="/driver/penalties" replace />} />
+      <Route path="/driver-manual" element={<Navigate to="/driver/manual" replace />} />
+      <Route path="/profile" element={<Navigate to="/driver/profile" replace />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
+
+// Internal helper for resolving legacy /checklist/:type 
+import { useParams } from 'react-router-dom';
+function ChecklistRedirector() {
+  const { type } = useParams();
+  // Keep the url search params too
+  const search = window.location.search;
+  return <Navigate to={`/driver/checklist/${type}${search}`} replace />;
+}
+
+// Internal helper for resolving legacy /dashboard route dynamically based on role
+function RouteRedirector() {
+  const { user, loading, isAuthenticated } = useAuth();
+  if (loading) return null;
+  if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
+
+  if (user.role === 'superadmin') {
+    return user.company_id ? <Navigate to="/admin/dashboard" replace /> : <Navigate to="/sa/dashboard" replace />;
+  }
+  
+  if (user.role === 'admin' || user.role === 'standard') {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to="/driver/home" replace />;
+}
+
