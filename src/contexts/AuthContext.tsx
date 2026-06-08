@@ -42,6 +42,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return {
         name: cleanName,
         role: profile.role as Role,
+        company_id: profile.company_id,
         isInternal,
       };
     } catch (err) {
@@ -67,7 +68,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
           // 🔥 NÃO define role até ter profile
           role: profile?.role ?? prev?.role ?? null,
-
+          company_id: profile?.company_id ?? prev?.company_id ?? null,
           isInternal: profile?.isInternal ?? prev?.isInternal ?? false,
         };
       });

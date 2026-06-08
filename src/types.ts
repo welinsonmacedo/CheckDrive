@@ -1,10 +1,11 @@
-export type Role = "driver" | "admin" | "standard";
+export type Role = "driver" | "admin" | "standard" | "superadmin";
 
 export interface User {
   id: string;
   email: string;
   name: string;
   role: Role | null; // 🔥 ESSENCIAL
+  company_id?: string;
   isInternal: boolean;
   modality_ids?: string[];
 }

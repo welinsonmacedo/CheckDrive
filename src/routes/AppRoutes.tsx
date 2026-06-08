@@ -15,6 +15,7 @@ import AdminDashboard from '../pages/AdminDashboard';
 import Documentation from '../pages/Documentation';
 import AppLayout from '../components/layout/AppLayout';
 import ResetPassword from '../pages/ResetPassword';
+import SuperAdminDashboard from '../pages/SuperAdminDashboard';
 
 import DriverRankingDetailsModal from '../components/admin/DriverRankingDetailsModal'; // if unused, doesn't matter
 import DriverPenalties from '../pages/DriverPenalties';
@@ -34,7 +35,15 @@ export default function AppRoutes() {
       <Route path="/dashboard" element={
         <ProtectedRoute>
           <AppLayout user={user} onLogout={logout}>
-            {(user?.role === 'admin' || user?.role === 'standard') ? <AdminDashboard /> : <DriverHome />}
+            {(user?.role === 'admin' || user?.role === 'standard' || user?.role === 'superadmin') ? <AdminDashboard /> : <DriverHome />}
+          </AppLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/saas" element={
+        <ProtectedRoute>
+          <AppLayout user={user} onLogout={logout}>
+            {user?.role === 'superadmin' ? <SuperAdminDashboard user={user} /> : <Navigate to="/dashboard" replace />}
           </AppLayout>
         </ProtectedRoute>
       } />

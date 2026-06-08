@@ -41,7 +41,11 @@ export const ProtectedRoute = ({ children, role }: ProtectedRouteProps) => {
   }
 
   if (role && user?.role !== role) {
-    return <Navigate to="/dashboard" replace />;
+    if (role === 'admin' && user?.role === 'superadmin') {
+      // allow
+    } else {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   return <>{children}</>;

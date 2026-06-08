@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, LogOut, Home, Trophy, AlertTriangle, User as UserIcon, Droplets } from 'lucide-react';
+import { BookOpen, LogOut, Home, Trophy, AlertTriangle, User as UserIcon, Droplets, Building } from 'lucide-react';
 import { User } from '../../types';
 import OfflineSyncBanner from './OfflineSyncBanner';
 
@@ -93,6 +93,20 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
               Perfil
             </span>
           </Link>
+
+          {user?.role === 'superadmin' && (
+            <Link
+              to="/saas"
+              className={`flex flex-col items-center gap-1 transition-colors ${
+                location.pathname === '/saas' ? 'text-primary' : 'text-zinc-400'
+              }`}
+            >
+              <Building size={20} />
+              <span className="text-[10px] font-bold uppercase tracking-wider">
+                SaaS
+              </span>
+            </Link>
+          )}
 
         </nav>
       )}
