@@ -99,6 +99,23 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleExitImpersonation = async () => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ company_id: null })
+        .eq('id', user.id);
+        
+      if (error) throw error;
+      
+      window.location.href = '/saas';
+    } catch (err) {
+      console.error('Erro ao sair do painel da empresa:', err);
+      alert('Erro ao sair do painel da empresa.');
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -506,6 +523,14 @@ export default function AdminDashboard() {
                 ?.label || "Dashboard"}
             </h2>
           </div>
+          {user?.role === "superadmin" && (
+            <button
+              onClick={handleExitImpersonation}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/40 rounded-xl transition-all font-bold text-xs uppercase tracking-wider shadow-sm border border-purple-200/50"
+            >
+              Voltar ao SaaS / Super Admin
+            </button>
+          )}
         </div>
 
         {/* Content Area */}

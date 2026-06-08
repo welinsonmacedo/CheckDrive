@@ -35,7 +35,13 @@ export default function AppRoutes() {
       <Route path="/dashboard" element={
         <ProtectedRoute>
           <AppLayout user={user} onLogout={logout}>
-            {(user?.role === 'admin' || user?.role === 'standard' || user?.role === 'superadmin') ? <AdminDashboard /> : <DriverHome />}
+            {user?.role === 'superadmin' ? (
+              user?.company_id ? <AdminDashboard /> : <Navigate to="/saas" replace />
+            ) : (user?.role === 'admin' || user?.role === 'standard') ? (
+              <AdminDashboard />
+            ) : (
+              <DriverHome />
+            )}
           </AppLayout>
         </ProtectedRoute>
       } />
