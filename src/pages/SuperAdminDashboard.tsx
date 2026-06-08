@@ -93,10 +93,14 @@ export default function SuperAdminDashboard({ user }: SuperAdminDashboardProps) 
   const handleSaveCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const basePlanName = formData.get('plan_name') as string;
+    const hideAverages = formData.get('hide_averages') === 'on' || formData.get('hide_averages') === 'true';
+    const finalPlanName = hideAverages ? `${basePlanName}||hide_averages` : basePlanName;
+
     const dataObj = {
       name: formData.get('name') as string,
       document: formData.get('document') as string,
-      plan_name: formData.get('plan_name') as string,
+      plan_name: finalPlanName,
       max_users: parseInt(formData.get('max_users') as string) || 10,
       max_vehicles: parseInt(formData.get('max_vehicles') as string) || 10,
       subscription_status: formData.get('subscription_status') as string,
@@ -499,9 +503,16 @@ export default function SuperAdminDashboard({ user }: SuperAdminDashboardProps) 
                         <div className="text-sm text-gray-500">{company.document || 'Sem CNPJ'}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          {company.plan_name || 'Básico'}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            {company.plan_name?.split('||')[0] || 'Básico'}
+                          </span>
+                          {company.plan_name?.split('||').includes('hide_averages') && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                              Médias Ocultas
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 text-sm">
@@ -606,7 +617,7 @@ export default function SuperAdminDashboard({ user }: SuperAdminDashboardProps) 
                       <div>
                         <span className="font-medium text-gray-900 dark:text-white">{company.name}</span>
                         <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full dark:bg-gray-700 dark:text-gray-300">
-                          {company.plan_name || 'Personalizado'}
+                          {company.plan_name?.split('||')[0] || 'Personalizado'}
                         </span>
                       </div>
                       <span className="text-sm font-medium text-gray-900 dark:text-white">
@@ -697,7 +708,7 @@ export default function SuperAdminDashboard({ user }: SuperAdminDashboardProps) 
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plano</label>
                   <select
                     name="plan_name"
-                    defaultValue={editingCompany?.plan_name || 'Básico'}
+                    defaultValue={(editingCompany?.plan_name || 'Básico').split('||')[0]}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white"
                   >
                     {plans.map((p, i) => (
@@ -740,6 +751,19 @@ export default function SuperAdminDashboard({ user }: SuperAdminDashboardProps) 
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-transparent dark:border-gray-600 dark:text-white"
                   />
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2 mt-4 pt-2 border-t border-gray-100 dark:border-gray-700">
+                <input
+                  type="checkbox"
+                  id="hide_averages"
+                  name="hide_averages"
+                  defaultChecked={editingCompany?.plan_name?.split('||').includes('hide_averages') || false}
+                  className="h-4 w-4 text-emerald-600 focus:ring-emerald-500 border-gray-300 rounded"
+                />
+                <label htmlFor="hide_averages" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  Ocultar módulo de médias para este cliente
+                </label>
               </div>
 
               <div>

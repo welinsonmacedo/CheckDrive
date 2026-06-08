@@ -8,6 +8,7 @@ export interface User {
   company_id?: string;
   isInternal: boolean;
   modality_ids?: string[];
+  hideAverages?: boolean;
 }
 
 export interface VehicleModality {

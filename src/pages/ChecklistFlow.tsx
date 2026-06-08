@@ -511,6 +511,7 @@ export default function ChecklistFlow() {
 
   const handleSubmit = async () => {
     setLoading(true);
+    let saveOfflineAndExit: () => Promise<void> = async () => {};
     try {
       let itemValuesPayload = { ...formData.itemValues };
       let newDefectsPayload = { ...formData.defects };
@@ -613,7 +614,7 @@ export default function ChecklistFlow() {
         return;
       }
 
-      const saveOfflineAndExit = async () => {
+      saveOfflineAndExit = async () => {
         setLoading(true);
         const { fileToBase64 } = await import('../lib/offlineSubmitHelper');
         const { queueSubmission } = await import('../lib/offlineQueue');

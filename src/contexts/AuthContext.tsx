@@ -39,11 +39,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         ? rawName.replace("//INTERNO", "").trim()
         : rawName;
 
+      let hideAverages = false;
+      if (profile.company_id) {
+        try {
+          const { data: companyData } = await supabase
+            .from("companies")
+            .select("plan_name")
+            .eq("id", profile.company_id)
+            .single();
+          if (companyData?.plan_name) {
+            hideAverages = companyData.plan_name.split("||").includes("hide_averages");
+          }
+        } catch (cErr) {
+          console.error("Erro ao carregar configurações de média da empresa:", cErr);
+        }
+      }
+
       return {
         name: cleanName,
         role: profile.role as Role,
         company_id: profile.company_id,
         isInternal,
+        hideAverages,
       };
     } catch (err) {
       console.error("Erro inesperado profile:", err);
@@ -70,6 +87,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           role: profile?.role ?? prev?.role ?? null,
           company_id: profile?.company_id ?? prev?.company_id ?? null,
           isInternal: profile?.isInternal ?? prev?.isInternal ?? false,
+          hideAverages: profile?.hideAverages ?? prev?.hideAverages ?? false,
         };
       });
     };

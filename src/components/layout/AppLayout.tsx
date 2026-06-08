@@ -40,7 +40,7 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
             </span>
           </Link>
 
-          {!user?.isInternal && (
+          {!user?.isInternal && !user?.hideAverages && (
             <Link
               to="/medias"
               className={`flex flex-col items-center gap-1 transition-colors ${

@@ -219,12 +219,16 @@ export default function AdminDashboard() {
       label: "Abastecimento",
       color: "from-green-500 to-emerald-500",
     },
-    {
-      id: "averages",
-      icon: Activity,
-      label: "Médias",
-      color: "from-cyan-500 to-blue-500",
-    },
+    ...(!user?.hideAverages
+      ? [
+          {
+            id: "averages",
+            icon: Activity,
+            label: "Médias",
+            color: "from-cyan-500 to-blue-500",
+          },
+        ]
+      : []),
     {
       id: "schedules",
       icon: CalendarDays,

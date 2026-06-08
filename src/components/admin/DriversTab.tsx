@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { CheckCircle2, Search, X, Plus, Key } from 'lucide-react';
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function DriversTab() {
+  const { user } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [modalities, setModalities] = useState<any[]>([]);
   const [scoreProfiles, setScoreProfiles] = useState<any[]>([]);
@@ -98,6 +100,12 @@ const openCreateForm = () => {
             await supabase.from('profiles').update({ full_name: parsedName, role: userForm.role }).eq('id', userForm.id);
         }
       } else {
+        const isAllowed = await checkUserLimit();
+        if (!isAllowed) {
+          setSaving(false);
+          return;
+        }
+
         const { data, error } = await supabase.auth.signUp({
           email: userForm.email,
           password: userForm.password,
@@ -192,6 +200,43 @@ const openCreateForm = () => {
     }
   };
 
+  const checkUserLimit = async (): Promise<boolean> => {
+    if (!user?.company_id) return true;
+    try {
+      const { data: company, error: companyErr } = await supabase
+        .from('companies')
+        .select('max_users')
+        .eq('id', user.company_id)
+        .single();
+      
+      if (companyErr || !company) {
+        console.warn("Could not fetch company limits, skipping check.", companyErr);
+        return true;
+      }
+
+      const { count, error: countErr } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', user.company_id)
+        .eq('active', true);
+
+      if (countErr) {
+        console.warn("Could not query profiles count, skipping check.", countErr);
+        return true;
+      }
+
+      const limit = company.max_users || 10;
+      if ((count || 0) >= limit) {
+        alert(`Limite de usuários do seu plano atingido (${limit} usuários). Entre em contato para fazer um upgrade.`);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error("Error checking user limits:", e);
+      return true;
+    }
+  };
+
   const toggleStatus = async (id: string, currentStatus: boolean) => {
     if (
       !window.confirm(
@@ -201,6 +246,11 @@ const openCreateForm = () => {
       return;
 
     try {
+      if (!currentStatus) {
+        const isAllowed = await checkUserLimit();
+        if (!isAllowed) return;
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({ active: !currentStatus })

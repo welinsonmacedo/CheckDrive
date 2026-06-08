@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { CheckCircle2, Search, X, Eye } from "lucide-react";
 import VehicleDetailsModal from "./VehicleDetailsModal";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function VehiclesTab() {
+  const { user } = useAuth();
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [trailers, setTrailers] = useState<any[]>([]);
   const [types, setTypes] = useState<any[]>([]);
@@ -60,6 +62,43 @@ export default function VehiclesTab() {
     fetchData();
   }, []);
 
+  const checkVehicleLimit = async (): Promise<boolean> => {
+    if (!user?.company_id) return true;
+    try {
+      const { data: company, error: companyErr } = await supabase
+        .from('companies')
+        .select('max_vehicles')
+        .eq('id', user.company_id)
+        .single();
+      
+      if (companyErr || !company) {
+        console.warn("Could not fetch company limits, skipping check.", companyErr);
+        return true;
+      }
+
+      const { count, error: countErr } = await supabase
+        .from('vehicles')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', user.company_id)
+        .eq('active', true);
+
+      if (countErr) {
+        console.warn("Could not query vehicles count, skipping check.", countErr);
+        return true;
+      }
+
+      const limit = company.max_vehicles || 10;
+      if ((count || 0) >= limit) {
+        alert(`Limite de veículos do seu plano atingido (${limit} veículos). Entre em contato para fazer um upgrade.`);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error("Error checking vehicle limits:", e);
+      return true;
+    }
+  };
+
   const handleSaveVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -77,6 +116,11 @@ export default function VehiclesTab() {
           .eq("id", vehicleForm.id);
         if (error) throw error;
       } else {
+        const isAllowed = await checkVehicleLimit();
+        if (!isAllowed) {
+          setSaving(false);
+          return;
+        }
         const { error } = await supabase.from("vehicles").insert([
           {
             plate: vehicleForm.plate,
@@ -145,6 +189,10 @@ export default function VehiclesTab() {
     )
       return;
     try {
+      if (table === "vehicles" && !currentStatus) {
+        const isAllowed = await checkVehicleLimit();
+        if (!isAllowed) return;
+      }
       const { error } = await supabase
         .from(table)
         .update({ active: !currentStatus })

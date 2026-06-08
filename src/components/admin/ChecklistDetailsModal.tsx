@@ -110,11 +110,22 @@ export default function ChecklistDetailsModal({
           profiles: drivers?.find((d) => d.id === issue.driver_id),
         }));
 
-        setDefectItems(issuesWithRelations);
+        // Deduplicate issues by item_title, description, and photo_url
+        const seen = new Set<string>();
+        const uniqueIssues: any[] = [];
+        issuesWithRelations.forEach((issue: any) => {
+          const key = `${issue.item_title.trim()}||${(issue.description || "").trim()}||${issue.photo_url || ""}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniqueIssues.push(issue);
+          }
+        });
+
+        setDefectItems(uniqueIssues);
 
         // Expandir o primeiro item automaticamente
-        if (issuesWithRelations.length > 0 && expandedItems.length === 0) {
-          setExpandedItems([issuesWithRelations[0].id]);
+        if (uniqueIssues.length > 0 && expandedItems.length === 0) {
+          setExpandedItems([uniqueIssues[0].id]);
         }
       } else {
         // Se não encontrar issues, tenta extrair dos details (fallback)
@@ -169,9 +180,20 @@ export default function ChecklistDetailsModal({
       }
     }
 
-    setDefectItems(items);
-    if (items.length > 0 && expandedItems.length === 0) {
-      setExpandedItems([items[0].id]);
+    // Deduplicate items in fallback extraction count as well
+    const seen = new Set<string>();
+    const uniqueItems: any[] = [];
+    items.forEach((item: any) => {
+      const key = `${item.item_title.trim()}||${(item.description || "").trim()}||${item.photo_url || ""}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueItems.push(item);
+      }
+    });
+
+    setDefectItems(uniqueItems);
+    if (uniqueItems.length > 0 && expandedItems.length === 0) {
+      setExpandedItems([uniqueItems[0].id]);
     }
   }
 
