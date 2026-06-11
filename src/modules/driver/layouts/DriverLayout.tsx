@@ -1,12 +1,43 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { Home, Trophy, AlertTriangle, User as UserIcon, Droplets, Bell } from 'lucide-react';
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import OfflineSyncBanner from '@/src/modules/shared/layouts/OfflineSyncBanner';
+import { supabase } from '@/src/lib/supabase';
 
 export default function DriverLayout() {
   const { user } = useAuth();
   const location = useLocation();
+  const [unviewedCount, setUnviewedCount] = useState(0);
+
+  const fetchUnviewedPointsCount = async () => {
+    try {
+      if (!user?.id) return;
+      const { data: logs } = await supabase
+        .from('audit_logs')
+        .select('id')
+        .eq('driver_id', user.id);
+      
+      if (!logs) return;
+
+      const stored = localStorage.getItem('viewed_point_log_ids');
+      const viewedIds: string[] = stored ? JSON.parse(stored) : [];
+      
+      const unviewedLogs = logs.filter(log => !viewedIds.includes(log.id));
+      setUnviewedCount(unviewedLogs.length);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnviewedPointsCount();
+
+    window.addEventListener('notifications_read', fetchUnviewedPointsCount);
+    return () => {
+      window.removeEventListener('notifications_read', fetchUnviewedPointsCount);
+    };
+  }, [user?.id]);
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
@@ -80,7 +111,14 @@ export default function DriverLayout() {
               location.pathname.includes('/driver/notifications') ? 'text-primary' : 'text-zinc-400'
             }`}
           >
-            <Bell size={20} />
+            <div className="relative">
+              <Bell size={20} />
+              {unviewedCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full text-[8px] w-3.5 h-3.5 font-bold flex items-center justify-center shadow-sm">
+                  {unviewedCount}
+                </span>
+              )}
+            </div>
             <span className="text-[10px] font-bold uppercase tracking-wider">
               Alertas
             </span>

@@ -16,6 +16,7 @@ import {
   Wrench,
   Clock,
   CheckCircle,
+  Trophy,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -23,14 +24,41 @@ import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 export default function DriverNotifications() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"issues" | "alerts">("issues");
+  const [activeTab, setActiveTab] = useState<"issues" | "alerts" | "points">("issues");
   const [loading, setLoading] = useState(true);
   const [issues, setIssues] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [pointLogs, setPointLogs] = useState<any[]>([]);
+  const [viewedLogIds, setViewedLogIds] = useState<string[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   // Stats for vehicles driver is associated with
   const [driverVehicleIds, setDriverVehicleIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("viewed_point_log_ids");
+      if (stored) {
+        setViewedLogIds(JSON.parse(stored));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  const unviewedPointLogsCount = pointLogs.filter((log) => !viewedLogIds.includes(log.id)).length;
+
+  useEffect(() => {
+    if (activeTab === "points" && pointLogs.length > 0) {
+      const allIds = pointLogs.map((log) => log.id);
+      const uniqueIds = Array.from(new Set([...viewedLogIds, ...allIds]));
+      setViewedLogIds(uniqueIds);
+      localStorage.setItem("viewed_point_log_ids", JSON.stringify(uniqueIds));
+      
+      // Dispatch custom event to notify DriverLayout to update counters instantly
+      window.dispatchEvent(new Event("notifications_read"));
+    }
+  }, [activeTab, pointLogs, viewedLogIds]);
 
   useEffect(() => {
     if (user?.id) {
@@ -205,6 +233,19 @@ export default function DriverNotifications() {
         .filter((alert) => alert.isTriggered);
 
       setAlerts(triggeredAlerts);
+
+      // 4. Fetch audit logs (points / penalties / contests)
+      const { data: auditData, error: auditError } = await supabase
+        .from("audit_logs")
+        .select("*")
+        .eq("driver_id", user?.id)
+        .order("created_at", { ascending: false });
+
+      if (auditError) {
+        console.error("Error fetching driver audit logs:", auditError);
+      } else {
+        setPointLogs(auditData || []);
+      }
     } catch (e) {
       console.error("Error loading notification view data", e);
     } finally {
@@ -253,10 +294,10 @@ export default function DriverNotifications() {
       </div>
 
       {/* Stats/Summary Row */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-3">
         <button
           onClick={() => setActiveTab("issues")}
-          className={`bento-card flex flex-col items-center justify-center p-4 transition-all hover:border-indigo-400 active:scale-98 ${
+          className={`bento-card flex flex-col items-center justify-center p-3 transition-all hover:border-indigo-400 active:scale-98 ${
             activeTab === "issues"
               ? "border-indigo-500 bg-indigo-50/[0.15] ring-2 ring-indigo-500/10"
               : "border-app-border"
@@ -265,25 +306,25 @@ export default function DriverNotifications() {
           <div className="relative mb-2">
             <AlertTriangle
               className={issues.length > 0 ? "text-amber-500" : "text-text-muted"}
-              size={24}
+              size={22}
             />
             {issues.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white rounded-full text-[10px] w-5 h-5 font-black flex items-center justify-center shadow-sm">
+              <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white rounded-full text-[9px] w-4.5 h-4.5 font-black flex items-center justify-center shadow-sm">
                 {issues.length}
               </span>
             )}
           </div>
-          <span className="text-2xl font-black text-text-main tabular-nums">
+          <span className="text-xl font-black text-text-main tabular-nums">
             {issues.length}
           </span>
-          <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+          <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest text-center truncate w-full">
             Pendências
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab("alerts")}
-          className={`bento-card flex flex-col items-center justify-center p-4 transition-all hover:border-indigo-400 active:scale-98 ${
+          className={`bento-card flex flex-col items-center justify-center p-3 transition-all hover:border-indigo-400 active:scale-98 ${
             activeTab === "alerts"
               ? "border-indigo-500 bg-indigo-50/[0.15] ring-2 ring-indigo-500/10"
               : "border-app-border"
@@ -292,34 +333,72 @@ export default function DriverNotifications() {
           <div className="relative mb-2">
             <Wrench
               className={alerts.length > 0 ? "text-[#e12a2a]" : "text-text-muted"}
-              size={24}
+              size={22}
             />
             {alerts.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-[#e12a2a] text-white rounded-full text-[10px] w-5 h-5 font-black flex items-center justify-center shadow-sm">
+              <span className="absolute -top-1.5 -right-1.5 bg-[#e12a2a] text-white rounded-full text-[9px] w-4.5 h-4.5 font-black flex items-center justify-center shadow-sm">
                 {alerts.length}
               </span>
             )}
           </div>
-          <span className="text-2xl font-black text-text-main tabular-nums">
+          <span className="text-xl font-black text-text-main tabular-nums">
             {alerts.length}
           </span>
-          <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-            Alertas Ativos
+          <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest text-center truncate w-full">
+            Manutenções
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("points")}
+          className={`bento-card flex flex-col items-center justify-center p-3 transition-all hover:border-indigo-400 active:scale-98 ${
+            activeTab === "points"
+              ? "border-indigo-500 bg-indigo-50/[0.15] ring-2 ring-indigo-500/10"
+              : "border-app-border"
+          }`}
+        >
+          <div className="relative mb-2">
+            <Trophy
+              className={unviewedPointLogsCount > 0 ? "text-amber-500 animate-bounce" : "text-text-muted"}
+              size={22}
+            />
+            {unviewedPointLogsCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full text-[9px] w-4.5 h-4.5 font-black flex items-center justify-center shadow-sm">
+                {unviewedPointLogsCount}
+              </span>
+            )}
+          </div>
+          <span className="text-xl font-black text-text-main tabular-nums">
+            {pointLogs.length}
+          </span>
+          <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest text-center truncate w-full">
+            Histórico Pontos
           </span>
         </button>
       </div>
 
       {/* Tabs list with Framer Motion underliner */}
       <div className="flex border-b border-app-border">
-        {(["issues", "alerts"] as const).map((tab) => (
+        {(["issues", "alerts", "points"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`relative flex-1 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${
+            className={`relative flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${
               activeTab === tab ? "text-indigo-600" : "text-text-muted"
             }`}
           >
-            {tab === "issues" ? "Pendências Ativas" : "Manutenções Críticas"}
+            {tab === "issues" && "Pendências"}
+            {tab === "alerts" && "Manutenções"}
+            {tab === "points" && (
+              <span className="inline-flex items-center gap-1">
+                Pontos
+                {unviewedPointLogsCount > 0 && (
+                  <span className="bg-red-500 text-white rounded-full text-[9px] px-1 font-black leading-none py-0.5 animate-pulse">
+                    {unviewedPointLogsCount}
+                  </span>
+                )}
+              </span>
+            )}
             {activeTab === tab && (
               <motion.div
                 layoutId="activeTabIndicator"
@@ -552,6 +631,118 @@ export default function DriverNotifications() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {activeTab === "points" && (
+            <motion.div
+              key="points"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                  Notificações de Pontos e Contestações
+                </span>
+                <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Auditoria
+                </span>
+              </div>
+
+              {pointLogs.length === 0 ? (
+                <div className="bento-card items-center justify-center text-center p-8 border-dashed py-16 bg-white">
+                  <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500 mb-4 mx-auto border border-emerald-100">
+                    <CheckCircle size={32} />
+                  </div>
+                  <h3 className="text-sm font-black text-text-main">
+                    Nenhum registro encontrado!
+                  </h3>
+                  <p className="text-text-muted text-xs mt-1 leading-normal max-w-sm font-medium">
+                    Até o momento, não foram registradas penalidades, descontos ou contestações de pontos na sua conta.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pointLogs.map((log) => {
+                    const isNew = !viewedLogIds.includes(log.id);
+                    const isContested = log.reason && (log.reason.includes("[CONTESTADO]") || log.reason.includes("[CONTESTADO PARCIALMENTE]"));
+                    const isReversal = log.type === "reversal";
+                    const isDeduction = log.type === "penalty" || log.type === "manual";
+                    
+                    let badgeLabel = "Registro";
+                    let badgeColor = "bg-zinc-100 text-zinc-800 border-zinc-200";
+                    let prefixIcon = <Clock size={14} className="text-zinc-500" />;
+                    
+                    if (isReversal) {
+                      badgeLabel = "Pontos Revertidos";
+                      badgeColor = "bg-emerald-50 text-emerald-800 border-emerald-200";
+                      prefixIcon = <CheckCircle size={14} className="text-emerald-500" />;
+                    } else if (isContested) {
+                      badgeLabel = "Contestado";
+                      badgeColor = "bg-amber-50 text-amber-800 border-amber-200";
+                      prefixIcon = <AlertTriangle size={14} className="text-amber-500" />;
+                    } else if (isDeduction) {
+                      badgeLabel = "Pontos Descontados";
+                      badgeColor = "bg-red-50 text-red-800 border-red-200";
+                      prefixIcon = <AlertTriangle size={14} className="text-red-500" />;
+                    }
+
+                    return (
+                      <div
+                        key={log.id}
+                        className={`bento-card border flex flex-col gap-3 p-4 hover:border-indigo-200 transition-colors relative bg-white ${
+                          isNew
+                            ? "border-amber-300 bg-amber-50/[0.04]"
+                            : "border-app-border"
+                        }`}
+                      >
+                        {isNew && (
+                          <div className="absolute top-3 right-3 flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                          </div>
+                        )}
+
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className={`px-2 py-0.5 rounded text-[8px] font-black tracking-widest uppercase border ${badgeColor}`}>
+                                {badgeLabel}
+                              </span>
+                              {isNew && (
+                                <span className="px-1.5 py-0.5 rounded bg-red-500 text-white text-[8px] font-black tracking-widest uppercase animate-pulse">
+                                  Novo
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="text-sm font-black text-text-main mt-1.5">
+                              {log.reason || "Auditoria de rotina"}
+                            </h4>
+                          </div>
+
+                          <span className={`text-sm font-black tabular-nums shrink-0 whitespace-nowrap ${
+                            log.amount > 0 ? "text-emerald-600" : "text-red-500"
+                          }`}>
+                            {log.amount > 0 ? `+${log.amount}` : log.amount} pts
+                          </span>
+                        </div>
+
+                        <div className="pt-2.5 border-t border-app-border flex justify-between items-center text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                          <span className="flex items-center gap-1.5">
+                            {prefixIcon}
+                            {getRelativeTime(log.created_at)}
+                          </span>
+                          <span className="text-zinc-400 font-bold">
+                            {new Date(log.created_at).toLocaleDateString("pt-BR")}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
