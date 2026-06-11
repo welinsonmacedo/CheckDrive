@@ -358,7 +358,7 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
             </div>
           ) : frequentDefects.length > 0 ? (
             <div className="flex-1 w-full min-h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={300}>
                 <BarChart data={frequentDefects} layout="vertical" margin={{ top: 0, right: 30, left: 100, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E5E7EB" />
                   <XAxis 

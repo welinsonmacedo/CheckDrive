@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { Plug, Save, MessageSquare, Trash2, Plus, AlertCircle } from "lucide-react";
+import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
 export default function IntegrationsTab() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -26,16 +28,23 @@ export default function IntegrationsTab() {
     message: "",
   });
 
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [instanceStatus, setInstanceStatus] = useState<string | null>(null);
+  const [fetchingQrCode, setFetchingQrCode] = useState(false);
+
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user?.company_id) {
+      fetchData();
+    }
+  }, [user?.company_id]);
 
   const fetchData = async () => {
+    if (!user?.company_id) return;
     setLoading(true);
     setErrorMsg(null);
     try {
       // Check if table exists by trying to select
-      const { data: evData, error: evError } = await supabase.from("integration_evolution_api").select("*").limit(1);
+      const { data: evData, error: evError } = await supabase.from("integration_evolution_api").select("*").eq("company_id", user.company_id).limit(1);
       if (evError) throw evError;
 
       if (evData && evData.length > 0) {
@@ -50,7 +59,7 @@ export default function IntegrationsTab() {
       const { data: rulesData, error: rulesError } = await supabase.from("integration_whatsapp_rules").select(`
         *,
         auto_alerts(title)
-      `);
+      `).eq("company_id", user.company_id);
       if (rulesError) throw rulesError;
       setRules(rulesData || []);
 
@@ -58,7 +67,7 @@ export default function IntegrationsTab() {
       setAutoAlerts(alertsData || []);
 
     } catch (error: any) {
-      if (error.message?.includes('relation "integration_evolution_api" does not exist') || error.message?.includes('does not exist')) {
+      if (error?.code === 'PGRST205' || error.message?.includes('relation "integration_evolution_api" does not exist') || error.message?.includes('does not exist') || error.message?.includes('schema cache')) {
         setErrorMsg("As tabelas de integração não existem.");
       } else {
         console.error("Error fetching integrations:", error);
@@ -68,9 +77,71 @@ export default function IntegrationsTab() {
     }
   };
 
+  const fetchInstanceStatus = async () => {
+    if (!evolutionForm.url || !evolutionForm.api_key || !evolutionForm.instance_name) {
+      return alert("Preencha as configurações da API primeiro.");
+    }
+    
+    setFetchingQrCode(true);
+    setInstanceStatus(null);
+    setQrCode(null);
+    try {
+      // 1. Tentar criar a instância (se já existir, a API normalmente retorna erro que podemos ignorar e prosseguir para conectar)
+      const createUrl = `${evolutionForm.url.replace(/\/$/, '')}/instance/create`;
+      await fetch(createUrl, {
+        method: "POST",
+        headers: {
+          "apikey": evolutionForm.api_key,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          instanceName: evolutionForm.instance_name,
+          qrcode: true,
+          integration: "WHATSAPP-BAILEYS"
+        })
+      }).catch(() => {}); // Ignorar falha de rede na criação, tentaremos conectar de qualquer forma
+
+      // 2. Buscar o status de conexão (que retorna o base64 se estiver pendente)
+      const url = `${evolutionForm.url.replace(/\/$/, '')}/instance/connect/${evolutionForm.instance_name}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "apikey": evolutionForm.api_key,
+          "Content-Type": "application/json"
+        }
+      });
+      
+      const textResponse = await response.text();
+      let data;
+      try {
+        data = JSON.parse(textResponse);
+      } catch (err) {
+        setInstanceStatus(`Erro: Resposta inválida da API (recebido: ${textResponse.substring(0, 50)}...). Verifique se a URL informada está correta.`);
+        setFetchingQrCode(false);
+        return;
+      }
+      
+      if (response.ok) {
+        if (data.base64) {
+           setQrCode(data.base64);
+           setInstanceStatus("QR Code Gerado. Escaneie no WhatsApp.");
+        } else if (data.instance?.state === "open" || data.instance?.status === "open" || data.state === "open" || data.instance?.state === "CONNECTED") {
+           setInstanceStatus("Instância já conectada.");
+        } else {
+           setInstanceStatus(`Status: ${data.instance?.state || data.state || data.instance?.status || "Aguardando"}`);
+        }
+      } else {
+         setInstanceStatus(`Erro: ${data.response?.message || data.message || "Falha ao conectar"}`);
+      }
+    } catch (error: any) {
+      setInstanceStatus(`Erro: ${error.message}`);
+    } finally {
+      setFetchingQrCode(false);
+    }
+  };
+
   const saveEvolutionConfig = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       const payload = {
         company_id: user?.company_id,
         url: evolutionForm.url,
@@ -78,11 +149,17 @@ export default function IntegrationsTab() {
         instance_name: evolutionForm.instance_name,
       };
 
+      let error;
       if (evolutionForm.id) {
-        await supabase.from("integration_evolution_api").update(payload).eq("id", evolutionForm.id);
+        const res = await supabase.from("integration_evolution_api").update(payload).eq("id", evolutionForm.id);
+        error = res.error;
       } else {
-        await supabase.from("integration_evolution_api").insert([payload]);
+        const res = await supabase.from("integration_evolution_api").insert([payload]);
+        error = res.error;
       }
+      
+      if (error) throw error;
+
       alert("Configuração da Evolution API salva com sucesso!");
       fetchData();
     } catch (error: any) {
@@ -96,7 +173,6 @@ export default function IntegrationsTab() {
       return alert("Preencha todos os campos da regra.");
     }
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       const payload = {
         company_id: user?.company_id,
         auto_alert_id: ruleForm.auto_alert_id,
@@ -200,10 +276,33 @@ WITH CHECK (company_id = get_default_company_id());
             <input type="text" placeholder="Ex: FrotaZap" className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" value={evolutionForm.instance_name} onChange={(e) => setEvolutionForm({...evolutionForm, instance_name: e.target.value})} />
           </div>
         </div>
-        <div className="flex justify-end">
-          <button onClick={saveEvolutionConfig} className="px-6 h-10 bg-primary text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg hover:shadow-primary/20 transition-all flex items-center gap-2">
-            <Save size={14} /> Salvar API
-          </button>
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mt-6 border-t border-zinc-100 pt-6">
+          <div className="flex-1">
+            {instanceStatus && (
+              <div className="mb-4 text-sm p-3 rounded-lg bg-zinc-50 border border-zinc-200">
+                <strong className="font-medium text-zinc-700">Status:</strong>{" "}
+                <span className="text-zinc-600">{instanceStatus}</span>
+              </div>
+            )}
+            
+            {qrCode && (
+              <div className="mt-4 flex flex-col items-start gap-2">
+                <p className="text-xs font-medium text-zinc-500">Escaneie o QR Code abaixo com o seu WhatsApp:</p>
+                <div className="p-2 bg-white rounded-xl shadow-sm border border-zinc-200 inline-block">
+                  <img src={qrCode} alt="WhatsApp Login QR Code" className="w-64 h-64 object-contain" />
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex gap-2">
+            <button onClick={fetchInstanceStatus} disabled={fetchingQrCode} className="px-6 h-10 bg-zinc-800 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg hover:shadow-zinc-800/20 transition-all flex items-center gap-2 disabled:opacity-70">
+              {fetchingQrCode ? "Buscando..." : "Gerar QR Code"}
+            </button>
+            <button onClick={saveEvolutionConfig} className="px-6 h-10 bg-primary text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg hover:shadow-primary/20 transition-all flex items-center gap-2">
+              <Save size={14} /> Salvar API
+            </button>
+          </div>
         </div>
       </div>
 
