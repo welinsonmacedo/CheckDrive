@@ -2,9 +2,10 @@ import React, { useState, useEffect, createContext, useContext } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { User, Role } from "@/src/modules/shared/types";
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isProfileLoading: boolean;
   isAuthenticated: boolean;
   onlineUsers: any[];
   logout: () => Promise<void>;
@@ -15,9 +16,9 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
 
-  // 🔥 busca profile (não bloqueia UI)
   const fetchProfile = async (userId: string, email: string) => {
     try {
       const { data: profile, error } = await supabase
@@ -28,19 +29,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) {
         console.error("Erro ao buscar profile:", error);
-        return null;
       }
 
-      if (!profile) return null;
-
-      const rawName = profile.full_name || email.split("@")[0];
+      const rawName = profile?.full_name || email.split("@")[0] || "Usuário";
       const isInternal = rawName.endsWith("//INTERNO");
       const cleanName = isInternal
         ? rawName.replace("//INTERNO", "").trim()
         : rawName;
 
       let hideAverages = false;
-      if (profile.company_id) {
+      if (profile?.company_id) {
         try {
           const { data: companyData } = await supabase
             .from("companies")
@@ -57,21 +55,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       return {
         name: cleanName,
-        role: profile.role as Role,
-        company_id: profile.company_id,
+        role: profile?.role as Role || null,
+        company_id: profile?.company_id || null,
         isInternal,
         hideAverages,
       };
     } catch (err) {
       console.error("Erro inesperado profile:", err);
-      return null;
+      return {
+        name: email.split("@")[0] || "Usuário",
+        role: null,
+        company_id: null,
+        isInternal: false,
+        hideAverages: false
+      };
     }
   };
 
   useEffect(() => {
     let mounted = true;
 
-    // 🔥 setter seguro (não sobrescreve role errado)
     const setUserSafe = (session: any, profile?: any) => {
       if (!mounted) return;
 
@@ -82,8 +85,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           id: session.user.id,
           email: session.user.email || "",
           name: profile?.name ?? prev?.name ?? "Usuário",
-
-          // 🔥 NÃO define role até ter profile
           role: profile?.role ?? prev?.role ?? null,
           company_id: profile?.company_id ?? prev?.company_id ?? null,
           isInternal: profile?.isInternal ?? prev?.isInternal ?? false,
@@ -103,18 +104,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           await supabase.auth.signOut().catch(() => {});
           setUser(null);
           setLoading(false);
+          setIsProfileLoading(false);
           return;
         }
 
         const session = data.session;
 
         if (session) {
-          // 🔥 seta usuário imediato
+          setIsProfileLoading(true);
           setUserSafe(session);
 
-          // 🔥 carrega profile em background
-          fetchProfile(session.user.id, session.user.email || "").then((profile) => {
-            if (profile && mounted) setUserSafe(session, profile);
+          fetchProfile(session.user.id, session.user.email || "").then((profileInfo) => {
+            if (profileInfo && mounted) setUserSafe(session, profileInfo);
+            if (mounted) setIsProfileLoading(false);
           });
 
           // 🔥 Roda rotina automática de fechamento em background
@@ -134,6 +136,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (mounted) {
           setUser(null);
           setLoading(false);
+          setIsProfileLoading(false);
         }
       }
     };
@@ -142,20 +145,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      if (session) {
-        setUserSafe(session);
-
-        fetchProfile(session.user.id, session.user.email || "").then((profile) => {
-          if (profile && mounted) setUserSafe(session, profile);
-        });
-      } else {
-        if (mounted) setUser(null);
+      if (event === 'SIGNED_OUT' || !session) {
+        setUser(null);
+        setLoading(false);
+        setIsProfileLoading(false);
+        return;
       }
 
-      if (mounted) setLoading(false);
+      if (session) {
+        setIsProfileLoading(true);
+        setUserSafe(session);
+        fetchProfile(session.user.id, session.user.email || "").then((profileInfo) => {
+          if (profileInfo && mounted) setUserSafe(session, profileInfo);
+          if (mounted) setIsProfileLoading(false);
+        });
+        if (mounted) setLoading(false);
+      }
     });
 
     return () => {
@@ -223,6 +231,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       value={{
         user,
         loading,
+        isProfileLoading,
         isAuthenticated: !!user,
         onlineUsers,
         logout,

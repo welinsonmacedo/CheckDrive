@@ -86,7 +86,7 @@ export default function ManualIssueModal({ onClose, onSuccess }: ManualIssueModa
           throw new Error(`Erro na foto: ${valRes.error}`);
         }
         
-        const fileExt = formData.photo.name.split('.').pop();
+        const fileExt = formData.photo.name && formData.photo.name.includes('.') ? formData.photo.name.split('.').pop() : 'jpg';
         const fileName = `${Math.random()}.${fileExt}`;
         const filePath = `${user?.id || 'manual'}/${Date.now()}_${fileName}`;
         

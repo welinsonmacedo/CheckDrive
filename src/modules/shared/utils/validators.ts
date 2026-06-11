@@ -23,16 +23,21 @@ export function validateFileUpload(file: File): { valid: boolean; error?: string
   }
 
   // Check type
-  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+  if (file.type && !ALLOWED_MIME_TYPES.includes(file.type)) {
     return { valid: false, error: 'Formato de arquivo não suportado.' };
   }
 
   // Check extension manually just in case
-  const parts = file.name.split('.');
-  const ext = parts[parts.length - 1].toLowerCase();
-  
-  if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    return { valid: false, error: 'Extensão de arquivo não permitida.' };
+  const fileName = file.name || "";
+  if (fileName) {
+    const parts = fileName.split('.');
+    if (parts.length > 1) {
+      const ext = parts[parts.length - 1].toLowerCase();
+      
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        return { valid: false, error: 'Extensão de arquivo não permitida.' };
+      }
+    }
   }
 
   return { valid: true };

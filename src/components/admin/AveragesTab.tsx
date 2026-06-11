@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'motion/react';
-import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock } from 'lucide-react';
+import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer } from 'lucide-react';
 
 export default function AveragesTab() {
   const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers' | 'schedules' | 'edit'>('vehicles');
@@ -13,6 +13,10 @@ export default function AveragesTab() {
   // Date filters
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Extra filters
+  const [filterVehicle, setFilterVehicle] = useState('');
+  const [filterDriver, setFilterDriver] = useState('');
 
   // Edit mode
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -102,7 +106,7 @@ export default function AveragesTab() {
     }
 
     if (details?.adjusted_liters !== undefined && details?.adjusted_liters !== null && details.adjusted_liters !== '') {
-      liters = parseFloat(details.adjusted_liters.toString());
+      liters = parseFloat(details.adjusted_liters.toString().replace(',', '.'));
       hasAdjustment = true;
     }
 
@@ -200,29 +204,48 @@ export default function AveragesTab() {
   const enrichedData = processed.list;
   const scheduleFuelMap = processed.map;
 
-  const passesDateFilter = (dateString: string) => {
-    if (!startDate && !endDate) return true;
-    const d = new Date(dateString);
-    if (startDate) {
-      const s = new Date(startDate);
-      s.setHours(0,0,0,0);
-      if (d < s) return false;
+  const passesFilters = (itemDate: string, vehicleId?: string, driverId?: string) => {
+    if (startDate || endDate) {
+      const d = new Date(itemDate);
+      if (startDate) {
+        const s = new Date(startDate);
+        s.setHours(0,0,0,0);
+        if (d < s) return false;
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        e.setHours(23,59,59,999);
+        if (d > e) return false;
+      }
     }
-    if (endDate) {
-      const e = new Date(endDate);
-      e.setHours(23,59,59,999);
-      if (d > e) return false;
-    }
+    
+    if (filterVehicle && vehicleId !== filterVehicle) return false;
+    if (filterDriver && driverId !== filterDriver) return false;
+    
     return true;
   };
 
   const filteredEnrichedData = useMemo(() => {
-    return enrichedData.filter(d => passesDateFilter(d.created_at));
-  }, [enrichedData, startDate, endDate]);
+    return enrichedData.filter(d => passesFilters(d.created_at, d.vehicles?.id, d.profiles?.id));
+  }, [enrichedData, startDate, endDate, filterVehicle, filterDriver]);
 
   const filteredSchedules = useMemo(() => {
-    return schedules.filter(s => passesDateFilter(s.start_at || s.created_at));
-  }, [schedules, startDate, endDate]);
+    return schedules.filter(s => passesFilters(s.start_at || s.created_at, s.vehicle_id, s.driver_id));
+  }, [schedules, startDate, endDate, filterVehicle, filterDriver]);
+
+  const uniqueVehicles = useMemo(() => {
+    const vMap = new Map();
+    submissions.forEach(s => { if (s.vehicles) vMap.set(s.vehicles.id, s.vehicles.plate); });
+    schedules.forEach(s => { if (s.vehicles) vMap.set(s.vehicles.id, s.vehicles.plate); });
+    return Array.from(vMap.entries()).map(([id, plate]) => ({ id, plate })).sort((a,b) => a.plate.localeCompare(b.plate));
+  }, [submissions, schedules]);
+
+  const uniqueDrivers = useMemo(() => {
+    const dMap = new Map();
+    submissions.forEach(s => { if (s.profiles) dMap.set(s.profiles.id, s.profiles.full_name); });
+    schedules.forEach(s => { if (s.profiles) dMap.set(s.profiles.id, s.profiles.full_name); });
+    return Array.from(dMap.entries()).map(([id, name]) => ({ id, name })).sort((a,b) => a.name.localeCompare(b.name));
+  }, [submissions, schedules]);
 
   // Aggregated data for vehicles
   const vehicleAverages = useMemo(() => {
@@ -240,16 +263,18 @@ export default function AveragesTab() {
 
   // Aggregated data for drivers
   const driverAverages = useMemo(() => {
-    return filteredEnrichedData.reduce((acc: any, sub: any) => {
-      const pId = sub.profiles?.id;
-      if (!pId || !sub.profiles?.full_name) return acc;
-      if (!acc[pId]) acc[pId] = { name: sub.profiles.full_name, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
-      acc[pId].distance += Math.max(0, sub.distance || 0);
-      acc[pId].scaleDistance += Math.max(0, sub.scaleDistance || 0);
-      acc[pId].offScaleDistance += Math.max(0, sub.offScaleDistance || 0);
-      acc[pId].liters += Math.max(0, sub.liters || 0);
-      return acc;
-    }, {});
+    return filteredEnrichedData
+      .filter((sub: any) => sub.details?.average_status === 'reviewed')
+      .reduce((acc: any, sub: any) => {
+        const pId = sub.profiles?.id;
+        if (!pId || !sub.profiles?.full_name) return acc;
+        if (!acc[pId]) acc[pId] = { name: sub.profiles.full_name, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
+        acc[pId].distance += Math.max(0, sub.distance || 0);
+        acc[pId].scaleDistance += Math.max(0, sub.scaleDistance || 0);
+        acc[pId].offScaleDistance += Math.max(0, sub.offScaleDistance || 0);
+        acc[pId].liters += Math.max(0, sub.liters || 0);
+        return acc;
+      }, {});
   }, [filteredEnrichedData]);
 
   const toggleReviewStatus = async (sub: any) => {
@@ -281,7 +306,7 @@ export default function AveragesTab() {
       const newDetails = { ...subToUpdate.details };
       // Instead of changing itemValues, we set adjusted_liters
       if (editData.liters !== '') {
-        newDetails.adjusted_liters = editData.liters.toString();
+        newDetails.adjusted_liters = editData.liters.toString().replace(',', '.');
       } else {
         newDetails.adjusted_liters = null; // reset to original
       }
@@ -308,7 +333,7 @@ export default function AveragesTab() {
       
       alert('Abastecimento atualizado com sucesso!');
       setEditingId(null);
-      fetchData();
+      await fetchData();
     } catch (error) {
       console.error('Erro ao atualizar', error);
       alert('Erro ao atualizar abastecimento.');
@@ -366,7 +391,33 @@ export default function AveragesTab() {
           ))}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black uppercase text-zinc-500 ml-1">Veículo</span>
+            <select
+              value={filterVehicle}
+              onChange={(e) => setFilterVehicle(e.target.value)}
+              className="bg-app-bg border border-app-border rounded-xl px-3 py-2 text-xs text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary font-mono max-w-[150px]"
+            >
+              <option value="">Todos</option>
+              {uniqueVehicles.map(v => (
+                <option key={v.id} value={v.id}>{v.plate}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black uppercase text-zinc-500 ml-1">Motorista</span>
+            <select
+              value={filterDriver}
+              onChange={(e) => setFilterDriver(e.target.value)}
+              className="bg-app-bg border border-app-border rounded-xl px-3 py-2 text-xs text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary max-w-[150px]"
+            >
+              <option value="">Todos</option>
+              {uniqueDrivers.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex flex-col">
             <span className="text-[10px] font-black uppercase text-zinc-500 ml-1">Data Início</span>
             <input 
@@ -385,15 +436,22 @@ export default function AveragesTab() {
               className="bg-app-bg border border-app-border rounded-xl px-3 py-2 text-xs text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary font-mono"
             />
           </div>
-          {(startDate || endDate) && (
+          {(startDate || endDate || filterVehicle || filterDriver) && (
             <button
-              onClick={() => { setStartDate(''); setEndDate(''); }}
+              onClick={() => { setStartDate(''); setEndDate(''); setFilterVehicle(''); setFilterDriver(''); }}
               className="mt-4 p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
               title="Limpar Filtros"
             >
               <X size={16} />
             </button>
           )}
+          <button
+            onClick={() => window.print()}
+            className="mt-4 p-2 text-zinc-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors print:hidden"
+            title="Imprimir"
+          >
+            <Printer size={16} />
+          </button>
         </div>
       </div>
 
@@ -538,7 +596,13 @@ export default function AveragesTab() {
                        
                        if (globalSub) {
                          accumulatedDistance = globalSub.distance || 0;
-                         if (globalSub.average > 0) {
+                         if (hasAdjustment && scheduleDistance > 0 && liters > 0) {
+                           avg = (scheduleDistance / liters).toFixed(2);
+                         } else if (accumulatedDistance > 0 && liters > 0) {
+                           avg = (accumulatedDistance / liters).toFixed(2);
+                         } else if (scheduleDistance > 0 && liters > 0) {
+                           avg = (scheduleDistance / liters).toFixed(2);
+                         } else if (globalSub.average > 0) {
                            avg = globalSub.average.toFixed(2);
                          }
                        }

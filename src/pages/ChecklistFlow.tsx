@@ -16,6 +16,7 @@ import imageCompression from "browser-image-compression";
 import localforage from "localforage";
 import { supabase } from "../lib/supabase";
 import { decodeItemTitle, applyNumberMask, parseMaskedValue } from "../lib/maskUtils";
+import { triggerWhatsAppDispatches } from "../lib/whatsappIntegration";
 
 const STEPS = ["info", "external_photos", "items", "summary"];
 
@@ -66,6 +67,7 @@ export default function ChecklistFlow() {
   const [requireExternalPhotos, setRequireExternalPhotos] = useState(true);
   const [requireFuelReceiptPhoto, setRequireFuelReceiptPhoto] = useState(true);
   const [requireLocation, setRequireLocation] = useState(false);
+  const [kmLimitSettings, setKmLimitSettings] = useState({ enabled: false, maxDistance: 0 });
 
   const [dataRestored, setDataRestored] = useState(false);
 
@@ -306,6 +308,12 @@ export default function ChecklistFlow() {
       if (settingsRes.data && settingsRes.data.require_location !== undefined) {
         setRequireLocation(settingsRes.data.require_location === true);
       }
+      if (settingsRes.data) {
+        setKmLimitSettings({
+          enabled: settingsRes.data.km_limit_enabled === true,
+          maxDistance: settingsRes.data.max_km_limit ? Number(settingsRes.data.max_km_limit) : 0,
+        });
+      }
 
       // Check for active schedule to pre-fill
       let prefill = { vehicleId: "", trailerId: "", routeId: "" };
@@ -466,7 +474,8 @@ export default function ChecklistFlow() {
       let isKmValid =
         !!formData.km &&
         !isNaN(currentKm) &&
-        (lastKm === null || currentKm >= lastKm);
+        (lastKm === null || currentKm >= lastKm) &&
+        (!kmLimitSettings.enabled || lastKm === null || currentKm <= lastKm + kmLimitSettings.maxDistance);
 
       return (
         formData.vehicleId &&
@@ -1305,7 +1314,7 @@ export default function ChecklistFlow() {
                         <input
                           type="number"
                           placeholder="Ex: 125430"
-                          className={`w-full h-12 px-4 pl-10 rounded-xl border ${formData.km && lastKm !== null && parseInt(formData.km) < lastKm ? "border-danger focus:border-danger bg-red-50" : "border-app-border focus:border-primary bg-white"} text-sm font-bold text-text-main outline-none transition-colors`}
+                          className={`w-full h-12 px-4 pl-10 rounded-xl border ${(formData.km && lastKm !== null && parseInt(formData.km) < lastKm) || (kmLimitSettings.enabled && lastKm !== null && formData.km && parseInt(formData.km) > lastKm + kmLimitSettings.maxDistance) ? "border-danger focus:border-danger bg-red-50" : "border-app-border focus:border-primary bg-white"} text-sm font-bold text-text-main outline-none transition-colors`}
                           value={formData.km}
                           onChange={(e) =>
                             setFormData({ ...formData, km: e.target.value })
@@ -1313,17 +1322,23 @@ export default function ChecklistFlow() {
                         />
                         <Gauge
                           size={14}
-                          className={`absolute left-4 top-1/2 -translate-y-1/2 ${formData.km && lastKm !== null && parseInt(formData.km) < lastKm ? "text-danger" : "text-text-muted"}`}
+                          className={`absolute left-4 top-1/2 -translate-y-1/2 ${(formData.km && lastKm !== null && parseInt(formData.km) < lastKm) || (kmLimitSettings.enabled && lastKm !== null && formData.km && parseInt(formData.km) > lastKm + kmLimitSettings.maxDistance) ? "text-danger" : "text-text-muted"}`}
                         />
                       </div>
-                      {formData.km &&
-                        lastKm !== null &&
-                        parseInt(formData.km) < lastKm && (
-                          <div className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1">
-                            <AlertCircle size={10} /> Não pode ser menor que o
-                            último KM registrado: {lastKm}
-                          </div>
-                        )}
+                      {formData.km && lastKm !== null && (
+                        <>
+                          {parseInt(formData.km) < lastKm && (
+                            <div className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1">
+                              <AlertCircle size={10} /> Não pode ser menor que o último KM registrado: {lastKm}
+                            </div>
+                          )}
+                          {kmLimitSettings.enabled && parseInt(formData.km) > lastKm + kmLimitSettings.maxDistance && (
+                            <div className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1">
+                              <AlertCircle size={10} /> KM ultrapassa o limite permitido ({lastKm + kmLimitSettings.maxDistance})
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
 

@@ -66,7 +66,7 @@ export default function DriverAverages() {
         }
 
         if (details?.adjusted_liters !== undefined && details?.adjusted_liters !== null && details.adjusted_liters !== '') {
-          liters = parseFloat(details.adjusted_liters.toString());
+          liters = parseFloat(details.adjusted_liters.toString().replace(',','.'));
           hasAdjustment = true;
         }
 
@@ -117,7 +117,7 @@ export default function DriverAverages() {
       });
 
       enrichedSubmissions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      setData(enrichedSubmissions);
+      setData(enrichedSubmissions.filter(item => item.details?.average_status === 'reviewed'));
 
     } catch (error) {
       console.error('Erro ao buscar médias:', error);

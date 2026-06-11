@@ -5,7 +5,7 @@ import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { isAuthenticated, loading: authLoading, user } = useAuth();
+  const { isAuthenticated, loading: authLoading, isProfileLoading, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,27 +15,27 @@ export default function Login() {
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    if (!authLoading && !isProfileLoading && isAuthenticated) {
       if (user?.role === 'superadmin') {
         navigate('/saas', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });
       }
     }
-  }, [isAuthenticated, authLoading, navigate, user]);
+  }, [isAuthenticated, authLoading, isProfileLoading, navigate, user]);
 
   useEffect(() => {
     let sub: any;
     const checkState = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session && !authLoading && !isAuthenticated) {
+      if (session && !authLoading && !isProfileLoading && !isAuthenticated) {
         setError('Perfil não encontrado. Contate o administrador do sistema.');
         setLoading(false);
       }
     };
     checkState();
     return () => {};
-  }, [authLoading, isAuthenticated]);
+  }, [authLoading, isProfileLoading, isAuthenticated]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

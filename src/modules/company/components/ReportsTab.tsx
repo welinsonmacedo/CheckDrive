@@ -117,7 +117,7 @@ export default function ReportsTab() {
       const { data, error } = await supabase
         .from("checklist_submissions")
         .select(
-          "id, odometer, type, created_at, profiles(full_name), vehicles(plate)",
+          "id, odometer, type, created_at, trailer_id, profiles(full_name), vehicles(plate)",
         )
         .not("odometer", "is", null)
         .gte("created_at", `${startDate}T00:00:00Z`)
@@ -126,35 +126,77 @@ export default function ReportsTab() {
 
       if (error) throw error;
 
-      // Calculate mileage per vehicle/driver combination
+      // Fetch trailers separately safely
+      const { data: trailersReq } = await supabase.from("trailers").select("id, plate");
+      const trailersMap = new Map((trailersReq || []).map((t: any) => [t.id, t.plate]));
+
+      // Calculate mileage per vehicle/trailer and driver combination
       const mileageStats: Record<string, any> = {};
 
       if (data) {
+        // Group submissions by vehicle to compute correct deltas sequentially
+        const subsByVehicle: Record<string, any[]> = {};
         data.forEach((sub: any) => {
-          if (!sub.vehicles?.plate || !sub.profiles?.full_name || !sub.odometer)
-            return;
+          if (!sub.vehicles?.plate) return;
+          if (!subsByVehicle[sub.vehicles.plate]) subsByVehicle[sub.vehicles.plate] = [];
+          subsByVehicle[sub.vehicles.plate].push(sub);
+        });
 
-          const key = `${sub.vehicles.plate}-${sub.profiles.full_name}`;
-          if (!mileageStats[key]) {
-            mileageStats[key] = {
-              vehiclePlate: sub.vehicles.plate,
-              driverName: sub.profiles.full_name,
-              minOdometer: sub.odometer,
-              maxOdometer: sub.odometer,
-              submissionsCount: 1,
-              distance: 0,
-            };
-          } else {
-            mileageStats[key].submissionsCount += 1;
-            if (sub.odometer < mileageStats[key].minOdometer) {
-              mileageStats[key].minOdometer = sub.odometer;
+        Object.values(subsByVehicle).forEach((vehicleSubs) => {
+          let prevOdo = vehicleSubs[0].odometer;
+
+          vehicleSubs.forEach((sub) => {
+            if (!sub.profiles?.full_name || !sub.odometer) return;
+
+            // Calculate diff since the last checklist for this same vehicle
+            let diff = 0;
+            if (sub.odometer >= prevOdo) {
+              diff = sub.odometer - prevOdo;
             }
-            if (sub.odometer > mileageStats[key].maxOdometer) {
-              mileageStats[key].maxOdometer = sub.odometer;
+            prevOdo = sub.odometer;
+
+            const vPlate = sub.vehicles.plate;
+            const driverName = sub.profiles.full_name;
+
+            // Credit diff to Vehicle
+            const vKey = `V-${vPlate}-${driverName}`;
+            if (!mileageStats[vKey]) {
+              mileageStats[vKey] = {
+                type: "Veículo",
+                plate: vPlate,
+                driverName,
+                minOdometer: sub.odometer,
+                maxOdometer: sub.odometer,
+                submissionsCount: 0,
+                distance: 0,
+              };
             }
-            mileageStats[key].distance =
-              mileageStats[key].maxOdometer - mileageStats[key].minOdometer;
-          }
+            mileageStats[vKey].submissionsCount += 1;
+            if (sub.odometer < mileageStats[vKey].minOdometer) mileageStats[vKey].minOdometer = sub.odometer;
+            if (sub.odometer > mileageStats[vKey].maxOdometer) mileageStats[vKey].maxOdometer = sub.odometer;
+            mileageStats[vKey].distance += diff;
+
+            // Credit diff to Trailer
+            if (sub.trailer_id && trailersMap.has(sub.trailer_id)) {
+              const tPlate = trailersMap.get(sub.trailer_id);
+              const tKey = `T-${tPlate}-${driverName}`;
+              if (!mileageStats[tKey]) {
+                mileageStats[tKey] = {
+                  type: "Reboque",
+                  plate: tPlate,
+                  driverName,
+                  minOdometer: sub.odometer,
+                  maxOdometer: sub.odometer,
+                  submissionsCount: 0,
+                  distance: 0,
+                };
+              }
+              mileageStats[tKey].submissionsCount += 1;
+              if (sub.odometer < mileageStats[tKey].minOdometer) mileageStats[tKey].minOdometer = sub.odometer;
+              if (sub.odometer > mileageStats[tKey].maxOdometer) mileageStats[tKey].maxOdometer = sub.odometer;
+              mileageStats[tKey].distance += diff;
+            }
+          });
         });
       }
 
@@ -688,7 +730,10 @@ export default function ReportsTab() {
                           Motorista
                         </th>
                         <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Veículo
+                          Placa (Veículo/Reboque)
+                        </th>
+                        <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                          Tipo
                         </th>
                         <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
                           Checklists (Qtd)
@@ -708,7 +753,7 @@ export default function ReportsTab() {
                       {mileageData.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={7}
                             className="text-center py-8 text-xs text-text-muted uppercase tracking-widest font-bold"
                           >
                             Nenhum dado encontrado no período
@@ -721,7 +766,14 @@ export default function ReportsTab() {
                               {item.driverName}
                             </td>
                             <td className="px-5 py-4 text-xs font-black text-text-main">
-                              {item.vehiclePlate}
+                              {item.plate}
+                            </td>
+                            <td className="px-5 py-4 text-xs">
+                              <span
+                                className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${item.type === "Veículo" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}
+                              >
+                                {item.type}
+                              </span>
                             </td>
                             <td className="px-5 py-4 text-xs font-bold text-text-muted">
                               {item.submissionsCount}

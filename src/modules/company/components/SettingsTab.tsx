@@ -10,12 +10,15 @@ import {
   Camera,
   MapPin,
   CheckCircle2,
+  Plug,
+  Gauge,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import FleetSettingsSection from "@/src/modules/company/components/FleetSettingsSection";
 import ManualPenaltiesSettingsSection from "@/src/modules/company/components/ManualPenaltiesSettingsSection";
 import ScoreProfilesSettingsSection from "@/src/modules/company/components/ScoreProfilesSettingsSection";
 
+import IntegrationsTab from "@/src/modules/company/components/IntegrationsTab";
 import ScoreCloseModal from "@/src/modules/company/components/ScoreCloseModal";
 
 interface SettingsTabProps {
@@ -31,23 +34,38 @@ export default function SettingsTab({
 }: SettingsTabProps) {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    "global" | "profiles" | "vehicles" | "manual_penalties"
+    "global" | "profiles" | "vehicles" | "manual_penalties" | "integrations"
   >("global");
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
+
+  const [sqlError, setSqlError] = useState<string | null>(null);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setSqlError(null);
     try {
       const { error } = await supabase
         .from("app_settings")
-        .update(appSettings)
+        .update({
+           system_type: appSettings.system_type,
+           initial_value: appSettings.initial_value,
+           require_external_photos: appSettings.require_external_photos,
+           require_fuel_receipt_photo: appSettings.require_fuel_receipt_photo,
+           require_location: appSettings.require_location,
+           km_limit_enabled: appSettings.km_limit_enabled,
+           max_km_limit: appSettings.max_km_limit,
+        })
         .eq("id", "global");
       if (error) throw error;
       alert("Configurações salvas com sucesso.");
       fetchData();
     } catch (error: any) {
-      alert("Erro: " + error.message);
+      if (error.message && (error.message.includes("Could not find the 'km_limit_enabled'") || error.message.includes('column "km_limit_enabled" of relation "app_settings" does not exist'))) {
+        setSqlError("Oops, the database needs updating!");
+      } else {
+        alert("Erro: " + error.message);
+      }
     } finally {
       setSaving(false);
     }
@@ -77,6 +95,12 @@ export default function SettingsTab({
       label: "Checklist Extra",
       icon: AlertCircle,
       desc: "Pendências e restrições",
+    },
+    {
+      id: "integrations",
+      label: "Integrações",
+      icon: Plug,
+      desc: "WhatsApp e APIs",
     },
   ];
 
@@ -155,6 +179,21 @@ export default function SettingsTab({
             </div>
 
             <form onSubmit={handleSaveSettings} className="space-y-8">
+              {sqlError && (
+                <div className="bg-white p-6 rounded-3xl border border-app-border shadow-sm mb-4">
+                   <h3 className="text-sm font-black text-danger uppercase tracking-tight mb-2">Atenção!</h3>
+                   <p className="text-sm text-zinc-600 mb-4">Para poder salvar o Limite de KM, precisamos adicionar as colunas no Supabase. Copie o SQL abaixo e cole no painel do Supabase:</p>
+                   <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl overflow-x-auto text-xs font-mono text-zinc-600">
+                     <pre>
+{`ALTER TABLE public.app_settings 
+ADD COLUMN IF NOT EXISTS km_limit_enabled BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS max_km_limit NUMERIC DEFAULT 0;`}
+                     </pre>
+                   </div>
+                   <button type="button" onClick={() => setSqlError(null)} className="mt-4 px-4 py-2 bg-zinc-200 text-zinc-700 rounded-lg text-sm font-bold">Voltar</button>
+                </div>
+              )}
+
               {/* Geral Card */}
               <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm">
                 <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 border-b border-zinc-100 pb-4 mb-6 flex items-center gap-2">
@@ -327,6 +366,69 @@ export default function SettingsTab({
                       </div>
                     </label>
                   </div>
+
+                  {/* Row 4: KM Limit */}
+                  <div className="flex flex-col p-4 rounded-2xl bg-zinc-50 border border-zinc-100 hover:border-primary/20 transition-colors group">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 group-hover:text-primary transition-colors shrink-0">
+                          <Gauge size={18} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-zinc-800">
+                            Habilitar Limite de KM
+                          </h4>
+                          <p className="text-[11px] text-zinc-500 mt-1 max-w-sm leading-relaxed">
+                            Restringir a diferença máxima do KM informado na chegada em relação ao anterior.
+                          </p>
+                        </div>
+                      </div>
+                      <label className="flex items-center cursor-pointer shrink-0">
+                        <div className="relative">
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={appSettings?.km_limit_enabled ?? false}
+                            onChange={(e) =>
+                              setAppSettings({
+                                ...appSettings,
+                                km_limit_enabled: e.target.checked,
+                              })
+                            }
+                          />
+                          <div
+                            className={`block w-12 h-7 rounded-full shadow-inner transition-colors ${appSettings?.km_limit_enabled ? "bg-primary" : "bg-zinc-300"}`}
+                          ></div>
+                          <div
+                            className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${appSettings?.km_limit_enabled ? "transform translate-x-5" : ""}`}
+                          ></div>
+                        </div>
+                      </label>
+                    </div>
+
+                    {appSettings?.km_limit_enabled && (
+                      <div className="mt-4 pt-4 border-t border-zinc-200 ml-14">
+                        <label className="block text-xs font-bold text-zinc-700 uppercase tracking-widest mb-2">
+                          Limite em KM (Distância máxima)
+                        </label>
+                        <input
+                          type="number"
+                          className="w-full sm:w-1/2 p-3 bg-white border border-zinc-200 rounded-xl focus:ring-1 focus:ring-primary focus:border-primary text-sm"
+                          placeholder="Ex: 500"
+                          value={appSettings?.max_km_limit || ""}
+                          onChange={(e) =>
+                            setAppSettings({
+                              ...appSettings,
+                              max_km_limit: parseInt(e.target.value) || 0,
+                            })
+                          }
+                        />
+                        <p className="text-[10px] text-zinc-500 mt-2">
+                          O motorista não poderá inserir um KM maior que (KM Anterior + Limite).
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -367,6 +469,19 @@ export default function SettingsTab({
               </p>
             </div>
             <FleetSettingsSection />
+          </div>
+        ) : activeTab === "integrations" ? (
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-black text-zinc-800 tracking-tight flex items-center gap-2">
+                <Plug className="text-primary" size={24} />
+                Integrações
+              </h2>
+              <p className="text-sm font-bold text-zinc-500 tracking-wider uppercase mt-1">
+                Conexões com serviços externos
+              </p>
+            </div>
+            <IntegrationsTab />
           </div>
         ) : (
           <div className="space-y-6">

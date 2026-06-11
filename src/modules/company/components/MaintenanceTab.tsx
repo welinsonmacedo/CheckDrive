@@ -12,6 +12,7 @@ import {
   Eye,
   Undo,
   Trash2,
+  Camera,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -41,6 +42,12 @@ export default function MaintenanceTab() {
     string | string[] | null
   >(null);
   const [resolveNotes, setResolveNotes] = useState("");
+  const [resolveNf, setResolveNf] = useState("");
+  const [resolveValue, setResolveValue] = useState("");
+  const [resolvePhotos, setResolvePhotos] = useState<File[]>([]);
+  const [sqlError, setSqlError] = useState<string | null>(null);
+  const [resolveNextDate, setResolveNextDate] = useState("");
+  const [resolveWarningDays, setResolveWarningDays] = useState("");
   const [isResolving, setIsResolving] = useState(false);
 
   useEffect(() => {
@@ -53,7 +60,10 @@ export default function MaintenanceTab() {
     try {
       const { data: issuesData, error } = await supabase
         .from("checklist_issues")
-        .select("*")
+        .select(`
+          *,
+          auto_alerts (*)
+        `)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -193,6 +203,12 @@ export default function MaintenanceTab() {
     setResolvingIssueId(issue.grouped_ids || [issue.id]);
     setSelectedIdsToResolve(issue.grouped_ids || [issue.id]);
     setResolveNotes("");
+    setResolveNf("");
+    setResolveValue("");
+    setResolvePhotos([]);
+    setSqlError(null);
+    setResolveNextDate("");
+    setResolveWarningDays("");
   }
 
   async function confirmModalAction() {
@@ -221,30 +237,70 @@ export default function MaintenanceTab() {
       return;
     }
 
+    if (modalActionType === "resolve") {
+      if (resolvingIssueData?.auto_alerts?.trigger_type === "date" && !resolveNextDate) {
+         alert("Por favor, informe a próxima data de vencimento para o alerta.");
+         return;
+      }
+    }
+
     setIsResolving(true);
+    setSqlError(null);
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      await supabase
+      // Upload photos if any
+      const uploadedPhotos: string[] = [];
+      for (let i = 0; i < resolvePhotos.length; i++) {
+         const file = resolvePhotos[i];
+         const path = `${user?.id || 'unknown'}/resolution/${Date.now()}_${i}.jpg`;
+         const { error: uploadError } = await supabase.storage
+            .from("checklist-photos")
+            .upload(path, file);
+         if (!uploadError) uploadedPhotos.push(path);
+      }
+
+      const { error: updateError } = await supabase
         .from("checklist_issues")
         .update({
           status: "resolved",
           resolution_notes: resolveNotes,
+          resolution_nf: resolveNf,
+          resolution_value: resolveValue ? Number(resolveValue) : null,
+          resolution_photos: uploadedPhotos,
           resolved_at: new Date().toISOString(),
           resolved_by: user?.id,
         })
         .in("id", selectedIdsToResolve);
+        
+      if (updateError) throw updateError;
+
+      // Check if we need to update a date-based auto_alert
+      if (resolvingIssueData?.auto_alerts?.trigger_type === "date" && resolveNextDate) {
+         await supabase.from("auto_alerts").update({
+            trigger_date: resolveNextDate,
+            warning_days: resolveWarningDays ? Number(resolveWarningDays) : resolvingIssueData.auto_alerts.warning_days
+         }).eq("id", resolvingIssueData.auto_alert_id);
+      }
 
       setResolvingIssueId(null);
       setResolvingIssueData(null);
       setSelectedIdsToResolve([]);
       setResolveNotes("");
+      setResolveNf("");
+      setResolveValue("");
+      setResolvePhotos([]);
+      setSqlError(null);
       fetchIssues();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Erro ao resolver. Tente novamente.");
+      if (err.message && (err.message.includes("Could not find the 'resolution_nf' column") || err.message.includes('column "resolution_nf" of relation "checklist_issues" does not exist'))) {
+        setSqlError("Oops, the database needs updating!");
+      } else {
+        alert("Erro ao resolver. Tente novamente: " + err.message);
+      }
     } finally {
       setIsResolving(false);
     }
@@ -631,20 +687,50 @@ export default function MaintenanceTab() {
 
                         {issue.status === "resolved" && (
                           <div className="flex items-start justify-end gap-6 text-left">
-                            <div>
+                            <div className="flex-1 max-w-[200px]">
                               <div className="text-sm text-green-600 font-semibold flex items-center gap-1">
                                 <CheckCircle size={14} />
                                 Resolvido
                               </div>
 
                               {issue.resolution_notes && (
-                                <div className="text-text-muted text-xs mt-1 max-w-xs">
+                                <div className="text-text-muted text-xs mt-1">
                                   {issue.resolution_notes}
+                                </div>
+                              )}
+                              
+                              {issue.resolution_nf && (
+                                <div className="text-zinc-600 text-[10px] mt-1 font-bold uppercase tracking-widest">
+                                  NF: {issue.resolution_nf}
+                                </div>
+                              )}
+                              {issue.resolution_value > 0 && (
+                                <div className="text-primary text-[10px] font-black uppercase tracking-widest">
+                                  Valor: R$ {issue.resolution_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </div>
+                              )}
+                              {issue.resolution_photos && issue.resolution_photos.length > 0 && (
+                                <div className="flex gap-1 mt-2">
+                                  {issue.resolution_photos.map((pUrl: string, i: number) => (
+                                     <button
+                                       key={i}
+                                       onClick={(e) => {
+                                         e.stopPropagation();
+                                         const fullUrl = supabase.storage.from("checklist-photos").getPublicUrl(pUrl).data.publicUrl;
+                                         setSelectedImage(fullUrl);
+                                         setZoom(1);
+                                       }}
+                                       title="Ver Foto do Serviço"
+                                       className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center cursor-pointer border border-gray-200 hover:border-primary overflow-hidden shrink-0"
+                                     >
+                                        <img src={supabase.storage.from("checklist-photos").getPublicUrl(pUrl).data.publicUrl} className="w-full h-full object-cover" alt="Solução" />
+                                     </button>
+                                  ))}
                                 </div>
                               )}
 
                               {issue.resolved_at && (
-                                <div className="text-[10px] text-gray-400 mt-1">
+                                <div className="text-[10px] text-gray-400 mt-2">
                                   {new Date(
                                     issue.resolved_at,
                                   ).toLocaleDateString()}
@@ -873,20 +959,125 @@ export default function MaintenanceTab() {
                   </div>
                 )}
 
-              {modalActionType === "resolve" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Observações da solução (opcional)
-                  </label>
-                  <textarea
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                    rows={4}
-                    placeholder="Descreva como a pendência foi resolvida..."
-                    value={resolveNotes}
-                    onChange={(e) => setResolveNotes(e.target.value)}
-                  />
+              {modalActionType === "resolve" && !sqlError && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Nota Fiscal (opcional)
+                        </label>
+                        <input
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                          type="text"
+                          placeholder="Número da NF"
+                          value={resolveNf}
+                          onChange={(e) => setResolveNf(e.target.value)}
+                        />
+                     </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Valor (opcional)
+                        </label>
+                        <input
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                          type="number"
+                          step="0.01"
+                          placeholder="R$ 0,00"
+                          value={resolveValue}
+                          onChange={(e) => setResolveValue(e.target.value)}
+                        />
+                     </div>
+                  </div>
+
+                  <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                       Fotos do Serviço (opcional)
+                     </label>
+                     <div className="flex flex-wrap gap-2 mb-2">
+                        {resolvePhotos.map((p, i) => (
+                           <div key={i} className="relative w-16 h-16 rounded border border-gray-200 overflow-hidden">
+                              <img src={URL.createObjectURL(p)} alt="doc" className="w-full h-full object-cover" />
+                              <button onClick={() => setResolvePhotos(resolvePhotos.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5"><X size={10} /></button>
+                           </div>
+                        ))}
+                        <label className="w-16 h-16 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary cursor-pointer transition-colors bg-gray-50">
+                           <Camera size={20} />
+                           <input type="file" className="hidden" accept="image/*" multiple onChange={(e) => {
+                             if (e.target.files) {
+                               const newFiles = Array.from(e.target.files);
+                               setResolvePhotos([...resolvePhotos, ...newFiles]);
+                             }
+                           }} />
+                        </label>
+                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Observações da solução (opcional)
+                    </label>
+                    <textarea
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                      rows={3}
+                      placeholder="Descreva como a pendência foi resolvida..."
+                      value={resolveNotes}
+                      onChange={(e) => setResolveNotes(e.target.value)}
+                    />
+                  </div>
+
+                  {resolvingIssueData?.auto_alerts?.trigger_type === 'date' && (
+                    <div className="bg-orange-50 p-4 border border-orange-200 rounded-xl space-y-3 relative overflow-hidden">
+                      <div className="flex items-center gap-2 mb-1">
+                        <AlertCircle className="text-orange-500" size={16} />
+                        <h4 className="text-xs font-black text-orange-700 uppercase tracking-widest">Alerta Automático (Data)</h4>
+                      </div>
+                      <p className="text-xs text-orange-800/80 mb-3 block">
+                        Esta pendência foi gerada por um alerta. Ao resolvê-la, defina a próxima data de vencimento.
+                      </p>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                         <div>
+                           <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Próxima Data</label>
+                           <input
+                             type="date"
+                             value={resolveNextDate}
+                             onChange={(e) => setResolveNextDate(e.target.value)}
+                             required
+                             className="w-full bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                           />
+                         </div>
+                         <div>
+                           <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Avisar com (Dias)</label>
+                           <input
+                             type="number"
+                             value={resolveWarningDays}
+                             onChange={(e) => setResolveWarningDays(e.target.value)}
+                             placeholder={resolvingIssueData.auto_alerts.warning_days?.toString() || "15"}
+                             className="w-full bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                           />
+                         </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+
+              {modalActionType === "resolve" && sqlError && (
+                <div className="bg-white p-6 rounded-3xl border border-app-border shadow-sm mb-4">
+                   <h3 className="text-sm font-black text-danger uppercase tracking-tight mb-2">Atenção!</h3>
+                   <p className="text-sm text-zinc-600 mb-4">Para poder salvar Nota Fiscal, Valor e Fotos da solução, precisamos adicionar as colunas no Supabase. Copie o SQL abaixo e cole no painel do Supabase:</p>
+                   <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl overflow-x-auto text-xs font-mono text-zinc-600">
+                     <pre>
+{`ALTER TABLE public.checklist_issues 
+ADD COLUMN IF NOT EXISTS resolution_nf TEXT,
+ADD COLUMN IF NOT EXISTS resolution_value NUMERIC,
+ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
+                     </pre>
+                   </div>
+                   <button onClick={() => setSqlError(null)} className="mt-4 px-4 py-2 bg-zinc-200 text-zinc-700 rounded-lg text-sm font-bold">Voltar e tentar novamente</button>
+                </div>
+              )}
+
               <div className="flex bg-gray-50 -mx-6 -mb-6 px-6 py-4 justify-end gap-3 rounded-b-xl border-t border-gray-200">
                 <button
                   type="button"
@@ -894,6 +1085,7 @@ export default function MaintenanceTab() {
                     setResolvingIssueId(null);
                     setResolvingIssueData(null);
                     setSelectedIdsToResolve([]);
+                    setSqlError(null);
                   }}
                   disabled={isResolving}
                   className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"

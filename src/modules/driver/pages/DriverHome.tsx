@@ -190,7 +190,16 @@ export default function DriverHome() {
       </button>
 
       {/* Active Schedule Alert */}
-      {!user?.isInternal && schedulesToday.filter(s => !hiddenSchedules.includes(s.id)).map((schedule) => {
+      {!user?.isInternal && schedulesToday.filter(s => {
+        if (hiddenSchedules.includes(s.id)) return false;
+        const isFinished = s.start_checklist_id && s.end_checklist_id;
+        const nowMs = new Date().getTime();
+        const endMs = new Date(s.end_at).getTime();
+        const isTimeExpired = nowMs > endMs + 30 * 60 * 1000;
+        // Hide if finished AND expired
+        if (isFinished && isTimeExpired) return false;
+        return true;
+      }).map((schedule) => {
         const isFinished = schedule.start_checklist_id && schedule.end_checklist_id;
         const nowMs = new Date().getTime();
         const endMs = new Date(schedule.end_at).getTime();

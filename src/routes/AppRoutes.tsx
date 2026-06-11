@@ -81,8 +81,8 @@ function ChecklistRedirector() {
 
 // Internal helper for resolving legacy /dashboard route dynamically based on role
 function RouteRedirector() {
-  const { user, loading, isAuthenticated } = useAuth();
-  if (loading) return null;
+  const { user, loading, isProfileLoading, isAuthenticated } = useAuth();
+  if (loading || isProfileLoading) return null;
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
 
   if (user.role === 'superadmin') {

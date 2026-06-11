@@ -85,7 +85,7 @@ export default function DriverProfile() {
       const file = e.target.files?.[0];
       if (!file || !user) return;
 
-      const fileExt = file.name.split(".").pop();
+      const fileExt = file.name && file.name.includes(".") ? file.name.split(".").pop() : "jpg";
       const fileName = `${user.id}-${Math.random()}.${fileExt}`;
       const filePath = `${fileName}`;
 

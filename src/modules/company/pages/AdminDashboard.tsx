@@ -50,6 +50,7 @@ import RankingTab from "@/src/modules/company/components/RankingTab";
 import DatabaseTab from "@/src/modules/company/components/DatabaseTab";
 import ReportsTab from "@/src/modules/company/components/ReportsTab";
 import AveragesTab from "@/src/modules/company/components/AveragesTab";
+import AlertsTab from "@/src/modules/company/components/AlertsTab";
 import ManualTab from "@/src/modules/company/components/ManualTab";
 import FeedbackTab from "@/src/modules/company/components/FeedbackTab";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -343,6 +344,12 @@ export default function AdminDashboard() {
       label: "Iscas",
       color: "from-fuchsia-500 to-purple-500",
     },
+    {
+      id: "alerts",
+      icon: Bell,
+      label: "Alertas",
+      color: "from-orange-500 to-amber-500",
+    },
   ];
 
   return (
@@ -591,8 +598,11 @@ export default function AdminDashboard() {
                 <AuditTab appSettings={appSettings} />
               )}
               {activeTab === "feedback" && user?.role === "admin" && <FeedbackTab />}
-              {activeTab === "database" && user?.role === "admin" && (
+              {activeTab === "database" && (
                 <DatabaseTab />
+              )}
+              {activeTab === "alerts" && (
+                <AlertsTab />
               )}
               {activeTab === "settings" && user?.role === "admin" && (
                 <SettingsTab

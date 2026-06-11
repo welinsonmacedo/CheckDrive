@@ -17,6 +17,7 @@ import localforage from "localforage";
 import { supabase } from "@/src/lib/supabase";
 import { decodeItemTitle, applyNumberMask, parseMaskedValue } from "@/src/lib/maskUtils";
 import { validateFileUpload } from "@/src/modules/shared/utils/validators";
+import { triggerWhatsAppDispatches } from "@/src/lib/whatsappIntegration";
 
 const STEPS = ["info", "external_photos", "items", "summary"];
 
@@ -61,12 +62,14 @@ export default function ChecklistFlow() {
 
   const [lastKm, setLastKm] = useState<number | null>(null);
   const [existingIssues, setExistingIssues] = useState<any[]>([]);
+  const [vehicleAlerts, setVehicleAlerts] = useState<any[]>([]);
   const [isScheduled, setIsScheduled] = useState(false);
   const [isInternal, setIsInternal] = useState(false);
   const [isTrailerOnly, setIsTrailerOnly] = useState(false);
   const [requireExternalPhotos, setRequireExternalPhotos] = useState(true);
   const [requireFuelReceiptPhoto, setRequireFuelReceiptPhoto] = useState(true);
   const [requireLocation, setRequireLocation] = useState(false);
+  const [kmLimitSettings, setKmLimitSettings] = useState({ enabled: false, maxDistance: 0 });
 
   const [dataRestored, setDataRestored] = useState(false);
 
@@ -209,13 +212,77 @@ export default function ChecklistFlow() {
         .limit(1)
         .single();
 
+      let currentKmForAlerts = 0;
       if (data) {
         setLastKm(data.odometer);
+        currentKmForAlerts = data.odometer;
       } else {
         setLastKm(null);
       }
+      
+      // Fetch alerts
+      const { data: alertsData } = await supabase
+        .from('auto_alerts')
+        .select('*')
+        .eq('target_vehicle_id', vehicleId)
+        .eq('active', true)
+        .eq('generate_issue', true);
+        
+      if (alertsData) {
+        const activeAlerts = alertsData.filter(alert => {
+          if (alert.trigger_type === 'date' && alert.trigger_date) {
+            const warningDays = alert.warning_days ? Number(alert.warning_days) : 0;
+            const targetDate = new Date(alert.trigger_date + "T00:00:00");
+            const thresholdDate = new Date(targetDate);
+            thresholdDate.setDate(targetDate.getDate() - warningDays);
+            return new Date() >= thresholdDate;
+          }
+          if (alert.trigger_type === 'km' && alert.interval_km && alert.last_km && alert.warning_km) {
+             const warningThreshold = Number(alert.last_km) + Number(alert.interval_km) - Number(alert.warning_km);
+             return currentKmForAlerts >= warningThreshold;
+          }
+          return false;
+        });
+        
+        // Auto-generate issues for triggered alerts
+        if (activeAlerts.length > 0) {
+          try {
+            // Check which alerts already generated pending issues
+            const alertIds = activeAlerts.map(a => a.id);
+            const { data: existingAlertIssues } = await supabase
+              .from('checklist_issues')
+              .select('auto_alert_id')
+              .in('auto_alert_id', alertIds)
+              .eq('status', 'pending');
+              
+            const alreadyGeneratedSet = new Set((existingAlertIssues || []).map(ei => ei.auto_alert_id));
+            
+            const issuesToInsert = activeAlerts
+              .filter(alert => !alreadyGeneratedSet.has(alert.id))
+              .map(alert => ({
+                vehicle_id: vehicleId,
+                item_title: `🚨 Alerta: ${alert.title}`,
+                description: `Gerado automaticamente. ${alert.trigger_type === 'km' ? `KM Alvo: ${Number(alert.last_km) + Number(alert.interval_km)}` : `Data Alvo: ${alert.trigger_date.split('-').reverse().join('/')}`}`,
+                status: 'pending',
+                auto_alert_id: alert.id
+              }));
+              
+            if (issuesToInsert.length > 0) {
+              await supabase.from('checklist_issues').insert(issuesToInsert);
+              // Call WhatsApp Integration
+              triggerWhatsAppDispatches(activeAlerts.filter(a => !alreadyGeneratedSet.has(a.id)), currentKmForAlerts, vRes.data?.find((v: any) => v.id === vehicleId)?.plate || "");
+            }
+          } catch(e) {
+            console.error('Error auto-generating alert issues', e);
+          }
+        }
+        
+        setVehicleAlerts(activeAlerts);
+      } else {
+        setVehicleAlerts([]);
+      }
     } catch (error) {
-      console.error("Error fetching last KM:", error);
+      console.error("Error fetching last KM or alerts:", error);
       setLastKm(null);
     }
   };
@@ -314,6 +381,12 @@ export default function ChecklistFlow() {
       }
       if (settingsRes.data && settingsRes.data.require_location !== undefined) {
         setRequireLocation(settingsRes.data.require_location === true);
+      }
+      if (settingsRes.data) {
+        setKmLimitSettings({
+          enabled: settingsRes.data.km_limit_enabled === true,
+          maxDistance: settingsRes.data.max_km_limit ? Number(settingsRes.data.max_km_limit) : 0,
+        });
       }
 
       // Check for active schedule to pre-fill
@@ -460,6 +533,7 @@ export default function ChecklistFlow() {
       }));
     } catch (error) {
       console.error("Compression failed", error);
+      alert("Erro ao otimizar a imagem. Tente novamente.");
     }
   };
 
@@ -476,7 +550,8 @@ export default function ChecklistFlow() {
       let isKmValid =
         !!formData.km &&
         !isNaN(currentKm) &&
-        (lastKm === null || currentKm >= lastKm);
+        (lastKm === null || currentKm >= lastKm) &&
+        (!kmLimitSettings.enabled || lastKm === null || currentKm <= lastKm + kmLimitSettings.maxDistance);
 
       return (
         formData.vehicleId &&
@@ -1323,7 +1398,7 @@ export default function ChecklistFlow() {
                         <input
                           type="number"
                           placeholder="Ex: 125430"
-                          className={`w-full h-12 px-4 pl-10 rounded-xl border ${formData.km && lastKm !== null && parseInt(formData.km) < lastKm ? "border-danger focus:border-danger bg-red-50" : "border-app-border focus:border-primary bg-white"} text-sm font-bold text-text-main outline-none transition-colors`}
+                          className={`w-full h-12 px-4 pl-10 rounded-xl border ${(formData.km && lastKm !== null && parseInt(formData.km) < lastKm) || (kmLimitSettings.enabled && lastKm !== null && formData.km && parseInt(formData.km) > lastKm + kmLimitSettings.maxDistance) ? "border-danger focus:border-danger bg-red-50" : "border-app-border focus:border-primary bg-white"} text-sm font-bold text-text-main outline-none transition-colors`}
                           value={formData.km}
                           onChange={(e) =>
                             setFormData({ ...formData, km: e.target.value })
@@ -1331,17 +1406,23 @@ export default function ChecklistFlow() {
                         />
                         <Gauge
                           size={14}
-                          className={`absolute left-4 top-1/2 -translate-y-1/2 ${formData.km && lastKm !== null && parseInt(formData.km) < lastKm ? "text-danger" : "text-text-muted"}`}
+                          className={`absolute left-4 top-1/2 -translate-y-1/2 ${(formData.km && lastKm !== null && parseInt(formData.km) < lastKm) || (kmLimitSettings.enabled && lastKm !== null && formData.km && parseInt(formData.km) > lastKm + kmLimitSettings.maxDistance) ? "text-danger" : "text-text-muted"}`}
                         />
                       </div>
-                      {formData.km &&
-                        lastKm !== null &&
-                        parseInt(formData.km) < lastKm && (
-                          <div className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1">
-                            <AlertCircle size={10} /> Não pode ser menor que o
-                            último KM registrado: {lastKm}
-                          </div>
-                        )}
+                      {formData.km && lastKm !== null && (
+                        <>
+                          {parseInt(formData.km) < lastKm && (
+                            <div className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1">
+                              <AlertCircle size={10} /> Não pode ser menor que o último KM registrado: {lastKm}
+                            </div>
+                          )}
+                          {kmLimitSettings.enabled && parseInt(formData.km) > lastKm + kmLimitSettings.maxDistance && (
+                            <div className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1">
+                              <AlertCircle size={10} /> KM ultrapassa o limite permitido ({lastKm + kmLimitSettings.maxDistance})
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -1386,6 +1467,27 @@ export default function ChecklistFlow() {
                           size={14}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted rotate-90 pointer-events-none"
                         />
+                      </div>
+                    </div>
+                  )}
+
+                  {vehicleAlerts.length > 0 && (
+                    <div className="mt-6 bg-red-50 border border-danger/20 rounded-xl p-4 space-y-3 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-5">
+                         <AlertTriangle size={64} />
+                      </div>
+                      <div className="flex items-center gap-2 relative z-10">
+                        <AlertTriangle className="text-danger" size={16} />
+                        <h4 className="text-xs font-black text-danger uppercase tracking-widest">Atenção: Alertas Automáticos</h4>
+                      </div>
+                      <p className="text-xs text-danger/80 relative z-10 leading-relaxed font-medium">As pendências abaixo foram geradas automaticamente e impedem que o veículo fique 100% regularizado. <strong>Apenas supervisores (pelo painel) podem resolver e dar baixa nestes alertas.</strong></p>
+                      <div className="space-y-2 relative z-10 pt-2 border-t border-danger/10">
+                        {vehicleAlerts.map(alert => (
+                           <div key={alert.id} className="bg-white/60 px-3 py-2.5 border border-danger/10 shadow-sm rounded-lg flex justify-between items-center">
+                             <span className="text-sm text-danger font-bold">{alert.title}</span>
+                             <span className="text-[9px] uppercase tracking-widest font-black text-danger/70 bg-danger/10 px-2 py-1 rounded-md">Pendente</span>
+                           </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1615,7 +1717,7 @@ export default function ChecklistFlow() {
                                                   }}
                                                 />
                                                 {defect.photo ? (
-                                                  <img src={URL.createObjectURL(defect.photo)} className="w-full h-full object-cover" alt="Evidência" />
+                                                  <img src={(defect.photo instanceof Blob || defect.photo instanceof File) ? URL.createObjectURL(defect.photo) : ""} className="w-full h-full object-cover" alt="Evidência" />
                                                 ) : defect.existing_photo_url ? (
                                                   <img src={supabase.storage.from("checklist-photos").getPublicUrl(defect.existing_photo_url).data.publicUrl} className="w-full h-full object-cover" alt="Evidência Anterior" />
                                                 ) : <Camera size={16} className="text-danger/50" />}
