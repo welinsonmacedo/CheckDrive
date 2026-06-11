@@ -1,0 +1,7 @@
+src/modules/company/components/ManualPenaltiesSettingsSection.tsx:94:CREATE POLICY "Public Read" ON manual_penalties FOR SELECT TO authenticated USING (true);
+src/modules/company/components/ManualPenaltiesSettingsSection.tsx:95:CREATE POLICY "Admin Manage" ON manual_penalties FOR ALL TO authenticated USING (true) WITH CHECK (true);
+src/modules/company/components/AlertsTab.tsx:180:CREATE POLICY "Users can manage auto_alerts for their company"
+src/modules/company/components/IntegrationsTab.tsx:153:CREATE POLICY "Users can manage integration_evolution_api"
+src/modules/company/components/IntegrationsTab.tsx:170:CREATE POLICY "Users can manage integration_whatsapp_rules"
+src/components/admin/ManualPenaltiesSettingsSection.tsx:94:CREATE POLICY "Public Read" ON manual_penalties FOR SELECT TO authenticated USING (true);
+src/components/admin/ManualPenaltiesSettingsSection.tsx:95:CREATE POLICY "Admin Manage" ON manual_penalties FOR ALL TO authenticated USING (true) WITH CHECK (true);

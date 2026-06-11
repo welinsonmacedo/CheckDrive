@@ -161,11 +161,12 @@ export default function AveragesTab() {
             }
 
             // Calculate schedule distances in this interval
-            const intervalScheds = schedules.filter(s => 
-              s.vehicle_id === sub.vehicles?.id && 
-              new Date(s.created_at) >= new Date(lastFuelSub.created_at) &&
-              new Date(s.created_at) <= new Date(sub.created_at)
-            );
+            const intervalScheds = schedules.filter(s => {
+              const schedCompDate = new Date(s.end_at || s.start_at || s.created_at);
+              return s.vehicle_id === sub.vehicles?.id && 
+                schedCompDate > new Date(lastFuelSub.created_at) &&
+                schedCompDate <= new Date(sub.created_at);
+            });
 
             intervalScheds.forEach(s => {
               const startOdo = s.start_checklist?.odometer || 0;
@@ -187,7 +188,13 @@ export default function AveragesTab() {
             distance,
             scaleDistance,
             offScaleDistance,
-            average: avg
+            average: avg,
+            intervalScheds: lastFuelSub ? schedules.filter(s => {
+              const schedCompDate = new Date(s.end_at || s.start_at || s.created_at);
+              return s.vehicle_id === sub.vehicles?.id && 
+                schedCompDate > new Date(lastFuelSub.created_at) &&
+                schedCompDate <= new Date(sub.created_at);
+            }) : []
           });
 
           lastFuelSub = sub;
@@ -263,18 +270,41 @@ export default function AveragesTab() {
 
   // Aggregated data for drivers
   const driverAverages = useMemo(() => {
-    return filteredEnrichedData
+    const acc: any = {};
+    
+    filteredEnrichedData
       .filter((sub: any) => sub.details?.average_status === 'reviewed')
-      .reduce((acc: any, sub: any) => {
-        const pId = sub.profiles?.id;
-        if (!pId || !sub.profiles?.full_name) return acc;
-        if (!acc[pId]) acc[pId] = { name: sub.profiles.full_name, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
-        acc[pId].distance += Math.max(0, sub.distance || 0);
-        acc[pId].scaleDistance += Math.max(0, sub.scaleDistance || 0);
-        acc[pId].offScaleDistance += Math.max(0, sub.offScaleDistance || 0);
-        acc[pId].liters += Math.max(0, sub.liters || 0);
-        return acc;
-      }, {});
+      .forEach((sub: any) => {
+        const scheds = sub.intervalScheds || [];
+        
+        if (scheds.length > 0) {
+            const totalScaleDist = Math.max(sub.scaleDistance, 1);
+
+            scheds.forEach((s: any) => {
+                const pId = s.driver_id || s.profiles?.id;
+                const pName = s.profiles?.full_name || 'Desconhecido';
+                if (!pId) return;
+
+                const startOdo = s.start_checklist?.odometer || 0;
+                const endOdo = s.end_checklist?.odometer || 0;
+                let sDist = 0;
+                if (endOdo > startOdo) sDist = endOdo - startOdo;
+
+                if (sDist === 0) return; // ignore schedules with 0 distance in distribution
+
+                const ratio = sDist / totalScaleDist;
+                const sLiters = sub.liters * ratio;
+
+                if (!acc[pId]) acc[pId] = { name: pName, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
+                
+                acc[pId].distance += sDist;
+                acc[pId].scaleDistance += sDist;
+                acc[pId].liters += sLiters;
+            });
+        }
+      });
+      
+    return acc;
   }, [filteredEnrichedData]);
 
   const toggleReviewStatus = async (sub: any) => {
