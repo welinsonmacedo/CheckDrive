@@ -30,7 +30,7 @@ import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'companies' | 'plans' | 'usage'>('overview');
   
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -158,8 +158,8 @@ export default function SuperAdminDashboard() {
         
       if (error) throw error;
       
-      // Force reload to refresh AuthContext and route
-      window.location.href = '/dashboard';
+      await refreshProfile();
+      navigate('/admin/dashboard');
     } catch (err) {
       console.error('Erro ao acessar painel da empresa:', err);
       alert('Erro ao acessar painel da empresa.');

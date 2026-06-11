@@ -9,6 +9,7 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   onlineUsers: any[];
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -226,6 +227,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const refreshProfile = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsProfileLoading(true);
+        const profileInfo = await fetchProfile(session.user.id, session.user.email || "");
+        if (profileInfo) {
+          setUser({
+            id: session.user.id,
+            email: session.user.email || "",
+            name: profileInfo.name,
+            role: profileInfo.role,
+            company_id: profileInfo.company_id,
+            isInternal: profileInfo.isInternal,
+            hideAverages: profileInfo.hideAverages,
+          });
+        }
+        setIsProfileLoading(false);
+      }
+    } catch (err) {
+      console.error("Erro ao atualizar profile:", err);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -235,6 +260,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isAuthenticated: !!user,
         onlineUsers,
         logout,
+        refreshProfile,
       }}
     >
       {children}

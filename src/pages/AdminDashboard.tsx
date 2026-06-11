@@ -58,7 +58,7 @@ import { runSilentAudit } from "../lib/auditService";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [appSettings, setAppSettings] = useState({
     system_type: "points",
@@ -109,7 +109,8 @@ export default function AdminDashboard() {
         
       if (error) throw error;
       
-      window.location.href = '/saas';
+      await refreshProfile();
+      navigate('/sa/dashboard');
     } catch (err) {
       console.error('Erro ao sair do painel da empresa:', err);
       alert('Erro ao sair do painel da empresa.');

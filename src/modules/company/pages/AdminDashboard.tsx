@@ -53,14 +53,15 @@ import AveragesTab from "@/src/modules/company/components/AveragesTab";
 import AlertsTab from "@/src/modules/company/components/AlertsTab";
 import ManualTab from "@/src/modules/company/components/ManualTab";
 import FeedbackTab from "@/src/modules/company/components/FeedbackTab";
+import NotificationsTab from "@/src/modules/company/components/NotificationsTab";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
 import { runSilentAudit } from "@/src/lib/auditService";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("overview");
+  const { user, refreshProfile } = useAuth();
+  const [activeTab, setActiveTab ] = useState("overview");
   const [appSettings, setAppSettings] = useState({
     system_type: "points",
     initial_value: 1000,
@@ -72,24 +73,93 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [vehiclesWithPending, setVehiclesWithPending] = useState<any[]>([]);
   const [openDropdowns, setOpenDropdowns] = useState<string[]>([]);
+  const [notifCount, setNotifCount] = useState(0);
 
   const [selectedSub, setSelectedSub] = useState<any | null>(null);
 
   useEffect(() => {
     fetchData();
     fetchVehiclesWithPending();
+    fetchNotificationCount();
 
     // Background audit specifically invoked when admin is online
     runSilentAudit();
     const intervalId = setInterval(
       () => {
         runSilentAudit();
+        fetchNotificationCount();
       },
       5 * 60 * 1000,
     ); // 5 minutes
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [user?.company_id]);
+
+  const fetchNotificationCount = async () => {
+    if (!user?.company_id) return;
+    try {
+      const { data: issuesData } = await supabase
+        .from("checklist_issues")
+        .select("id, vehicle_id, trailer_id, item_title")
+        .eq("company_id", user.company_id)
+        .eq("status", "pending");
+
+      const uniqueIssuesSet = new Set<string>();
+      (issuesData || []).forEach((issue) => {
+        const vehicleKey = issue.vehicle_id || issue.trailer_id || "no-vehicle";
+        const titleKey = (issue.item_title || "").trim().toLowerCase();
+        uniqueIssuesSet.add(`${vehicleKey}_${titleKey}`);
+      });
+
+      const { data: alertsData } = await supabase
+        .from("auto_alerts")
+        .select("id, trigger_type, trigger_date, warning_days, interval_km, last_km, warning_km, target_vehicle_id")
+        .eq("company_id", user.company_id)
+        .eq("active", true);
+
+      const { data: submissions } = await supabase
+        .from("checklist_submissions")
+        .select("vehicle_id, odometer")
+        .eq("company_id", user.company_id)
+        .order("created_at", { ascending: false });
+
+      const latestOdometer: Record<string, number> = {};
+      (submissions || []).forEach((sub) => {
+        if (sub.vehicle_id && !latestOdometer[sub.vehicle_id]) {
+          latestOdometer[sub.vehicle_id] = sub.odometer || 0;
+        }
+      });
+
+      let triggeredAlertsCount = 0;
+      (alertsData || []).forEach((alert) => {
+        if (alert.trigger_type === "date" && alert.trigger_date) {
+          const warningDays = alert.warning_days ? Number(alert.warning_days) : 0;
+          const targetDate = new Date(alert.trigger_date + "T00:00:00");
+          const thresholdDate = new Date(targetDate);
+          thresholdDate.setDate(targetDate.getDate() - warningDays);
+          if (new Date() >= thresholdDate) {
+            triggeredAlertsCount++;
+          }
+        } else if (
+          alert.trigger_type === "km" &&
+          alert.interval_km &&
+          alert.last_km &&
+          alert.warning_km
+        ) {
+          const vehicleOdometer = latestOdometer[alert.target_vehicle_id] || 0;
+          const warningThreshold =
+            Number(alert.last_km) + Number(alert.interval_km) - Number(alert.warning_km);
+          if (vehicleOdometer >= warningThreshold) {
+            triggeredAlertsCount++;
+          }
+        }
+      });
+
+      setNotifCount(uniqueIssuesSet.size + triggeredAlertsCount);
+    } catch (err) {
+      console.warn("Error fetching admin notification count:", err);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -110,7 +180,8 @@ export default function AdminDashboard() {
         
       if (error) throw error;
       
-      window.location.href = '/saas';
+      await refreshProfile();
+      navigate('/sa/dashboard');
     } catch (err) {
       console.error('Erro ao sair do painel da empresa:', err);
       alert('Erro ao sair do painel da empresa.');
@@ -206,6 +277,12 @@ export default function AdminDashboard() {
       icon: LayoutDashboard,
       label: "Painel",
       color: "from-blue-500 to-cyan-500",
+    },
+    {
+      id: "notifications",
+      icon: Bell,
+      label: "Notificações",
+      color: "from-indigo-600 to-purple-600",
     },
     {
       id: "tracking",
@@ -376,7 +453,7 @@ export default function AdminDashboard() {
                     : "text-gray-600 hover:bg-gray-100"
               }`}
             >
-              <div className="min-w-[20px] flex items-center justify-center">
+              <div className="min-w-[20px] flex items-center justify-center relative">
                 <item.icon
                   size={20}
                   className={
@@ -387,10 +464,20 @@ export default function AdminDashboard() {
                         : "text-gray-400 group-hover/item:text-gray-600"
                   }
                 />
+                {item.id === "notifications" && notifCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 rounded-full w-2.5 h-2.5 border border-white" />
+                )}
               </div>
               <span className="text-sm font-semibold flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
                 {item.label}
               </span>
+              {item.id === "notifications" && notifCount > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-tight tabular-nums transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 duration-300 ${
+                  activeTab === item.id ? "bg-white text-indigo-700" : "bg-red-500 text-white"
+                }`}>
+                  {notifCount}
+                </span>
+              )}
               {activeTab === item.id && !item.disabled && (
                 <ChevronRight
                   size={16}
@@ -560,6 +647,7 @@ export default function AdminDashboard() {
                   appSettings={appSettings}
                 />
               )}
+              {activeTab === "notifications" && <NotificationsTab />}
               {activeTab === "tracking" && <TrackingTab />}
               {activeTab === "reports" && <ReportsTab />}
               {activeTab === "manual" && <ManualTab />}
