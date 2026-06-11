@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { Home, Trophy, AlertTriangle, User as UserIcon, Droplets } from 'lucide-react';
+import { Home, Trophy, AlertTriangle, User as UserIcon, Droplets, Bell } from 'lucide-react';
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import OfflineSyncBanner from '@/src/modules/shared/layouts/OfflineSyncBanner';
 
@@ -73,6 +73,18 @@ export default function DriverLayout() {
               </span>
             </Link>
           )}
+
+          <Link
+            to="/driver/notifications"
+            className={`flex flex-col items-center gap-1 transition-colors ${
+              location.pathname.includes('/driver/notifications') ? 'text-primary' : 'text-zinc-400'
+            }`}
+          >
+            <Bell size={20} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">
+              Alertas
+            </span>
+          </Link>
 
           <Link
             to="/driver/profile"

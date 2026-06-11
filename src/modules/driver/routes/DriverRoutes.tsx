@@ -7,6 +7,7 @@ import ChecklistFlow from '../pages/ChecklistFlow';
 import DriverPenalties from '../pages/DriverPenalties';
 import DriverProfile from '../pages/DriverProfile';
 import DriverAverages from '../pages/DriverAverages';
+import DriverNotifications from '../pages/DriverNotifications';
 import DriverLayout from '../layouts/DriverLayout';
 
 export default function DriverRoutes() {
@@ -18,6 +19,7 @@ export default function DriverRoutes() {
         <Route path="history" element={<DriverAverages />} />
         <Route path="ranking" element={<Ranking />} />
         <Route path="penalties" element={<DriverPenalties />} />
+        <Route path="notifications" element={<DriverNotifications />} />
         <Route path="manual" element={<DriverManual />} />
         <Route path="profile" element={<DriverProfile />} />
         <Route path="schedule" element={<Navigate to="home" replace />} /> {/* Placeholder */}

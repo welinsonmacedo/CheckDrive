@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Car, Fuel, Route, ClipboardCheck, Trophy, AlertTriangle, ChevronRight, BookOpen } from 'lucide-react';
+import { Car, Fuel, Route, ClipboardCheck, Trophy, AlertTriangle, ChevronRight, BookOpen, Bell } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { cacheData, getCachedData } from '@/src/lib/offlineQueue';
@@ -13,6 +13,7 @@ export default function DriverHome() {
   const [systemType, setSystemType] = useState('points');
   const [schedulesToday, setSchedulesToday] = useState<any[]>([]);
   const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
+  const [notifCount, setNotifCount] = useState(0);
   const [hiddenSchedules, setHiddenSchedules] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('hiddenSchedules');
@@ -101,6 +102,67 @@ export default function DriverHome() {
         await cacheData('schedulesToday', fetchedSchedules || []);
       }
 
+      // Fetch notification counts (unique pending checklist issues + active auto_alerts)
+      try {
+        const { data: issuesData } = await supabase
+          .from("checklist_issues")
+          .select("id, vehicle_id, trailer_id, item_title")
+          .eq("status", "pending");
+
+        const uniqueIssuesSet = new Set<string>();
+        (issuesData || []).forEach((issue) => {
+          const vehicleKey = issue.vehicle_id || issue.trailer_id || "no-vehicle";
+          const titleKey = (issue.item_title || "").trim().toLowerCase();
+          uniqueIssuesSet.add(`${vehicleKey}_${titleKey}`);
+        });
+
+        const { data: alertsData } = await supabase
+          .from("auto_alerts")
+          .select("id, trigger_type, trigger_date, warning_days, interval_km, last_km, warning_km, target_vehicle_id")
+          .eq("active", true);
+
+        const { data: oauthSubs } = await supabase
+          .from("checklist_submissions")
+          .select("vehicle_id, odometer")
+          .order("created_at", { ascending: false });
+
+        const latestOdometer: Record<string, number> = {};
+        (oauthSubs || []).forEach((sub) => {
+          if (sub.vehicle_id && !latestOdometer[sub.vehicle_id]) {
+            latestOdometer[sub.vehicle_id] = sub.odometer || 0;
+          }
+        });
+
+        let triggeredAlertsCount = 0;
+        (alertsData || []).forEach((alert) => {
+          if (alert.trigger_type === "date" && alert.trigger_date) {
+            const warningDays = alert.warning_days ? Number(alert.warning_days) : 0;
+            const targetDate = new Date(alert.trigger_date + "T00:00:00");
+            const thresholdDate = new Date(targetDate);
+            thresholdDate.setDate(targetDate.getDate() - warningDays);
+            if (new Date() >= thresholdDate) {
+              triggeredAlertsCount++;
+            }
+          } else if (
+            alert.trigger_type === "km" &&
+            alert.interval_km &&
+            alert.last_km &&
+            alert.warning_km
+          ) {
+            const vehicleOdometer = latestOdometer[alert.target_vehicle_id] || 0;
+            const warningThreshold =
+              Number(alert.last_km) + Number(alert.interval_km) - Number(alert.warning_km);
+            if (vehicleOdometer >= warningThreshold) {
+              triggeredAlertsCount++;
+            }
+          }
+        });
+
+        setNotifCount(uniqueIssuesSet.size + triggeredAlertsCount);
+      } catch (err) {
+        console.warn("Could not retrieve notification stats counts:", err);
+      }
+
     } catch (error) {
       console.error('Error fetching driver stats:', error);
       const cached = await getCachedData('schedulesToday');
@@ -138,9 +200,22 @@ export default function DriverHome() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-8 py-10">
       {/* Welcome & Quick Stats */}
-      <div className="space-y-1">
-        <h2 className="text-3xl font-extrabold text-text-main tracking-tight">{driverInfo.name}</h2>
-        <p className="text-text-muted text-sm font-medium">Bom dia! Sua operação hoje começa agora.</p>
+      <div className="flex justify-between items-start">
+        <div className="space-y-1">
+          <h2 className="text-3xl font-extrabold text-text-main tracking-tight">{driverInfo.name}</h2>
+          <p className="text-text-muted text-sm font-medium">Bom dia! Sua operação hoje começa agora.</p>
+        </div>
+        <button
+          onClick={() => navigate('/driver/notifications')}
+          className="relative p-3 bg-white border border-app-border rounded-2xl shadow-sm text-text-muted hover:text-indigo-600 hover:border-indigo-100 transition-all active:scale-95 flex items-center justify-center shrink-0"
+        >
+          <Bell size={22} />
+          {notifCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 bg-[#e12a2a] text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-sm border border-white">
+              {notifCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {!user?.isInternal ? (
