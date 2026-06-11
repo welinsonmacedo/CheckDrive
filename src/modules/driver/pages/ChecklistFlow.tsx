@@ -58,6 +58,7 @@ export default function ChecklistFlow() {
       right: null as File | null,
       receipt: null as File | null,
     },
+    photoPreviews: {} as Record<string, string>,
     itemValues: {} as Record<string, "normal" | "defect" | string>,
     defects: {} as Record<
       string,
@@ -686,12 +687,63 @@ export default function ChecklistFlow() {
     });
   };
 
+  const safeGetFile = (file: any, key: string, fallbackBase64?: string): File | null => {
+    if (file && (file instanceof Blob || file instanceof File)) {
+      return file as File;
+    }
+    if (fallbackBase64 && fallbackBase64.startsWith("data:image/")) {
+      try {
+        const arr = fallbackBase64.split(",");
+        const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], `photo_${key}.jpg`, { type: mime });
+      } catch (err) {
+        console.error("Error converting base64 fallback to file for key: " + key, err);
+      }
+    }
+    return null;
+  };
+
   const handlePhotoUpload = async (key: string, file: File) => {
+    // 1. Immediately read original file for instant, highly responsive preview (no loading lag)
+    const originalReader = new FileReader();
+    originalReader.onloadend = () => {
+      const base64String = originalReader.result as string;
+      setFormData((prev) => ({
+        ...prev,
+        photoPreviews: {
+          ...(prev.photoPreviews || {}),
+          [key]: base64String,
+        }
+      }));
+    };
+    originalReader.readAsDataURL(file);
+
+    // 2. Perform safe image compression in background
     const finalFile = await compressImageSafe(file);
     setFormData((prev) => ({
       ...prev,
       photos: { ...prev.photos, [key]: finalFile },
     }));
+
+    // 3. Regenerate preview from compressed file to keep quality/size aligned in persistent storage
+    const compressedReader = new FileReader();
+    compressedReader.onloadend = () => {
+      const base64String = compressedReader.result as string;
+      setFormData((prev) => ({
+        ...prev,
+        photoPreviews: {
+          ...(prev.photoPreviews || {}),
+          [key]: base64String,
+        }
+      }));
+    };
+    compressedReader.readAsDataURL(finalFile);
   };
 
   const isStepValid = () => {
@@ -707,7 +759,14 @@ export default function ChecklistFlow() {
     if (currentStep === 1) {
       if (!requireExternalPhotos) return true;
       const photos = formData.photos;
-      return !!(photos.front && photos.back && photos.left && photos.right);
+      const previews = formData.photoPreviews || {};
+      
+      const hasFront = photos.front || (previews.front && previews.front.startsWith("data:image/"));
+      const hasBack = photos.back || (previews.back && previews.back.startsWith("data:image/"));
+      const hasLeft = photos.left || (previews.left && previews.left.startsWith("data:image/"));
+      const hasRight = photos.right || (previews.right && previews.right.startsWith("data:image/"));
+      
+      return !!(hasFront && hasBack && hasLeft && hasRight);
     }
     if (currentStep === 2) {
       return options.items.every((item) => !!formData.itemValues[item.id]);
@@ -732,13 +791,18 @@ export default function ChecklistFlow() {
 
       const photoUrls: Record<string, string> = {};
       const photos = formData.photos;
+      const previews = formData.photoPreviews || {};
 
-      for (const [key, file] of Object.entries(photos)) {
-        if (file && key !== "receipt") {
+      for (const key of ["front", "back", "left", "right"]) {
+        const fileObj = (photos as any)[key];
+        const previewStr = (previews as any)[key];
+        const finalFile = safeGetFile(fileObj, key, previewStr);
+
+        if (finalFile) {
           const path = `photos/${user.id}/${Date.now()}_${key}.jpg`;
           const { error } = await supabase.storage
             .from("checklist-photos")
-            .upload(path, file);
+            .upload(path, finalFile);
           if (error) {
             console.error(`Error uploading photo ${key}:`, error);
           } else {
@@ -748,11 +812,12 @@ export default function ChecklistFlow() {
       }
 
       let receipt_photo_url = null;
-      if (photos.receipt) {
+      const receiptFile = safeGetFile(photos.receipt, "receipt", previews.receipt);
+      if (receiptFile) {
         const path = `receipts/${user.id}/${Date.now()}_receipt.jpg`;
         const { error } = await supabase.storage
           .from("checklist-photos")
-          .upload(path, photos.receipt);
+          .upload(path, receiptFile);
         if (error) {
           console.error("Error uploading receipt photo:", error);
         } else {
@@ -1084,7 +1149,7 @@ export default function ChecklistFlow() {
                   Fotos Externas do Veículo
                 </h3>
 
-                <div className="grid grid-cols-2 gap-3">
+                 <div className="grid grid-cols-2 gap-3">
                   {[
                     { key: "front", label: "Frente" },
                     { key: "back", label: "Traseira" },
@@ -1092,6 +1157,7 @@ export default function ChecklistFlow() {
                     { key: "right", label: "Lateral Direita" },
                   ].map(({ key, label }) => {
                     const currentPhoto = (formData.photos as any)[key];
+                    const currentPreview = (formData.photoPreviews || {} as any)[key] || (currentPhoto && (currentPhoto instanceof Blob || currentPhoto instanceof File) ? URL.createObjectURL(currentPhoto) : "");
                     return (
                       <div
                         key={key}
@@ -1107,10 +1173,10 @@ export default function ChecklistFlow() {
                             if (file) handlePhotoUpload(key, file);
                           }}
                         />
-                        {currentPhoto ? (
+                        {currentPreview ? (
                           <>
                             <img
-                              src={URL.createObjectURL(currentPhoto)}
+                              src={currentPreview}
                               className="absolute inset-0 w-full h-full object-cover"
                               alt={label}
                             />
@@ -1149,10 +1215,10 @@ export default function ChecklistFlow() {
                           if (file) handlePhotoUpload("receipt", file);
                         }}
                       />
-                      {formData.photos.receipt ? (
+                      {formData.photoPreviews?.receipt || (formData.photos.receipt && ((formData.photos.receipt as any) instanceof Blob)) ? (
                         <>
                           <img
-                            src={URL.createObjectURL(formData.photos.receipt)}
+                            src={formData.photoPreviews?.receipt || URL.createObjectURL(formData.photos.receipt as any)}
                             className="absolute inset-0 w-full h-full object-cover"
                             alt="Cupom"
                           />
