@@ -760,6 +760,53 @@ export default function ChecklistFlow() {
     compressedReader.readAsDataURL(finalFile);
   };
 
+  const handleDefectPhotoUpload = async (itemId: string, defectIdx: number, file: File) => {
+    // 1. Immediately read original file for instant preview
+    const originalReader = new FileReader();
+    originalReader.onloadend = () => {
+      const base64String = originalReader.result as string;
+      setFormData((prev) => ({
+        ...prev,
+        photoPreviews: {
+          ...(prev.photoPreviews || {}),
+          [`defect_${itemId}_${defectIdx}`]: base64String,
+        },
+      }));
+    };
+    originalReader.readAsDataURL(file);
+
+    // 2. Perform safe image compression
+    const finalFile = await compressImageSafe(file);
+    setFormData((prev) => {
+      const newDefects = [...(prev.defects[itemId] || [])];
+      newDefects[defectIdx] = {
+        ...newDefects[defectIdx],
+        photo: finalFile,
+      };
+      return {
+        ...prev,
+        defects: {
+          ...prev.defects,
+          [itemId]: newDefects,
+        },
+      };
+    });
+    
+    // 3. Update preview with compressed file to match storage size
+    const compressedReader = new FileReader();
+    compressedReader.onloadend = () => {
+      const base64String = compressedReader.result as string;
+      setFormData((prev) => ({
+        ...prev,
+        photoPreviews: {
+          ...(prev.photoPreviews || {}),
+          [`defect_${itemId}_${defectIdx}`]: base64String,
+        },
+      }));
+    };
+    compressedReader.readAsDataURL(finalFile);
+  };
+
   const isStepValid = () => {
     if (currentStep === 0) {
       if (!isTrailerOnly && !formData.vehicleId) return false;
@@ -1276,11 +1323,11 @@ export default function ChecklistFlow() {
                     const currentPhoto = (formData.photos as any)[key];
                     const currentPreview =
                       (formData.photoPreviews || ({} as any))[key] ||
-                      (currentPhoto &&
-                      (currentPhoto instanceof Blob ||
-                        currentPhoto instanceof File)
-                        ? URL.createObjectURL(currentPhoto)
-                        : "");
+                      (
+                        currentPhoto && (currentPhoto instanceof Blob || currentPhoto instanceof File)
+                          ? URL.createObjectURL(currentPhoto)
+                          : ""
+                      );
                     return (
                       <div
                         key={key}
@@ -1442,46 +1489,15 @@ export default function ChecklistFlow() {
                                                 capture="environment"
                                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                 onChange={(e) => {
-                                                  const file =
-                                                    e.target.files?.[0];
+                                                  const file = e.target.files?.[0];
                                                   if (file) {
-                                                    compressImageSafe(
-                                                      file,
-                                                    ).then((compressed) => {
-                                                      const newDefects = [
-                                                        ...(formData.defects[
-                                                          item.id
-                                                        ] || []),
-                                                      ];
-                                                      newDefects[defectIdx] = {
-                                                        ...newDefects[
-                                                          defectIdx
-                                                        ],
-                                                        photo: compressed,
-                                                      };
-                                                      setFormData((p) => ({
-                                                        ...p,
-                                                        defects: {
-                                                          ...p.defects,
-                                                          [item.id]: newDefects,
-                                                        },
-                                                      }));
-                                                    });
+                                                    handleDefectPhotoUpload(item.id, defectIdx, file);
                                                   }
                                                 }}
                                               />
-                                              {defect.photo ? (
+                                              {formData.photoPreviews?.[`defect_${item.id}_${defectIdx}`] ? (
                                                 <img
-                                                  src={
-                                                    (defect.photo as any) instanceof
-                                                      Blob ||
-                                                    (defect.photo as any) instanceof
-                                                      File
-                                                      ? URL.createObjectURL(
-                                                          defect.photo as any,
-                                                        )
-                                                      : ""
-                                                  }
+                                                  src={formData.photoPreviews[`defect_${item.id}_${defectIdx}`]}
                                                   className="w-full h-full object-cover"
                                                   alt="Evidência"
                                                 />
@@ -1622,41 +1638,15 @@ export default function ChecklistFlow() {
                                                 capture="environment"
                                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                 onChange={(e) => {
-                                                  const file =
-                                                    e.target.files?.[0];
+                                                  const file = e.target.files?.[0];
                                                   if (file) {
-                                                    compressImageSafe(
-                                                      file,
-                                                    ).then((compressed) => {
-                                                      const newDefects = [
-                                                        ...(formData.defects[
-                                                          item.id
-                                                        ] || []),
-                                                      ];
-                                                      newDefects[
-                                                        customDefectIdx
-                                                      ] = {
-                                                        ...newDefects[
-                                                          customDefectIdx
-                                                        ],
-                                                        photo: compressed,
-                                                      };
-                                                      setFormData((prev) => ({
-                                                        ...prev,
-                                                        defects: {
-                                                          ...prev.defects,
-                                                          [item.id]: newDefects,
-                                                        },
-                                                      }));
-                                                    });
+                                                    handleDefectPhotoUpload(item.id, customDefectIdx, file);
                                                   }
                                                 }}
                                               />
-                                              {customDefect.photo ? (
+                                              {formData.photoPreviews?.[`defect_${item.id}_${customDefectIdx}`] ? (
                                                 <img
-                                                  src={URL.createObjectURL(
-                                                    customDefect.photo,
-                                                  )}
+                                                  src={formData.photoPreviews[`defect_${item.id}_${customDefectIdx}`]}
                                                   className="w-full h-full object-cover"
                                                   alt="Defeito"
                                                 />
@@ -1838,41 +1828,15 @@ export default function ChecklistFlow() {
                                                   capture="environment"
                                                   className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                   onChange={(e) => {
-                                                    const file =
-                                                      e.target.files?.[0];
+                                                    const file = e.target.files?.[0];
                                                     if (file) {
-                                                      compressImageSafe(
-                                                        file,
-                                                      ).then((compressed) => {
-                                                        const newDefects = [
-                                                          ...(formData.defects[
-                                                            item.id
-                                                          ] || []),
-                                                        ];
-                                                        newDefects[defectIdx] =
-                                                          {
-                                                            ...newDefects[
-                                                              defectIdx
-                                                            ],
-                                                            photo: compressed,
-                                                          };
-                                                        setFormData((p) => ({
-                                                          ...p,
-                                                          defects: {
-                                                            ...p.defects,
-                                                            [item.id]:
-                                                              newDefects,
-                                                          },
-                                                        }));
-                                                      });
+                                                      handleDefectPhotoUpload(item.id, defectIdx, file);
                                                     }
                                                   }}
                                                 />
-                                                {defect.photo ? (
+                                                {formData.photoPreviews?.[`defect_${item.id}_${defectIdx}`] ? (
                                                   <img
-                                                    src={URL.createObjectURL(
-                                                      defect.photo,
-                                                    )}
+                                                    src={formData.photoPreviews[`defect_${item.id}_${defectIdx}`]}
                                                     className="w-full h-full object-cover"
                                                     alt="Evidência"
                                                   />
@@ -2020,42 +1984,15 @@ export default function ChecklistFlow() {
                                                   capture="environment"
                                                   className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                   onChange={(e) => {
-                                                    const file =
-                                                      e.target.files?.[0];
+                                                    const file = e.target.files?.[0];
                                                     if (file) {
-                                                      compressImageSafe(
-                                                        file,
-                                                      ).then((compressed) => {
-                                                        const newDefects = [
-                                                          ...(formData.defects[
-                                                            item.id
-                                                          ] || []),
-                                                        ];
-                                                        newDefects[
-                                                          customDefectIdx
-                                                        ] = {
-                                                          ...newDefects[
-                                                            customDefectIdx
-                                                          ],
-                                                          photo: compressed,
-                                                        };
-                                                        setFormData((prev) => ({
-                                                          ...prev,
-                                                          defects: {
-                                                            ...prev.defects,
-                                                            [item.id]:
-                                                              newDefects,
-                                                          },
-                                                        }));
-                                                      });
+                                                      handleDefectPhotoUpload(item.id, customDefectIdx, file);
                                                     }
                                                   }}
                                                 />
-                                                {customDefect.photo ? (
+                                                {formData.photoPreviews?.[`defect_${item.id}_${customDefectIdx}`] ? (
                                                   <img
-                                                    src={URL.createObjectURL(
-                                                      customDefect.photo,
-                                                    )}
+                                                    src={formData.photoPreviews[`defect_${item.id}_${customDefectIdx}`]}
                                                     className="w-full h-full object-cover"
                                                     alt="Defeito"
                                                   />
