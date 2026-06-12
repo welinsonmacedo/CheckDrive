@@ -1336,7 +1336,6 @@ export default function ChecklistFlow() {
                         <input
                           type="file"
                           accept="image/*"
-                          capture="environment"
                           className="absolute inset-0 opacity-0 cursor-pointer z-10"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
@@ -1486,7 +1485,6 @@ export default function ChecklistFlow() {
                                               <input
                                                 type="file"
                                                 accept="image/*"
-                                                capture="environment"
                                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                 onChange={(e) => {
                                                   const file = e.target.files?.[0];
@@ -1635,7 +1633,6 @@ export default function ChecklistFlow() {
                                               <input
                                                 type="file"
                                                 accept="image/*"
-                                                capture="environment"
                                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                 onChange={(e) => {
                                                   const file = e.target.files?.[0];
@@ -1825,7 +1822,6 @@ export default function ChecklistFlow() {
                                                 <input
                                                   type="file"
                                                   accept="image/*"
-                                                  capture="environment"
                                                   className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                   onChange={(e) => {
                                                     const file = e.target.files?.[0];
@@ -1981,7 +1977,6 @@ export default function ChecklistFlow() {
                                                 <input
                                                   type="file"
                                                   accept="image/*"
-                                                  capture="environment"
                                                   className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                   onChange={(e) => {
                                                     const file = e.target.files?.[0];
