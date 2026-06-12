@@ -2,8 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { Home, Trophy, AlertTriangle, User as UserIcon, Droplets, Bell } from 'lucide-react';
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
-import OfflineSyncBanner from '@/src/modules/shared/layouts/OfflineSyncBanner';
 import { supabase } from '@/src/lib/supabase';
+import localforage from 'localforage';
+
+// Limpar todo o cache do localforage no momento do carregamento (reload ou nova abertura)
+if (typeof window !== 'undefined') {
+  localforage.clear().catch(console.error);
+}
 
 export default function DriverLayout() {
   const { user } = useAuth();
@@ -20,7 +25,10 @@ export default function DriverLayout() {
       
       if (!logs) return;
 
-      const stored = localStorage.getItem('viewed_point_log_ids');
+      // Limpar cache e memória persistente no reload/abertura do app para motoristas
+      // localforage.clear().catch(console.error); // Retirado localforage.clear para não apagar o badge de notificacoes
+
+      const stored = localStorage.getItem(`viewed_point_log_ids_${user.id}`);
       const viewedIds: string[] = stored ? JSON.parse(stored) : [];
       
       const unviewedLogs = logs.filter(log => !viewedIds.includes(log.id));
@@ -41,7 +49,6 @@ export default function DriverLayout() {
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
-      <OfflineSyncBanner />
 
       <main className={`flex-1 overflow-x-hidden ${!location.pathname.includes('/checklist') ? 'pb-24 sm:pb-0' : ''}`}>
         <Outlet />

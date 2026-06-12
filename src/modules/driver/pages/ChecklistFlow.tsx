@@ -57,6 +57,7 @@ export default function ChecklistFlow() {
       left: null as File | null,
       right: null as File | null,
       receipt: null as File | null,
+      odometer: null as File | null,
     },
     photoPreviews: {} as Record<string, string>,
     itemValues: {} as Record<string, "normal" | "defect" | string>,
@@ -118,8 +119,11 @@ export default function ChecklistFlow() {
     init();
   }, [type]);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const hasSubmittedRef = useRef(false);
+
   useEffect(() => {
-    if (dataRestored) {
+    if (dataRestored && !isSubmitting && !hasSubmittedRef.current) {
       const scheduleId = new URLSearchParams(window.location.search).get(
         "schedule",
       );
@@ -133,7 +137,7 @@ export default function ChecklistFlow() {
           console.error("Localforage save error:", err);
         });
     }
-  }, [formData, currentStep, type, dataRestored]);
+  }, [formData, currentStep, type, dataRestored, isSubmitting]);
 
   useEffect(() => {
     if (formData.vehicleId || formData.trailerId) {
@@ -232,42 +236,73 @@ export default function ChecklistFlow() {
     }
   };
 
-  const renderItemInput = (item: any) => (
-    <div className="flex bg-app-bg p-1 rounded-xl border border-app-border gap-1">
-      <button
-        type="button"
-        className={`h-8 px-4 rounded-lg font-bold text-xs transition-all ${
-          formData.itemValues[item.id] === "normal"
-            ? "bg-emerald-500 text-white shadow-sm"
-            : "text-text-muted hover:text-text-main"
-        }`}
-        onClick={() => {
-          setFormData((prev) => ({
-            ...prev,
-            itemValues: { ...prev.itemValues, [item.id]: "normal" },
-          }));
-        }}
-      >
-        OK
-      </button>
-      <button
-        type="button"
-        className={`h-8 px-4 rounded-lg font-bold text-xs transition-all ${
-          formData.itemValues[item.id] === "defect"
-            ? "bg-danger text-white shadow-sm"
-            : "text-text-muted hover:text-text-main"
-        }`}
-        onClick={() => {
-          setFormData((prev) => ({
-            ...prev,
-            itemValues: { ...prev.itemValues, [item.id]: "defect" },
-          }));
-        }}
-      >
-        Defeito
-      </button>
-    </div>
-  );
+  const renderItemInput = (item: any) => {
+    if (item.input_type === 'text' || item.input_type === 'number' || item.mask) {
+      return (
+        <div className="w-40 shrink-0">
+          <input
+            type={item.input_type === 'number' || item.mask ? 'tel' : 'text'}
+            className="w-full h-10 px-3 rounded-lg border border-app-border bg-app-bg text-sm font-medium text-text-main text-right focus:border-primary transition-colors outline-none"
+            placeholder={item.mask ? item.mask.replace(/#/g, '0') : "Digite..."}
+            value={
+              formData.itemValues[item.id] === undefined || 
+              formData.itemValues[item.id] === 'normal' || 
+              formData.itemValues[item.id] === 'defect' 
+                ? '' 
+                : formData.itemValues[item.id]
+            }
+            onChange={(e) => {
+              let val = e.target.value;
+              if (item.mask) {
+                val = applyNumberMask(val, item.mask);
+              }
+              setFormData(prev => ({
+                ...prev,
+                itemValues: { ...prev.itemValues, [item.id]: val }
+              }));
+            }}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex bg-app-bg p-1 rounded-xl border border-app-border gap-1 shrink-0">
+        <button
+          type="button"
+          className={`h-8 px-4 rounded-lg font-bold text-xs transition-all ${
+            formData.itemValues[item.id] === "normal"
+              ? "bg-emerald-500 text-white shadow-sm"
+              : "text-text-muted hover:text-text-main"
+          }`}
+          onClick={() => {
+            setFormData((prev) => ({
+              ...prev,
+              itemValues: { ...prev.itemValues, [item.id]: "normal" },
+            }));
+          }}
+        >
+          OK
+        </button>
+        <button
+          type="button"
+          className={`h-8 px-4 rounded-lg font-bold text-xs transition-all ${
+            formData.itemValues[item.id] === "defect"
+              ? "bg-danger text-white shadow-sm"
+              : "text-text-muted hover:text-text-main"
+          }`}
+          onClick={() => {
+            setFormData((prev) => ({
+              ...prev,
+              itemValues: { ...prev.itemValues, [item.id]: "defect" },
+            }));
+          }}
+        >
+          Defeito
+        </button>
+      </div>
+    );
+  };
 
   const fetchLastKm = async (vehicleId: string) => {
     try {
@@ -296,71 +331,7 @@ export default function ChecklistFlow() {
         .eq("generate_issue", true);
 
       if (alertsData) {
-        const activeAlerts = alertsData.filter((alert) => {
-          if (alert.trigger_type === "date" && alert.trigger_date) {
-            const warningDays = alert.warning_days
-              ? Number(alert.warning_days)
-              : 0;
-            const targetDate = new Date(alert.trigger_date + "T00:00:00");
-            const thresholdDate = new Date(targetDate);
-            thresholdDate.setDate(targetDate.getDate() - warningDays);
-            return new Date() >= thresholdDate;
-          }
-          if (
-            alert.trigger_type === "km" &&
-            alert.interval_km &&
-            alert.last_km &&
-            alert.warning_km
-          ) {
-            const warningThreshold =
-              Number(alert.last_km) +
-              Number(alert.interval_km) -
-              Number(alert.warning_km);
-            return currentKmForAlerts >= warningThreshold;
-          }
-          return false;
-        });
-
-        // Auto-generate issues for triggered alerts
-        if (activeAlerts.length > 0) {
-          try {
-            // Check which alerts already generated pending issues
-            const alertIds = activeAlerts.map((a) => a.id);
-            const { data: existingAlertIssues } = await supabase
-              .from("checklist_issues")
-              .select("auto_alert_id")
-              .in("auto_alert_id", alertIds)
-              .eq("status", "pending");
-
-            const alreadyGeneratedSet = new Set(
-              (existingAlertIssues || []).map((ei) => ei.auto_alert_id),
-            );
-
-            const issuesToInsert = activeAlerts
-              .filter((alert) => !alreadyGeneratedSet.has(alert.id))
-              .map((alert) => ({
-                vehicle_id: vehicleId,
-                item_title: `🚨 Alerta: ${alert.title}`,
-                description: `Gerado automaticamente. ${alert.trigger_type === "km" ? `KM Alvo: ${Number(alert.last_km) + Number(alert.interval_km)}` : `Data Alvo: ${alert.trigger_date.split("-").reverse().join("/")}`}`,
-                status: "pending",
-                auto_alert_id: alert.id,
-              }));
-
-            if (issuesToInsert.length > 0) {
-              await supabase.from("checklist_issues").insert(issuesToInsert);
-              // Call WhatsApp Integration
-              triggerWhatsAppDispatches(
-                activeAlerts.filter((a) => !alreadyGeneratedSet.has(a.id)),
-                currentKmForAlerts,
-                options.vehicles.find((v: any) => v.id === vehicleId)?.plate || "",
-              );
-            }
-          } catch (e) {
-            console.error("Error auto-generating alert issues", e);
-          }
-        }
-
-        setVehicleAlerts(activeAlerts);
+        setVehicleAlerts(alertsData);
       } else {
         setVehicleAlerts([]);
       }
@@ -591,6 +562,38 @@ export default function ChecklistFlow() {
   };
 
   const nextStep = () => {
+    if (currentStep === 0) {
+      if (!isInternal && !isTrailerOnly) {
+        if (!formData.vehicleId) {
+          return alert("Selecione um veículo.");
+        }
+        if (!formData.km) {
+          return alert("Informe a kilometragem atual.");
+        }
+        if (lastKm !== null && Number(formData.km) < Number(lastKm)) {
+          return alert(
+            `Kilometragem inválida. O último KM registrado foi ${lastKm}.`,
+          );
+        }
+      }
+
+      if (type !== "yard") {
+        const selectedVehicle = options.vehicles.find(
+          (v: any) => v.id === formData.vehicleId,
+        );
+        if (
+          !isTrailerOnly &&
+          selectedVehicle?.requires_trailer &&
+          !formData.trailerId
+        ) {
+          return alert("Este veículo exige que o reboque seja selecionado.");
+        }
+        if (options.routes.length > 0 && !formData.routeId) {
+          return alert("Selecione uma rota.");
+        }
+      }
+    }
+
     setIsStepLoading(true);
     setTimeout(() => {
       setCurrentStep((prev) => {
@@ -657,17 +660,21 @@ export default function ChecklistFlow() {
               clearTimeout(timer);
               URL.revokeObjectURL(objectUrl);
               if (blob) {
-                const compressedFile = new File([blob], file.name || "photo.jpg", {
-                  type: "image/jpeg",
-                  lastModified: Date.now(),
-                });
+                const compressedFile = new File(
+                  [blob],
+                  file.name || "photo.jpg",
+                  {
+                    type: "image/jpeg",
+                    lastModified: Date.now(),
+                  },
+                );
                 resolve(compressedFile);
               } else {
                 resolve(file);
               }
             },
             "image/jpeg",
-            0.75
+            0.75,
           );
         } catch (e) {
           console.warn("Canvas compress error, returning original file", e);
@@ -687,7 +694,11 @@ export default function ChecklistFlow() {
     });
   };
 
-  const safeGetFile = (file: any, key: string, fallbackBase64?: string): File | null => {
+  const safeGetFile = (
+    file: any,
+    key: string,
+    fallbackBase64?: string,
+  ): File | null => {
     if (file && (file instanceof Blob || file instanceof File)) {
       return file as File;
     }
@@ -703,7 +714,10 @@ export default function ChecklistFlow() {
         }
         return new File([u8arr], `photo_${key}.jpg`, { type: mime });
       } catch (err) {
-        console.error("Error converting base64 fallback to file for key: " + key, err);
+        console.error(
+          "Error converting base64 fallback to file for key: " + key,
+          err,
+        );
       }
     }
     return null;
@@ -719,7 +733,7 @@ export default function ChecklistFlow() {
         photoPreviews: {
           ...(prev.photoPreviews || {}),
           [key]: base64String,
-        }
+        },
       }));
     };
     originalReader.readAsDataURL(file);
@@ -740,7 +754,7 @@ export default function ChecklistFlow() {
         photoPreviews: {
           ...(prev.photoPreviews || {}),
           [key]: base64String,
-        }
+        },
       }));
     };
     compressedReader.readAsDataURL(finalFile);
@@ -757,25 +771,47 @@ export default function ChecklistFlow() {
       return true;
     }
     if (currentStep === 1) {
-      if (!requireExternalPhotos) return true;
       const photos = formData.photos;
       const previews = formData.photoPreviews || {};
-      
-      const hasFront = photos.front || (previews.front && previews.front.startsWith("data:image/"));
-      const hasBack = photos.back || (previews.back && previews.back.startsWith("data:image/"));
-      const hasLeft = photos.left || (previews.left && previews.left.startsWith("data:image/"));
-      const hasRight = photos.right || (previews.right && previews.right.startsWith("data:image/"));
-      
+
+      if (type === "fuel") {
+        const hasReceipt = photos.receipt || (previews.receipt && previews.receipt.startsWith("data:image/"));
+        const hasOdometer = photos.odometer || (previews.odometer && previews.odometer.startsWith("data:image/"));
+        
+        if (requireFuelReceiptPhoto && !hasReceipt) return false;
+        if (!hasOdometer) return false;
+        return true;
+      }
+
+      if (!requireExternalPhotos) return true;
+
+      const hasFront =
+        photos.front ||
+        (previews.front && previews.front.startsWith("data:image/"));
+      const hasBack =
+        photos.back ||
+        (previews.back && previews.back.startsWith("data:image/"));
+      const hasLeft =
+        photos.left ||
+        (previews.left && previews.left.startsWith("data:image/"));
+      const hasRight =
+        photos.right ||
+        (previews.right && previews.right.startsWith("data:image/"));
+
       return !!(hasFront && hasBack && hasLeft && hasRight);
     }
     if (currentStep === 2) {
-      return options.items.every((item) => !!formData.itemValues[item.id]);
+      return options.items.every((item) => {
+        if (item.order_index === 0) return true; // Optional item
+        return !!formData.itemValues[item.id];
+      });
     }
     return true;
   };
 
   const handleSubmit = async () => {
     setLoading(true);
+    setIsSubmitting(true);
     try {
       const {
         data: { user },
@@ -793,7 +829,7 @@ export default function ChecklistFlow() {
       const photos = formData.photos;
       const previews = formData.photoPreviews || {};
 
-      for (const key of ["front", "back", "left", "right"]) {
+      for (const key of ["front", "back", "left", "right", "odometer"]) {
         const fileObj = (photos as any)[key];
         const previewStr = (previews as any)[key];
         const finalFile = safeGetFile(fileObj, key, previewStr);
@@ -812,7 +848,11 @@ export default function ChecklistFlow() {
       }
 
       let receipt_photo_url = null;
-      const receiptFile = safeGetFile(photos.receipt, "receipt", previews.receipt);
+      const receiptFile = safeGetFile(
+        photos.receipt,
+        "receipt",
+        previews.receipt,
+      );
       if (receiptFile) {
         const path = `receipts/${user.id}/${Date.now()}_receipt.jpg`;
         const { error } = await supabase.storage
@@ -852,7 +892,6 @@ export default function ChecklistFlow() {
           receipt_photo_url,
           status,
           company_id: companyId,
-          schedule_id: scheduleId ? parseInt(scheduleId) || null : null,
           details: {
             itemValues: formData.itemValues,
             itemTitles,
@@ -970,17 +1009,102 @@ export default function ChecklistFlow() {
         }
       }
 
-      const cacheKey = scheduleId
-        ? `checklist_draft_schedule_${scheduleId}`
-        : `checklist_draft_${type || "start"}`;
-      await localforage.removeItem(cacheKey);
+      // Check and generate auto-alerts on submit, since now we have the reliable formData.km
+      if (vehicleAlerts && vehicleAlerts.length > 0 && formData.vehicleId) {
+        try {
+          const finalKmForAlerts = parseInt(formData.km) || 0;
+
+          const triggeredAlerts = vehicleAlerts.filter((alert) => {
+            if (alert.trigger_type === "date" && alert.trigger_date) {
+              const warningDays = alert.warning_days
+                ? Number(alert.warning_days)
+                : 0;
+              const targetDate = new Date(alert.trigger_date + "T00:00:00");
+              targetDate.setDate(targetDate.getDate() - warningDays);
+              return new Date() >= targetDate;
+            } else if (
+              alert.trigger_type === "km" &&
+              alert.last_km &&
+              alert.interval_km
+            ) {
+              const warningKm = alert.warning_km ? Number(alert.warning_km) : 0;
+              const targetKm =
+                Number(alert.last_km) + Number(alert.interval_km) - warningKm;
+              return finalKmForAlerts >= targetKm;
+            }
+            return false;
+          });
+
+          if (triggeredAlerts.length > 0) {
+            const alertIds = triggeredAlerts.map((a) => a.id);
+            const { data: existingAlertIssues } = await supabase
+              .from("checklist_issues")
+              .select("auto_alert_id")
+              .in("auto_alert_id", alertIds)
+              .eq("status", "pending");
+
+            const alreadyGeneratedSet = new Set(
+              (existingAlertIssues || []).map((ei) => ei.auto_alert_id),
+            );
+
+            const alertsToInsert = triggeredAlerts.filter(
+              (alert) => !alreadyGeneratedSet.has(alert.id),
+            );
+
+            if (alertsToInsert.length > 0) {
+              const issuesAlertData = alertsToInsert.map((alert) => ({
+                submission_id: submission.id, // Linking it correctly to the submission
+                vehicle_id: formData.vehicleId,
+                driver_id: user.id,
+                item_title: `🚨 Alerta: ${alert.title}`,
+                description: `Gerado automaticamente. ${alert.trigger_type === "km" ? `KM Alvo atingido na viagem.` : `Data Alvo: ${alert.trigger_date.split("-").reverse().join("/")}`}`,
+                status: "pending",
+                auto_alert_id: alert.id,
+                company_id: companyId,
+              }));
+
+              const { error: insertError } = await supabase
+                .from("checklist_issues")
+                .insert(issuesAlertData);
+              if (insertError) {
+                console.error("Error inserting alert issues", insertError);
+              } else {
+                let targetPlate = options.vehicles.find(
+                  (v: any) => v.id === formData.vehicleId,
+                )?.plate;
+                if (!targetPlate) {
+                  const { data: vData } = await supabase
+                    .from("vehicles")
+                    .select("plate")
+                    .eq("id", formData.vehicleId)
+                    .single();
+                  if (vData) targetPlate = vData.plate;
+                }
+
+                await triggerWhatsAppDispatches(
+                  alertsToInsert,
+                  finalKmForAlerts,
+                  targetPlate || "",
+                );
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Auto alert processing error:", e);
+        }
+      }
+
+      const sessionKey = `checklist_state_${type || "start"}`;
+      await localforage.removeItem(sessionKey);
+      hasSubmittedRef.current = true;
 
       navigate("/");
     } catch (error) {
       console.error("Submission failed", error);
-      alert("Erro ao enviar checklist. Por favor tente novamente.");
+      alert(`Erro ao enviar checklist (${error instanceof Error ? error.message : JSON.stringify(error)}). Por favor tente novamente.`);
     } finally {
       setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -995,46 +1119,20 @@ export default function ChecklistFlow() {
           <ChevronLeft size={20} />
         </button>
         <h1 className="text-sm font-bold text-text-main">
-          Checklist - {type === "yard" ? "Pátio" : type === "end" ? "Fim de Rota" : "Início de Rota"}
+          Checklist -{" "}
+          {type === "yard"
+            ? "Pátio"
+            : type === "end"
+              ? "Fim de Rota"
+              : type === "fuel"
+                ? "Abastecimento"
+                : "Início de Rota"}
         </h1>
         <div className="w-10" />
       </header>
 
       {/* Main Content */}
       <main className="max-w-xl mx-auto px-4 pt-20 space-y-4">
-        {/* Stepper Progress */}
-        <div className="bento-card p-4 flex justify-between items-center bg-white border border-app-border rounded-2xl shadow-sm">
-          {STEPS.map((step, idx) => {
-            const isActive = currentStep === idx;
-            const isCompleted = currentStep > idx;
-            return (
-              <div key={step} className="flex flex-col items-center flex-1 relative">
-                {idx > 0 && (
-                  <div
-                    className={`absolute right-[50%] left-[-50%] top-4 h-[2px] -translate-y-1/2 z-0 transition-colors duration-300
-                      ${isCompleted ? "bg-primary" : "bg-app-border"}`}
-                  />
-                )}
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs z-10 transition-all duration-300
-                    ${isCompleted ? "bg-primary text-white" : isActive ? "bg-primary/10 text-primary border-2 border-primary" : "bg-app-bg text-text-muted border border-app-border"}`}
-                >
-                  {idx + 1}
-                </div>
-                <span className="text-[9px] font-bold uppercase mt-1 tracking-wider text-text-muted">
-                  {step === "info"
-                    ? "Início"
-                    : step === "external_photos"
-                      ? "Fotos Ext"
-                      : step === "items"
-                        ? "Itens"
-                        : "Resumo"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
         {/* Step Contents */}
         <div className="space-y-4">
           {/* Step 0: Information */}
@@ -1052,7 +1150,9 @@ export default function ChecklistFlow() {
                 {/* Vehicle Selection */}
                 {!isTrailerOnly && (
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-text-main">Veículo</label>
+                    <label className="text-xs font-bold text-text-main">
+                      Veículo
+                    </label>
                     <select
                       className="w-full h-12 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-medium text-text-main outline-none focus:border-primary"
                       value={formData.vehicleId}
@@ -1072,10 +1172,14 @@ export default function ChecklistFlow() {
                 )}
 
                 {/* Trailer Selection */}
-                {type !== "yard" && (
+                {type !== "yard" &&
+                  (isTrailerOnly ||
+                    options.vehicles.find(
+                      (v: any) => v.id === formData.vehicleId,
+                    )?.requires_trailer) && (
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-text-main">
-                      Reboque / Carreta (Opcional)
+                      Reboque / Carreta
                     </label>
                     <select
                       className="w-full h-12 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-medium text-text-main outline-none focus:border-primary"
@@ -1084,7 +1188,7 @@ export default function ChecklistFlow() {
                         setFormData({ ...formData, trailerId: e.target.value })
                       }
                     >
-                      <option value="">Selecione um reboque (opcional)</option>
+                      <option value="">Selecione um reboque</option>
                       {options.trailers.map((t: any) => (
                         <option key={t.id} value={t.id}>
                           {t.plate} - {t.model}
@@ -1097,7 +1201,9 @@ export default function ChecklistFlow() {
                 {/* Route Selection */}
                 {type !== "yard" && options.routes.length > 0 && (
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-text-main">Rota</label>
+                    <label className="text-xs font-bold text-text-main">
+                      Rota
+                    </label>
                     <select
                       className="w-full h-12 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-medium text-text-main outline-none focus:border-primary"
                       value={formData.routeId}
@@ -1106,11 +1212,15 @@ export default function ChecklistFlow() {
                       }
                     >
                       <option value="">Selecione a rota</option>
-                      {options.routes.map((r: any) => (
-                        <option key={r.id} value={r.id}>
-                          {r.origin} ➔ {r.destination}
-                        </option>
-                      ))}
+                      {options.routes.map((r: any) => {
+                        const validStops = (r.stops || []).filter((s: string) => !s.startsWith("__MODALITY:"));
+                        const stopsStr = validStops.length > 0 ? ` (Paradas: ${validStops.join(", ")})` : "";
+                        return (
+                          <option key={r.id} value={r.id}>
+                            {r.origin} ➔ {r.destination}{stopsStr}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 )}
@@ -1118,7 +1228,9 @@ export default function ChecklistFlow() {
                 {/* Odometer KM Input */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-text-main">Kilometragem</label>
+                    <label className="text-xs font-bold text-text-main">
+                      Kilometragem
+                    </label>
                     {lastKm !== null && (
                       <span className="text-[10px] font-medium text-text-muted">
                         Último KM registrado: <strong>{lastKm}</strong>
@@ -1130,7 +1242,9 @@ export default function ChecklistFlow() {
                     placeholder="Digite o KM atual"
                     className="w-full h-12 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-medium text-text-main outline-none focus:border-primary"
                     value={formData.km}
-                    onChange={(e) => setFormData({ ...formData, km: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, km: e.target.value })
+                    }
                   />
                 </div>
               </div>
@@ -1146,18 +1260,27 @@ export default function ChecklistFlow() {
             >
               <div className="bento-card p-5 bg-white border border-app-border rounded-2xl space-y-4 shadow-sm">
                 <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-2">
-                  Fotos Externas do Veículo
+                  {type === "fuel" ? "Fotos de Abastecimento" : "Fotos Externas do Veículo"}
                 </h3>
 
-                 <div className="grid grid-cols-2 gap-3">
-                  {[
+                <div className="grid grid-cols-2 gap-3">
+                  {(type === "fuel" ? [
+                    { key: "odometer", label: "Odômetro/Tacógrafo" },
+                    ...(requireFuelReceiptPhoto ? [{ key: "receipt", label: "Cupom" }] : [])
+                  ] : [
                     { key: "front", label: "Frente" },
                     { key: "back", label: "Traseira" },
                     { key: "left", label: "Lateral Esquerda" },
                     { key: "right", label: "Lateral Direita" },
-                  ].map(({ key, label }) => {
+                  ]).map(({ key, label }) => {
                     const currentPhoto = (formData.photos as any)[key];
-                    const currentPreview = (formData.photoPreviews || {} as any)[key] || (currentPhoto && (currentPhoto instanceof Blob || currentPhoto instanceof File) ? URL.createObjectURL(currentPhoto) : "");
+                    const currentPreview =
+                      (formData.photoPreviews || ({} as any))[key] ||
+                      (currentPhoto &&
+                      (currentPhoto instanceof Blob ||
+                        currentPhoto instanceof File)
+                        ? URL.createObjectURL(currentPhoto)
+                        : "");
                     return (
                       <div
                         key={key}
@@ -1188,7 +1311,10 @@ export default function ChecklistFlow() {
                           </>
                         ) : (
                           <div className="space-y-1.5">
-                            <Camera size={24} className="mx-auto text-text-muted" />
+                            <Camera
+                              size={24}
+                              className="mx-auto text-text-muted"
+                            />
                             <span className="text-[10px] font-bold text-text-main uppercase tracking-wider block">
                               {label}
                             </span>
@@ -1198,45 +1324,6 @@ export default function ChecklistFlow() {
                     );
                   })}
                 </div>
-
-                {requireFuelReceiptPhoto && type === "fuel" && (
-                  <div className="space-y-1.5 pt-3 border-t border-app-border">
-                    <label className="text-xs font-bold text-text-main">
-                      Cupom de Abastecimento
-                    </label>
-                    <div className="relative h-24 rounded-2xl border border-app-border bg-app-bg flex flex-col items-center justify-center overflow-hidden">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handlePhotoUpload("receipt", file);
-                        }}
-                      />
-                      {formData.photoPreviews?.receipt || (formData.photos.receipt && ((formData.photos.receipt as any) instanceof Blob)) ? (
-                        <>
-                          <img
-                            src={formData.photoPreviews?.receipt || URL.createObjectURL(formData.photos.receipt as any)}
-                            className="absolute inset-0 w-full h-full object-cover"
-                            alt="Cupom"
-                          />
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                            <span className="text-[10px] font-black text-white uppercase tracking-wider">
-                              Alterar Cupom
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="space-y-1 flex items-center gap-2">
-                          <Plus size={16} className="text-text-muted" />
-                          <span className="text-xs font-bold text-text-muted">Anexar Cupom</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             </motion.div>
           )}
@@ -1259,114 +1346,492 @@ export default function ChecklistFlow() {
                           layout
                           className="bento-card p-4 bg-white border border-app-border rounded-2xl space-y-4 shadow-sm"
                         >
-                    <div className="flex justify-between items-start gap-4">
-                      <div>
-                        <h4 className="text-sm font-bold text-text-main">{item.title}</h4>
-                        {item.description && (
-                          <p className="text-[10px] text-text-muted">{item.description}</p>
-                        )}
-                      </div>
-                      <div className="flex bg-app-bg p-1 rounded-xl border border-app-border gap-1">
-                        <button
-                          type="button"
-                          className={`h-8 px-4 rounded-lg font-bold text-xs transition-all ${
-                            formData.itemValues[item.id] === "normal"
-                              ? "bg-emerald-500 text-white shadow-sm"
-                              : "text-text-muted hover:text-text-main"
-                          }`}
-                          onClick={() => {
-                            setFormData((prev) => ({
-                              ...prev,
-                              itemValues: { ...prev.itemValues, [item.id]: "normal" },
-                            }));
-                          }}
-                        >
-                          OK
-                        </button>
-                        <button
-                          type="button"
-                          className={`h-8 px-4 rounded-lg font-bold text-xs transition-all ${
-                            formData.itemValues[item.id] === "defect"
-                              ? "bg-danger text-white shadow-sm"
-                              : "text-text-muted hover:text-text-main"
-                          }`}
-                          onClick={() => {
-                            setFormData((prev) => ({
-                              ...prev,
-                              itemValues: { ...prev.itemValues, [item.id]: "defect" },
-                            }));
-                          }}
-                        >
-                          Defeito
-                        </button>
-                      </div>
-                    </div>
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="flex-1">
+                              <h4 className="text-sm font-bold text-text-main">
+                                {item.title}
+                              </h4>
+                              {item.description && (
+                                <p className="text-[10px] text-text-muted">
+                                  {item.description}
+                                </p>
+                              )}
+                            </div>
+                            {renderItemInput(item)}
+                          </div>
 
-                    {formData.itemValues[item.id] === "defect" && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-4"
-                      >
-                        {item.options && item.options.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {item.options.map((opt: string) => {
-                              const defectIdx = (formData.defects[item.id] || []).findIndex(
-                                (d: any) => d.description === opt
-                              );
-                              const isSelected = defectIdx !== -1;
-                              const defect = isSelected
-                                ? (formData.defects[item.id] || [])[defectIdx]
-                                : null;
+                          {formData.itemValues[item.id] === "defect" && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-4"
+                            >
+                              {item.options && item.options.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {item.options.map((opt: string) => {
+                                    const defectIdx = (
+                                      formData.defects[item.id] || []
+                                    ).findIndex(
+                                      (d: any) => d.description === opt,
+                                    );
+                                    const isSelected = defectIdx !== -1;
+                                    const defect = isSelected
+                                      ? (formData.defects[item.id] || [])[
+                                          defectIdx
+                                        ]
+                                      : null;
 
-                              return (
-                                <div
-                                  key={opt}
-                                  className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
-                                    isSelected
-                                      ? "border-danger bg-red-50 text-danger"
-                                      : "border-app-border bg-app-bg text-text-muted hover:text-text-main"
-                                  }`}
-                                >
-                                  <label className="flex items-center gap-2 cursor-pointer text-xs font-bold uppercase tracking-wider">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      className="form-checkbox h-4 w-4 text-danger border-danger/30 rounded"
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          const newDefects = [
-                                            ...(formData.defects[item.id] || []),
-                                            { description: opt, photo: null },
-                                          ];
-                                          setFormData({
-                                            ...formData,
-                                            defects: {
-                                              ...formData.defects,
-                                              [item.id]: newDefects,
-                                            },
-                                          });
-                                        } else {
-                                          const newDefects = [
-                                            ...(formData.defects[item.id] || []),
-                                          ];
-                                          newDefects.splice(defectIdx, 1);
-                                          setFormData({
-                                            ...formData,
-                                            defects: {
-                                              ...formData.defects,
-                                              [item.id]: newDefects,
-                                            },
-                                          });
-                                        }
-                                      }}
-                                    />
-                                    {opt}
-                                  </label>
+                                    return (
+                                      <div
+                                        key={opt}
+                                        className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all ${
+                                          isSelected
+                                            ? "border-danger bg-red-50 text-danger"
+                                            : "border-app-border bg-app-bg text-text-muted hover:text-text-main"
+                                        }`}
+                                      >
+                                        <label className="flex items-center gap-2 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            className="form-checkbox h-4 w-4 text-danger border-danger/30 rounded"
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                const newDefects = [
+                                                  ...(formData.defects[
+                                                    item.id
+                                                  ] || []),
+                                                  {
+                                                    description: opt,
+                                                    photo: null,
+                                                  },
+                                                ];
+                                                setFormData({
+                                                  ...formData,
+                                                  defects: {
+                                                    ...formData.defects,
+                                                    [item.id]: newDefects,
+                                                  },
+                                                });
+                                              } else {
+                                                const newDefects = [
+                                                  ...(formData.defects[
+                                                    item.id
+                                                  ] || []),
+                                                ];
+                                                newDefects.splice(defectIdx, 1);
+                                                setFormData({
+                                                  ...formData,
+                                                  defects: {
+                                                    ...formData.defects,
+                                                    [item.id]: newDefects,
+                                                  },
+                                                });
+                                              }
+                                            }}
+                                          />
+                                          {opt}
+                                        </label>
 
-                                  {isSelected && defect && (
-                                    <div className="flex items-center gap-2 border-l border-red-200 pl-2">
-                                      <div className="relative w-8 h-8 rounded-full border border-red-200 bg-red-50 flex items-center justify-center overflow-hidden">
+                                        {isSelected && defect && (
+                                          <div className="flex items-center gap-2 border-l border-red-200 pl-2">
+                                            <div className="relative w-8 h-8 rounded-full border border-red-200 bg-red-50 flex items-center justify-center overflow-hidden">
+                                              <input
+                                                type="file"
+                                                accept="image/*"
+                                                capture="environment"
+                                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                onChange={(e) => {
+                                                  const file =
+                                                    e.target.files?.[0];
+                                                  if (file) {
+                                                    compressImageSafe(
+                                                      file,
+                                                    ).then((compressed) => {
+                                                      const newDefects = [
+                                                        ...(formData.defects[
+                                                          item.id
+                                                        ] || []),
+                                                      ];
+                                                      newDefects[defectIdx] = {
+                                                        ...newDefects[
+                                                          defectIdx
+                                                        ],
+                                                        photo: compressed,
+                                                      };
+                                                      setFormData((p) => ({
+                                                        ...p,
+                                                        defects: {
+                                                          ...p.defects,
+                                                          [item.id]: newDefects,
+                                                        },
+                                                      }));
+                                                    });
+                                                  }
+                                                }}
+                                              />
+                                              {defect.photo ? (
+                                                <img
+                                                  src={
+                                                    (defect.photo as any) instanceof
+                                                      Blob ||
+                                                    (defect.photo as any) instanceof
+                                                      File
+                                                      ? URL.createObjectURL(
+                                                          defect.photo as any,
+                                                        )
+                                                      : ""
+                                                  }
+                                                  className="w-full h-full object-cover"
+                                                  alt="Evidência"
+                                                />
+                                              ) : defect.existing_photo_url ? (
+                                                <img
+                                                  src={
+                                                    supabase.storage
+                                                      .from("checklist-photos")
+                                                      .getPublicUrl(
+                                                        defect.existing_photo_url,
+                                                      ).data.publicUrl
+                                                  }
+                                                  className="w-full h-full object-cover"
+                                                  alt="Evidência Anterior"
+                                                />
+                                              ) : (
+                                                <Camera
+                                                  size={16}
+                                                  className="text-danger/50"
+                                                />
+                                              )}
+                                            </div>
+                                            <span className="text-[9px] font-bold text-danger uppercase tracking-widest">
+                                              Foto Evidência
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {(() => {
+                                const customDefectIdx = (
+                                  formData.defects[item.id] || []
+                                ).findIndex(
+                                  (d) =>
+                                    !d.existing_issue_id &&
+                                    (!item.options ||
+                                      !item.options.includes(d.description)),
+                                );
+                                const hasCustomDefect = customDefectIdx !== -1;
+                                const customDefect = hasCustomDefect
+                                  ? formData.defects[item.id][customDefectIdx]
+                                  : null;
+
+                                return (
+                                  <div
+                                    className={`p-3 rounded-lg border ${hasCustomDefect ? "border-danger bg-white" : "border-app-border bg-white"} transition-colors mt-4`}
+                                  >
+                                    <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-text-main">
+                                      <input
+                                        type="checkbox"
+                                        className="w-4 h-4 text-danger rounded border-danger/30"
+                                        checked={hasCustomDefect}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            const newDefects = [
+                                              ...(formData.defects[item.id] ||
+                                                []),
+                                              {
+                                                description: "",
+                                                photo: null,
+                                              },
+                                            ];
+                                            setFormData((p) => ({
+                                              ...p,
+                                              defects: {
+                                                ...p.defects,
+                                                [item.id]: newDefects,
+                                              },
+                                            }));
+                                          } else {
+                                            const newDefects = [
+                                              ...(formData.defects[item.id] ||
+                                                []),
+                                            ];
+                                            newDefects.splice(
+                                              customDefectIdx,
+                                              1,
+                                            );
+                                            setFormData((p) => ({
+                                              ...p,
+                                              defects: {
+                                                ...p.defects,
+                                                [item.id]: newDefects,
+                                              },
+                                            }));
+                                          }
+                                        }}
+                                      />
+                                      Outros
+                                    </label>
+
+                                    {hasCustomDefect && customDefect && (
+                                      <div className="mt-4 pt-4 border-t border-danger/10 space-y-4">
+                                        <div className="space-y-1.5 mt-2">
+                                          <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
+                                            <span>
+                                              Descrição do Problema (Outros)
+                                            </span>
+                                          </label>
+                                          <textarea
+                                            className="w-full p-3 rounded-lg border border-red-100 bg-white text-xs text-text-main outline-none focus:border-danger"
+                                            placeholder="Descreva o defeito encontrado..."
+                                            rows={2}
+                                            value={customDefect.description}
+                                            onChange={(e) => {
+                                              const newDefects = [
+                                                ...(formData.defects[item.id] ||
+                                                  []),
+                                              ];
+                                              newDefects[customDefectIdx] = {
+                                                ...newDefects[customDefectIdx],
+                                                description: e.target.value,
+                                              };
+                                              setFormData((prev) => ({
+                                                ...prev,
+                                                defects: {
+                                                  ...prev.defects,
+                                                  [item.id]: newDefects,
+                                                },
+                                              }));
+                                            }}
+                                          />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                          <label className="text-[10px] font-bold text-danger uppercase tracking-widest">
+                                            Foto do Defeito
+                                          </label>
+                                          <div className="flex items-center gap-3">
+                                            <div className="relative w-16 h-16 rounded-lg border border-red-200 bg-white flex items-center justify-center overflow-hidden">
+                                              <input
+                                                type="file"
+                                                accept="image/*"
+                                                capture="environment"
+                                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                onChange={(e) => {
+                                                  const file =
+                                                    e.target.files?.[0];
+                                                  if (file) {
+                                                    compressImageSafe(
+                                                      file,
+                                                    ).then((compressed) => {
+                                                      const newDefects = [
+                                                        ...(formData.defects[
+                                                          item.id
+                                                        ] || []),
+                                                      ];
+                                                      newDefects[
+                                                        customDefectIdx
+                                                      ] = {
+                                                        ...newDefects[
+                                                          customDefectIdx
+                                                        ],
+                                                        photo: compressed,
+                                                      };
+                                                      setFormData((prev) => ({
+                                                        ...prev,
+                                                        defects: {
+                                                          ...prev.defects,
+                                                          [item.id]: newDefects,
+                                                        },
+                                                      }));
+                                                    });
+                                                  }
+                                                }}
+                                              />
+                                              {customDefect.photo ? (
+                                                <img
+                                                  src={URL.createObjectURL(
+                                                    customDefect.photo,
+                                                  )}
+                                                  className="w-full h-full object-cover"
+                                                  alt="Defeito"
+                                                />
+                                              ) : (
+                                                <Camera
+                                                  size={20}
+                                                  className="text-danger/40"
+                                                />
+                                              )}
+                                            </div>
+                                            <span className="text-[10px] font-medium text-text-muted italic">
+                                              Toque para anexar evidência
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </motion.div>
+                          )}
+                        </motion.div>
+                      </React.Fragment>
+                    ))}
+                </div>
+
+                {/* Trailer Items (Only if trailer selected) */}
+                {formData.trailerId && (
+                  <div className="space-y-3 pt-4 border-t border-app-border">
+                    <h4 className="text-[9px] font-black text-orange-600 uppercase tracking-widest pl-1">
+                      Itens do Reboque
+                    </h4>
+                    {options.items.filter((i) => i.is_trailer_item).length >
+                    0 ? (
+                      options.items
+                        .filter((i) => i.is_trailer_item)
+                        .map((item) => (
+                          <React.Fragment key={item.id}>
+                            <div className="p-4 rounded-xl border border-app-border bg-app-bg flex items-center justify-between group hover:bg-white hover:border-orange-200 transition-all">
+                              <span className="text-xs font-bold text-text-main flex-1 mr-4">
+                                {item.title}
+                                {item.order_index === 0 && (
+                                  <span className="ml-2 text-[9px] font-medium text-text-muted">
+                                    (Opcional)
+                                  </span>
+                                )}
+                              </span>
+                              {renderItemInput(item)}
+                            </div>
+
+                            {/* Defeitos Conhecidos / Existentes (Reboque) */}
+                            {formData.itemValues[item.id] !== "normal" &&
+                              existingIssues.some(
+                                (issue) =>
+                                  issue.item_title === item.title &&
+                                  issue.trailer_id !== null,
+                              ) && (
+                                <div className="mt-3 pt-3 border-t border-app-border">
+                                  <p className="text-[10px] font-black text-warning uppercase tracking-widest flex items-center gap-1 mb-2">
+                                    <AlertCircle size={12} /> Defeito Pendente
+                                  </p>
+                                  {existingIssues
+                                    .filter(
+                                      (issue) =>
+                                        issue.item_title === item.title &&
+                                        issue.trailer_id !== null,
+                                    )
+                                    .map((issue) => (
+                                      <div
+                                        key={issue.id}
+                                        className="text-xs text-text-muted italic bg-orange-50/50 p-2 rounded-lg border border-orange-100 flex items-start gap-2"
+                                      >
+                                        <div className="flex-1">
+                                          "
+                                          {issue.description || "Sem descrição"}
+                                          "
+                                          <div className="mt-1 text-[9px] font-bold text-orange-600 uppercase tracking-widest">
+                                            Reportado {issue.report_count || 1}{" "}
+                                            {issue.report_count === 1
+                                              ? "vez"
+                                              : "vezes"}
+                                          </div>
+                                        </div>
+                                        {issue.photo_url && (
+                                          <div className="w-12 h-12 rounded overflow-hidden shrink-0 border border-orange-200">
+                                            <img
+                                              src={
+                                                supabase.storage
+                                                  .from("checklist-photos")
+                                                  .getPublicUrl(issue.photo_url)
+                                                  .data.publicUrl
+                                              }
+                                              className="w-full h-full object-cover"
+                                              alt="Foto Anterior"
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
+
+                            {formData.itemValues[item.id] === "defect" && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-4"
+                              >
+                                {item.options && item.options.length > 0 && (
+                                  <div className="space-y-2 mb-4">
+                                    <p className="text-[10px] font-bold text-danger uppercase tracking-widest pb-1 border-b border-danger/10">
+                                      Pendências Mapeadas:
+                                    </p>
+                                    {item.options.map((opt, i) => {
+                                      const defectIdx = (
+                                        formData.defects[item.id] || []
+                                      ).findIndex((d) => d.description === opt);
+                                      const isSelected = defectIdx !== -1;
+                                      const defect = isSelected
+                                        ? formData.defects[item.id][defectIdx]
+                                        : null;
+                                      return (
+                                        <div
+                                          key={i}
+                                          className={`p-3 rounded-lg border ${isSelected ? "border-danger bg-white" : "border-app-border bg-white"} transition-colors`}
+                                        >
+                                          <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-text-main">
+                                            <input
+                                              type="checkbox"
+                                              className="w-4 h-4 text-danger rounded border-danger/30"
+                                              checked={isSelected}
+                                              onChange={(e) => {
+                                                if (e.target.checked) {
+                                                  const newDefects = [
+                                                    ...(formData.defects[
+                                                      item.id
+                                                    ] || []),
+                                                    {
+                                                      description: opt,
+                                                      photo: null,
+                                                    },
+                                                  ];
+                                                  setFormData((p) => ({
+                                                    ...p,
+                                                    defects: {
+                                                      ...p.defects,
+                                                      [item.id]: newDefects,
+                                                    },
+                                                  }));
+                                                } else {
+                                                  const newDefects = [
+                                                    ...(formData.defects[
+                                                      item.id
+                                                    ] || []),
+                                                  ];
+                                                  newDefects.splice(
+                                                    defectIdx,
+                                                    1,
+                                                  );
+                                                  setFormData((p) => ({
+                                                    ...p,
+                                                    defects: {
+                                                      ...p.defects,
+                                                      [item.id]: newDefects,
+                                                    },
+                                                  }));
+                                                }
+                                              }}
+                                            />
+                                            {opt}
+                                          </label>
+                                          {isSelected && defect && (
+                                            <div className="flex items-center gap-3 ml-7 pt-3 mt-3 border-t border-danger/10">
+                                              <div className="relative w-12 h-12 rounded-lg border border-red-200 bg-red-50 flex items-center justify-center overflow-hidden">
                                                 <input
                                                   type="file"
                                                   accept="image/*"
@@ -1376,7 +1841,9 @@ export default function ChecklistFlow() {
                                                     const file =
                                                       e.target.files?.[0];
                                                     if (file) {
-                                                      compressImageSafe(file).then((compressed) => {
+                                                      compressImageSafe(
+                                                        file,
+                                                      ).then((compressed) => {
                                                         const newDefects = [
                                                           ...(formData.defects[
                                                             item.id
@@ -1403,16 +1870,9 @@ export default function ChecklistFlow() {
                                                 />
                                                 {defect.photo ? (
                                                   <img
-                                                    src={
-                                                      (defect.photo as any) instanceof
-                                                        Blob ||
-                                                      (defect.photo as any) instanceof
-                                                        File
-                                                        ? URL.createObjectURL(
-                                                            defect.photo as any,
-                                                          )
-                                                        : ""
-                                                    }
+                                                    src={URL.createObjectURL(
+                                                      defect.photo,
+                                                    )}
                                                     className="w-full h-full object-cover"
                                                     alt="Evidência"
                                                   />
@@ -1516,12 +1976,13 @@ export default function ChecklistFlow() {
                                           <div className="space-y-1.5 mt-2">
                                             <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
                                               <span>
-                                                Descrição do Problema (Outros)
+                                                Descrição do Problema (Outros -
+                                                Reboque)
                                               </span>
                                             </label>
                                             <textarea
                                               className="w-full p-3 rounded-lg border border-red-100 bg-white text-xs text-text-main outline-none focus:border-danger"
-                                              placeholder="Descreva o defeito encontrado..."
+                                              placeholder="Descreva o defeito no reboque..."
                                               rows={2}
                                               value={customDefect.description}
                                               onChange={(e) => {
@@ -1562,7 +2023,9 @@ export default function ChecklistFlow() {
                                                     const file =
                                                       e.target.files?.[0];
                                                     if (file) {
-                                                      compressImageSafe(file).then((compressed) => {
+                                                      compressImageSafe(
+                                                        file,
+                                                      ).then((compressed) => {
                                                         const newDefects = [
                                                           ...(formData.defects[
                                                             item.id
@@ -1615,506 +2078,74 @@ export default function ChecklistFlow() {
                                 })()}
                               </motion.div>
                             )}
-                          </motion.div>
-                        </React.Fragment>
-                        ))}
-                    </div>
-
-                    {/* Trailer Items (Only if trailer selected) */}
-                    {formData.trailerId && (
-                      <div className="space-y-3 pt-4 border-t border-app-border">
-                        <h4 className="text-[9px] font-black text-orange-600 uppercase tracking-widest pl-1">
-                          Itens do Reboque
-                        </h4>
-                        {options.items.filter((i) => i.is_trailer_item).length >
-                        0 ? (
-                          options.items
-                            .filter((i) => i.is_trailer_item)
-                            .map((item) => (
-                              <React.Fragment key={item.id}>
-                                <div className="p-4 rounded-xl border border-app-border bg-app-bg flex items-center justify-between group hover:bg-white hover:border-orange-200 transition-all">
-                                  <span className="text-xs font-bold text-text-main flex-1 mr-4">
-                                    {item.title}
-                                    {item.order_index === 0 && (
-                                      <span className="ml-2 text-[9px] font-medium text-text-muted">
-                                        (Opcional)
-                                      </span>
-                                    )}
-                                  </span>
-                                  {renderItemInput(item)}
-                                </div>
-
-                                {/* Defeitos Conhecidos / Existentes (Reboque) */}
-                                {formData.itemValues[item.id] !== "normal" &&
-                                  existingIssues.some(
-                                    (issue) =>
-                                      issue.item_title === item.title &&
-                                      issue.trailer_id !== null,
-                                  ) && (
-                                    <div className="mt-3 pt-3 border-t border-app-border">
-                                      <p className="text-[10px] font-black text-warning uppercase tracking-widest flex items-center gap-1 mb-2">
-                                        <AlertCircle size={12} /> Defeito
-                                        Pendente
-                                      </p>
-                                      {existingIssues
-                                        .filter(
-                                          (issue) =>
-                                            issue.item_title === item.title &&
-                                            issue.trailer_id !== null,
-                                        )
-                                        .map((issue) => (
-                                          <div
-                                            key={issue.id}
-                                            className="text-xs text-text-muted italic bg-orange-50/50 p-2 rounded-lg border border-orange-100 flex items-start gap-2"
-                                          >
-                                            <div className="flex-1">
-                                              "
-                                              {issue.description ||
-                                                "Sem descrição"}
-                                              "
-                                              <div className="mt-1 text-[9px] font-bold text-orange-600 uppercase tracking-widest">
-                                                Reportado{" "}
-                                                {issue.report_count || 1}{" "}
-                                                {issue.report_count === 1
-                                                  ? "vez"
-                                                  : "vezes"}
-                                              </div>
-                                            </div>
-                                            {issue.photo_url && (
-                                              <div className="w-12 h-12 rounded overflow-hidden shrink-0 border border-orange-200">
-                                                <img
-                                                  src={
-                                                    supabase.storage
-                                                      .from("checklist-photos")
-                                                      .getPublicUrl(
-                                                        issue.photo_url,
-                                                      ).data.publicUrl
-                                                  }
-                                                  className="w-full h-full object-cover"
-                                                  alt="Foto Anterior"
-                                                />
-                                              </div>
-                                            )}
-                                          </div>
-                                        ))}
-                                    </div>
-                                  )}
-
-                                {formData.itemValues[item.id] === "defect" && (
-                                  <motion.div
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="mb-4 p-4 rounded-xl border border-danger/20 bg-red-50/30 space-y-4"
-                                  >
-                                    {item.options &&
-                                      item.options.length > 0 && (
-                                        <div className="space-y-2 mb-4">
-                                          <p className="text-[10px] font-bold text-danger uppercase tracking-widest pb-1 border-b border-danger/10">
-                                            Pendências Mapeadas:
-                                          </p>
-                                          {item.options.map((opt, i) => {
-                                            const defectIdx = (
-                                              formData.defects[item.id] || []
-                                            ).findIndex(
-                                              (d) => d.description === opt,
-                                            );
-                                            const isSelected = defectIdx !== -1;
-                                            const defect = isSelected
-                                              ? formData.defects[item.id][
-                                                  defectIdx
-                                                ]
-                                              : null;
-                                            return (
-                                              <div
-                                                key={i}
-                                                className={`p-3 rounded-lg border ${isSelected ? "border-danger bg-white" : "border-app-border bg-white"} transition-colors`}
-                                              >
-                                                <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-text-main">
-                                                  <input
-                                                    type="checkbox"
-                                                    className="w-4 h-4 text-danger rounded border-danger/30"
-                                                    checked={isSelected}
-                                                    onChange={(e) => {
-                                                      if (e.target.checked) {
-                                                        const newDefects = [
-                                                          ...(formData.defects[
-                                                            item.id
-                                                          ] || []),
-                                                          {
-                                                            description: opt,
-                                                            photo: null,
-                                                          },
-                                                        ];
-                                                        setFormData((p) => ({
-                                                          ...p,
-                                                          defects: {
-                                                            ...p.defects,
-                                                            [item.id]:
-                                                              newDefects,
-                                                          },
-                                                        }));
-                                                      } else {
-                                                        const newDefects = [
-                                                          ...(formData.defects[
-                                                            item.id
-                                                          ] || []),
-                                                        ];
-                                                        newDefects.splice(
-                                                          defectIdx,
-                                                          1,
-                                                        );
-                                                        setFormData((p) => ({
-                                                          ...p,
-                                                          defects: {
-                                                            ...p.defects,
-                                                            [item.id]:
-                                                              newDefects,
-                                                          },
-                                                        }));
-                                                      }
-                                                    }}
-                                                  />
-                                                  {opt}
-                                                </label>
-                                                {isSelected && defect && (
-                                                  <div className="flex items-center gap-3 ml-7 pt-3 mt-3 border-t border-danger/10">
-                                                    <div className="relative w-12 h-12 rounded-lg border border-red-200 bg-red-50 flex items-center justify-center overflow-hidden">
-                                                      <input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        capture="environment"
-                                                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                                        onChange={(e) => {
-                                                          const file =
-                                                            e.target.files?.[0];
-                                                          if (file) {
-                                                            compressImageSafe(file).then(
-                                                              (compressed) => {
-                                                                const newDefects =
-                                                                  [
-                                                                    ...(formData
-                                                                      .defects[
-                                                                      item.id
-                                                                    ] || []),
-                                                                  ];
-                                                                newDefects[
-                                                                  defectIdx
-                                                                ] = {
-                                                                  ...newDefects[
-                                                                    defectIdx
-                                                                  ],
-                                                                  photo:
-                                                                    compressed,
-                                                                };
-                                                                setFormData(
-                                                                  (p) => ({
-                                                                    ...p,
-                                                                    defects: {
-                                                                      ...p.defects,
-                                                                      [item.id]:
-                                                                        newDefects,
-                                                                    },
-                                                                  }),
-                                                                );
-                                                              },
-                                                            );
-                                                          }
-                                                        }}
-                                                      />
-                                                      {defect.photo ? (
-                                                        <img
-                                                          src={URL.createObjectURL(
-                                                            defect.photo,
-                                                          )}
-                                                          className="w-full h-full object-cover"
-                                                          alt="Evidência"
-                                                        />
-                                                      ) : defect.existing_photo_url ? (
-                                                        <img
-                                                          src={
-                                                            supabase.storage
-                                                              .from(
-                                                                "checklist-photos",
-                                                              )
-                                                              .getPublicUrl(
-                                                                defect.existing_photo_url,
-                                                              ).data.publicUrl
-                                                          }
-                                                          className="w-full h-full object-cover"
-                                                          alt="Evidência Anterior"
-                                                        />
-                                                      ) : (
-                                                        <Camera
-                                                          size={16}
-                                                          className="text-danger/50"
-                                                        />
-                                                      )}
-                                                    </div>
-                                                    <span className="text-[9px] font-bold text-danger uppercase tracking-widest">
-                                                      Foto Evidência
-                                                    </span>
-                                                  </div>
-                                                )}
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-
-                                    {(() => {
-                                      const customDefectIdx = (
-                                        formData.defects[item.id] || []
-                                      ).findIndex(
-                                        (d) =>
-                                          !d.existing_issue_id &&
-                                          (!item.options ||
-                                            !item.options.includes(
-                                              d.description,
-                                            )),
-                                      );
-                                      const hasCustomDefect =
-                                        customDefectIdx !== -1;
-                                      const customDefect = hasCustomDefect
-                                        ? formData.defects[item.id][
-                                            customDefectIdx
-                                          ]
-                                        : null;
-
-                                      return (
-                                        <div
-                                          className={`p-3 rounded-lg border ${hasCustomDefect ? "border-danger bg-white" : "border-app-border bg-white"} transition-colors mt-4`}
-                                        >
-                                          <label className="flex items-center gap-3 cursor-pointer text-xs font-bold text-text-main">
-                                            <input
-                                              type="checkbox"
-                                              className="w-4 h-4 text-danger rounded border-danger/30"
-                                              checked={hasCustomDefect}
-                                              onChange={(e) => {
-                                                if (e.target.checked) {
-                                                  const newDefects = [
-                                                    ...(formData.defects[
-                                                      item.id
-                                                    ] || []),
-                                                    {
-                                                      description: "",
-                                                      photo: null,
-                                                    },
-                                                  ];
-                                                  setFormData((p) => ({
-                                                    ...p,
-                                                    defects: {
-                                                      ...p.defects,
-                                                      [item.id]: newDefects,
-                                                    },
-                                                  }));
-                                                } else {
-                                                  const newDefects = [
-                                                    ...(formData.defects[
-                                                      item.id
-                                                    ] || []),
-                                                  ];
-                                                  newDefects.splice(
-                                                    customDefectIdx,
-                                                    1,
-                                                  );
-                                                  setFormData((p) => ({
-                                                    ...p,
-                                                    defects: {
-                                                      ...p.defects,
-                                                      [item.id]: newDefects,
-                                                    },
-                                                  }));
-                                                }
-                                              }}
-                                            />
-                                            Outros
-                                          </label>
-
-                                          {hasCustomDefect && customDefect && (
-                                            <div className="mt-4 pt-4 border-t border-danger/10 space-y-4">
-                                              <div className="space-y-1.5 mt-2">
-                                                <label className="text-[10px] font-bold text-danger uppercase tracking-widest flex justify-between">
-                                                  <span>
-                                                    Descrição do Problema
-                                                    (Outros - Reboque)
-                                                  </span>
-                                                </label>
-                                                <textarea
-                                                  className="w-full p-3 rounded-lg border border-red-100 bg-white text-xs text-text-main outline-none focus:border-danger"
-                                                  placeholder="Descreva o defeito no reboque..."
-                                                  rows={2}
-                                                  value={
-                                                    customDefect.description
-                                                  }
-                                                  onChange={(e) => {
-                                                    const newDefects = [
-                                                      ...(formData.defects[
-                                                        item.id
-                                                      ] || []),
-                                                    ];
-                                                    newDefects[
-                                                      customDefectIdx
-                                                    ] = {
-                                                      ...newDefects[
-                                                        customDefectIdx
-                                                      ],
-                                                      description:
-                                                        e.target.value,
-                                                    };
-                                                    setFormData((prev) => ({
-                                                      ...prev,
-                                                      defects: {
-                                                        ...prev.defects,
-                                                        [item.id]: newDefects,
-                                                      },
-                                                    }));
-                                                  }}
-                                                />
-                                              </div>
-
-                                              <div className="space-y-1.5">
-                                                <label className="text-[10px] font-bold text-danger uppercase tracking-widest">
-                                                  Foto do Defeito
-                                                </label>
-                                                <div className="flex items-center gap-3">
-                                                  <div className="relative w-16 h-16 rounded-lg border border-red-200 bg-white flex items-center justify-center overflow-hidden">
-                                                    <input
-                                                      type="file"
-                                                      accept="image/*"
-                                                      capture="environment"
-                                                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                                      onChange={(e) => {
-                                                        const file =
-                                                          e.target.files?.[0];
-                                                        if (file) {
-                                                          compressImageSafe(file).then(
-                                                            (compressed) => {
-                                                              const newDefects =
-                                                                [
-                                                                  ...(formData
-                                                                    .defects[
-                                                                    item.id
-                                                                  ] || []),
-                                                                ];
-                                                              newDefects[
-                                                                customDefectIdx
-                                                              ] = {
-                                                                ...newDefects[
-                                                                  customDefectIdx
-                                                                ],
-                                                                photo:
-                                                                  compressed,
-                                                              };
-                                                              setFormData(
-                                                                (prev) => ({
-                                                                  ...prev,
-                                                                  defects: {
-                                                                    ...prev.defects,
-                                                                    [item.id]:
-                                                                      newDefects,
-                                                                  },
-                                                                }),
-                                                              );
-                                                            },
-                                                          );
-                                                        }
-                                                      }}
-                                                    />
-                                                    {customDefect.photo ? (
-                                                      <img
-                                                        src={URL.createObjectURL(
-                                                          customDefect.photo,
-                                                        )}
-                                                        className="w-full h-full object-cover"
-                                                        alt="Defeito"
-                                                      />
-                                                    ) : (
-                                                      <Camera
-                                                        size={20}
-                                                        className="text-danger/40"
-                                                      />
-                                                    )}
-                                                  </div>
-                                                  <span className="text-[10px] font-medium text-text-muted italic">
-                                                    Toque para anexar evidência
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })()}
-                                  </motion.div>
-                                )}
-                              </React.Fragment>
-                            ))
-                        ) : (
-                          <p className="text-[10px] text-text-muted italic py-2">
-                            Nenhum item de reboque configurado.
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {options.items.length === 0 && (
-                      <div className="py-10 text-center text-xs text-text-muted italic">
-                        Carregando itens...
-                      </div>
+                          </React.Fragment>
+                        ))
+                    ) : (
+                      <p className="text-[10px] text-text-muted italic py-2">
+                        Nenhum item de reboque configurado.
+                      </p>
                     )}
                   </div>
-                </motion.div>
-              )}
+                )}
 
-            {currentStep === 3 && (
-              <motion.div
-                key="step3"
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="space-y-6"
-              >
-                <div className="bento-card items-center py-10 space-y-6">
-                  <div className="w-20 h-20 bg-green-50 text-success rounded-full flex items-center justify-center shadow-inner">
-                    <ClipboardCheck size={32} />
+                {options.items.length === 0 && (
+                  <div className="py-10 text-center text-xs text-text-muted italic">
+                    Carregando itens...
                   </div>
-                  <div className="space-y-2 text-center px-4">
-                    <h2 className="text-2xl font-black text-text-main tracking-tight">
-                      Tudo pronto!
-                    </h2>
-                    <p className="text-text-muted text-xs font-medium leading-relaxed">
-                      Os dados foram validados e o checklist está completo para
-                      envio.
-                    </p>
-                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
 
-                  <div className="w-full bg-app-bg p-5 rounded-2xl border border-app-border space-y-3">
-                    <div className="flex justify-between items-center text-[10px] uppercase font-bold tracking-widest">
-                      <span className="text-text-muted">Placa</span>
-                      <span className="text-text-main">
-                        {
-                          options.vehicles.find(
-                            (v) => v.id === formData.vehicleId,
-                          )?.plate
-                        }
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] uppercase font-bold tracking-widest">
-                      <span className="text-text-muted">Hodômetro</span>
-                      <span className="text-text-main font-mono">
-                        {formData.km} km
-                      </span>
-                    </div>
-                    <div className="h-px bg-app-border/50" />
-                    <div className="flex justify-between items-center text-[10px] uppercase font-bold tracking-widest">
-                      <span className="text-text-muted">Status</span>
-                      <span className="text-success">CONCLUÍDO</span>
-                    </div>
+          {currentStep === 3 && (
+            <motion.div
+              key="step3"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="space-y-6"
+            >
+              <div className="bento-card items-center py-10 space-y-6">
+                <div className="w-20 h-20 bg-green-50 text-success rounded-full flex items-center justify-center shadow-inner">
+                  <ClipboardCheck size={32} />
+                </div>
+                <div className="space-y-2 text-center px-4">
+                  <h2 className="text-2xl font-black text-text-main tracking-tight">
+                    Tudo pronto!
+                  </h2>
+                  <p className="text-text-muted text-xs font-medium leading-relaxed">
+                    Os dados foram validados e o checklist está completo para
+                    envio.
+                  </p>
+                </div>
+
+                <div className="w-full bg-app-bg p-5 rounded-2xl border border-app-border space-y-3">
+                  <div className="flex justify-between items-center text-[10px] uppercase font-bold tracking-widest">
+                    <span className="text-text-muted">Placa</span>
+                    <span className="text-text-main">
+                      {
+                        options.vehicles.find(
+                          (v) => v.id === formData.vehicleId,
+                        )?.plate
+                      }
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] uppercase font-bold tracking-widest">
+                    <span className="text-text-muted">Hodômetro</span>
+                    <span className="text-text-main font-mono">
+                      {formData.km} km
+                    </span>
+                  </div>
+                  <div className="h-px bg-app-border/50" />
+                  <div className="flex justify-between items-center text-[10px] uppercase font-bold tracking-widest">
+                    <span className="text-text-muted">Status</span>
+                    <span className="text-success">CONCLUÍDO</span>
                   </div>
                 </div>
-              </motion.div>
-            )}
-          </div>
-        </main>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </main>
 
       {/* Footer Navigation */}
       <div className="fixed bottom-0 left-0 right-0 p-4 pb-12 sm:p-6 sm:pb-8 bg-white/80 backdrop-blur-md border-t border-app-border flex gap-3 z-[60] max-w-xl mx-auto rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.05)] pt-4">

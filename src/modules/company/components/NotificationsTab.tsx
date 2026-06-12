@@ -22,6 +22,7 @@ export default function NotificationsTab() {
   const [activeTab, setActiveTab] = useState<"issues" | "alerts">("issues");
   const [loading, setLoading] = useState(true);
   const [issues, setIssues] = useState<any[]>([]);
+  const [alertIssues, setAlertIssues] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
@@ -36,8 +37,8 @@ export default function NotificationsTab() {
     try {
       setLoading(true);
 
-      // 1. Fetch checklist issues (status: pending)
-      const { data: issuesData, error: issuesError } = await supabase
+      // 1. Fetch ALL pending checklist issues
+      const { data: allIssuesData, error: issuesError } = await supabase
         .from("checklist_issues")
         .select(`
           *,
@@ -52,11 +53,12 @@ export default function NotificationsTab() {
         console.error("Error fetching checklist issues:", issuesError);
       }
 
+      const issuesData = (allIssuesData || []).filter(i => !i.auto_alert_id);
+      const alertIssuesData = (allIssuesData || []).filter(i => i.auto_alert_id);
+
       // Group and Deduplicate Checklist Issues
-      // When the same issue (same vehicle + item_title) is reported multiple times, we only display the newest one,
-      // but we add a badge indicating "Reported X times" (Relatado X vezes).
       const groupedIssuesMap = new Map<string, any[]>();
-      (issuesData || []).forEach((issue) => {
+      issuesData.forEach((issue) => {
         const vehicleKey = issue.vehicle_id || issue.trailer_id || "no-vehicle";
         const titleKey = (issue.item_title || "").trim().toLowerCase();
         const groupKey = `${vehicleKey}_${titleKey}`;
@@ -69,18 +71,41 @@ export default function NotificationsTab() {
 
       const processedIssuesList = Array.from(groupedIssuesMap.values()).map(
         (group) => {
-          // The newest is the first in the group since the initial list is ordered by created_at DESC
           const primaryIssue = group[0];
           return {
             ...primaryIssue,
             occurrencesCount: group.length,
-            // Track all dates reported
             reportedDates: group.map((i) => i.created_at),
           };
         }
       );
-
       setIssues(processedIssuesList);
+
+      // Group and Deduplicate Alert Issues
+      const groupedAlertIssuesMap = new Map<string, any[]>();
+      alertIssuesData.forEach((issue) => {
+        const vehicleKey = issue.vehicle_id || issue.trailer_id || "no-vehicle";
+        const titleKey = (issue.item_title || "").trim().toLowerCase();
+        const groupKey = `${vehicleKey}_${titleKey}`;
+
+        if (!groupedAlertIssuesMap.has(groupKey)) {
+          groupedAlertIssuesMap.set(groupKey, []);
+        }
+        groupedAlertIssuesMap.get(groupKey)!.push(issue);
+      });
+
+      const processedAlertIssuesList = Array.from(groupedAlertIssuesMap.values()).map(
+        (group) => {
+          const primaryIssue = group[0];
+          return {
+            ...primaryIssue,
+            occurrencesCount: group.length,
+            reportedDates: group.map((i) => i.created_at),
+          };
+        }
+      );
+      setAlertIssues(processedAlertIssuesList);
+
 
       // 2. Fetch auto alerts
       const { data: alertsData, error: alertsError } = await supabase
@@ -202,6 +227,14 @@ export default function NotificationsTab() {
     return plate.includes(s) || title.includes(s) || desc.includes(s);
   });
 
+  const filteredAlertIssues = alertIssues.filter((issue) => {
+    const plate = (issue.vehicle?.plate || issue.trailer?.plate || "").toLowerCase();
+    const title = (issue.item_title || "").toLowerCase();
+    const desc = (issue.description || "").toLowerCase();
+    const s = searchTerm.toLowerCase();
+    return plate.includes(s) || title.includes(s) || desc.includes(s);
+  });
+
   const filteredAlerts = alerts.filter((alert) => {
     const plate = (alert.vehicle?.plate || alert.trailer?.plate || "").toLowerCase();
     const title = (alert.title || "").toLowerCase();
@@ -254,7 +287,7 @@ export default function NotificationsTab() {
             }`}
           >
             <Wrench size={16} />
-            Alertas Críticos ({filteredAlerts.length})
+            Alertas Críticos ({filteredAlerts.length + filteredAlertIssues.length})
           </button>
         </div>
       </div>
@@ -361,7 +394,7 @@ export default function NotificationsTab() {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-4"
             >
-              {filteredAlerts.length === 0 ? (
+              {filteredAlerts.length === 0 && filteredAlertIssues.length === 0 ? (
                 <div className="bg-white border border-dashed border-gray-200 rounded-3xl items-center justify-center text-center p-8 py-16">
                   <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500 mb-4 mx-auto border border-emerald-100">
                     <CheckCircle size={32} />
@@ -375,6 +408,68 @@ export default function NotificationsTab() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredAlertIssues.map((issue) => (
+                    <div
+                      key={issue.id}
+                      className="bg-white border border-red-200/65 rounded-2xl flex flex-col gap-4 p-5 hover:border-red-300 hover:shadow-md transition-all duration-200 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-[10px] font-black text-gray-700 px-2 py-0.5 bg-gray-100 rounded border border-gray-200 uppercase tracking-widest">
+                              {issue.vehicle?.plate || issue.trailer?.plate || "S/ Placa"}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-red-50 text-red-600 text-[8px] font-black tracking-widest uppercase border border-red-100">
+                              Alerta Disparado
+                            </span>
+                            {issue.occurrencesCount > 1 && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-black tracking-wider uppercase">
+                                <Layers size={10} />
+                                {issue.occurrencesCount}x Relatado
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="text-sm font-extrabold text-gray-800 mt-2">
+                            {issue.item_title}
+                          </h4>
+                          {issue.description && (
+                            <p className="text-gray-500 text-xs font-semibold leading-relaxed mt-1">
+                              {issue.description}
+                            </p>
+                          )}
+                        </div>
+
+                        {issue.photo_url && (
+                          <button
+                            onClick={() => setSelectedPhoto(getPhotoUrl(issue.photo_url))}
+                            className="w-14 h-14 bg-gray-100 rounded-xl overflow-hidden shrink-0 border border-gray-200 relative group shadow-sm flex items-center justify-center hover:border-red-500 transition-all active:scale-95"
+                          >
+                            <img
+                              src={getPhotoUrl(issue.photo_url)}
+                              alt="Defeito"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <Eye size={16} className="text-white" />
+                            </div>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-gray-100 flex justify-between items-center text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                        <span className="flex items-center gap-1">
+                          <Clock size={12} />
+                          Disparado em: {getRelativeTime(issue.created_at)}
+                        </span>
+                        {issue.occurrencesCount > 1 && (
+                          <span className="italic normal-case text-[9px] text-emerald-600 font-extrabold">
+                            Primeiro: {new Date(issue.reportedDates[issue.reportedDates.length - 1]).toLocaleDateString("pt-BR")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
                   {filteredAlerts.map((alert) => {
                     const isKmType = alert.trigger_type === "km";
 

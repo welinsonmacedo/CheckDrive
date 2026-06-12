@@ -190,10 +190,12 @@ export default function DriverHome() {
     return false;
   };
 
+  const activeSchedules = schedulesToday.filter(s => new Date(s.end_at) > new Date() && !hiddenSchedules.includes(s.id));
+
   const isTypeLocked = (typeId: string) => {
     if (user?.isInternal) return false;
-    // Se há escalas para hoje, bloqueia chamadas avulsas
-    if (schedulesToday.length > 0) return true;
+    // Se há escalas ATIVAS para hoje, bloqueia chamadas avulsas
+    if (activeSchedules.length > 0) return true;
     return false;
   };
 
@@ -250,128 +252,81 @@ export default function DriverHome() {
         </div>
       )}
 
-      {/* Manual do App Link */}
-      <button onClick={() => navigate('/driver-manual')} className="w-full flex items-center justify-between p-4 bg-white border border-app-border rounded-2xl shadow-sm hover:border-primary/30 active:bg-zinc-50 transition-all">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex shrink-0 items-center justify-center">
-            <BookOpen size={20} />
+      {/* active schedules rendering */}
+      {activeSchedules.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">Minhas Escalas</h3>
+            <div className="h-px flex-1 mx-4 bg-app-border" />
           </div>
-          <div className="text-left">
-            <h3 className="text-sm font-black text-text-main">Manual do App</h3>
-            <p className="text-[10px] uppercase tracking-widest font-bold text-text-muted mt-0.5">Aprenda a usar o aplicativo</p>
-          </div>
-        </div>
-        <ChevronRight size={20} className="text-text-muted" />
-      </button>
-
-      {/* Active Schedule Alert */}
-      {!user?.isInternal && schedulesToday.filter(s => {
-        if (hiddenSchedules.includes(s.id)) return false;
-        const isFinished = s.start_checklist_id && s.end_checklist_id;
-        const nowMs = new Date().getTime();
-        const endMs = new Date(s.end_at).getTime();
-        const isTimeExpired = nowMs > endMs + 30 * 60 * 1000;
-        // Hide if finished AND expired
-        if (isFinished && isTimeExpired) return false;
-        return true;
-      }).map((schedule) => {
-        const isFinished = schedule.start_checklist_id && schedule.end_checklist_id;
-        const nowMs = new Date().getTime();
-        const endMs = new Date(schedule.end_at).getTime();
-        const isTimeExpired = nowMs > endMs + 30 * 60 * 1000;
-        const isActiveOrUpcoming = !isFinished && !isTimeExpired;
-        const isExpanded = expandedScheduleId === schedule.id;
-
-        const scheduleTypes = schedule.requires_fueling === false 
-          ? originalChecklistTypes.filter(t => t.id !== 'fuel') 
-          : originalChecklistTypes;
-
-        return (
-        <div 
-          key={schedule.id}
-          onClick={() => setExpandedScheduleId(isExpanded ? null : schedule.id)}
-          className={`border rounded-2xl p-5 flex flex-col gap-4 text-white shadow-lg overflow-hidden relative cursor-pointer transition-colors mb-4 ${
-            isFinished 
-              ? 'bg-success border-success/20' 
-              : isTimeExpired 
-                ? 'bg-gray-500 border-gray-600'
-                : 'bg-primary border-primary/20'
-          }`}
-        >
-          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-            <Route size={100} />
-          </div>
-          <div className="relative z-10 flex items-start justify-between">
-            <div>
-              <span className="inline-flex px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-widest mb-3">
-                {isFinished ? 'Concluída' : isTimeExpired ? 'Expirada' : new Date() >= new Date(schedule.start_at) ? 'Escala Ativa' : 'Próxima Escala'}
-              </span>
-              <h3 className="text-xl font-black tracking-tight">{schedule.routes?.origin} &#8594; {schedule.routes?.destination}</h3>
-              <p className="text-white/80 text-sm font-medium mt-1">Veículo: <span className="font-mono">{schedule.vehicles?.plate}</span></p>
-              <p className="text-white/80 text-xs font-bold mt-1">
-                Data: {new Date(schedule.start_at).toLocaleDateString('pt-BR')} | {new Date(schedule.start_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit'})} às {new Date(schedule.end_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit'})}
-              </p>
-            </div>
-            <motion.div animate={{ rotate: isExpanded ? 180 : 0 }}>
-              <ChevronRight size={24} className="text-white/80 transform rotate-90" />
-            </motion.div>
-          </div>
-          
-          <div className="relative z-10">
+          <div className="space-y-3">
             <AnimatePresence>
-              {isExpanded ? (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }} 
-                  animate={{ opacity: 1, height: 'auto' }} 
-                  exit={{ opacity: 0, height: 0 }}
-                  className="flex flex-col gap-3 mt-4" 
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {scheduleTypes.map((type) => {
-                    const done = isTypeDone(schedule, type.id);
-                    const disabled = done || (isTimeExpired && !done);
-                    return (
-                      <button
-                        key={type.id}
-                        disabled={disabled}
-                        onClick={() => {
-                          if (!disabled) navigate(`/checklist/${type.id}?schedule=${schedule.id}`);
-                        }}
-                        className={`w-full h-14 rounded-xl flex items-center px-4 gap-3 font-black text-sm uppercase tracking-widest shadow-sm transition-all ${
-                          done ? 'bg-[#299c5e] text-white border border-[#30b56d] cursor-default opacity-90' : isTimeExpired ? 'bg-gray-200 text-gray-500 cursor-not-allowed opacity-80' : 'bg-white text-primary hover:bg-zinc-50'
-                        }`}
+              {activeSchedules.map((schedule) => {
+                const isExpanded = expandedScheduleId === schedule.id;
+                return (
+                  <motion.div
+                    key={schedule.id}
+                    layoutId={`schedule-${schedule.id}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className={`bento-card border ${isExpanded ? 'border-primary shadow-md' : 'border-app-border hover:border-primary/30'} overflow-hidden transition-colors cursor-pointer p-0`}
+                    onClick={() => setExpandedScheduleId(isExpanded ? null : schedule.id)}
+                  >
+                    <div className="p-4 flex items-center justify-between gap-4">
+                      <div className="flex-1 space-y-1">
+                         <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-bold text-text-main px-2 py-0.5 bg-zinc-100 text-center rounded border border-zinc-200">
+                              🚗 {schedule.vehicles?.plate || 'Não definido'}
+                            </span>
+                         </div>
+                         <h4 className="text-sm font-black text-text-main mt-2 leading-tight line-clamp-1">{schedule.routes?.origin || '?'} <span className="font-bold text-zinc-300 mx-1">-</span> {schedule.routes?.destination || '?'}</h4>
+                         <p className="text-[10px] text-text-muted font-bold uppercase tracking-wider mt-1 flex items-center gap-1">
+                           <Route size={10} /> 
+                           {new Date(schedule.start_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} às {new Date(schedule.end_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
+                         </p>
+                      </div>
+                      <ChevronRight size={20} className={`text-text-muted transition-transform shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
+                    </div>
+
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="bg-app-bg border-t border-app-border p-4 grid gap-3"
                       >
-                        <type.icon size={20} />
-                        <span className="flex-1 text-left">{type.label}</span>
-                        {done && <CheckCircle2 size={20} />}
-                      </button>
-                    );
-                  })}
-                  
-                  {isFinished && (
-                    <button
-                      onClick={(e) => hideSchedule(e, schedule.id)}
-                      className="w-full h-10 rounded-xl flex items-center justify-center px-4 gap-2 font-bold text-xs uppercase tracking-widest bg-white/20 text-white hover:bg-white/30 transition-all mt-2 border border-white/20"
-                    >
-                      Remover Card da Tela
-                    </button>
-                  )}
-                </motion.div>
-              ) : (
-                <div className="pt-2 flex items-center justify-between text-xs font-bold text-white/80 uppercase tracking-widest border-t border-white/20">
-                  <span>Clique para opções de checklist</span>
-                  {isFinished && (
-                    <span className="bg-white/20 px-2 py-0.5 rounded">Concluída</span>
-                  )}
-                  {isTimeExpired && !isFinished && (
-                    <span className="bg-white/20 px-2 py-0.5 rounded">Expirada</span>
-                  )}
-                </div>
-              )}
+                         {displayedTypes.filter(type => type.id !== 'fuel' || schedule.requires_fueling).map((type) => {
+                            const done = isTypeDone(schedule, type.id);
+                            return (
+                               <button
+                                 key={type.id}
+                                 disabled={done}
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   navigate(`/checklist/${type.id}?schedule_id=${schedule.id}&vehicle_id=${schedule.vehicles?.id}`);
+                                 }}
+                                 className={`w-full flex items-center p-3 rounded-xl border ${done ? 'border-green-200 bg-green-50/50 opacity-60' : 'border-zinc-200 bg-white hover:border-primary/30 shadow-sm'} transition-all`}
+                               >
+                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${done ? 'bg-green-100 text-green-600' : type.bg + ' ' + type.color}`}>
+                                    <type.icon size={16} />
+                                  </div>
+                                  <div className="flex-1 text-left ml-3">
+                                    <span className={`block text-xs font-bold tracking-tight uppercase ${done ? 'text-green-700' : 'text-text-main'}`}>{type.label}</span>
+                                  </div>
+                                  {done ? <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[9px] font-black uppercase tracking-widest leading-none">Feito</span> : <ChevronRight size={16} className="text-zinc-400" />}
+                               </button>
+                            );
+                         })}
+                      </motion.div>
+                    )}
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
           </div>
         </div>
-      )})}
+      )}
 
       {/* Checklist Grid */}
       <div className="space-y-4">

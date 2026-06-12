@@ -2,7 +2,6 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BookOpen, LogOut, Home, Trophy, AlertTriangle, User as UserIcon, Droplets, Building } from 'lucide-react';
 import { User } from '@/src/modules/shared/types/index';
-import OfflineSyncBanner from '@/src/modules/shared/layouts/OfflineSyncBanner';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -16,7 +15,6 @@ export default function AppLayout({ children, user, onLogout }: AppLayoutProps) 
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col">
-      <OfflineSyncBanner />
 
     
 

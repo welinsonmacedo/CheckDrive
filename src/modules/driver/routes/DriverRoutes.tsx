@@ -1,7 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import DriverHome from '../pages/DriverHome';
-import DriverManual from '../pages/DriverManual';
 import Ranking from '../pages/Ranking';
 import ChecklistFlow from '../pages/ChecklistFlow';
 import DriverPenalties from '../pages/DriverPenalties';
@@ -20,7 +19,6 @@ export default function DriverRoutes() {
         <Route path="ranking" element={<Ranking />} />
         <Route path="penalties" element={<DriverPenalties />} />
         <Route path="notifications" element={<DriverNotifications />} />
-        <Route path="manual" element={<DriverManual />} />
         <Route path="profile" element={<DriverProfile />} />
         <Route path="schedule" element={<Navigate to="home" replace />} /> {/* Placeholder */}
         <Route path="fuel" element={<Navigate to="home" replace />} /> {/* Placeholder */}

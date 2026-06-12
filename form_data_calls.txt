@@ -1,0 +1,29 @@
+48:  const [formData, setFormData] = useState({
+102:            setFormData(savedData.formData);
+182:        setFormData((prev) => {
+245:          setFormData((prev) => ({
+261:          setFormData((prev) => ({
+511:      setFormData((prev) => {
+696:      setFormData((prev) => ({
+708:    setFormData((prev) => ({
+717:      setFormData((prev) => ({
+1109:                        setFormData({ ...formData, vehicleId: e.target.value });
+1133:                        setFormData({ ...formData, trailerId: e.target.value })
+1156:                        setFormData({ ...formData, routeId: e.target.value })
+1187:                      setFormData({ ...formData, km: e.target.value })
+1355:                                  setFormData((prev) => ({
+1374:                                  setFormData((prev) => ({
+1434:                                                setFormData({
+1448:                                                setFormData({
+1487:                                                      setFormData((p) => ({
+1576:                                            setFormData((p) => ({
+1592:                                            setFormData((p) => ({
+1627:                                              setFormData((prev) => ({
+1669:                                                      setFormData((prev) => ({
+1828:                                                  setFormData((p) => ({
+1845:                                                  setFormData((p) => ({
+1884:                                                        setFormData((p) => ({
+1970:                                              setFormData((p) => ({
+1986:                                              setFormData((p) => ({
+2025:                                                setFormData((prev) => ({
+2067:                                                        setFormData((prev) => ({
