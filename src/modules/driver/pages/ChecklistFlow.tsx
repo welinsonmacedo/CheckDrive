@@ -1056,91 +1056,7 @@ export default function ChecklistFlow() {
         }
       }
 
-      // Check and generate auto-alerts on submit, since now we have the reliable formData.km
-      if (vehicleAlerts && vehicleAlerts.length > 0 && formData.vehicleId) {
-        try {
-          const finalKmForAlerts = parseInt(formData.km) || 0;
-
-          const triggeredAlerts = vehicleAlerts.filter((alert) => {
-            if (alert.trigger_type === "date" && alert.trigger_date) {
-              const warningDays = alert.warning_days
-                ? Number(alert.warning_days)
-                : 0;
-              const targetDate = new Date(alert.trigger_date + "T00:00:00");
-              targetDate.setDate(targetDate.getDate() - warningDays);
-              return new Date() >= targetDate;
-            } else if (
-              alert.trigger_type === "km" &&
-              alert.last_km &&
-              alert.interval_km
-            ) {
-              const warningKm = alert.warning_km ? Number(alert.warning_km) : 0;
-              const targetKm =
-                Number(alert.last_km) + Number(alert.interval_km) - warningKm;
-              return finalKmForAlerts >= targetKm;
-            }
-            return false;
-          });
-
-          if (triggeredAlerts.length > 0) {
-            const alertIds = triggeredAlerts.map((a) => a.id);
-            const { data: existingAlertIssues } = await supabase
-              .from("checklist_issues")
-              .select("auto_alert_id")
-              .in("auto_alert_id", alertIds)
-              .eq("status", "pending");
-
-            const alreadyGeneratedSet = new Set(
-              (existingAlertIssues || []).map((ei) => ei.auto_alert_id),
-            );
-
-            const alertsToInsert = triggeredAlerts.filter(
-              (alert) => !alreadyGeneratedSet.has(alert.id),
-            );
-
-            if (alertsToInsert.length > 0) {
-              const issuesAlertData = alertsToInsert.map((alert) => ({
-                submission_id: submission.id, // Linking it correctly to the submission
-                vehicle_id: formData.vehicleId,
-                driver_id: user.id,
-                item_title: `🚨 Alerta: ${alert.title}`,
-                description: `Gerado automaticamente. ${alert.trigger_type === "km" ? `KM Alvo atingido na viagem.` : `Data Alvo: ${alert.trigger_date.split("-").reverse().join("/")}`}`,
-                status: "pending",
-                auto_alert_id: alert.id,
-                company_id: companyId,
-              }));
-
-              const { error: insertError } = await supabase
-                .from("checklist_issues")
-                .insert(issuesAlertData);
-              if (insertError) {
-                console.error("Error inserting alert issues", insertError);
-              } else {
-                let targetPlate = options.vehicles.find(
-                  (v: any) => v.id === formData.vehicleId,
-                )?.plate;
-                if (!targetPlate) {
-                  const { data: vData } = await supabase
-                    .from("vehicles")
-                    .select("plate")
-                    .eq("id", formData.vehicleId)
-                    .single();
-                  if (vData) targetPlate = vData.plate;
-                }
-
-                await triggerWhatsAppDispatches(
-                  alertsToInsert,
-                  finalKmForAlerts,
-                  targetPlate || "",
-                );
-              }
-            }
-          }
-        } catch (e) {
-          console.error("Auto alert processing error:", e);
-        }
-      }
-
+      // Note: Auto-alerts check & WhatsApp notifications are handled entirely asynchronously by the check-checklist-alerts Supabase Edge Function database webhook.
       const sessionKey = `checklist_state_${type || "start"}`;
       await localforage.removeItem(sessionKey);
       hasSubmittedRef.current = true;
@@ -1336,6 +1252,7 @@ export default function ChecklistFlow() {
                         <input
                           type="file"
                           accept="image/*"
+                          capture="environment"
                           className="absolute inset-0 opacity-0 cursor-pointer z-10"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
@@ -1485,6 +1402,7 @@ export default function ChecklistFlow() {
                                               <input
                                                 type="file"
                                                 accept="image/*"
+                                                capture="environment"
                                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                 onChange={(e) => {
                                                   const file = e.target.files?.[0];
@@ -1633,6 +1551,7 @@ export default function ChecklistFlow() {
                                               <input
                                                 type="file"
                                                 accept="image/*"
+                                                capture="environment"
                                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                 onChange={(e) => {
                                                   const file = e.target.files?.[0];
@@ -1822,6 +1741,7 @@ export default function ChecklistFlow() {
                                                 <input
                                                   type="file"
                                                   accept="image/*"
+                                                  capture="environment"
                                                   className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                   onChange={(e) => {
                                                     const file = e.target.files?.[0];
@@ -1977,6 +1897,7 @@ export default function ChecklistFlow() {
                                                 <input
                                                   type="file"
                                                   accept="image/*"
+                                                  capture="environment"
                                                   className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                   onChange={(e) => {
                                                     const file = e.target.files?.[0];

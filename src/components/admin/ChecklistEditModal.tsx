@@ -89,7 +89,7 @@ export default function ChecklistEditModal({
             for (const [id, title] of Object.entries(
               submission.details.itemTitles,
             )) {
-              titleToId[title as string] = id;
+              titleToId[(title as string).toLowerCase().trim()] = id;
             }
           }
 
@@ -97,7 +97,7 @@ export default function ChecklistEditModal({
           const grouped: Record<string, any[]> = {};
           data.forEach((issue) => {
             // Remove suffix like " (1)" to find the base title
-            const baseTitle = issue.item_title.replace(/\s\(\d+\)$/, "");
+            const baseTitle = issue.item_title.replace(/\s\(\d+\)$/, "").toLowerCase().trim();
             const itemId = titleToId[baseTitle];
 
             if (itemId) {

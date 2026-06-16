@@ -1,6 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
-import { Search, MapPin, Truck, AlertTriangle, User, Navigation, Edit2, X, RefreshCw, Eye } from 'lucide-react';
+import { 
+  Search, 
+  MapPin, 
+  Truck, 
+  AlertTriangle, 
+  User, 
+  Navigation, 
+  Edit2, 
+  X, 
+  RefreshCw, 
+  Eye,
+  Compass,
+  Activity,
+  Calendar,
+  Lock,
+  ChevronRight,
+  ShieldAlert,
+  Info,
+  Clock,
+  CheckCircle2,
+  ListFilter
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 import VehicleDetailsModal from '@/src/modules/company/components/VehicleDetailsModal';
 import DriverRankingDetailsModal from '@/src/modules/company/components/DriverRankingDetailsModal';
 
@@ -188,11 +210,11 @@ export default function TrackingTab() {
   };
 
   const getStatusColor = (status: string) => {
-    if (status === 'Em trânsito') return 'bg-blue-100 text-blue-700 border-blue-200';
-    if (status === 'Viagem Concluída') return 'bg-green-100 text-green-700 border-green-200';
-    if (status === 'Aguardando Início') return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-    if (status === 'Sem viagem') return 'bg-zinc-100 text-zinc-700 border-zinc-200';
-    return 'bg-purple-100 text-purple-700 border-purple-200'; 
+    if (status === 'Em trânsito') return 'bg-indigo-50 text-indigo-700 border-indigo-150';
+    if (status === 'Viagem Concluída') return 'bg-emerald-50 text-emerald-700 border-emerald-150';
+    if (status === 'Aguardando Início') return 'bg-amber-50 text-amber-700 border-amber-150';
+    if (status === 'Sem viagem') return 'bg-gray-50 text-gray-600 border-gray-150';
+    return 'bg-purple-50 text-purple-700 border-purple-150'; 
   };
 
   const getSortOrder = (item: any, type: 'vehicle' | 'driver' | 'bait') => {
@@ -228,6 +250,18 @@ export default function TrackingTab() {
 
   const vehicleTypes = Array.from(new Set(vehicles.map(v => v.type).filter(Boolean)));
 
+  // Live Statistics Calculations
+  const statsTotalVehicles = vehicles.length;
+  const statsInTransit = vehicles.filter(v => {
+    const s = schedulesMap[`v_${v.id}`];
+    return getComputedState(v, s, true).status === 'Em trânsito';
+  }).length;
+  const statsWaiting = vehicles.filter(v => {
+    const s = schedulesMap[`v_${v.id}`];
+    return getComputedState(v, s, true).status === 'Aguardando Início';
+  }).length;
+  const statsPendingIssues = Object.values(issuesCount).reduce((acc, current) => acc + current, 0);
+
   const renderCard = (type: 'vehicle' | 'driver' | 'bait', item: any) => {
     const key = type === 'vehicle' ? 'v_' : type === 'driver' ? 'd_' : 'b_';
     const schedule = schedulesMap[`${key}${item.id}`];
@@ -242,209 +276,354 @@ export default function TrackingTab() {
     if (type === 'vehicle') {
       title = item.plate;
       subtitle = item.type || 'Veículo';
-      icon = <Truck size={18} className="text-primary" />;
+      icon = <Truck size={18} className="text-indigo-600" />;
       issues = issuesCount[item.id] || 0;
     } else if (type === 'driver') {
       title = item.full_name;
-      subtitle = 'Motorista';
-      icon = <User size={18} className="text-blue-500" />;
+      subtitle = 'Motorista Comercial';
+      icon = <User size={18} className="text-sky-500" />;
     } else {
       title = item.name;
-      subtitle = 'Isca';
+      subtitle = 'Dispositivo de Segurança';
       icon = <MapPin size={18} className="text-fuchsia-500" />;
     }
 
     const baitsStr = [schedule?.bait1?.name, schedule?.bait2?.name, schedule?.bait3?.name].filter(Boolean).join(', ');
 
     return (
-      <div key={item.id} className="bg-white border border-app-border rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-        <div className={`absolute left-0 top-0 bottom-0 w-1 ${state.status === 'Em trânsito' ? 'bg-blue-500' : state.status === 'Viagem Concluída' ? 'bg-green-500' : state.isManual ? 'bg-purple-500' : 'bg-zinc-300'}`} />
+      <motion.div 
+        key={item.id} 
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+        className="bg-white border border-gray-200/80 rounded-2xl p-5 hover:shadow-lg hover:border-gray-300 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[250px]"
+      >
+        {/* Top Accent Line */}
+        <div className={`absolute top-0 left-0 right-0 h-[3px] ${
+          state.status === 'Em trânsito' ? 'bg-indigo-500' : 
+          state.status === 'Viagem Concluída' ? 'bg-emerald-500' : 
+          state.isManual ? 'bg-purple-500' : 'bg-gray-300'
+        }`} />
         
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h3 className="text-lg font-black text-text-main flex items-center gap-2">
-              {icon}
-              {title}
-            </h3>
-            <p className="text-[10px] uppercase tracking-wider font-bold text-text-muted mt-0.5">{subtitle}</p>
-          </div>
-          
-          <div className="flex flex-col items-end gap-1.5">
-            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest border ${statusColor}`}>
-              {state.status}
-            </span>
-            {issues > 0 && (
-              <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md bg-danger/10 text-danger border border-danger/20 w-fit">
-                <AlertTriangle size={12} />
-                {issues} pend {issues === 1 ? 'ância' : 'ências'}
+        <div>
+          {/* Header section */}
+          <div className="flex justify-between items-start gap-3 mb-4">
+            <div className="min-w-0">
+              <h3 className="text-base font-black text-gray-800 flex items-center gap-2 truncate">
+                <span className="p-1.5 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-center">
+                  {icon}
+                </span>
+                <span className="tracking-tight">{title}</span>
+              </h3>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mt-1.5">{subtitle}</p>
+            </div>
+            
+            <div className="flex flex-col items-end gap-1.5 shrink-0">
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5 ${statusColor}`}>
+                {state.status === 'Em trânsito' && (
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                  </span>
+                )}
+                {state.status}
               </span>
+              
+              {issues > 0 && (
+                <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100/60">
+                  <AlertTriangle size={11} />
+                  {issues} {issues === 1 ? 'pendência' : 'pendências'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Location and Info block */}
+          <div className="space-y-3">
+            <div className="p-3 bg-gray-50/70 border border-gray-100 rounded-xl relative overflow-hidden group-hover:bg-gray-50 transition-colors">
+              <div className="flex items-start gap-2.5">
+                <Navigation size={14} className="text-gray-400 shrink-0 mt-1 spin-hover" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-black text-gray-450 uppercase tracking-widest leading-none mb-1">Localização e Destino</p>
+                  <p className="text-xs font-bold text-gray-700 truncate leading-snug">{state.location}</p>
+                  
+                  {type === 'vehicle' && latestOdometer[item.id] !== undefined && (
+                    <div className="mt-2 text-[10px] font-bold text-gray-505 flex items-center gap-1">
+                      <span>KM Sincronizado:</span>
+                      <span className="font-semibold text-gray-800 bg-gray-150 px-1.5 py-0.2 rounded font-mono">{latestOdometer[item.id]} km</span>
+                    </div>
+                  )}
+
+                  {state.isManual && (
+                    <p className="text-[9px] font-black text-purple-700 bg-purple-50 border border-purple-100/60 inline-flex items-center gap-1 mt-2.5 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      <span className="w-1 h-1 rounded-full bg-purple-500 animate-pulse" />
+                      Sobrescrito Manual
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Travel / Schedule info */}
+            {schedule ? (
+              <div className="py-2.5 border-t border-gray-100 space-y-2 mt-1">
+                {type !== 'driver' && (
+                  <div className="flex items-center gap-2 text-xs text-gray-655 font-bold">
+                    <User size={13} className="text-gray-400 shrink-0" />
+                    <span className="truncate">{schedule.profiles?.full_name}</span>
+                  </div>
+                )}
+                {type !== 'vehicle' && schedule.vehicles && (
+                  <div className="flex items-center gap-2 text-xs text-gray-655 font-bold">
+                    <Truck size={13} className="text-gray-400 shrink-0" />
+                    <span className="truncate font-mono">{schedule.vehicles.plate}</span>
+                  </div>
+                )}
+                {type !== 'bait' && baitsStr && (
+                  <div className="flex items-start gap-2 text-[11px] text-fuchsia-700 font-bold bg-fuchsia-50/50 p-2 rounded-lg border border-fuchsia-100/50">
+                    <MapPin size={13} className="text-fuchsia-500 shrink-0 mt-0.5" />
+                    <span className="truncate">Dispositivos: <strong className="text-fuchsia-800">{baitsStr}</strong></span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="pt-2 text-center">
+                <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider flex items-center justify-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                  Sem Programação Ativa
+                </span>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-start gap-3 p-3 bg-zinc-50 rounded-xl border border-app-border/50">
-            <Navigation size={16} className="text-primary shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-0.5">Localização e Destino</p>
-              <p className="text-sm font-bold text-text-main leading-tight">{state.location}</p>
-              {type === 'vehicle' && latestOdometer[item.id] !== undefined && (
-                <p className="text-xs font-bold text-text-muted mt-1 whitespace-nowrap">
-                  KM Atual: <span className="text-text-main">{latestOdometer[item.id]}</span>
-                </p>
-              )}
-              {state.isManual && (
-                <p className="text-[9px] font-black text-purple-600 mt-1 uppercase tracking-widest bg-purple-100 inline-block px-1.5 py-0.5 rounded">Sobrescrito Manualmente</p>
-              )}
-            </div>
-          </div>
-
-          {schedule && (
-            <div className="space-y-2">
-              {type !== 'driver' && (
-                <div className="flex items-center gap-3 px-1 text-sm font-medium text-text-main">
-                  <User size={16} className="text-text-muted shrink-0" />
-                  <span className="truncate">{schedule.profiles?.full_name}</span>
-                </div>
-              )}
-              {type !== 'vehicle' && schedule.vehicles && (
-                <div className="flex items-center gap-3 px-1 text-sm font-medium text-text-main">
-                  <Truck size={16} className="text-text-muted shrink-0" />
-                  <span className="truncate">{schedule.vehicles.plate}</span>
-                </div>
-              )}
-              {type !== 'bait' && baitsStr && (
-                <div className="flex items-start gap-3 px-1 text-sm font-medium text-fuchsia-700">
-                  <MapPin size={16} className="shrink-0 mt-0.5" />
-                  <span className="text-xs font-bold">Iscas: {baitsStr}</span>
-                </div>
-              )}
-            </div>
+        {/* Floating Quick Action Overlay */}
+        <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
+          {type === 'vehicle' && (
+            <>
+              <button 
+                onClick={() => setSelectedVehicle(item)}
+                className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 hover:border-indigo-500 hover:bg-indigo-50/20 text-gray-500 hover:text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-150 flex items-center gap-1"
+                title="Resumo do Veículo"
+              >
+                <Eye size={12} />
+                <span>Resumo</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setEditingVehicle(item);
+                  setEditForm({
+                    manual_location: item.manual_location || state.location,
+                    manual_status: item.manual_status || state.status
+                  });
+                }}
+                className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 hover:border-purple-500 hover:bg-purple-50/20 text-gray-500 hover:text-purple-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-150 flex items-center gap-1"
+                title="Ajuste Manual"
+              >
+                <Edit2 size={12} />
+                <span>Ajustar</span>
+              </button>
+            </>
           )}
-        </div>
 
-        {type === 'vehicle' && (
-          <div className="absolute bottom-4 right-4 flex gap-2 translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
-            <button 
-              onClick={() => setSelectedVehicle(item)}
-              className="p-2 bg-white border border-app-border hover:border-indigo-500 text-indigo-500 rounded-xl shadow-sm transition-colors"
-              title="Resumo do Veículo"
-            >
-              <Eye size={16} />
-            </button>
-            <button 
-              onClick={() => {
-                setEditingVehicle(item);
-                setEditForm({
-                  manual_location: item.manual_location || state.location,
-                  manual_status: item.manual_status || state.status
-                });
-              }}
-              className="p-2 bg-white border border-app-border hover:border-primary text-text-muted hover:text-primary rounded-xl shadow-sm transition-colors"
-              title="Corrigir Manualmente"
-            >
-              <Edit2 size={16} />
-            </button>
-          </div>
-        )}
-
-        {type === 'driver' && (
-          <div className="absolute bottom-4 right-4 flex gap-2 translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
+          {type === 'driver' && (
             <button 
               onClick={() => setSelectedDriver(item)}
-              className="p-2 bg-white border border-app-border hover:border-indigo-500 text-indigo-500 rounded-xl shadow-sm transition-colors"
+              className="px-3 py-1.5 bg-gray-50 border border-gray-200 hover:border-indigo-500 hover:bg-indigo-50/20 text-gray-500 hover:text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-150 flex items-center gap-1"
               title="Resumo do Motorista"
             >
-              <Eye size={16} />
+              <Eye size={12} />
+              <span>Ver Perfil</span>
             </button>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </motion.div>
     );
   };
 
   return (
     <div className="space-y-6">
-      <div className={(selectedVehicle || selectedDriver || editingVehicle) ? 'print:hidden' : 'space-y-6'}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
+      
+      {/* 1. Live Stats Summary Ribbon */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { 
+            label: 'Frota Rastreada', 
+            value: statsTotalVehicles, 
+            caption: 'Dispositivos ativos', 
+            icon: Compass, 
+            bg: 'from-blue-50/30 to-indigo-50/10 hover:border-blue-200',
+            border: 'border-blue-100',
+            text: 'text-indigo-600'
+          },
+          { 
+            label: 'Em Trânsito', 
+            value: statsInTransit, 
+            caption: 'Viagens em andamento', 
+            icon: Activity, 
+            bg: 'from-emerald-50/30 to-teal-50/10 hover:border-emerald-200',
+            border: 'border-emerald-100',
+            text: 'text-emerald-600',
+            pulse: true
+          },
+          { 
+            label: 'Aguardando Viagem', 
+            value: statsWaiting, 
+            caption: 'Programado na escala', 
+            icon: Calendar, 
+            bg: 'from-amber-50/30 to-yellow-50/10 hover:border-amber-200',
+            border: 'border-amber-100',
+            text: 'text-amber-600'
+          },
+          { 
+            label: 'Total de Pendências', 
+            value: statsPendingIssues, 
+            caption: 'Checklist com falhas', 
+            icon: ShieldAlert, 
+            bg: 'from-rose-50/30 to-red-50/10 hover:border-rose-200',
+            border: 'border-rose-100',
+            text: 'text-rose-600'
+          }
+        ].map((block, idx) => {
+          const Icon = block.icon;
+          return (
+            <div key={idx} className={`bg-white border ${block.border} rounded-2xl p-4 bg-gradient-to-br ${block.bg} transition-all duration-200 shadow-sm relative group`}>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
+                  {block.label}
+                </span>
+                <span className={`p-1.5 rounded-lg bg-white border border-gray-100 ${block.text} group-hover:scale-110 transition-transform`}>
+                  <Icon size={14} />
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-black text-gray-800 tracking-tight">{block.value}</span>
+                {block.pulse && (
+                  <span className="relative flex h-2 w-2 self-center mb-1">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[9px] text-gray-500 font-bold mt-1 uppercase tracking-normal">{block.caption}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 2. Page Controls & Tabs */}
+      <div className="bg-white border border-gray-250/60 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 shadow-sm">
         
-            <p className="text-text-muted text-sm font-bold mt-1">Acompanhe a localização e status atual da frota</p>
-          </div>
-        
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto text-text-main">
-          {activeTab === 'vehicles' && vehicleTypes.length > 0 && (
-            <select
-              className="h-10 px-4 bg-white rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-primary/50 w-full sm:w-auto border border-app-border shadow-sm text-text-muted"
-              value={vehicleTypeFilter}
-              onChange={e => setVehicleTypeFilter(e.target.value)}
+        {/* Rounded Pill Tabs */}
+        <div className="flex p-1 bg-gray-50/80 border border-gray-200/80 rounded-xl space-x-1 shrink-0 w-fit">
+          {[
+            { id: 'vehicles', label: 'Veículos' },
+            { id: 'drivers', label: 'Motoristas' },
+            { id: 'baits', label: 'Iscas de Segurança' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id as any);
+                setSearchTerm('');
+              }}
+              className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                activeTab === tab.id 
+                  ? 'bg-white text-indigo-600 shadow-sm border border-gray-200/40' 
+                  : 'text-gray-550 hover:text-gray-800 hover:bg-gray-100/50'
+              }`}
             >
-              <option value="">Todos os TIpos</option>
-              {vehicleTypes.map((t: any) => <option key={t} value={t}>{t}</option>)}
-            </select>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Inputs & Operations */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 text-gray-800">
+          
+          {/* Vehicle Type Filter */}
+          {activeTab === 'vehicles' && vehicleTypes.length > 0 && (
+            <div className="relative w-full sm:w-auto">
+              <select
+                className="h-10 pl-3 pr-8 bg-white rounded-xl text-xs font-black uppercase tracking-wide outline-none border border-gray-200 hover:border-gray-300 focus:ring-1 focus:ring-indigo-500 w-full sm:w-44 text-gray-600 cursor-pointer appearance-none shadow-sm"
+                value={vehicleTypeFilter}
+                onChange={e => setVehicleTypeFilter(e.target.value)}
+              >
+                <option value="">Filtro: Todos</option>
+                {vehicleTypes.map((t: any) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <ListFilter size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
           )}
 
+          {/* Search Field */}
           <div className="relative w-full sm:w-auto">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input 
               type="text" 
-              placeholder="Buscar..."
-              className="h-10 pl-9 pr-4 bg-white rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-primary/50 w-full sm:w-64 border border-app-border shadow-sm placeholder:text-text-muted/50"
+              placeholder={`Filtrar ${activeTab === 'vehicles' ? 'veículos...' : activeTab === 'drivers' ? 'motoristas...' : 'iscas...'}`}
+              className="h-10 pl-9 pr-4 bg-white rounded-xl text-xs font-semibold outline-none border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-full sm:w-60 shadow-sm placeholder:text-gray-400"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
-          <button onClick={fetchData} className="p-2.5 bg-white border border-app-border rounded-xl hover:bg-zinc-50 transition-colors shadow-sm text-text-muted hover:text-primary">
-            <RefreshCw size={18} />
+
+          {/* Sync Button */}
+          <button 
+            onClick={fetchData} 
+            className="h-10 w-10 bg-white border border-gray-200 hover:border-gray-300 rounded-xl hover:bg-gray-50 flex items-center justify-center transition-colors shadow-sm text-gray-500 hover:text-indigo-600 active:scale-95 shrink-0"
+            title="Sincronizar Dados"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
+
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-app-border pb-px overflow-x-auto no-scrollbar">
-        {[
-          { id: 'vehicles', label: 'Veículos' },
-          { id: 'drivers', label: 'Motoristas' },
-          { id: 'baits', label: 'Iscas' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === tab.id 
-                ? 'border-primary text-primary' 
-                : 'border-transparent text-text-muted hover:text-text-main hover:border-text-muted/30'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* 3. Cards Grid */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 space-y-3">
+          <div className="w-9 h-9 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+          <p className="text-[10px] uppercase font-black tracking-widest text-gray-400 animate-pulse">Consultando Sinais de Satélite...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {activeTab === 'vehicles' && filteredVehicles.map(v => renderCard('vehicle', v))}
+          {activeTab === 'drivers' && filteredDrivers.map(d => renderCard('driver', d))}
+          {activeTab === 'baits' && filteredBaits.map(b => renderCard('bait', b))}
+          
+          {/* Empty States */}
+          {activeTab === 'vehicles' && filteredVehicles.length === 0 && (
+            <div className="col-span-full py-16 text-center bg-white border border-gray-200/70 rounded-2xl shadow-sm">
+              <div className="max-w-xs mx-auto space-y-2">
+                <Truck size={28} className="mx-auto text-gray-300" />
+                <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider">Frota Não Localizada</h4>
+                <p className="text-xs text-gray-400 font-semibold">Nenhum veículo corresponde à sua busca ou filtro aplicados.</p>
+              </div>
+            </div>
+          )}
+          {activeTab === 'drivers' && filteredDrivers.length === 0 && (
+            <div className="col-span-full py-16 text-center bg-white border border-gray-200/70 rounded-2xl shadow-sm">
+              <div className="max-w-xs mx-auto space-y-2">
+                <User size={28} className="mx-auto text-gray-300" />
+                <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider">Nenhum Motorista Encontrado</h4>
+                <p className="text-xs text-gray-400 font-semibold">Considere pesquisar por outros termos ou nomes.</p>
+              </div>
+            </div>
+          )}
+          {activeTab === 'baits' && filteredBaits.length === 0 && (
+            <div className="col-span-full py-16 text-center bg-white border border-gray-200/70 rounded-2xl shadow-sm">
+              <div className="max-w-xs mx-auto space-y-2">
+                <MapPin size={28} className="mx-auto text-gray-300" />
+                <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider">Iscas Indisponíveis</h4>
+                <p className="text-xs text-gray-400 font-semibold">Nenhum localizador de carga registrado ou ativo no momento.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {activeTab === 'vehicles' && filteredVehicles.map(v => renderCard('vehicle', v))}
-        {activeTab === 'drivers' && filteredDrivers.map(d => renderCard('driver', d))}
-        {activeTab === 'baits' && filteredBaits.map(b => renderCard('bait', b))}
-        
-        {activeTab === 'vehicles' && filteredVehicles.length === 0 && !loading && (
-          <div className="col-span-full py-12 text-center text-text-muted">
-            <p className="font-bold text-sm">Nenhum veículo encontrado para monitoramento.</p>
-          </div>
-        )}
-        {activeTab === 'drivers' && filteredDrivers.length === 0 && !loading && (
-          <div className="col-span-full py-12 text-center text-text-muted">
-            <p className="font-bold text-sm">Nenhum motorista encontrado.</p>
-          </div>
-        )}
-        {activeTab === 'baits' && filteredBaits.length === 0 && !loading && (
-          <div className="col-span-full py-12 text-center text-text-muted">
-            <p className="font-bold text-sm">Nenhuma isca encontrada.</p>
-          </div>
-        )}
-      </div>
-      </div>
-
-      {/* Manual Override Modal */}
+      {/* Detail Modals */}
       {selectedVehicle && (
         <VehicleDetailsModal vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} />
       )}
@@ -459,35 +638,43 @@ export default function TrackingTab() {
         />
       )}
 
+      {/* Manual Override Dialog */}
       {editingVehicle && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-app-border flex items-center justify-between">
-              <h3 className="text-base font-black text-text-main flex items-center gap-2 uppercase tracking-wide">
-                <Edit2 size={18} className="text-primary" />
-                DADOS MANUAIS DE FROTA
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100"
+          >
+            <div className="p-5 border-b border-gray-150 flex items-center justify-between bg-gray-50/50">
+              <h3 className="text-sm font-black text-gray-800 flex items-center gap-2 uppercase tracking-wider">
+                <Edit2 size={16} className="text-indigo-600" />
+                Ajuste Manual de Coordenadas
               </h3>
               <button 
                 onClick={() => setEditingVehicle(null)}
-                className="p-2 hover:bg-zinc-100 rounded-full text-text-muted transition-colors"
+                className="p-1.5 hover:bg-gray-150 rounded-full text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
             
             <form onSubmit={handleManualSave} className="p-5 space-y-4">
-              <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-800 text-xs font-medium">
-                <strong>Atenção:</strong> Ao inserir dados manuais, as atualizações automáticas via escala para este veículo serão interrompidas até que você apague as informações abaixo.
+              <div className="bg-amber-50 border border-amber-200/80 p-3.5 rounded-xl text-amber-800 text-[11px] font-bold flex gap-2">
+                <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <p>
+                  <strong>Ajuste Forçado:</strong> Modificar estas variáveis temporariamente suspenderá as atualizações coordenadas automáticas para a placa <strong>{editingVehicle.plate}</strong>.
+                </p>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Status Atual</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Status de Operação</label>
                 <select 
-                  className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold outline-none focus:border-primary transition-all text-text-main"
+                  className="w-full h-11 px-3 rounded-xl border border-gray-250 bg-white text-xs font-bold outline-none focus:border-indigo-500 transition-all text-gray-800 cursor-pointer shadow-sm"
                   value={editForm.manual_status}
                   onChange={e => setEditForm({...editForm, manual_status: e.target.value})}
                 >
-                  <option value="">(Automático)</option>
+                  <option value="">(Usar modo automático)</option>
                   <option value="Em trânsito">Em trânsito</option>
                   <option value="Viagem Concluída">Viagem Concluída</option>
                   <option value="Aguardando Início">Aguardando Início</option>
@@ -497,39 +684,40 @@ export default function TrackingTab() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Localização / Destino</label>
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Localização Declarada</label>
                 <input 
                   type="text" 
-                  placeholder="Ex: Pátio SP ou Para RJ"
-                  className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-xs font-bold text-text-main outline-none focus:border-primary transition-all"
+                  placeholder="Ex: Pátio Principal, SP ou Rota Br-116"
+                  className="w-full h-11 px-3.5 rounded-xl border border-gray-250 bg-white text-xs font-bold text-gray-800 outline-none focus:border-indigo-500 transition-all shadow-sm"
                   value={editForm.manual_location}
                   onChange={e => setEditForm({...editForm, manual_location: e.target.value})}
                 />
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-4 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => {
                     setEditForm({ manual_location: '', manual_status: '' });
                   }}
-                  className="flex-1 py-3 text-xs font-bold text-text-muted uppercase border border-app-border hover:bg-zinc-50 rounded-xl"
+                  className="flex-1 py-3 text-[10px] font-black text-gray-500 hover:text-gray-700 uppercase tracking-wider border border-gray-200 hover:bg-gray-50 rounded-xl transition-colors"
                 >
-                  Limpar / Usar Auto
+                  Reverter Auto
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 py-3 text-[11px] font-black text-white bg-primary hover:bg-primary/90 rounded-xl uppercase tracking-widest shadow-md flex justify-center items-center gap-2"
+                  className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] rounded-xl uppercase tracking-widest shadow-md hover:shadow-lg transition-all flex justify-center items-center gap-1.5"
                 >
-                  {saving && <RefreshCw size={14} className="animate-spin" />}
-                  Salvar
+                  {saving && <RefreshCw size={13} className="animate-spin" />}
+                  Confirmar
                 </button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
+
     </div>
   );
 }

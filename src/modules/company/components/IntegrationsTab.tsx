@@ -10,6 +10,7 @@ import {
   Send,
   CheckCircle2,
   XCircle,
+  Check,
 } from "lucide-react";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
@@ -31,9 +32,16 @@ export default function IntegrationsTab() {
   const [autoAlerts, setAutoAlerts] = useState<any[]>([]);
 
   const [showRuleForm, setShowRuleForm] = useState(false);
-  const [ruleForm, setRuleForm] = useState({
+  const [ruleForm, setRuleForm] = useState<{
+    id: string;
+    ids: string[];
+    auto_alert_ids: string[];
+    phone_numbers: string;
+    message: string;
+  }>({
     id: "",
-    auto_alert_id: "",
+    ids: [],
+    auto_alert_ids: [],
     phone_numbers: "",
     message: "",
   });
@@ -262,32 +270,41 @@ export default function IntegrationsTab() {
   const saveRule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
-      !ruleForm.auto_alert_id ||
+      ruleForm.auto_alert_ids.length === 0 ||
       !ruleForm.phone_numbers ||
       !ruleForm.message
     ) {
-      return alert("Preencha todos os campos da regra.");
+      return alert("Preencha todos os campos e selecione pelo menos um alerta.");
     }
     try {
-      const payload = {
+      if (ruleForm.ids && ruleForm.ids.length > 0) {
+        // Delete all previously grouped rules first to start fresh
+        const { error: deleteError } = await supabase
+          .from("integration_whatsapp_rules")
+          .delete()
+          .in("id", ruleForm.ids);
+        if (deleteError) throw deleteError;
+      }
+
+      // Prepare payload with a row for each alert ID
+      const payloads = ruleForm.auto_alert_ids.map((alertId) => ({
         company_id: user?.company_id,
-        auto_alert_id: ruleForm.auto_alert_id,
+        auto_alert_id: alertId,
         phone_numbers: ruleForm.phone_numbers,
         message: ruleForm.message,
-      };
+      }));
 
-      if (ruleForm.id) {
-        await supabase
-          .from("integration_whatsapp_rules")
-          .update(payload)
-          .eq("id", ruleForm.id);
-      } else {
-        await supabase.from("integration_whatsapp_rules").insert([payload]);
-      }
+      const { error: insertError } = await supabase
+        .from("integration_whatsapp_rules")
+        .insert(payloads);
+
+      if (insertError) throw insertError;
+
       setShowRuleForm(false);
       setRuleForm({
         id: "",
-        auto_alert_id: "",
+        ids: [],
+        auto_alert_ids: [],
         phone_numbers: "",
         message: "",
       });
@@ -297,10 +314,10 @@ export default function IntegrationsTab() {
     }
   };
 
-  const deleteRule = async (id: string) => {
-    if (!confirm("Excluir esta regra?")) return;
+  const deleteRule = async (ids: string[]) => {
+    if (!confirm("Excluir esta regra de mensagem e todos os seus vínculos de alerta?")) return;
     try {
-      await supabase.from("integration_whatsapp_rules").delete().eq("id", id);
+      await supabase.from("integration_whatsapp_rules").delete().in("id", ids);
       fetchData();
     } catch (error: any) {
       alert("Erro ao excluir: " + error.message);
@@ -568,7 +585,8 @@ WITH CHECK (company_id = get_default_company_id());
               setShowRuleForm(true);
               setRuleForm({
                 id: "",
-                auto_alert_id: "",
+                ids: [],
+                auto_alert_ids: [],
                 phone_numbers: "",
                 message: "",
               });
@@ -586,23 +604,59 @@ WITH CHECK (company_id = get_default_company_id());
             </h4>
             <form onSubmit={saveRule} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
-                  Vincular a qual alerta criado?
+                <label className="block text-[10px] font-black uppercase text-zinc-500 mb-2">
+                  Vincular a qual(is) alerta(s) criado(s)? (Selecione um ou mais)
                 </label>
-                <select
-                  className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary appearance-none"
-                  value={ruleForm.auto_alert_id}
-                  onChange={(e) =>
-                    setRuleForm({ ...ruleForm, auto_alert_id: e.target.value })
-                  }
-                >
-                  <option value="">Selecione um alerta...</option>
-                  {autoAlerts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.title}
-                    </option>
-                  ))}
-                </select>
+                {autoAlerts.length === 0 ? (
+                  <p className="text-xs text-zinc-400 italic">Nenhum alerta automático cadastrado.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-3 bg-app-bg border border-app-border rounded-xl max-h-48 overflow-y-auto">
+                    {autoAlerts.map((a) => {
+                      const isSelected = ruleForm.auto_alert_ids.includes(a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => {
+                            const updated = isSelected
+                              ? ruleForm.auto_alert_ids.filter((id) => id !== a.id)
+                              : [...ruleForm.auto_alert_ids, a.id];
+                            setRuleForm({ ...ruleForm, auto_alert_ids: updated });
+                          }}
+                          className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-left text-xs font-semibold select-none transition-all ${
+                            isSelected
+                              ? "bg-primary/5 border-primary text-primary"
+                              : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50"
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded flex items-center justify-center border transition-colors shrink-0 ${
+                            isSelected ? "bg-primary border-primary text-white" : "border-zinc-300 bg-white"
+                          }`}>
+                            {isSelected && <Check size={11} className="stroke-[3]" />}
+                          </div>
+                          <span className="truncate">{a.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex gap-2.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setRuleForm({ ...ruleForm, auto_alert_ids: autoAlerts.map(a => a.id) })}
+                    className="text-[9px] font-bold text-primary hover:underline"
+                  >
+                    Selecionar Todos
+                  </button>
+                  <span className="text-[9px] text-zinc-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setRuleForm({ ...ruleForm, auto_alert_ids: [] })}
+                    className="text-[9px] font-bold text-zinc-500 hover:underline"
+                  >
+                    Limpar Seleção
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
@@ -651,64 +705,103 @@ WITH CHECK (company_id = get_default_company_id());
           </div>
         )}
 
-        {rules.length === 0 ? (
-          <div className="text-center py-6 text-sm text-zinc-500 border border-dashed border-zinc-200 rounded-xl">
-            Nenhuma regra de mensagem cadastrada.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {rules.map((rule) => (
-              <div
-                key={rule.id}
-                className="p-4 rounded-xl border border-zinc-200 bg-white flex flex-col md:flex-row md:items-center justify-between gap-4"
-              >
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded uppercase tracking-widest">
-                      Alerta: {rule.auto_alerts?.title || "Desconhecido"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-500 mb-1">
-                    <strong className="text-zinc-700">Para:</strong>{" "}
-                    {rule.phone_numbers}
-                  </p>
-                  <p className="text-sm font-medium text-zinc-800 bg-zinc-50 p-2 rounded-lg border border-zinc-100 mt-2 line-clamp-2">
-                    {rule.message}
-                  </p>
-                </div>
-                <div className="flex gap-2 self-end md:self-auto shrink-0">
-                  <button
-                    onClick={() => sendTestMessage(rule)}
-                    title="Enviar Mensagem de Teste"
-                    className="p-2 text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                  >
-                    <Send size={16} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setRuleForm({
-                        id: rule.id,
-                        auto_alert_id: rule.auto_alert_id,
-                        phone_numbers: rule.phone_numbers,
-                        message: rule.message,
-                      });
-                      setShowRuleForm(true);
-                    }}
-                    className="p-2 text-primary bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors"
-                  >
-                    Atualizar
-                  </button>
-                  <button
-                    onClick={() => deleteRule(rule.id)}
-                    className="p-2 text-danger bg-danger/10 rounded-lg hover:bg-danger/20 transition-colors"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+        {(() => {
+          const groupedRulesMap = new Map<string, any>();
+          rules.forEach((rule) => {
+            const key = `${rule.phone_numbers || ""}:::${rule.message || ""}`;
+            if (!groupedRulesMap.has(key)) {
+              groupedRulesMap.set(key, {
+                id: rule.id,
+                ids: [rule.id],
+                auto_alert_ids: [rule.auto_alert_id],
+                alert_titles: [rule.auto_alerts?.title || "Desconhecido"],
+                phone_numbers: rule.phone_numbers,
+                message: rule.message,
+                created_at: rule.created_at,
+              });
+            } else {
+              const existing = groupedRulesMap.get(key);
+              existing.ids.push(rule.id);
+              if (!existing.auto_alert_ids.includes(rule.auto_alert_id)) {
+                existing.auto_alert_ids.push(rule.auto_alert_id);
+              }
+              const title = rule.auto_alerts?.title || "Desconhecido";
+              if (!existing.alert_titles.includes(title)) {
+                existing.alert_titles.push(title);
+              }
+            }
+          });
+          const groupedRules = Array.from(groupedRulesMap.values());
+
+          if (groupedRules.length === 0) {
+            return (
+              <div className="text-center py-6 text-sm text-zinc-500 border border-dashed border-zinc-200 rounded-xl">
+                Nenhuma regra de mensagem cadastrada.
               </div>
-            ))}
-          </div>
-        )}
+            );
+          }
+
+          return (
+            <div className="space-y-3">
+              {groupedRules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className="p-4 rounded-xl border border-zinc-200 bg-white flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mr-1">
+                        Alertas Vinculados:
+                      </span>
+                      {rule.alert_titles.map((title: string, index: number) => (
+                        <span key={index} className="text-[9px] font-black bg-blue-50 text-blue-800 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                          {title}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-zinc-500 mb-1">
+                      <strong className="text-zinc-700">Para:</strong>{" "}
+                      {rule.phone_numbers}
+                    </p>
+                    <p className="text-sm font-medium text-zinc-800 bg-zinc-50 p-2.5 rounded-lg border border-zinc-100 mt-2 whitespace-pre-wrap leading-relaxed">
+                      {rule.message}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 self-end md:self-auto shrink-0">
+                    <button
+                      onClick={() => sendTestMessage(rule)}
+                      title="Enviar Mensagem de Teste"
+                      className="p-2 text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+                    >
+                      <Send size={16} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRuleForm({
+                          id: rule.id,
+                          ids: rule.ids,
+                          auto_alert_ids: rule.auto_alert_ids,
+                          phone_numbers: rule.phone_numbers || "",
+                          message: rule.message || "",
+                        });
+                        setShowRuleForm(true);
+                      }}
+                      className="p-2 text-primary bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors"
+                    >
+                      Atualizar
+                    </button>
+                    <button
+                      onClick={() => deleteRule(rule.ids)}
+                      className="p-2 text-danger bg-danger/10 rounded-lg hover:bg-danger/20 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

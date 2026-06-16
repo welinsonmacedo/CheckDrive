@@ -13,6 +13,7 @@ import {
   Undo,
   Trash2,
   Camera,
+  Gauge,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -48,6 +49,9 @@ export default function MaintenanceTab() {
   const [sqlError, setSqlError] = useState<string | null>(null);
   const [resolveNextDate, setResolveNextDate] = useState("");
   const [resolveWarningDays, setResolveWarningDays] = useState("");
+  const [resolveCurrentKm, setResolveCurrentKm] = useState("");
+  const [resolveIntervalKm, setResolveIntervalKm] = useState("");
+  const [resolveWarningKm, setResolveWarningKm] = useState("");
   const [isResolving, setIsResolving] = useState(false);
 
   useEffect(() => {
@@ -209,6 +213,37 @@ export default function MaintenanceTab() {
     setSqlError(null);
     setResolveNextDate("");
     setResolveWarningDays("");
+    setResolveCurrentKm("");
+    setResolveIntervalKm("");
+    setResolveWarningKm("");
+
+    if (issue.auto_alerts) {
+      if (issue.auto_alerts.trigger_type === "km") {
+        setResolveIntervalKm(issue.auto_alerts.interval_km?.toString() || "");
+        setResolveWarningKm(issue.auto_alerts.warning_km?.toString() || "");
+        
+        // Initial estimate of KM
+        const estimatedKm = Number(issue.auto_alerts.last_km || 0) + Number(issue.auto_alerts.interval_km || 0);
+        setResolveCurrentKm(estimatedKm.toString());
+
+        // Fetch real-time current odometer of the vehicle if available
+        if (issue.vehicle_id) {
+          supabase
+            .from("checklist_submissions")
+            .select("odometer")
+            .eq("vehicle_id", issue.vehicle_id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .then(({ data }) => {
+              if (data && data.length > 0 && data[0].odometer) {
+                setResolveCurrentKm(data[0].odometer.toString());
+              }
+            });
+        }
+      } else if (issue.auto_alerts.trigger_type === "date") {
+        setResolveWarningDays(issue.auto_alerts.warning_days?.toString() || "");
+      }
+    }
   }
 
   async function confirmModalAction() {
@@ -240,6 +275,10 @@ export default function MaintenanceTab() {
     if (modalActionType === "resolve") {
       if (resolvingIssueData?.auto_alerts?.trigger_type === "date" && !resolveNextDate) {
          alert("Por favor, informe a próxima data de vencimento para o alerta.");
+         return;
+      }
+      if (resolvingIssueData?.auto_alerts?.trigger_type === "km" && !resolveCurrentKm) {
+         alert("Por favor, informe o KM da resolução para o alerta.");
          return;
       }
     }
@@ -285,6 +324,15 @@ export default function MaintenanceTab() {
          }).eq("id", resolvingIssueData.auto_alert_id);
       }
 
+      // Check if we need to update a km-based auto_alert
+      if (resolvingIssueData?.auto_alerts?.trigger_type === "km" && resolveCurrentKm) {
+         await supabase.from("auto_alerts").update({
+            last_km: Number(resolveCurrentKm),
+            interval_km: resolveIntervalKm ? Number(resolveIntervalKm) : resolvingIssueData.auto_alerts.interval_km,
+            warning_km: resolveWarningKm ? Number(resolveWarningKm) : resolvingIssueData.auto_alerts.warning_km
+         }).eq("id", resolvingIssueData.auto_alert_id);
+      }
+
       setResolvingIssueId(null);
       setResolvingIssueData(null);
       setSelectedIdsToResolve([]);
@@ -292,6 +340,11 @@ export default function MaintenanceTab() {
       setResolveNf("");
       setResolveValue("");
       setResolvePhotos([]);
+      setResolveNextDate("");
+      setResolveWarningDays("");
+      setResolveCurrentKm("");
+      setResolveIntervalKm("");
+      setResolveWarningKm("");
       setSqlError(null);
       fetchIssues();
     } catch (err: any) {
@@ -1024,6 +1077,67 @@ export default function MaintenanceTab() {
                       onChange={(e) => setResolveNotes(e.target.value)}
                     />
                   </div>
+
+                  {resolvingIssueData?.auto_alerts?.trigger_type === 'km' && (
+                    <div className="bg-blue-50 p-4 border border-blue-200 rounded-xl space-y-3 relative overflow-hidden">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Gauge className="text-blue-500" size={16} />
+                        <h4 className="text-xs font-black text-blue-700 uppercase tracking-widest">Alerta Automático (KM)</h4>
+                      </div>
+                      <p className="text-xs text-blue-800/80 mb-3 block animate-pulse">
+                        Este alerta é baseado em quilometragem (KM). Informe o KM real do veículo nesta manutenção para recalcular os próximos avisos.
+                      </p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                         <div>
+                           <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">KM do Serviço *</label>
+                           <input
+                             type="number"
+                             value={resolveCurrentKm}
+                             onChange={(e) => setResolveCurrentKm(e.target.value)}
+                             required
+                             placeholder="Ex: 120500"
+                             className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-bold"
+                           />
+                         </div>
+                         <div>
+                           <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Intervalo KM</label>
+                           <input
+                             type="number"
+                             value={resolveIntervalKm}
+                             onChange={(e) => setResolveIntervalKm(e.target.value)}
+                             required
+                             placeholder="Ex: 10000"
+                             className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                           />
+                         </div>
+                         <div>
+                           <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Antecedência (KM)</label>
+                           <input
+                             type="number"
+                             value={resolveWarningKm}
+                             onChange={(e) => setResolveWarningKm(e.target.value)}
+                             required
+                             placeholder="Ex: 1000"
+                             className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                           />
+                         </div>
+                      </div>
+
+                      {resolveCurrentKm && resolveIntervalKm && (
+                        <div className="pt-2.5 border-t border-blue-200/60 flex flex-col gap-1 text-[11px] text-blue-900 font-bold">
+                          <span className="flex items-center gap-1.5">
+                            • Próximo vencimento do alerta: <strong className="text-blue-700">{Number(resolveCurrentKm) + Number(resolveIntervalKm)} KM</strong>
+                          </span>
+                          {resolveWarningKm && (
+                            <span className="flex items-center gap-1.5">
+                              • Início dos avisos no feed: <strong className="text-amber-700">{Number(resolveCurrentKm) + Number(resolveIntervalKm) - Number(resolveWarningKm)} KM</strong>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {resolvingIssueData?.auto_alerts?.trigger_type === 'date' && (
                     <div className="bg-orange-50 p-4 border border-orange-200 rounded-xl space-y-3 relative overflow-hidden">

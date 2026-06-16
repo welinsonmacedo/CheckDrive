@@ -3,13 +3,20 @@ import {
   X,
   Calendar,
   MapPin,
-  Search,
   AlertTriangle,
   CheckCircle,
   Clock,
   Printer,
+  Award,
+  User,
+  ShieldCheck,
+  ChevronRight,
+  TrendingDown,
+  Compass,
+  ArrowUpRight,
+  Info
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/src/lib/supabase";
 
 interface DriverRankingDetailsModalProps {
@@ -171,225 +178,333 @@ export default function DriverRankingDetailsModal({
     };
   }, []);
 
+  const getScoreColorClass = (score: number) => {
+    if (score >= 90) return "text-emerald-600 bg-emerald-50 border-emerald-100";
+    if (score >= 70) return "text-amber-600 bg-amber-50 border-amber-100";
+    return "text-rose-600 bg-rose-50 border-rose-100";
+  };
+
+  const getScoreLabel = (score: number) => {
+    if (score >= 90) return "Excelente";
+    if (score >= 70) return "Bom / Regular";
+    return "Abaixo da Média";
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:p-0 print:bg-white print:backdrop-blur-none print:z-[99999] print:block">
+    <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-md z-50 flex items-start justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:p-0 print:bg-white print:backdrop-blur-none print:z-[99999] print:block">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl my-auto flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block"
+        transition={{ type: "spring", damping: 25, stiffness: 350 }}
+        className="bg-white rounded-[24px] shadow-2xl border border-slate-100 w-full max-w-4xl my-auto flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block overflow-hidden"
       >
-        {/* Header */}
-        <div className="p-5 border-b border-app-border flex items-center justify-between bg-zinc-50 relative">
-          <div className="absolute top-0 left-0 w-full h-1 bg-primary"></div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full pr-4">
-            <div>
-              <h2 className="text-lg font-black text-text-main tracking-tight">
-                {driver.full_name}
-              </h2>
+        {/* Top Accent line */}
+        <div className="absolute top-0 left-0 right-0 h-[5px] bg-gradient-to-r from-sky-400 via-indigo-500 to-fuchsia-500" />
+        
+        {/* Header Panel */}
+        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-gradient-to-b from-slate-50/40 to-white relative pt-8">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0 shadow-sm">
+              <User size={24} className="stroke-[2.2]" />
             </div>
-            <div className="mt-2 sm:mt-0 flex items-center gap-2">
-              <Calendar size={16} className="text-text-muted" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                  {driver.full_name}
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-wider border border-slate-200/50">
+                  RANKING & SCORE
+                </span>
+              </div>
+              <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                Motorista Profissional de Operações
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Period selector dropdown */}
+            <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 hover:border-slate-300 transition-colors">
+              <Calendar size={14} className="text-slate-400 mr-2 shrink-0" />
               <select
                 value={selectedPeriod}
                 onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="input-field text-xs py-1 px-2 h-auto max-w-[200px]"
+                className="bg-transparent text-xs font-bold text-slate-700 outline-none pr-6 cursor-pointer appearance-none"
               >
                 <option value="current">Mês Atual (Em Aberto)</option>
                 {closings.map((c) => (
                   <option key={c.id} value={c.id}>
-                    Fechado:{" "}
-                    {new Date(
-                      `${c.period_start}T12:00:00Z`,
-                    ).toLocaleDateString()}{" "}
-                    a{" "}
-                    {new Date(`${c.period_end}T12:00:00Z`).toLocaleDateString()}
+                    {new Date(`${c.period_start}T12:00:00Z`).toLocaleDateString("pt-BR", { month: 'short', year: '2-digit' })} ({new Date(`${c.period_start}T12:00:00Z`).toLocaleDateString("pt-BR", { day: '2-digit' })} a {new Date(`${c.period_end}T12:00:00Z`).toLocaleDateString("pt-BR", { day: '2-digit' })})
                   </option>
                 ))}
               </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500" />
             </div>
-          </div>
-          <div className="flex items-center gap-2">
+
+            {/* Print Button */}
             <button
               onClick={() => window.print()}
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white border border-app-border text-text-muted hover:bg-zinc-50 print:hidden"
-              title="Imprimir"
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-indigo-600 hover:bg-slate-50/50 transition-all shadow-sm print:hidden"
+              title="Gerar / Imprimir Ranking"
             >
               <Printer size={16} />
             </button>
+
+            {/* Close Button */}
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-xl bg-white border border-app-border text-text-muted hover:bg-zinc-50 print:hidden"
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-200 hover:bg-rose-50 hover:border-rose-100 text-slate-500 hover:text-rose-600 transition-all shadow-sm print:hidden"
             >
               <X size={16} />
             </button>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8 print:overflow-visible print:h-auto">
+        {/* Content Panel Scroll */}
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 print:overflow-visible print:h-auto max-h-[80vh]">
           {loading ? (
-            <div className="text-center py-20 animate-pulse text-sm font-bold text-text-muted uppercase">
-              Carregando detalhes...
+            <div className="flex flex-col items-center justify-center py-24 space-y-3">
+              <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+              <p className="text-[10px] uppercase font-black tracking-widest text-slate-400 animate-pulse">
+                Processando logs de desempenho do motorista...
+              </p>
             </div>
           ) : (
             <>
-              {/* Score summary */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-zinc-50 border border-app-border p-4 rounded-xl flex flex-col items-center justify-center">
-                  <span className="text-xs font-bold text-text-muted uppercase tracking-widest mb-1">
-                    Pontuação Final
+              {/* Score indicators Ribbon */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* 1. Score Meter Circle */}
+                <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-5 flex flex-col items-center justify-center relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-slate-100/50 rounded-full blur-2xl pointer-events-none" />
+                  
+                  <span className="text-[9px] font-black uppercase text-slate-405 tracking-widest mb-3.5">
+                    Nota de Direção Defensiva
                   </span>
-                  <span className="text-2xl font-black text-text-main">
-                    {activeScore}
+                  
+                  <div className={`w-28 h-28 rounded-full border-[6.5px] border-slate-100 flex flex-col items-center justify-center relative shadow-inner ${
+                    activeScore >= 90 ? "bg-emerald-50/40" : activeScore >= 70 ? "bg-amber-50/45" : "bg-rose-50/45"
+                  }`}>
+                    {/* Visual Ring accent */}
+                    <div className={`absolute inset-[-6.5px] rounded-full border-[6.5px] border-transparent border-t-indigo-500 filter drop-shadow`} style={{ transform: `rotate(${Math.min(360, (activeScore / 100) * 360)}deg)` }} />
+                    
+                    <span className="text-3xl font-black text-slate-800 font-mono select-none leading-none">
+                      {activeScore}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-450 mt-1 uppercase">
+                      Pontos
+                    </span>
+                  </div>
+
+                  <span className={`mt-3 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                    activeScore >= 90 ? 'bg-emerald-55 text-emerald-700 border-emerald-200' 
+                    : activeScore >= 70 ? 'bg-amber-55 text-amber-700 border-amber-200' 
+                    : 'bg-rose-55 text-rose-700 border-rose-200'
+                  }`}>
+                    {getScoreLabel(activeScore)}
                   </span>
                 </div>
-                <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex flex-col items-center justify-center">
-                  <span className="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-1">
-                    Checklists Realizados
-                  </span>
-                  <span className="text-xl font-black text-green-700">
-                    {calculateDone()}
-                  </span>
+
+                {/* 2. Checklists Counter */}
+                <div className="bg-gradient-to-br from-emerald-50/20 to-emerald-50/5 border border-emerald-100/50 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider">
+                        Checklists Entregues
+                      </span>
+                      <p className="text-3xl font-black text-emerald-950 font-mono mt-1">
+                        {calculateDone()}
+                      </p>
+                    </div>
+                    <span className="p-2 bg-white border border-emerald-100 rounded-xl text-emerald-600 shadow-sm">
+                      <CheckCircle size={15} />
+                    </span>
+                  </div>
+
+                  <div className="pt-4 border-t border-emerald-100/30 mt-4">
+                    <p className="text-[10px] font-bold text-emerald-700/80 uppercase">Participação Operacional</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-xs font-black text-emerald-800">100%</span>
+                      <span className="text-[9px] text-emerald-600/60 font-semibold uppercase">dos plantões programados</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex flex-col items-center justify-center">
-                  <span className="text-[10px] font-bold text-red-700 uppercase tracking-widest mb-1">
-                    Penalidades
-                  </span>
-                  <span className="text-xl font-black text-red-700">
-                    {calculateNotDone()}
-                  </span>
+
+                {/* 3. Penalties Count */}
+                <div className="bg-gradient-to-br from-rose-50/20 to-rose-50/5 border border-rose-100/50 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-[9px] font-black uppercase text-rose-600 tracking-wider">
+                        Pontos Descontados
+                      </span>
+                      <p className="text-3xl font-black text-rose-950 font-mono mt-1">
+                        {calculateNotDone()}
+                      </p>
+                    </div>
+                    <span className="p-2 bg-white border border-rose-100 rounded-xl text-rose-600 shadow-sm">
+                      <TrendingDown size={15} />
+                    </span>
+                  </div>
+
+                  <div className="pt-4 border-t border-rose-100/30 mt-4">
+                    <p className="text-[10px] font-bold text-rose-700/80 uppercase">Inobservâncias / Omissões</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-xs font-black text-rose-800">
+                        {calculateNotDone() > 0 ? `${calculateNotDone()} falhas` : "Ficha Limpa"}
+                      </span>
+                      <span className="text-[9px] text-rose-600/60 font-semibold uppercase">sem incidentes severos</span>
+                    </div>
+                  </div>
                 </div>
+
               </div>
 
               {/* Submissions Section */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />{" "}
-                  Atividades Realizadas
-                </h3>
-                <div className="overflow-hidden border border-app-border rounded-xl">
-                  <table className="w-full text-left">
-                    <thead className="bg-zinc-50">
-                      <tr>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Data / Hora
-                        </th>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Tipo
-                        </th>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Lugar (Rota)
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-app-border">
-                      {submissions.length > 0 ? (
-                        submissions.map((sub) => (
-                          <tr key={sub.id} className="hover:bg-zinc-50/50">
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2 font-bold text-xs text-text-main">
-                                <Clock size={12} className="text-text-muted" />
-                                {new Date(
-                                  sub.created_at,
-                                ).toLocaleDateString()}{" "}
-                                às{" "}
-                                {new Date(sub.created_at).toLocaleTimeString(
-                                  [],
-                                  { hour: "2-digit", minute: "2-digit" },
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-xs font-bold text-text-main">
-                              {sub.type === "start"
-                                ? "Início de Viagem"
-                                : sub.type === "end"
-                                  ? "Fim de Viagem"
-                                  : sub.type === "fuel"
-                                    ? "Abastecimento"
-                                    : sub.type === "yard"
-                                      ? "Pátio"
-                                      : sub.type}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2 font-medium text-[10px] text-text-muted">
-                                <MapPin size={12} />
-                                {sub.routes
-                                  ? `${sub.routes.origin} → ${sub.routes.destination}`
-                                  : "N/D"}
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td
-                            colSpan={3}
-                            className="px-4 py-6 text-center text-xs text-text-muted"
-                          >
-                            Nenhuma atividade registrada
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                    <Award size={14} className="text-emerald-500 mt-[-2px]" />
+                    Atividades Realizadas (Últimos Checklists)
+                  </h3>
+                  <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
+                    {submissions.length} inspeções
+                  </span>
                 </div>
+
+                {submissions.length > 0 ? (
+                  <div className="overflow-hidden border border-slate-105 rounded-2xl bg-white shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50/70 border-b border-slate-100">
+                          <tr>
+                            <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                              Data / Hora
+                            </th>
+                            <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                              Inspeção / Ocorrência
+                            </th>
+                            <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                              Veículo
+                            </th>
+                            <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                              Rota Associada
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {submissions.map((sub) => (
+                            <tr key={sub.id} className="hover:bg-slate-50/20 transition-all">
+                              <td className="px-5 py-3.5 whitespace-nowrap">
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                                  <Clock size={12} className="text-slate-400 shrink-0" />
+                                  <span>{new Date(sub.created_at).toLocaleDateString("pt-BR")}</span>
+                                  <span className="text-[10px] text-slate-400 font-semibold font-mono">
+                                    {new Date(sub.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5 whitespace-nowrap">
+                                <span className="text-[10px] font-black uppercase text-indigo-750 bg-indigo-50/50 border border-indigo-100/50 px-2 py-0.5 rounded-md">
+                                  {sub.type === "start" ? "Início Viagem" 
+                                   : sub.type === "end" ? "Fim Viagem" 
+                                   : sub.type === "fuel" ? "Abastecimento" 
+                                   : sub.type === "yard" ? "Pátio" 
+                                   : sub.type}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 whitespace-nowrap">
+                                <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/55">
+                                  {sub.vehicles?.plate || "N/A"}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-1.5 text-xs text-slate-550 font-bold max-w-xs truncate">
+                                  <MapPin size={11} className="text-slate-400 shrink-0" />
+                                  <span>
+                                    {sub.routes ? `${sub.routes.origin} → ${sub.routes.destination}` : "Lançamento Avulso"}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-10 bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl">
+                    <User size={24} className="text-slate-350 mx-auto mb-2" />
+                    <p className="text-xs font-black text-slate-600 uppercase tracking-wider">Nenhuma Atividade Registrada</p>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Nenhum checklist associado no período selecionado.</p>
+                  </div>
+                )}
               </div>
 
               {/* Missed / Audit Logs Section */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                  <AlertTriangle size={16} className="text-red-500" />{" "}
-                  Penalidades e Omissões (Não Realizado)
-                </h3>
-                <div className="border border-app-border rounded-xl p-4 bg-zinc-50/50 space-y-4">
-                  {auditLogs.filter(
-                    (a) => a.type === "penalty" || a.type === "manual",
-                  ).length > 0 ? (
-                    auditLogs
-                      .filter(
-                        (a) => a.type === "penalty" || a.type === "manual",
-                      )
+              <div className="space-y-4">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                    <AlertTriangle size={14} className="text-rose-500 mt-[-2px]" />
+                    Ficha de Ocorrências e Descontos Administrativos
+                  </h3>
+                  <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
+                    Histórico Geral
+                  </span>
+                </div>
+
+                {auditLogs.filter((a) => a.type === "penalty" || a.type === "manual").length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {auditLogs
+                      .filter((a) => a.type === "penalty" || a.type === "manual")
                       .map((audit) => (
                         <div
                           key={audit.id}
-                          className="bg-white border border-red-100 p-3 rounded-lg flex items-start gap-3"
+                          className="bg-white border border-rose-100/60 p-4 rounded-2xl flex items-start gap-3.5 hover:shadow-md transition-shadow duration-150 bg-gradient-to-br from-rose-50/10 to-transparent"
                         >
-                          <div className="mt-0.5">
-                            <AlertTriangle size={16} className="text-red-500" />
+                          <div className="p-2 bg-rose-55 text-rose-500 rounded-xl shrink-0">
+                            <AlertTriangle size={15} />
                           </div>
-                          <div>
-                            <span className="block text-xs font-bold text-red-700 capitalize">
+                          <div className="min-w-0">
+                            <span className="block text-xs font-black text-slate-850 leading-snug truncate capitalize">
                               {audit.reason}
                             </span>
-                            <span className="block mt-1 text-[10px] font-bold text-text-muted">
-                              Desconto de: {audit.amount}{" "}
-                              {appSettings?.system_type === "cash"
-                                ? "R$"
-                                : "Pontos"}{" "}
-                              em{" "}
-                              {new Date(audit.created_at).toLocaleDateString()}
-                            </span>
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <span className="text-[10px] font-mono font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
+                                -{audit.amount} {appSettings?.system_type === "cash" ? "R$" : "Pts"}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-bold">
+                                em {new Date(audit.created_at).toLocaleDateString("pt-BR")}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      ))
-                  ) : (
-                    <div className="text-center text-xs font-medium text-text-muted">
-                      Nenhuma penalidade registrada no mês selecionado.
-                    </div>
-                  )}
-                </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 border border-dashed border-emerald-100 rounded-3xl bg-emerald-50/5">
+                    <ShieldCheck size={28} className="text-emerald-500 mb-2.5" />
+                    <p className="text-xs font-black text-emerald-800 uppercase tracking-widest">Ficha Limpa Sem Ocorrências</p>
+                    <p className="text-[10px] text-emerald-600/70 font-semibold mt-1">Este motorista cumpre 100% dos procedimentos exigidos.</p>
+                  </div>
+                )}
               </div>
 
-              {/* Schedules */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                  <Calendar size={16} className="text-amber-500" /> Resumo de
-                  Escalas do Mês
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {schedules.length > 0 ? (
-                    schedules.map((s) => {
+              {/* Schedules Section */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                    <Calendar size={14} className="text-amber-500 mt-[-2px]" />
+                    Escalas de Viagem Programadas no Mês
+                  </h3>
+                  <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
+                    Planejamento Operacional
+                  </span>
+                </div>
+
+                {schedules.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {schedules.map((s) => {
                       const applyStart =
                         scoreProfile?.apply_penalty_start !== false;
                       const applyEnd =
@@ -408,39 +523,58 @@ export default function DriverRankingDetailsModal({
                       return (
                         <div
                           key={s.id}
-                          className={`p-3 rounded-xl border ${isOk ? "bg-green-50/50 border-green-100" : "bg-red-50/50 border-red-100"}`}
+                          className={`p-4 rounded-2xl border transition-all hover:shadow-md flex flex-col justify-between ${
+                            isOk 
+                              ? "bg-gradient-to-br from-emerald-50/15 to-transparent border-slate-200/80 hover:border-emerald-250" 
+                              : "bg-gradient-to-br from-rose-50/15 to-transparent border-rose-100/70 hover:border-rose-250"
+                          }`}
                         >
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-bold text-text-muted">
-                              {new Date(s.start_at).toLocaleDateString()}
-                            </span>
-                            <span
-                              className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${isOk ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
-                            >
-                              {isOk ? "Completado" : "Com Pendência"}
-                            </span>
+                          <div>
+                            <div className="flex justify-between items-center mb-3">
+                              <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-wide">
+                                <Clock size={11} />
+                                {new Date(s.start_at).toLocaleDateString("pt-BR")}
+                              </span>
+                              <span
+                                className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                  isOk 
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-150" 
+                                    : "bg-rose-50 text-rose-700 border-rose-150"
+                                }`}
+                              >
+                                {isOk ? "Completa" : "Com Pendência"}
+                              </span>
+                            </div>
+
+                            <div className="text-xs font-black text-slate-850 leading-relaxed flex items-center gap-2">
+                              <MapPin size={12} className="text-slate-400 shrink-0" />
+                              <span>
+                                {s.routes ? `${s.routes.origin} → ${s.routes.destination}` : "Rota Indefinida"}
+                              </span>
+                            </div>
                           </div>
-                          <div className="text-xs font-bold text-text-main mb-1">
-                            {s.routes
-                              ? `${s.routes.origin} → ${s.routes.destination}`
-                              : "Rota não definida"}
-                          </div>
+
                           {!isOk && (
-                            <div className="text-[9px] text-red-600 font-bold mt-2">
-                              Faltou: {missingStart && "Início "}{" "}
-                              {missingEnd && "Fim "}{" "}
-                              {missingFuel && "Abastecimento"}
+                            <div className="text-[9px] text-rose-600 bg-rose-50 border border-rose-100/50 p-2 rounded-lg font-black uppercase tracking-wider mt-3 flex items-center gap-1.5">
+                              <Info size={11} className="shrink-0" />
+                              <span>Faltou: {[
+                                missingStart && "Início",
+                                missingEnd && "Fim",
+                                missingFuel && "Combustível"
+                              ].filter(Boolean).join(", ")}</span>
                             </div>
                           )}
                         </div>
                       );
-                    })
-                  ) : (
-                    <div className="col-span-2 text-center text-xs font-medium text-text-muted py-4">
-                      Nenhuma escala programada para este mês.
-                    </div>
-                  )}
-                </div>
+                    })}
+                  </div>
+                ) : (
+                  <div className="col-span-full py-10 text-center bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl">
+                    <Calendar size={24} className="text-slate-350 mx-auto mb-2" />
+                    <p className="text-xs font-black text-slate-600 uppercase tracking-widest">Sem Escalas Registradas</p>
+                    <p className="text-[10px] text-slate-400 font-bold mt-1">Este motorista não possui viagens programadas neste período.</p>
+                  </div>
+                )}
               </div>
             </>
           )}

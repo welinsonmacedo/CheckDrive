@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { motion } from 'motion/react';
-import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer } from 'lucide-react';
+import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer, Plus, PlusCircle, Trash2 } from 'lucide-react';
 
 export default function AveragesTab() {
   const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers' | 'schedules' | 'edit'>('vehicles');
@@ -18,9 +18,24 @@ export default function AveragesTab() {
   const [filterVehicle, setFilterVehicle] = useState('');
   const [filterDriver, setFilterDriver] = useState('');
 
+  // Add scale for media modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addFormData, setAddFormData] = useState({
+    vehicle_id: '',
+    driver_id: '',
+    start_at: '',
+    end_at: '',
+    start_odometer: '',
+    end_odometer: '',
+    fuelSelectId: 'manual',
+    liters: '',
+    litersOdometer: '',
+    litersDate: ''
+  });
+
   // Edit mode
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<{ odometer: string; liters: string; litersId: string | null; date: string }>({ odometer: '', liters: '', litersId: null, date: '' });
+  const [editData, setEditData] = useState<{ odometer: string; liters: string; litersId: string | null; date: string; fuelSelectId: string }>({ odometer: '', liters: '', litersId: null, date: '', fuelSelectId: 'manual' });
 
   useEffect(() => {
     fetchData();
@@ -46,12 +61,13 @@ export default function AveragesTab() {
             id,
             vehicle_id,
             driver_id,
+            fuel_checklist_id,
             created_at,
             start_at,
             end_at,
             start_checklist:checklist_submissions!start_checklist_id(id, odometer),
             end_checklist:checklist_submissions!end_checklist_id(id, odometer),
-            fuel_checklist:checklist_submissions!fuel_checklist_id(id, details),
+            fuel_checklist:checklist_submissions!fuel_checklist_id(id, details, created_at, odometer, vehicles(id, plate), profiles(id, full_name)),
             vehicles(id, plate),
             profiles(id, full_name)
           `)
@@ -162,8 +178,16 @@ export default function AveragesTab() {
 
             // Calculate schedule distances in this interval
             const intervalScheds = schedules.filter(s => {
+              // ALWAYS prefer the DB linked fuel checklist first
+              if (s.fuel_checklist_id === sub.id) return true;
+              
               const schedCompDate = new Date(s.end_at || s.start_at || s.created_at);
-              return s.vehicle_id === sub.vehicles?.id && 
+              const isVehicleMatch = s.vehicle_id === sub.vehicles?.id;
+              
+              // If it has some other fuel checklist explicitly assigned, it is not part of this interval's fallback
+              if (s.fuel_checklist_id && s.fuel_checklist_id !== sub.id) return false;
+              
+              return isVehicleMatch && 
                 schedCompDate > new Date(lastFuelSub.created_at) &&
                 schedCompDate <= new Date(sub.created_at);
             });
@@ -179,6 +203,17 @@ export default function AveragesTab() {
 
             // Off-scale is simply whatever is left over
             offScaleDistance = Math.max(0, distance - scaleDistance);
+          } else {
+            // No last fuel sub, let's still map any explicitly linked schedules
+            const intervalScheds = schedules.filter(s => s.fuel_checklist_id === sub.id);
+            intervalScheds.forEach(s => {
+              const startOdo = s.start_checklist?.odometer || 0;
+              const endOdo = s.end_checklist?.odometer || 0;
+              if (endOdo > startOdo) {
+                scaleDistance += (endOdo - startOdo);
+              }
+              scheduleFuelMap[s.id] = sub;
+            });
           }
 
           enrichedSubmissions.push({
@@ -190,16 +225,26 @@ export default function AveragesTab() {
             offScaleDistance,
             average: avg,
             intervalScheds: lastFuelSub ? schedules.filter(s => {
+              if (s.fuel_checklist_id === sub.id) return true;
+              if (s.fuel_checklist_id && s.fuel_checklist_id !== sub.id) return false;
               const schedCompDate = new Date(s.end_at || s.start_at || s.created_at);
               return s.vehicle_id === sub.vehicles?.id && 
                 schedCompDate > new Date(lastFuelSub.created_at) &&
                 schedCompDate <= new Date(sub.created_at);
-            }) : []
+            }) : schedules.filter(s => s.fuel_checklist_id === sub.id)
           });
 
           lastFuelSub = sub;
         }
       });
+    });
+
+    // Make sure we explicitly map ANY schedules that are linked to database fuel checklist
+    schedules.forEach(s => {
+      if (s.fuel_checklist) {
+        const fSub = submissions.find(sub => sub.id === s.fuel_checklist_id) || s.fuel_checklist;
+        scheduleFuelMap[s.id] = fSub;
+      }
     });
 
     // Re-sort enriched by created_at DESC for display
@@ -249,63 +294,135 @@ export default function AveragesTab() {
 
   const uniqueDrivers = useMemo(() => {
     const dMap = new Map();
-    submissions.forEach(s => { if (s.profiles) dMap.set(s.profiles.id, s.profiles.full_name); });
     schedules.forEach(s => { if (s.profiles) dMap.set(s.profiles.id, s.profiles.full_name); });
     return Array.from(dMap.entries()).map(([id, name]) => ({ id, name })).sort((a,b) => a.name.localeCompare(b.name));
-  }, [submissions, schedules]);
+  }, [schedules]);
 
-  // Aggregated data for vehicles
+  // Aggregated data for vehicles based strictly on reviewed scale lines
   const vehicleAverages = useMemo(() => {
-    return filteredEnrichedData.reduce((acc: any, sub: any) => {
-      const vId = sub.vehicles?.id;
-      if (!vId || !sub.vehicles?.plate) return acc;
-      if (!acc[vId]) acc[vId] = { plate: sub.vehicles.plate, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
-      acc[vId].distance += Math.max(0, sub.distance || 0);
-      acc[vId].scaleDistance += Math.max(0, sub.scaleDistance || 0);
-      acc[vId].offScaleDistance += Math.max(0, sub.offScaleDistance || 0);
-      acc[vId].liters += Math.max(0, sub.liters || 0);
-      return acc;
-    }, {});
-  }, [filteredEnrichedData]);
+    const acc: Record<string, any> = {};
 
-  // Aggregated data for drivers
-  const driverAverages = useMemo(() => {
-    const acc: any = {};
-    
-    filteredEnrichedData
-      .filter((sub: any) => sub.details?.average_status === 'reviewed')
-      .forEach((sub: any) => {
-        const scheds = sub.intervalScheds || [];
+    schedules.forEach((s: any) => {
+      const sub = scheduleFuelMap[s.id];
+      if (!sub || sub.details?.average_status !== 'reviewed') return;
+
+      // Filter by schedule details
+      if (!passesFilters(s.start_at || s.created_at, s.vehicle_id, s.driver_id)) return;
+
+      const vId = s.vehicle_id || s.vehicles?.id;
+      const plate = s.vehicles?.plate || 'Desconhecido';
+      if (!vId) return;
+
+      // Find sibling schedules for the same fuel sub to calculate proportion ratio
+      const siblingScheds = schedules.filter(sibling => {
+        if (sibling.fuel_checklist_id === sub.id) return true;
         
-        if (scheds.length > 0) {
-            const totalScaleDist = Math.max(sub.scaleDistance, 1);
-
-            scheds.forEach((s: any) => {
-                const pId = s.driver_id || s.profiles?.id;
-                const pName = s.profiles?.full_name || 'Desconhecido';
-                if (!pId) return;
-
-                const startOdo = s.start_checklist?.odometer || 0;
-                const endOdo = s.end_checklist?.odometer || 0;
-                let sDist = 0;
-                if (endOdo > startOdo) sDist = endOdo - startOdo;
-
-                if (sDist === 0) return; // ignore schedules with 0 distance in distribution
-
-                const ratio = sDist / totalScaleDist;
-                const sLiters = sub.liters * ratio;
-
-                if (!acc[pId]) acc[pId] = { name: pName, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
-                
-                acc[pId].distance += sDist;
-                acc[pId].scaleDistance += sDist;
-                acc[pId].liters += sLiters;
-            });
+        const schedCompDate = new Date(sibling.end_at || sibling.start_at || sibling.created_at);
+        const lastFuelSub = enrichedData.find((e, idx) => {
+          const currentIdx = enrichedData.findIndex(item => item.id === sub.id);
+          return idx > currentIdx && e.vehicles?.id === sub.vehicles?.id;
+        });
+        
+        const isMatchVehicle = sibling.vehicle_id === sub.vehicles?.id;
+        if (!isMatchVehicle) return false;
+        
+        if (sibling.fuel_checklist_id && sibling.fuel_checklist_id !== sub.id) return false;
+        
+        if (lastFuelSub) {
+          return schedCompDate > new Date(lastFuelSub.created_at) && schedCompDate <= new Date(sub.created_at);
+        } else {
+          return schedCompDate <= new Date(sub.created_at);
         }
       });
+
+      const totalScaleDist = siblingScheds.reduce((sum, sibling) => {
+        const startOdo = sibling.start_checklist?.odometer || 0;
+        const endOdo = sibling.end_checklist?.odometer || 0;
+        return sum + Math.max(0, endOdo - startOdo);
+      }, 0);
+
+      const startOdo = s.start_checklist?.odometer || 0;
+      const endOdo = s.end_checklist?.odometer || 0;
+      const sDist = Math.max(0, endOdo - startOdo);
+
+      const ratio = totalScaleDist > 0 ? (sDist / totalScaleDist) : (1 / Math.max(1, siblingScheds.length));
+      const { liters } = getLitersInfo(sub.details);
+      const sLiters = liters * ratio;
+
+      if (!acc[vId]) {
+        acc[vId] = { plate, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
+      }
       
+      acc[vId].distance += sDist;
+      acc[vId].scaleDistance += sDist;
+      acc[vId].liters += sLiters;
+    });
+
     return acc;
-  }, [filteredEnrichedData]);
+  }, [enrichedData, schedules, startDate, endDate, filterVehicle, filterDriver, scheduleFuelMap]);
+
+  // Aggregated data for drivers based strictly on reviewed scale lines
+  const driverAverages = useMemo(() => {
+    const acc: Record<string, any> = {};
+
+    schedules.forEach((s: any) => {
+      const sub = scheduleFuelMap[s.id];
+      if (!sub || sub.details?.average_status !== 'reviewed') return;
+
+      // Filter by schedule details
+      if (!passesFilters(s.start_at || s.created_at, s.vehicle_id, s.driver_id)) return;
+
+      const pId = s.driver_id || s.profiles?.id;
+      const name = s.profiles?.full_name || 'Desconhecido';
+      if (!pId) return;
+
+      // Find sibling schedules for the same fuel sub to calculate proportion ratio
+      const siblingScheds = schedules.filter(sibling => {
+        if (sibling.fuel_checklist_id === sub.id) return true;
+        
+        const schedCompDate = new Date(sibling.end_at || sibling.start_at || sibling.created_at);
+        const lastFuelSub = enrichedData.find((e, idx) => {
+          const currentIdx = enrichedData.findIndex(item => item.id === sub.id);
+          return idx > currentIdx && e.vehicles?.id === sub.vehicles?.id;
+        });
+        
+        const isMatchVehicle = sibling.vehicle_id === sub.vehicles?.id;
+        if (!isMatchVehicle) return false;
+        
+        if (sibling.fuel_checklist_id && sibling.fuel_checklist_id !== sub.id) return false;
+        
+        if (lastFuelSub) {
+          return schedCompDate > new Date(lastFuelSub.created_at) && schedCompDate <= new Date(sub.created_at);
+        } else {
+          return schedCompDate <= new Date(sub.created_at);
+        }
+      });
+
+      const totalScaleDist = siblingScheds.reduce((sum, sibling) => {
+        const startOdo = sibling.start_checklist?.odometer || 0;
+        const endOdo = sibling.end_checklist?.odometer || 0;
+        return sum + Math.max(0, endOdo - startOdo);
+      }, 0);
+
+      const startOdo = s.start_checklist?.odometer || 0;
+      const endOdo = s.end_checklist?.odometer || 0;
+      const sDist = Math.max(0, endOdo - startOdo);
+
+      const ratio = totalScaleDist > 0 ? (sDist / totalScaleDist) : (1 / Math.max(1, siblingScheds.length));
+      const { liters } = getLitersInfo(sub.details);
+      const sLiters = liters * ratio;
+
+      if (!acc[pId]) {
+        acc[pId] = { name, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
+      }
+      
+      acc[pId].distance += sDist;
+      acc[pId].scaleDistance += sDist;
+      acc[pId].liters += sLiters;
+    });
+
+    return acc;
+  }, [enrichedData, schedules, startDate, endDate, filterVehicle, filterDriver, scheduleFuelMap]);
 
   const toggleReviewStatus = async (sub: any) => {
     try {
@@ -329,66 +446,239 @@ export default function AveragesTab() {
     if (!editingId) return;
     
     try {
-      const subToUpdate = scheduleFuelMap[editingId];
-      if (!subToUpdate) return;
-      const fuelSubId = subToUpdate.id;
-      
-      const newDetails = { ...subToUpdate.details };
-      // Instead of changing itemValues, we set adjusted_liters
-      if (editData.liters !== '') {
-        newDetails.adjusted_liters = editData.liters.toString().replace(',', '.');
-      } else {
-        newDetails.adjusted_liters = null; // reset to original
-      }
-      
-      if (editData.odometer !== '') {
-        newDetails.adjusted_odometer = editData.odometer.toString();
-      } else {
-        newDetails.adjusted_odometer = null;
-      }
-      
-      if (editData.date !== '') {
-        newDetails.adjusted_date = new Date(editData.date).toISOString();
-      } else {
-        newDetails.adjusted_date = null;
+      const s = schedules.find(sched => sched.id === editingId);
+      if (!s) return;
+
+      const manualLitersNum = parseFloat(editData.liters.toString().replace(',', '.'));
+      const manualOdoNum = parseInt(editData.odometer, 10);
+      const manualDateIso = new Date(editData.date).toISOString();
+
+      if (isNaN(manualLitersNum) || manualLitersNum <= 0) {
+        alert('Por favor, insira um valor válido para os litros.');
+        return;
       }
 
-      const { error } = await supabase.from('checklist_submissions')
-        .update({
-          details: newDetails
-        })
-        .eq('id', fuelSubId);
+      let targetFuelId = s.fuel_checklist_id;
 
-      if (error) throw error;
-      
-      alert('Abastecimento atualizado com sucesso!');
+      if (editData.fuelSelectId === 'manual') {
+        if (targetFuelId) {
+          // Update the existing linked fuel checklist
+          const { data: currentSub } = await supabase.from('checklist_submissions').select('details').eq('id', targetFuelId).single();
+          const currentDetails = currentSub?.details || {};
+          const newDetails = {
+            ...currentDetails,
+            adjusted_liters: manualLitersNum.toString(),
+            adjusted_odometer: manualOdoNum.toString(),
+            adjusted_date: manualDateIso,
+            average_status: 'reviewed'
+          };
+          if (!newDetails.itemTitles) newDetails.itemTitles = { manual_liters: "Litros (Manual)" };
+          if (!newDetails.itemValues) newDetails.itemValues = { manual_liters: manualLitersNum.toString() };
+
+          const { error: updErr } = await supabase.from('checklist_submissions')
+            .update({
+              odometer: manualOdoNum,
+              created_at: manualDateIso,
+              details: newDetails
+            })
+            .eq('id', targetFuelId);
+
+          if (updErr) throw updErr;
+        } else {
+          // Create a new fuel submission
+          const newDetails = {
+            itemTitles: { manual_liters: "Litros (Manual)" },
+            itemValues: { manual_liters: manualLitersNum.toString() },
+            adjusted_liters: manualLitersNum.toString(),
+            adjusted_odometer: manualOdoNum.toString(),
+            adjusted_date: manualDateIso,
+            average_status: 'reviewed'
+          };
+
+          const { data: insertedSub, error: insErr } = await supabase.from('checklist_submissions').insert([{
+            driver_id: s.driver_id,
+            vehicle_id: s.vehicle_id,
+            type: 'fuel',
+            odometer: manualOdoNum,
+            created_at: manualDateIso,
+            details: newDetails
+          }]).select();
+
+          if (insErr) throw insErr;
+          targetFuelId = insertedSub[0].id;
+
+          // Update the schedule row
+          const { error: updSchedErr } = await supabase.from('schedules')
+            .update({ fuel_checklist_id: targetFuelId })
+            .eq('id', s.id);
+
+          if (updSchedErr) throw updSchedErr;
+        }
+      } else {
+        // Link to already existing fuel submission
+        targetFuelId = editData.fuelSelectId;
+        const { error: updSchedErr } = await supabase.from('schedules')
+          .update({ fuel_checklist_id: targetFuelId })
+          .eq('id', s.id);
+
+        if (updSchedErr) throw updSchedErr;
+
+        // Also update that fuel submission row with adjusted values
+        const { data: currentSub } = await supabase.from('checklist_submissions').select('details').eq('id', targetFuelId).single();
+        const currentDetails = currentSub?.details || {};
+        const newDetails = {
+          ...currentDetails,
+          adjusted_liters: manualLitersNum.toString(),
+          adjusted_odometer: manualOdoNum.toString(),
+          adjusted_date: manualDateIso,
+          average_status: 'reviewed'
+        };
+
+        const { error: updErr } = await supabase.from('checklist_submissions')
+          .update({
+            odometer: manualOdoNum,
+            created_at: manualDateIso,
+            details: newDetails
+          })
+          .eq('id', targetFuelId);
+
+        if (updErr) throw updErr;
+      }
+
+      alert('Escala e abastecimento atualizados com sucesso!');
       setEditingId(null);
       await fetchData();
-    } catch (error) {
-      console.error('Erro ao atualizar', error);
-      alert('Erro ao atualizar abastecimento.');
+    } catch (err: any) {
+      console.error('Erro ao salvar edição:', err);
+      alert('Erro ao salvar abastecimento: ' + (err.message || err));
+    }
+  };
+
+  const handleCreateMediaSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addFormData.vehicle_id || !addFormData.driver_id || !addFormData.start_at || !addFormData.end_at || !addFormData.start_odometer || !addFormData.end_odometer) {
+      alert('Por favor, preencha todos os campos obrigatórios da escala.');
+      return;
+    }
+
+    try {
+      // 1. Create a checklist_submission of type 'start' for start odometer
+      const { data: startCheck, error: errStart } = await supabase.from('checklist_submissions').insert([{
+        driver_id: addFormData.driver_id,
+        vehicle_id: addFormData.vehicle_id,
+        odometer: parseInt(addFormData.start_odometer, 10),
+        type: 'start',
+        details: { info: 'Escala de média' }
+      }]).select();
+      if (errStart) throw errStart;
+
+      // 2. Create a checklist_submission of type 'end' for end odometer
+      const { data: endCheck, error: errEnd } = await supabase.from('checklist_submissions').insert([{
+        driver_id: addFormData.driver_id,
+        vehicle_id: addFormData.vehicle_id,
+        odometer: parseInt(addFormData.end_odometer, 10),
+        type: 'end',
+        details: { info: 'Escala de média' }
+      }]).select();
+      if (errEnd) throw errEnd;
+
+      let fuelChecklistId = null;
+
+      // 3. Create fuel checklist submission if liters are supplied
+      if (addFormData.liters) {
+        const litersNum = parseFloat(addFormData.liters.replace(',', '.'));
+        const fuelOdo = addFormData.litersOdometer ? parseInt(addFormData.litersOdometer, 10) : parseInt(addFormData.end_odometer, 10);
+        const fuelDateIso = addFormData.litersDate ? new Date(addFormData.litersDate).toISOString() : new Date(addFormData.end_at).toISOString();
+
+        if (addFormData.fuelSelectId === 'manual') {
+          const { data: fuelCheck, error: errFuel } = await supabase.from('checklist_submissions').insert([{
+            driver_id: addFormData.driver_id,
+            vehicle_id: addFormData.vehicle_id,
+            type: 'fuel',
+            odometer: fuelOdo,
+            created_at: fuelDateIso,
+            details: {
+              itemTitles: { manual_liters: "Litros (Manual)" },
+              itemValues: { manual_liters: litersNum.toString() },
+              adjusted_liters: litersNum.toString(),
+              adjusted_odometer: fuelOdo.toString(),
+              adjusted_date: fuelDateIso,
+              average_status: 'reviewed'
+            }
+          }]).select();
+          if (errFuel) throw errFuel;
+          fuelChecklistId = fuelCheck[0].id;
+        } else {
+          fuelChecklistId = addFormData.fuelSelectId;
+        }
+      }
+
+      // 4. Create the schedule linking them!
+      const { error: errSched } = await supabase.from('schedules').insert([{
+        driver_id: addFormData.driver_id,
+        vehicle_id: addFormData.vehicle_id,
+        start_at: new Date(addFormData.start_at).toISOString(),
+        end_at: new Date(addFormData.end_at).toISOString(),
+        start_checklist_id: startCheck[0].id,
+        end_checklist_id: endCheck[0].id,
+        fuel_checklist_id: fuelChecklistId
+      }]);
+
+      if (errSched) throw errSched;
+
+      alert('Escala criada e vinculada com sucesso!');
+      setShowAddModal(false);
+      // Reset form
+      setAddFormData({
+        vehicle_id: '',
+        driver_id: '',
+        start_at: '',
+        end_at: '',
+        start_odometer: '',
+        end_odometer: '',
+        fuelSelectId: 'manual',
+        liters: '',
+        litersOdometer: '',
+        litersDate: ''
+      });
+      await fetchData();
+    } catch (err: any) {
+      console.error('Erro ao adicionar escala:', err);
+      alert('Erro ao adicionar escala: ' + (err.message || err));
     }
   };
 
   const startEditing = (s: any) => {
-    // s is now a schedule
-    const sub = scheduleFuelMap[s.id];
-    if (!sub) return;
-
     setEditingId(s.id); // track editing by schedule 'id'
-    let dDate = new Date(sub.details?.adjusted_date || sub.created_at);
+    
+    const sub = scheduleFuelMap[s.id];
+    
+    let dDate = new Date(s.end_at || s.start_at || s.created_at);
     dDate.setMinutes(dDate.getMinutes() - dDate.getTimezoneOffset());
     
-    const { liters, litersId } = getLitersInfo(sub.details);
-    
-    setEditData({
-      odometer: sub.details?.adjusted_odometer !== undefined && sub.details?.adjusted_odometer !== null 
-        ? sub.details.adjusted_odometer.toString() 
-        : sub.odometer?.toString() || '',
-      liters: liters > 0 ? liters.toString() : '',
-      litersId: litersId,
-      date: dDate.toISOString().slice(0, 16)
-    });
+    if (sub) {
+      const { liters, litersId } = getLitersInfo(sub.details);
+      let fuelDate = new Date(sub.details?.adjusted_date || sub.created_at);
+      fuelDate.setMinutes(fuelDate.getMinutes() - fuelDate.getTimezoneOffset());
+      
+      setEditData({
+        odometer: sub.details?.adjusted_odometer !== undefined && sub.details?.adjusted_odometer !== null 
+          ? sub.details.adjusted_odometer.toString() 
+          : sub.odometer?.toString() || '',
+        liters: liters > 0 ? liters.toString() : '',
+        litersId: litersId,
+        date: fuelDate.toISOString().slice(0, 16),
+        fuelSelectId: sub.id
+      });
+    } else {
+      setEditData({
+        odometer: s.end_checklist?.odometer?.toString() || '',
+        liters: '',
+        litersId: null,
+        date: dDate.toISOString().slice(0, 16),
+        fuelSelectId: 'manual'
+      });
+    }
   };
 
   const tabs = [
@@ -641,16 +931,7 @@ export default function AveragesTab() {
                     return (
                       <tr key={s.id} className={editingId === s.id ? 'bg-blue-50/30' : ''}>
                         <td className="py-3 px-4 font-mono text-sm text-text-main align-middle">
-                          {editingId === s.id ? (
-                            <input 
-                              type="datetime-local" 
-                              className="bg-white border border-zinc-300 rounded px-2 py-1 text-xs"
-                              value={editData.date}
-                              onChange={(e) => setEditData({...editData, date: e.target.value})}
-                            />
-                          ) : (
-                            new Date(s.start_at || s.created_at).toLocaleString('pt-BR')
-                          )}
+                          {new Date(s.start_at || s.created_at).toLocaleString('pt-BR')}
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-sm text-text-main">{s.vehicles?.plate || '-'}</td>
                         <td className="py-3 px-4 font-bold text-sm text-text-main">{s.profiles?.full_name?.split(' ')[0] || '-'}</td>

@@ -88,16 +88,24 @@ export default function ChecklistDetailsModal({
       console.log("Issues encontradas:", issuesData);
 
       if (issuesData && issuesData.length > 0) {
-        // Buscar informações do veículo e motorista
+        // Buscar informações do veículo, reboque e motorista
         const vehicleIds = [
-          ...new Set(issuesData.map((i: any) => i.vehicle_id)),
+          ...new Set(issuesData.map((i: any) => i.vehicle_id).filter(Boolean)),
         ];
-        const driverIds = [...new Set(issuesData.map((i: any) => i.driver_id))];
+        const trailerIds = [
+          ...new Set(issuesData.map((i: any) => i.trailer_id).filter(Boolean)),
+        ];
+        const driverIds = [...new Set(issuesData.map((i: any) => i.driver_id).filter(Boolean))];
 
         const { data: vehicles } = await supabase
           .from("vehicles")
           .select("id, plate, model")
           .in("id", vehicleIds);
+
+        const { data: trailers } = await supabase
+          .from("trailers")
+          .select("id, plate, model")
+          .in("id", trailerIds);
 
         const { data: drivers } = await supabase
           .from("profiles")
@@ -107,6 +115,7 @@ export default function ChecklistDetailsModal({
         const issuesWithRelations = issuesData.map((issue: any) => ({
           ...issue,
           vehicles: vehicles?.find((v) => v.id === issue.vehicle_id),
+          trailers: trailers?.find((t) => t.id === issue.trailer_id),
           profiles: drivers?.find((d) => d.id === issue.driver_id),
         }));
 
@@ -151,15 +160,22 @@ export default function ChecklistDetailsModal({
         if (val === "defect" || val === "defeito") {
           const rawDefectInfo = selectedSub.details.defects?.[itemId];
 
-          // Handle both old single object and new array of objects
-          const subDefects = Array.isArray(rawDefectInfo)
-            ? rawDefectInfo
-            : [
-                rawDefectInfo || {
-                  description: "Nenhuma descrição fornecida",
-                  photoUrl: null,
-                },
-              ];
+          // Handle string structure, old single object and new array of objects
+          let subDefects: any[] = [];
+          if (typeof rawDefectInfo === "string") {
+            subDefects = [{ description: rawDefectInfo, photoUrl: null }];
+          } else if (Array.isArray(rawDefectInfo)) {
+            subDefects = rawDefectInfo;
+          } else if (rawDefectInfo) {
+            subDefects = [rawDefectInfo];
+          } else {
+            subDefects = [
+              {
+                description: "Nenhuma descrição fornecida",
+                photoUrl: null,
+              },
+            ];
+          }
 
           subDefects.forEach((defectInfo: any, index: number) => {
             const titleSuffix = subDefects.length > 1 ? ` (${index + 1})` : "";
@@ -169,9 +185,12 @@ export default function ChecklistDetailsModal({
                 (selectedSub.details.itemTitles?.[itemId] || `Item ${itemId}`) +
                 titleSuffix,
               description:
-                defectInfo?.description || "Nenhuma descrição fornecida",
-              photo_url: defectInfo?.photoUrl || null,
+                typeof defectInfo === "string"
+                  ? defectInfo
+                  : defectInfo?.description || "Nenhuma descrição fornecida",
+              photo_url: defectInfo?.photoUrl || defectInfo?.photo_url || null,
               vehicles: selectedSub.vehicles,
+              trailers: selectedSub.trailers,
               profiles: selectedSub.profiles,
               created_at: selectedSub.created_at,
             });
@@ -313,7 +332,7 @@ export default function ChecklistDetailsModal({
   const titleToId: Record<string, string> = {};
   if (selectedSub?.details?.itemTitles) {
     for (const [id, title] of Object.entries(selectedSub.details.itemTitles)) {
-      titleToId[title as string] = id;
+      titleToId[(title as string).toLowerCase().trim()] = id;
     }
   }
 
@@ -598,7 +617,7 @@ export default function ChecklistDetailsModal({
                         : null;
 
                       let originalDescription = null;
-                      const baseTitle = item.item_title.replace(/\s\(\d+\)$/, "");
+                      const baseTitle = item.item_title.replace(/\s\(\d+\)$/, "").toLowerCase().trim();
                       const itemId = titleToId[baseTitle];
 
                       if (
@@ -618,14 +637,25 @@ export default function ChecklistDetailsModal({
                           if (match) {
                             defIndex = parseInt(match[1]) - 1;
                           }
-                          const prevDefectsArray =
+                          const prevDefectsRaw =
                             firstEdit.previous_defects[itemId];
+                          let prevDefectsArray: any[] = [];
+                          if (typeof prevDefectsRaw === "string") {
+                            prevDefectsArray = [{ description: prevDefectsRaw }];
+                          } else if (Array.isArray(prevDefectsRaw)) {
+                            prevDefectsArray = prevDefectsRaw;
+                          } else if (prevDefectsRaw) {
+                            prevDefectsArray = [prevDefectsRaw];
+                          }
+
                           if (
                             prevDefectsArray &&
                             prevDefectsArray[defIndex]
                           ) {
-                            originalDescription =
-                              prevDefectsArray[defIndex].description;
+                            const defObj = prevDefectsArray[defIndex];
+                            originalDescription = typeof defObj === "string"
+                              ? defObj
+                              : defObj?.description || null;
                           }
                         }
                       }

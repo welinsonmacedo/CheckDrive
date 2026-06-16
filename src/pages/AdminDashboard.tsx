@@ -50,7 +50,6 @@ import RankingTab from "../components/admin/RankingTab";
 import DatabaseTab from "../components/admin/DatabaseTab";
 import ReportsTab from "../components/admin/ReportsTab";
 import AveragesTab from "../components/admin/AveragesTab";
-import ManualTab from "../components/admin/ManualTab";
 import FeedbackTab from "../components/admin/FeedbackTab";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -259,12 +258,6 @@ export default function AdminDashboard() {
       label: "Relatório Gerencial",
       color: "from-indigo-600 to-blue-600",
     },
-    {
-      id: "manual",
-      icon: BookOpen,
-      label: "Manual do Sistema",
-      color: "from-cyan-600 to-blue-600",
-    },
     ...(user?.role === "admin"
       ? [
           {
@@ -272,16 +265,6 @@ export default function AdminDashboard() {
             icon: History,
             label: "Auditoria",
             color: "from-slate-500 to-gray-500",
-          },
-        ]
-      : []),
-    ...(user?.role === "admin"
-      ? [
-          {
-            id: "database",
-            icon: HardDrive,
-            label: "Banco de Dados",
-            color: "from-blue-600 to-indigo-600",
           },
         ]
       : []),
@@ -515,7 +498,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <div className={`dashboard-scroll-area flex-1 flex flex-col h-full overflow-y-auto print:h-auto print:overflow-visible ${selectedSub ? 'print:hidden' : ''}`}>
+      <div className={`dashboard-scroll-area flex-1 flex flex-col h-full print:h-auto print:overflow-visible ${activeTab === 'notifications' ? 'overflow-hidden' : 'overflow-y-auto'} ${selectedSub ? 'print:hidden' : ''}`}>
         {/* Top Bar */}
         <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-8 py-4 flex items-center justify-between print:hidden">
           <div>
@@ -535,7 +518,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 p-8 space-y-6">
+        <div className={`flex-1 p-8 ${activeTab === 'notifications' ? 'flex flex-col overflow-hidden h-full' : 'space-y-6'}`}>
           {/* Vehicles with Pending Section */}
 
           {/* Tab Content */}
@@ -546,7 +529,7 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="print:h-auto print:overflow-visible"
+              className={`print:h-auto print:overflow-visible ${activeTab === 'notifications' ? 'flex-1 flex flex-col overflow-hidden h-full' : ''}`}
             >
               {activeTab === "overview" && (
                 <OverviewTab
@@ -556,7 +539,6 @@ export default function AdminDashboard() {
               )}
               {activeTab === "tracking" && <TrackingTab />}
               {activeTab === "reports" && <ReportsTab />}
-              {activeTab === "manual" && <ManualTab />}
               {activeTab === "adm_users" && <AdmUsersTab />}
               {activeTab === "drivers" && <DriversTab />}
               {activeTab === "vehicles" && <VehiclesTab />}
