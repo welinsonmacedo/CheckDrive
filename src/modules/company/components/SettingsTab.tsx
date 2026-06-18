@@ -55,13 +55,20 @@ export default function SettingsTab({
            require_location: appSettings.require_location,
            km_limit_enabled: appSettings.km_limit_enabled,
            max_km_limit: appSettings.max_km_limit,
+           manual_checklist_activate: appSettings.manual_checklist_activate ?? true,
         })
         .eq("id", "global");
       if (error) throw error;
       alert("Configurações salvas com sucesso.");
       fetchData();
     } catch (error: any) {
-      if (error.message && (error.message.includes("Could not find the 'km_limit_enabled'") || error.message.includes('column "km_limit_enabled" of relation "app_settings" does not exist'))) {
+      if (
+        error.message &&
+        (error.message.includes("Could not find the 'km_limit_enabled'") ||
+          error.message.includes('column "km_limit_enabled" of relation "app_settings" does not exist') ||
+          error.message.includes("Could not find the 'manual_checklist_activate'") ||
+          error.message.includes('column "manual_checklist_activate" of relation "app_settings" does not exist'))
+      ) {
         setSqlError("Oops, the database needs updating!");
       } else {
         alert("Erro: " + error.message);
@@ -182,12 +189,13 @@ export default function SettingsTab({
               {sqlError && (
                 <div className="bg-white p-6 rounded-3xl border border-app-border shadow-sm mb-4">
                    <h3 className="text-sm font-black text-danger uppercase tracking-tight mb-2">Atenção!</h3>
-                   <p className="text-sm text-zinc-600 mb-4">Para poder salvar o Limite de KM, precisamos adicionar as colunas no Supabase. Copie o SQL abaixo e cole no painel do Supabase:</p>
+                   <p className="text-sm text-zinc-600 mb-4">Para poder salvar as configurações, precisamos adicionar as colunas necessárias no Supabase. Copie o SQL abaixo e cole no painel do Supabase:</p>
                    <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl overflow-x-auto text-xs font-mono text-zinc-600">
                      <pre>
 {`ALTER TABLE public.app_settings 
 ADD COLUMN IF NOT EXISTS km_limit_enabled BOOLEAN DEFAULT false,
-ADD COLUMN IF NOT EXISTS max_km_limit NUMERIC DEFAULT 0;`}
+ADD COLUMN IF NOT EXISTS max_km_limit NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS manual_checklist_activate BOOLEAN DEFAULT true;`}
                      </pre>
                    </div>
                    <button type="button" onClick={() => setSqlError(null)} className="mt-4 px-4 py-2 bg-zinc-200 text-zinc-700 rounded-lg text-sm font-bold">Voltar</button>
@@ -428,6 +436,44 @@ ADD COLUMN IF NOT EXISTS max_km_limit NUMERIC DEFAULT 0;`}
                         </p>
                       </div>
                     )}
+                  </div>
+
+                  {/* Row 5: Checklist Manual */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-2xl bg-zinc-50 border border-zinc-100 hover:border-primary/20 transition-colors group">
+                    <div className="flex items-center gap-4 mb-4 sm:mb-0">
+                      <div className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 group-hover:text-primary transition-colors shrink-0">
+                        <Smartphone size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-zinc-800">
+                          Permitir Checklist Manual (Avulso)
+                        </h4>
+                        <p className="text-[11px] text-zinc-500 mt-1 max-w-sm leading-relaxed">
+                          Ativar ou desativar a permissão para os motoristas realizarem checklists avulsos sem agendamento/escala prévia no app.
+                        </p>
+                      </div>
+                    </div>
+                    <label className="flex items-center cursor-pointer shrink-0 ml-14 sm:ml-0">
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={appSettings?.manual_checklist_activate ?? true}
+                          onChange={(e) =>
+                            setAppSettings({
+                              ...appSettings,
+                              manual_checklist_activate: e.target.checked,
+                            })
+                          }
+                        />
+                        <div
+                          className={`block w-12 h-7 rounded-full shadow-inner transition-colors ${appSettings?.manual_checklist_activate !== false ? "bg-primary" : "bg-zinc-300"}`}
+                        ></div>
+                        <div
+                          className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${appSettings?.manual_checklist_activate !== false ? "transform translate-x-5" : ""}`}
+                        ></div>
+                      </div>
+                    </label>
                   </div>
                 </div>
               </div>

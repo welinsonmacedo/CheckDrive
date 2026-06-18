@@ -5,11 +5,6 @@ import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { supabase } from '@/src/lib/supabase';
 import localforage from 'localforage';
 
-// Limpar todo o cache do localforage no momento do carregamento (reload ou nova abertura)
-if (typeof window !== 'undefined') {
-  localforage.clear().catch(console.error);
-}
-
 export default function DriverLayout() {
   const { user } = useAuth();
   const location = useLocation();

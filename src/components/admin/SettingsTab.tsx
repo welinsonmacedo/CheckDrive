@@ -327,6 +327,44 @@ export default function SettingsTab({
                       </div>
                     </label>
                   </div>
+
+                  {/* Row 4: Checklist Manual */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-2xl bg-zinc-50 border border-zinc-100 hover:border-primary/20 transition-colors group">
+                    <div className="flex items-center gap-4 mb-4 sm:mb-0">
+                      <div className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 group-hover:text-primary transition-colors shrink-0">
+                        <Smartphone size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-zinc-800">
+                          Permitir Checklist Manual (Avulso)
+                        </h4>
+                        <p className="text-[11px] text-zinc-500 mt-1 max-w-sm leading-relaxed">
+                          Ativar ou desativar a permissão para os motoristas realizarem checklists avulsos sem agendamento/escala prévia no app.
+                        </p>
+                      </div>
+                    </div>
+                    <label className="flex items-center cursor-pointer shrink-0 ml-14 sm:ml-0">
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={appSettings?.manual_checklist_activate ?? true}
+                          onChange={(e) =>
+                            setAppSettings({
+                              ...appSettings,
+                              manual_checklist_activate: e.target.checked,
+                            })
+                          }
+                        />
+                        <div
+                          className={`block w-12 h-7 rounded-full shadow-inner transition-colors ${appSettings?.manual_checklist_activate !== false ? "bg-primary" : "bg-zinc-300"}`}
+                        ></div>
+                        <div
+                          className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${appSettings?.manual_checklist_activate !== false ? "transform translate-x-5" : ""}`}
+                        ></div>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </div>
 

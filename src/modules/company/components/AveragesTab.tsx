@@ -93,7 +93,12 @@ export default function AveragesTab() {
             end_checklist:checklist_submissions!end_checklist_id(id, odometer),
             fuel_checklist:checklist_submissions!fuel_checklist_id(id, details, created_at, odometer, vehicles(id, plate), profiles(id, full_name)),
             vehicles(id, plate),
-            profiles(id, full_name)
+            profiles(id, full_name),
+            adjusted_start_odometer,
+            adjusted_end_odometer,
+            adjusted_liters,
+            adjusted_fuel_date,
+            adjusted_status
           `)
           .order('created_at', { ascending: true }),
         supabase.from('checklist_items')
@@ -217,8 +222,12 @@ export default function AveragesTab() {
             });
 
             intervalScheds.forEach(s => {
-              const startOdo = s.start_checklist?.odometer || 0;
-              const endOdo = s.end_checklist?.odometer || 0;
+              const startOdo = s.adjusted_start_odometer !== null && s.adjusted_start_odometer !== undefined 
+                ? s.adjusted_start_odometer 
+                : (s.start_checklist?.odometer || 0);
+              const endOdo = s.adjusted_end_odometer !== null && s.adjusted_end_odometer !== undefined 
+                ? s.adjusted_end_odometer 
+                : (s.end_checklist?.odometer || 0);
               if (endOdo > startOdo) {
                 scaleDistance += (endOdo - startOdo);
               }
@@ -231,8 +240,12 @@ export default function AveragesTab() {
             // No last fuel sub, let's still map any explicitly linked schedules
             const intervalScheds = schedules.filter(s => s.fuel_checklist_id === sub.id);
             intervalScheds.forEach(s => {
-              const startOdo = s.start_checklist?.odometer || 0;
-              const endOdo = s.end_checklist?.odometer || 0;
+              const startOdo = s.adjusted_start_odometer !== null && s.adjusted_start_odometer !== undefined 
+                ? s.adjusted_start_odometer 
+                : (s.start_checklist?.odometer || 0);
+              const endOdo = s.adjusted_end_odometer !== null && s.adjusted_end_odometer !== undefined 
+                ? s.adjusted_end_odometer 
+                : (s.end_checklist?.odometer || 0);
               if (endOdo > startOdo) {
                 scaleDistance += (endOdo - startOdo);
               }
@@ -334,7 +347,8 @@ export default function AveragesTab() {
 
     schedules.forEach((s: any) => {
       const sub = scheduleFuelMap[s.id];
-      if (!sub || sub.details?.average_status !== 'reviewed') return;
+      const isReviewed = s.adjusted_status === 'reviewed' || (sub && sub.details?.average_status === 'reviewed');
+      if (!isReviewed) return;
 
       // Filter by schedule details
       if (!passesFilters(s.start_at || s.created_at, s.vehicle_id, s.driver_id)) return;
@@ -345,7 +359,8 @@ export default function AveragesTab() {
 
       // Find sibling schedules for the same fuel sub to calculate proportion ratio
       const siblingScheds = schedules.filter(sibling => {
-        if (sibling.fuel_checklist_id === sub.id) return true;
+        if (sibling.fuel_checklist_id === sub?.id) return true;
+        if (!sub) return false;
         
         const schedCompDate = new Date(sibling.end_at || sibling.start_at || sibling.created_at);
         const lastFuelSub = enrichedData.find((e, idx) => {
@@ -365,19 +380,32 @@ export default function AveragesTab() {
         }
       });
 
-      const totalScaleDist = siblingScheds.reduce((sum, sibling) => {
-        const startOdo = sibling.start_checklist?.odometer || 0;
-        const endOdo = sibling.end_checklist?.odometer || 0;
-        return sum + Math.max(0, endOdo - startOdo);
-      }, 0);
-
-      const startOdo = s.start_checklist?.odometer || 0;
-      const endOdo = s.end_checklist?.odometer || 0;
+      const startOdo = s.adjusted_start_odometer !== null && s.adjusted_start_odometer !== undefined 
+        ? s.adjusted_start_odometer 
+        : (s.start_checklist?.odometer || 0);
+      const endOdo = s.adjusted_end_odometer !== null && s.adjusted_end_odometer !== undefined 
+        ? s.adjusted_end_odometer 
+        : (s.end_checklist?.odometer || 0);
       const sDist = Math.max(0, endOdo - startOdo);
 
-      const ratio = totalScaleDist > 0 ? (sDist / totalScaleDist) : (1 / Math.max(1, siblingScheds.length));
-      const { liters } = getLitersInfo(sub.details);
-      const sLiters = liters * ratio;
+      let sLiters = 0;
+      if (s.adjusted_liters !== null && s.adjusted_liters !== undefined) {
+        sLiters = Number(s.adjusted_liters);
+      } else if (sub) {
+        const totalScaleDist = siblingScheds.reduce((sum, sibling) => {
+          const sibStart = sibling.adjusted_start_odometer !== null && sibling.adjusted_start_odometer !== undefined 
+            ? sibling.adjusted_start_odometer 
+            : (sibling.start_checklist?.odometer || 0);
+          const sibEnd = sibling.adjusted_end_odometer !== null && sibling.adjusted_end_odometer !== undefined 
+            ? sibling.adjusted_end_odometer 
+            : (sibling.end_checklist?.odometer || 0);
+          return sum + Math.max(0, sibEnd - sibStart);
+        }, 0);
+
+        const ratio = totalScaleDist > 0 ? (sDist / totalScaleDist) : (1 / Math.max(1, siblingScheds.length));
+        const { liters } = getLitersInfo(sub.details);
+        sLiters = liters * ratio;
+      }
 
       if (!acc[vId]) {
         acc[vId] = { plate, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
@@ -397,7 +425,8 @@ export default function AveragesTab() {
 
     schedules.forEach((s: any) => {
       const sub = scheduleFuelMap[s.id];
-      if (!sub || sub.details?.average_status !== 'reviewed') return;
+      const isReviewed = s.adjusted_status === 'reviewed' || (sub && sub.details?.average_status === 'reviewed');
+      if (!isReviewed) return;
 
       // Filter by schedule details
       if (!passesFilters(s.start_at || s.created_at, s.vehicle_id, s.driver_id)) return;
@@ -408,7 +437,8 @@ export default function AveragesTab() {
 
       // Find sibling schedules for the same fuel sub to calculate proportion ratio
       const siblingScheds = schedules.filter(sibling => {
-        if (sibling.fuel_checklist_id === sub.id) return true;
+        if (sibling.fuel_checklist_id === sub?.id) return true;
+        if (!sub) return false;
         
         const schedCompDate = new Date(sibling.end_at || sibling.start_at || sibling.created_at);
         const lastFuelSub = enrichedData.find((e, idx) => {
@@ -428,19 +458,32 @@ export default function AveragesTab() {
         }
       });
 
-      const totalScaleDist = siblingScheds.reduce((sum, sibling) => {
-        const startOdo = sibling.start_checklist?.odometer || 0;
-        const endOdo = sibling.end_checklist?.odometer || 0;
-        return sum + Math.max(0, endOdo - startOdo);
-      }, 0);
-
-      const startOdo = s.start_checklist?.odometer || 0;
-      const endOdo = s.end_checklist?.odometer || 0;
+      const startOdo = s.adjusted_start_odometer !== null && s.adjusted_start_odometer !== undefined 
+        ? s.adjusted_start_odometer 
+        : (s.start_checklist?.odometer || 0);
+      const endOdo = s.adjusted_end_odometer !== null && s.adjusted_end_odometer !== undefined 
+        ? s.adjusted_end_odometer 
+        : (s.end_checklist?.odometer || 0);
       const sDist = Math.max(0, endOdo - startOdo);
 
-      const ratio = totalScaleDist > 0 ? (sDist / totalScaleDist) : (1 / Math.max(1, siblingScheds.length));
-      const { liters } = getLitersInfo(sub.details);
-      const sLiters = liters * ratio;
+      let sLiters = 0;
+      if (s.adjusted_liters !== null && s.adjusted_liters !== undefined) {
+        sLiters = Number(s.adjusted_liters);
+      } else if (sub) {
+        const totalScaleDist = siblingScheds.reduce((sum, sibling) => {
+          const sibStart = sibling.adjusted_start_odometer !== null && sibling.adjusted_start_odometer !== undefined 
+            ? sibling.adjusted_start_odometer 
+            : (sibling.start_checklist?.odometer || 0);
+          const sibEnd = sibling.adjusted_end_odometer !== null && sibling.adjusted_end_odometer !== undefined 
+            ? sibling.adjusted_end_odometer 
+            : (sibling.end_checklist?.odometer || 0);
+          return sum + Math.max(0, sibEnd - sibStart);
+        }, 0);
+
+        const ratio = totalScaleDist > 0 ? (sDist / totalScaleDist) : (1 / Math.max(1, siblingScheds.length));
+        const { liters } = getLitersInfo(sub.details);
+        sLiters = liters * ratio;
+      }
 
       if (!acc[pId]) {
         acc[pId] = { name, distance: 0, scaleDistance: 0, offScaleDistance: 0, liters: 0 };
@@ -454,15 +497,12 @@ export default function AveragesTab() {
     return acc;
   }, [enrichedData, schedules, startDate, endDate, filterVehicle, filterDriver, scheduleFuelMap]);
 
-  const toggleReviewStatus = async (sub: any) => {
+  const toggleScheduleReviewStatus = async (s: any) => {
     try {
-      const newDetails = { ...sub.details };
-      const newStatus = newDetails.average_status === 'reviewed' ? 'pending' : 'reviewed';
-      newDetails.average_status = newStatus;
-      
-      const { error } = await supabase.from('checklist_submissions')
-        .update({ details: newDetails })
-        .eq('id', sub.id);
+      const newStatus = s.adjusted_status === 'reviewed' ? 'pending' : 'reviewed';
+      const { error } = await supabase.from('schedules')
+        .update({ adjusted_status: newStatus })
+        .eq('id', s.id);
         
       if (!error) {
         fetchData();
@@ -479,146 +519,35 @@ export default function AveragesTab() {
       const s = schedules.find(sched => sched.id === editingId);
       if (!s) return;
 
-      let startId = s.start_checklist_id;
-      let endId = s.end_checklist_id;
-
-      // Update or create start checklist
-      if (startId) {
-        await supabase.from('checklist_submissions')
-          .update({ odometer: parseInt(editData.start_odometer, 10) || 0, vehicle_id: editData.vehicle_id, driver_id: editData.driver_id })
-          .eq('id', startId);
-      } else if (editData.start_odometer) {
-        const { data: newStart } = await supabase.from('checklist_submissions').insert([{
-          driver_id: editData.driver_id,
-          vehicle_id: editData.vehicle_id,
-          odometer: parseInt(editData.start_odometer, 10),
-          type: 'start',
-          details: { info: 'Escala de média' }
-        }]).select();
-        if (newStart && newStart[0]) {
-          startId = newStart[0].id;
-        }
+      const startOdoNum = parseInt(editData.start_odometer, 10) || 0;
+      const endOdoNum = parseInt(editData.end_odometer, 10) || 0;
+      if (startOdoNum > endOdoNum) {
+        alert('Erro: O hodômetro final não pode ser menor que o hodômetro inicial.');
+        return;
       }
 
-      // Update or create end checklist
-      if (endId) {
-        await supabase.from('checklist_submissions')
-          .update({ odometer: parseInt(editData.end_odometer, 10) || 0, vehicle_id: editData.vehicle_id, driver_id: editData.driver_id })
-          .eq('id', endId);
-      } else if (editData.end_odometer) {
-        const { data: newEnd } = await supabase.from('checklist_submissions').insert([{
-          driver_id: editData.driver_id,
-          vehicle_id: editData.vehicle_id,
-          odometer: parseInt(editData.end_odometer, 10),
-          type: 'end',
-          details: { info: 'Escala de média' }
-        }]).select();
-        if (newEnd && newEnd[0]) {
-          endId = newEnd[0].id;
-        }
+      const manualLitersNum = parseFloat(editData.liters.toString().replace(',', '.'));
+      if (editData.liters && (isNaN(manualLitersNum) || manualLitersNum <= 0)) {
+        alert('Erro: A quantidade de litros deve ser maior que zero.');
+        return;
       }
 
-      let targetFuelId = s.fuel_checklist_id;
+      const manualOdoNum = parseInt(editData.odometer, 10) || null;
+      const manualDateIso = editData.date ? new Date(editData.date).toISOString() : null;
 
-      if (editData.fuelSelectId === 'manual') {
-        const manualLitersNum = parseFloat(editData.liters.toString().replace(',', '.'));
-        const manualOdoNum = parseInt(editData.odometer, 10) || parseInt(editData.end_odometer, 10) || 0;
-        const manualDateIso = editData.date ? new Date(editData.date).toISOString() : new Date(editData.end_at).toISOString();
-
-        if (!isNaN(manualLitersNum) && manualLitersNum > 0) {
-          if (targetFuelId) {
-            // Update existing linked fuel checklist
-            const { data: currentSub } = await supabase.from('checklist_submissions').select('details').eq('id', targetFuelId).single();
-            const currentDetails = currentSub?.details || {};
-            const newDetails = {
-              ...currentDetails,
-              adjusted_liters: manualLitersNum.toString(),
-              adjusted_odometer: manualOdoNum.toString(),
-              adjusted_date: manualDateIso,
-              average_status: 'reviewed'
-            };
-            if (!newDetails.itemTitles) newDetails.itemTitles = { manual_liters: "Litros (Manual)" };
-            if (!newDetails.itemValues) newDetails.itemValues = { manual_liters: manualLitersNum.toString() };
-
-            await supabase.from('checklist_submissions')
-              .update({
-                odometer: manualOdoNum,
-                created_at: manualDateIso,
-                details: newDetails,
-                vehicle_id: editData.vehicle_id,
-                driver_id: editData.driver_id
-              })
-              .eq('id', targetFuelId);
-          } else {
-            // Create target fuel check
-            const newDetails = {
-              itemTitles: { manual_liters: "Litros (Manual)" },
-              itemValues: { manual_liters: manualLitersNum.toString() },
-              adjusted_liters: manualLitersNum.toString(),
-              adjusted_odometer: manualOdoNum.toString(),
-              adjusted_date: manualDateIso,
-              average_status: 'reviewed'
-            };
-
-            const { data: insertedSub } = await supabase.from('checklist_submissions').insert([{
-              driver_id: editData.driver_id,
-              vehicle_id: editData.vehicle_id,
-              type: 'fuel',
-              odometer: manualOdoNum,
-              created_at: manualDateIso,
-              details: newDetails
-            }]).select();
-
-            if (insertedSub && insertedSub[0]) {
-              targetFuelId = insertedSub[0].id;
-            }
-          }
-        } else {
-          targetFuelId = null;
-        }
-      } else {
-        // Link to already existing fuel submission
-        targetFuelId = editData.fuelSelectId;
-        
-        const manualLitersNum = parseFloat(editData.liters.toString().replace(',', '.'));
-        const manualOdoNum = parseInt(editData.odometer, 10);
-        const manualDateIso = editData.date ? new Date(editData.date).toISOString() : null;
-
-        const { data: currentSub } = await supabase.from('checklist_submissions').select('details').eq('id', targetFuelId).single();
-        const currentDetails = currentSub?.details || {};
-        const newDetails = {
-          ...currentDetails,
-          average_status: 'reviewed'
-        };
-        if (!isNaN(manualLitersNum) && manualLitersNum > 0) {
-          newDetails.adjusted_liters = manualLitersNum.toString();
-        }
-        if (!isNaN(manualOdoNum) && manualOdoNum > 0) {
-          newDetails.adjusted_odometer = manualOdoNum.toString();
-        }
-        if (manualDateIso) {
-          newDetails.adjusted_date = manualDateIso;
-        }
-
-        await supabase.from('checklist_submissions')
-          .update({
-            details: newDetails,
-            ...(manualOdoNum ? { odometer: manualOdoNum } : {}),
-            ...(manualDateIso ? { created_at: manualDateIso } : {})
-          })
-          .eq('id', targetFuelId);
-      }
-
-      // Update schedule fields:
+      // Update the schedule row with all adjusted fields, driver, vehicle and time constraints
       const { error: updSchedFieldsErr } = await supabase.from('schedules')
         .update({
           driver_id: editData.driver_id || null,
           vehicle_id: editData.vehicle_id || null,
           start_at: new Date(editData.start_at).toISOString(),
           end_at: new Date(editData.end_at).toISOString(),
-          start_checklist_id: startId,
-          end_checklist_id: endId,
-          fuel_checklist_id: targetFuelId
+          adjusted_start_odometer: parseInt(editData.start_odometer, 10) || null,
+          adjusted_end_odometer: parseInt(editData.end_odometer, 10) || null,
+          adjusted_liters: !isNaN(manualLitersNum) && manualLitersNum > 0 ? manualLitersNum : null,
+          adjusted_fuel_date: manualDateIso,
+          adjusted_status: 'reviewed',
+          fuel_checklist_id: editData.fuelSelectId !== 'manual' ? editData.fuelSelectId : null
         })
         .eq('id', s.id);
 
@@ -637,6 +566,19 @@ export default function AveragesTab() {
     e.preventDefault();
     if (!addFormData.vehicle_id || !addFormData.driver_id || !addFormData.start_at || !addFormData.end_at || !addFormData.start_odometer || !addFormData.end_odometer) {
       alert('Por favor, preencha todos os campos obrigatórios da escala.');
+      return;
+    }
+
+    const startOdoNum = parseInt(addFormData.start_odometer, 10) || 0;
+    const endOdoNum = parseInt(addFormData.end_odometer, 10) || 0;
+    if (startOdoNum > endOdoNum) {
+      alert('Erro: O hodômetro final não pode ser menor que o hodômetro inicial.');
+      return;
+    }
+
+    const litersNumVal = parseFloat(addFormData.liters.toString().replace(',', '.'));
+    if (addFormData.liters && (isNaN(litersNumVal) || litersNumVal <= 0)) {
+      alert('Erro: A quantidade de litros deve ser maior que zero.');
       return;
     }
 
@@ -732,7 +674,7 @@ export default function AveragesTab() {
     
     const sub = scheduleFuelMap[s.id];
     
-    let dDate = new Date(s.end_at || s.start_at || s.created_at);
+    let dDate = new Date(s.adjusted_fuel_date || s.end_at || s.start_at || s.created_at);
     dDate.setMinutes(dDate.getMinutes() - dDate.getTimezoneOffset());
     
     let startIso = s.start_at ? new Date(s.start_at) : new Date(s.created_at);
@@ -741,39 +683,54 @@ export default function AveragesTab() {
     let endIso = s.end_at ? new Date(s.end_at) : new Date(s.created_at);
     endIso.setMinutes(endIso.getMinutes() - endIso.getTimezoneOffset());
 
+    const initialStartOdo = s.adjusted_start_odometer !== null && s.adjusted_start_odometer !== undefined
+      ? s.adjusted_start_odometer.toString()
+      : s.start_checklist?.odometer?.toString() || '0';
+      
+    const initialEndOdo = s.adjusted_end_odometer !== null && s.adjusted_end_odometer !== undefined
+      ? s.adjusted_end_odometer.toString()
+      : s.end_checklist?.odometer?.toString() || '0';
+
+    const initialLiters = s.adjusted_liters !== null && s.adjusted_liters !== undefined
+      ? s.adjusted_liters.toString()
+      : (sub ? getLitersInfo(sub.details).liters.toString() : '');
+
+    const initialOdo = s.adjusted_end_odometer !== null && s.adjusted_end_odometer !== undefined
+      ? s.adjusted_end_odometer.toString()
+      : (sub ? (sub.details?.adjusted_odometer || sub.odometer || '').toString() : '');
+
     if (sub) {
-      const { liters, litersId } = getLitersInfo(sub.details);
-      let fuelDate = new Date(sub.details?.adjusted_date || sub.created_at);
+      let fuelDate = new Date(s.adjusted_fuel_date || sub.details?.adjusted_date || sub.created_at);
       fuelDate.setMinutes(fuelDate.getMinutes() - fuelDate.getTimezoneOffset());
       
       setEditData({
-        odometer: sub.details?.adjusted_odometer !== undefined && sub.details?.adjusted_odometer !== null 
-          ? sub.details.adjusted_odometer.toString() 
-          : sub.odometer?.toString() || '',
-        liters: liters > 0 ? liters.toString() : '',
-        litersId: litersId,
+        odometer: initialOdo,
+        liters: initialLiters,
+        litersId: s.fuel_checklist_id || sub.id,
         date: fuelDate.toISOString().slice(0, 16),
-        fuelSelectId: sub.id,
+        fuelSelectId: s.fuel_checklist_id || sub.id,
         driver_id: s.driver_id || '',
         vehicle_id: s.vehicle_id || '',
         start_at: startIso.toISOString().slice(0, 16),
         end_at: endIso.toISOString().slice(0, 16),
-        start_odometer: s.start_checklist?.odometer?.toString() || '0',
-        end_odometer: s.end_checklist?.odometer?.toString() || '0'
+        start_odometer: initialStartOdo,
+        end_odometer: initialEndOdo
       });
     } else {
+      let fuelDate = s.adjusted_fuel_date ? new Date(s.adjusted_fuel_date) : dDate;
+      
       setEditData({
-        odometer: s.end_checklist?.odometer?.toString() || '',
-        liters: '',
+        odometer: initialOdo,
+        liters: initialLiters,
         litersId: null,
-        date: dDate.toISOString().slice(0, 16),
+        date: fuelDate.toISOString().slice(0, 16),
         fuelSelectId: 'manual',
         driver_id: s.driver_id || '',
         vehicle_id: s.vehicle_id || '',
         start_at: startIso.toISOString().slice(0, 16),
         end_at: endIso.toISOString().slice(0, 16),
-        start_odometer: s.start_checklist?.odometer?.toString() || '0',
-        end_odometer: s.end_checklist?.odometer?.toString() || '0'
+        start_odometer: initialStartOdo,
+        end_odometer: initialEndOdo
       });
     }
   };
@@ -785,7 +742,51 @@ export default function AveragesTab() {
   ];
 
   if (loading) {
-    return <div className="p-8 text-center text-zinc-500">Carregando médias...</div>;
+    return (
+      <div className="space-y-6 animate-pulse">
+        {/* Skeleton Filtros */}
+        <div className="bg-white p-4 rounded-3xl border border-app-border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex gap-2 mb-2 md:mb-0">
+            <div className="h-8 w-28 bg-zinc-200 rounded-xl"></div>
+            <div className="h-8 w-28 bg-zinc-100 rounded-xl"></div>
+            <div className="h-8 w-36 bg-zinc-100 rounded-xl"></div>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="h-8 w-24 bg-zinc-100 rounded-xl"></div>
+            <div className="h-8 w-24 bg-zinc-100 rounded-xl"></div>
+            <div className="h-8 w-24 bg-zinc-100 rounded-xl"></div>
+          </div>
+        </div>
+
+        {/* Skeleton Tabela / Conteúdo */}
+        <div className="bg-white rounded-3xl border border-app-border shadow-sm overflow-hidden p-6 space-y-6">
+          <div className="flex justify-between items-center">
+            <div className="h-6 w-48 bg-zinc-200 rounded-lg"></div>
+            <div className="h-5 w-32 bg-zinc-100 rounded-lg"></div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="h-10 bg-zinc-100 rounded-xl w-full"></div>
+            <div className="grid grid-cols-6 gap-4 py-2 border-b border-zinc-100">
+              <div className="h-4 bg-zinc-200 rounded col-span-2"></div>
+              <div className="h-4 bg-zinc-200 rounded"></div>
+              <div className="h-4 bg-zinc-200 rounded"></div>
+              <div className="h-4 bg-zinc-200 rounded"></div>
+              <div className="h-4 bg-zinc-200 rounded"></div>
+            </div>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="grid grid-cols-6 gap-4 py-3 border-b border-zinc-50 animate-pulse">
+                <div className="h-4 bg-zinc-100 rounded col-span-2" style={{ animationDelay: `${i * 100}ms` }}></div>
+                <div className="h-4 bg-zinc-100 rounded" style={{ animationDelay: `${i * 100}ms` }}></div>
+                <div className="h-4 bg-zinc-100 rounded" style={{ animationDelay: `${i * 100}ms` }}></div>
+                <div className="h-4 bg-zinc-100 rounded" style={{ animationDelay: `${i * 100}ms` }}></div>
+                <div className="h-4 bg-zinc-100 rounded" style={{ animationDelay: `${i * 100}ms` }}></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1000,8 +1001,12 @@ export default function AveragesTab() {
                       </td>
                     </tr>
                   ) : filteredSchedules.map((s: any) => {
-                    const startOdo = s.start_checklist?.odometer || 0;
-                    const endOdo = s.end_checklist?.odometer || 0;
+                    const startOdo = s.adjusted_start_odometer !== null && s.adjusted_start_odometer !== undefined
+                      ? s.adjusted_start_odometer
+                      : s.start_checklist?.odometer || 0;
+                    const endOdo = s.adjusted_end_odometer !== null && s.adjusted_end_odometer !== undefined
+                      ? s.adjusted_end_odometer
+                      : s.end_checklist?.odometer || 0;
                     const scheduleDistance = endOdo > startOdo ? endOdo - startOdo : 0;
                     
                     let liters = 0;
@@ -1011,7 +1016,13 @@ export default function AveragesTab() {
                     let fuelSub: any = null;
                     const mappedFuelSub = scheduleFuelMap[s.id];
 
-                    if (mappedFuelSub) {
+                    if (s.adjusted_liters !== null && s.adjusted_liters !== undefined) {
+                      liters = Number(s.adjusted_liters);
+                      hasAdjustment = true;
+                      if (scheduleDistance > 0 && liters > 0) {
+                        avg = (scheduleDistance / liters).toFixed(2);
+                      }
+                    } else if (mappedFuelSub) {
                        const { liters: L, hasAdjustment: hasAdj } = getLitersInfo(mappedFuelSub.details);
                        liters = L;
                        hasAdjustment = hasAdj;
@@ -1102,14 +1113,30 @@ export default function AveragesTab() {
                                 <span className="text-[9px] text-blue-600 font-bold">Registro vinculado existente</span>
                               )}
                             </div>
+                          ) : s.adjusted_liters !== null && s.adjusted_liters !== undefined ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-mono text-text-main">
+                                {s.adjusted_fuel_date ? new Date(s.adjusted_fuel_date).toLocaleString('pt-BR') : new Date(s.end_at || s.start_at || s.created_at).toLocaleString('pt-BR')}
+                              </span>
+                              <div>
+                                <span className="bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider">Manual</span>
+                              </div>
+                            </div>
                           ) : fuelSub ? (
                             <div className="flex flex-col gap-1">
                               <span className="text-xs font-mono text-text-main">
                                 {new Date(fuelSub.created_at).toLocaleString('pt-BR')}
                               </span>
-                              <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">
-                                Por: <span className="text-primary">{fuelSub.profiles?.full_name?.split(' ')[0] || '-'}</span>
-                              </span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">
+                                  Por: <span className="text-primary">{fuelSub.profiles?.full_name?.split(' ')[0] || '-'}</span>
+                                </span>
+                                {hasAdjustment && (
+                                  <div>
+                                    <span className="bg-amber-100 text-amber-800 border border-amber-200 px-1 py-0.2 rounded text-[8px] font-black uppercase tracking-wider">Manual</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           ) : (
                             <span className="text-xs text-zinc-400">- Sem Vínculo -</span>
@@ -1122,7 +1149,7 @@ export default function AveragesTab() {
                               <span className="text-[9px] uppercase font-bold text-zinc-400">Início:</span>
                               <input 
                                 type="number" 
-                                className="bg-white border border-zinc-300 rounded px-1.5 py-0.5 text-xs font-mono text-text-main w-full"
+                                className={`bg-white border rounded px-1.5 py-0.5 text-xs font-mono text-text-main w-full ${parseInt(editData.start_odometer, 10) > parseInt(editData.end_odometer, 10) ? 'border-red-500 bg-red-50' : 'border-zinc-300'}`}
                                 value={editData.start_odometer}
                                 onChange={(e) => setEditData({...editData, start_odometer: e.target.value})}
                                 placeholder="Km Inicial"
@@ -1130,11 +1157,14 @@ export default function AveragesTab() {
                               <span className="text-[9px] uppercase font-bold text-zinc-400">Fim:</span>
                               <input 
                                 type="number" 
-                                className="bg-white border border-zinc-300 rounded px-1.5 py-0.5 text-xs font-mono text-text-main w-full"
+                                className={`bg-white border rounded px-1.5 py-0.5 text-xs font-mono text-text-main w-full ${parseInt(editData.start_odometer, 10) > parseInt(editData.end_odometer, 10) ? 'border-red-500 bg-red-50' : 'border-zinc-300'}`}
                                 value={editData.end_odometer}
                                 onChange={(e) => setEditData({...editData, end_odometer: e.target.value})}
                                 placeholder="Km Final"
                               />
+                              {parseInt(editData.start_odometer, 10) > parseInt(editData.end_odometer, 10) && (
+                                <span className="text-[9px] text-red-500 font-bold leading-tight mt-0.5">Fim menor que início!</span>
+                              )}
                             </div>
                           ) : (
                             <div className="flex flex-col gap-0.5">
@@ -1162,19 +1192,28 @@ export default function AveragesTab() {
 
                         <td className="py-3 px-4 font-mono text-sm relative border-r border-app-border">
                            {editingId === s.id ? (
-                             <input 
-                               type="number" 
-                               step="0.01"
-                               className="w-20 bg-white border border-zinc-300 rounded px-2 py-1 text-xs font-mono"
-                               value={editData.liters}
-                               onChange={(e) => setEditData({...editData, liters: e.target.value})}
-                               placeholder="Lt."
-                             />
+                             <div className="flex flex-col">
+                               <input 
+                                 type="number" 
+                                 step="0.01"
+                                 className={`w-20 bg-white border rounded px-2 py-1 text-xs font-mono ${editData.liters && (isNaN(parseFloat(editData.liters.toString().replace(',', '.'))) || parseFloat(editData.liters.toString().replace(',', '.')) <= 0) ? 'border-red-500 bg-red-50' : 'border-zinc-300'}`}
+                                 value={editData.liters}
+                                 onChange={(e) => setEditData({...editData, liters: e.target.value})}
+                                 placeholder="Lt."
+                               />
+                               {editData.liters && (isNaN(parseFloat(editData.liters.toString().replace(',', '.'))) || parseFloat(editData.liters.toString().replace(',', '.')) <= 0) && (
+                                 <span className="text-[8px] text-red-500 font-bold block mt-0.5">Inválido!</span>
+                               )}
+                             </div>
                            ) : (
-                             <span className="flex items-center gap-1 font-bold">
-                               {liters > 0 ? `${liters.toFixed(2)} L` : '-'}
-                               {hasAdjustment && <span className="text-[10px] text-amber-500 font-black" title="Litros ajustados manualmente">*</span>}
-                             </span>
+                             <div className="flex flex-col gap-0.5 font-bold">
+                               <span>{liters > 0 ? `${liters.toFixed(2)} L` : '-'}</span>
+                               {hasAdjustment && (
+                                 <span className="text-[8px] text-amber-700 bg-amber-100 border border-amber-200 px-1 rounded uppercase tracking-wider font-extrabold w-max" title="Litros ajustados manualmente">
+                                   Manual
+                                 </span>
+                               )}
+                             </div>
                            )}
                         </td>
                         
@@ -1183,24 +1222,20 @@ export default function AveragesTab() {
                         </td>
                         
                         <td className="py-3 px-4 text-center">
-                          {mappedFuelSub ? (
-                            <button
-                              onClick={() => toggleReviewStatus(mappedFuelSub)}
-                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors ${
-                                mappedFuelSub.details?.average_status === 'reviewed' 
-                                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
-                                  : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                              }`}
-                            >
-                              {mappedFuelSub.details?.average_status === 'reviewed' ? (
-                                <><CheckCircle2 size={12} /> Revisado</>
-                              ) : (
-                                <><Clock size={12} /> Aguardando</>
-                              )}
-                            </button>
-                          ) : (
-                            <span className="inline-flex px-2 py-1 rounded-lg text-[9px] font-semibold bg-zinc-150 text-zinc-500 uppercase">Sem Dados</span>
-                          )}
+                          <button
+                            onClick={() => toggleScheduleReviewStatus(s)}
+                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-colors ${
+                              s.adjusted_status === 'reviewed' 
+                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' 
+                                : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                            }`}
+                          >
+                            {s.adjusted_status === 'reviewed' ? (
+                              <><CheckCircle2 size={12} /> Revisado</>
+                            ) : (
+                              <><Clock size={12} /> Aguardando</>
+                            )}
+                          </button>
                         </td>
                         
                         <td className="py-3 px-4">

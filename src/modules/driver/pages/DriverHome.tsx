@@ -11,6 +11,7 @@ export default function DriverHome() {
   const { user } = useAuth();
   const [driverInfo, setDriverInfo] = useState({ name: 'Carregando...', score: 0, checklists: 0, participates_in_ranking: true });
   const [systemType, setSystemType] = useState('points');
+  const [manualChecklistActivate, setManualChecklistActivate] = useState(true);
   const [schedulesToday, setSchedulesToday] = useState<any[]>([]);
   const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
   const [notifCount, setNotifCount] = useState(0);
@@ -46,8 +47,11 @@ export default function DriverHome() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: settings } = await supabase.from('app_settings').select('system_type').single();
-      if (settings) setSystemType(settings.system_type);
+      const { data: settings } = await supabase.from('app_settings').select('system_type, manual_checklist_activate').single();
+      if (settings) {
+        setSystemType(settings.system_type);
+        setManualChecklistActivate(settings.manual_checklist_activate !== false);
+      }
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -203,6 +207,7 @@ export default function DriverHome() {
     if (user?.isInternal) return false;
     // Se há escalas ATIVAS para hoje, bloqueia chamadas avulsas
     if (activeSchedules.length > 0) return true;
+    if (!manualChecklistActivate) return true;
     return false;
   };
 
@@ -341,40 +346,53 @@ export default function DriverHome() {
           <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">{user?.isInternal ? 'Gestão de Frota' : 'Operação Diária'}</h3>
           <div className="h-px flex-1 mx-4 bg-app-border" />
         </div>
-        <div className="grid gap-4">
-          {displayedTypes.map((type) => {
-            const done = isTypeDone(null, type.id);
-            const locked = isTypeLocked(type.id);
-            
-            return (
-              <motion.button
-                key={type.id}
-                whileTap={locked ? {} : { scale: 0.98 }}
-                disabled={locked}
-                onClick={() => navigate(`/checklist/${type.id}`)}
-                className={`w-full bento-card !p-4 flex-row items-center gap-5 group transition-all ${
-                  locked 
-                    ? 'opacity-60 grayscale cursor-not-allowed border-dashed bg-gray-50/50' 
-                    : 'hover:border-primary/30 active:bg-app-bg'
-                }`}
-              >
-                <div className={`${done ? 'bg-green-400 text-white' : type.bg + ' ' + type.color} p-4 rounded-xl group-hover:scale-105 transition-transform`}>
-                  <type.icon size={24} />
-                </div>
-                <div className="flex-1 text-left">
-                  <div className="flex items-center gap-2">
-                    <span className={`block font-bold text-base ${done ? 'text-green-600' : 'text-text-main'}`}>{type.label}</span>
-                    {done && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 text-[8px] font-black uppercase tracking-widest">FEITO</span>
-                    )}
+        
+        {!manualChecklistActivate && !user?.isInternal ? (
+          <div className="bg-red-50 border border-red-100 rounded-2xl p-5 flex gap-4 items-center">
+            <div className="w-10 h-10 bg-red-100 flex items-center justify-center rounded-xl text-red-600 shrink-0">
+              <AlertTriangle size={20} />
+            </div>
+            <div className="flex-1">
+              <span className="block font-black text-red-700 text-xs uppercase tracking-wider">Checklist Avulso Desativado</span>
+              <span className="block text-[#a82525] text-[11px] leading-tight font-semibold mt-0.5">A empresa desativou o envio de checklist manual. Utilize suas escalas disponíveis acima para realizar checklists obrigatórios.</span>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {displayedTypes.map((type) => {
+              const done = isTypeDone(null, type.id);
+              const locked = isTypeLocked(type.id);
+              
+              return (
+                <motion.button
+                  key={type.id}
+                  whileTap={locked ? {} : { scale: 0.98 }}
+                  disabled={locked}
+                  onClick={() => navigate(`/checklist/${type.id}`)}
+                  className={`w-full bento-card !p-4 flex-row items-center gap-5 group transition-all ${
+                    locked 
+                      ? 'opacity-60 grayscale cursor-not-allowed border-dashed bg-gray-50/50' 
+                      : 'hover:border-primary/30 active:bg-app-bg'
+                  }`}
+                >
+                  <div className={`${done ? 'bg-green-400 text-white' : type.bg + ' ' + type.color} p-4 rounded-xl group-hover:scale-105 transition-transform`}>
+                    <type.icon size={24} />
                   </div>
-                  <span className="block text-xs text-text-muted font-medium italic">{type.desc}</span>
-                </div>
-                {!locked && <ChevronRight size={20} className="text-app-border group-hover:text-primary transition-colors" />}
-              </motion.button>
-            );
-          })}
-        </div>
+                  <div className="flex-1 text-left">
+                    <div className="flex items-center gap-2">
+                      <span className={`block font-bold text-base ${done ? 'text-green-600' : 'text-text-main'}`}>{type.label}</span>
+                      {done && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 text-[8px] font-black uppercase tracking-widest">FEITO</span>
+                      )}
+                    </div>
+                    <span className="block text-xs text-text-muted font-medium italic">{type.desc}</span>
+                  </div>
+                  {!locked && <ChevronRight size={20} className="text-app-border group-hover:text-primary transition-colors" />}
+                </motion.button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Status Alert - Bento style */}

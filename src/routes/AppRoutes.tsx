@@ -1,5 +1,5 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { DriverGuard, CompanyGuard, SuperAdminGuard } from '@/src/modules/shared/components/auth/Guards';
 import { ProtectedRoute } from '@/src/modules/shared/components/auth/ProtectedRoute';
@@ -18,6 +18,20 @@ import AppLayout from '@/src/modules/shared/layouts/AppLayout';
 
 export default function AppRoutes() {
   const { user, logout } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    const path = location.pathname;
+    if (
+      path !== '/' &&
+      path !== '/login' &&
+      path !== '/reset-password' &&
+      path !== '/privacy' &&
+      !path.startsWith('/login')
+    ) {
+      localStorage.setItem('checkdrive_last_visited_path', path + location.search);
+    }
+  }, [location]);
   
   return (
     <Routes>
@@ -83,6 +97,11 @@ function RouteRedirector() {
   const { user, loading, isProfileLoading, isAuthenticated } = useAuth();
   if (loading || isProfileLoading) return null;
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
+
+  const savedPath = localStorage.getItem('checkdrive_last_visited_path');
+  if (savedPath && savedPath !== '/' && savedPath !== '/login' && savedPath !== '/dashboard') {
+    return <Navigate to={savedPath} replace />;
+  }
 
   if (user.role === 'superadmin') {
     return user.company_id ? <Navigate to="/admin/dashboard" replace /> : <Navigate to="/sa/dashboard" replace />;

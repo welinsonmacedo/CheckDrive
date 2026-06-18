@@ -16,10 +16,15 @@ export default function Login() {
 
   useEffect(() => {
     if (!authLoading && !isProfileLoading && isAuthenticated) {
-      if (user?.role === 'superadmin') {
-        navigate('/saas', { replace: true });
+      const savedPath = localStorage.getItem('checkdrive_last_visited_path');
+      if (savedPath && savedPath !== '/' && savedPath !== '/login' && savedPath !== '/dashboard') {
+        navigate(savedPath, { replace: true });
       } else {
-        navigate('/dashboard', { replace: true });
+        if (user?.role === 'superadmin') {
+          navigate('/saas', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
       }
     }
   }, [isAuthenticated, authLoading, isProfileLoading, navigate, user]);

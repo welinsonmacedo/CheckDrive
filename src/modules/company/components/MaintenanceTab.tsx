@@ -14,6 +14,10 @@ import {
   Trash2,
   Camera,
   Gauge,
+  Calendar,
+  Clock,
+  TrendingUp,
+  Wrench,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -22,9 +26,11 @@ import ManualIssueModal from "@/src/modules/company/components/ManualIssueModal"
 export default function MaintenanceTab() {
   const { user } = useAuth();
   const [issues, setIssues] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [odometers, setOdometers] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"pending" | "resolved">("pending");
+  const [activeTab, setActiveTab] = useState<"pending" | "waiting" | "resolved" | "tracking">("pending");
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
@@ -53,10 +59,130 @@ export default function MaintenanceTab() {
   const [resolveIntervalKm, setResolveIntervalKm] = useState("");
   const [resolveWarningKm, setResolveWarningKm] = useState("");
   const [isResolving, setIsResolving] = useState(false);
+  const [resolveSubStatus, setResolveSubStatus] = useState<"resolved" | "waiting">("resolved");
+
+  const [resolveNfs, setResolveNfs] = useState<any[]>([
+    {
+      id: "first",
+      nf_number: "",
+      nf_key: "",
+      items: [{ id: "first-item", name: "", quantity: 1, unit_price: 0 }]
+    }
+  ]);
+
+  const DEFAULT_CATALOG_ITEMS = [
+    "Pneu Dianteiro",
+    "Pneu Traseiro",
+    "Pastilha de Freio",
+    "Lona de Freio",
+    "Troca de Óleo de Motor",
+    "Filtro de Óleo",
+    "Filtro de Combustível",
+    "Filtro de Ar",
+    "Mão de Obra Mecânica",
+    "Troca de Lâmpada (Farol)",
+    "Alinhamento e Balanceamento",
+    "Lâmpada de Sinaleira",
+    "Líquido de Arrefecimento"
+  ];
+
+  const [catalogItems, setCatalogItems] = useState<string[]>(DEFAULT_CATALOG_ITEMS);
+  const [newItemName, setNewItemName] = useState("");
+  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
 
   useEffect(() => {
     fetchIssues();
+    fetchCatalog();
+    fetchAlertsData();
   }, []);
+
+  async function fetchAlertsData() {
+    try {
+      const { data: alertsData, error: alertsError } = await supabase
+        .from("auto_alerts")
+        .select(`
+          *,
+          vehicles (plate, model),
+          profiles (full_name)
+        `);
+
+      if (!alertsError && alertsData) {
+        setAlerts(alertsData);
+      }
+
+      const { data: submissions, error: subError } = await supabase
+        .from("checklist_submissions")
+        .select("vehicle_id, odometer, created_at")
+        .order("created_at", { ascending: false });
+
+      if (!subError && submissions) {
+        const latestOdometer: Record<string, number> = {};
+        submissions.forEach((sub) => {
+          if (sub.vehicle_id && !latestOdometer[sub.vehicle_id]) {
+            latestOdometer[sub.vehicle_id] = sub.odometer || 0;
+          }
+        });
+        setOdometers(latestOdometer);
+      }
+    } catch (err) {
+      console.warn("Error fetching alerts tracking data:", err);
+    }
+  }
+
+  async function fetchCatalog() {
+    try {
+      const { data, error } = await supabase
+        .from("maintenance_items_catalog")
+        .select("name")
+        .order("name");
+      
+      if (!error && data && data.length > 0) {
+        const dbNames = data.map((item: any) => item.name);
+        const uniqueNames = Array.from(new Set([...DEFAULT_CATALOG_ITEMS, ...dbNames]));
+        setCatalogItems(uniqueNames);
+      } else {
+        const local = localStorage.getItem("maintenance_catalog_items");
+        if (local) {
+          setCatalogItems(JSON.parse(local));
+        }
+      }
+    } catch (err) {
+      console.warn("Could not load catalog from DB, using defaults:", err);
+    }
+  }
+
+  async function handleRegisterCatalogItem(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    
+    if (catalogItems.some(item => item.toLowerCase() === trimmed.toLowerCase())) {
+      alert("Este item já está cadastrado!");
+      return;
+    }
+    
+    const updated = [...catalogItems, trimmed].sort();
+    setCatalogItems(updated);
+    localStorage.setItem("maintenance_catalog_items", JSON.stringify(updated));
+    setNewItemName("");
+    setShowAddItemDialog(false);
+    
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("company_id")
+        .eq("id", user?.id)
+        .single();
+        
+      if (profile?.company_id) {
+        await supabase.from("maintenance_items_catalog").insert({
+          company_id: profile.company_id,
+          name: trimmed
+        });
+      }
+    } catch (err) {
+      console.warn("Could not save registered item to Supabase", err);
+    }
+  }
 
   async function fetchIssues() {
     setLoading(true);
@@ -194,6 +320,7 @@ export default function MaintenanceTab() {
       );
 
       setIssues(combinedIssues);
+      fetchAlertsData();
     } catch (error) {
       console.error(error);
     }
@@ -206,7 +333,8 @@ export default function MaintenanceTab() {
     setResolvingIssueData(issue);
     setResolvingIssueId(issue.grouped_ids || [issue.id]);
     setSelectedIdsToResolve(issue.grouped_ids || [issue.id]);
-    setResolveNotes("");
+    setResolveNotes(issue.status === "waiting" ? (issue.resolution_notes || "") : "");
+    setResolveSubStatus("resolved");
     setResolveNf("");
     setResolveValue("");
     setResolvePhotos([]);
@@ -216,6 +344,15 @@ export default function MaintenanceTab() {
     setResolveCurrentKm("");
     setResolveIntervalKm("");
     setResolveWarningKm("");
+    setResolveNfs([
+      {
+        id: Date.now().toString(),
+        nf_number: "",
+        nf_key: "",
+        items: [{ id: `item-${Date.now()}`, name: "", quantity: 1, unit_price: 0 }]
+      }
+    ]);
+    setShowAddItemDialog(false);
 
     if (issue.auto_alerts) {
       if (issue.auto_alerts.trigger_type === "km") {
@@ -273,13 +410,20 @@ export default function MaintenanceTab() {
     }
 
     if (modalActionType === "resolve") {
-      if (resolvingIssueData?.auto_alerts?.trigger_type === "date" && !resolveNextDate) {
-         alert("Por favor, informe a próxima data de vencimento para o alerta.");
-         return;
-      }
-      if (resolvingIssueData?.auto_alerts?.trigger_type === "km" && !resolveCurrentKm) {
-         alert("Por favor, informe o KM da resolução para o alerta.");
-         return;
+      if (resolveSubStatus === "resolved") {
+        if (resolvingIssueData?.auto_alerts?.trigger_type === "date" && !resolveNextDate) {
+           alert("Por favor, informe a próxima data de vencimento para o alerta.");
+           return;
+        }
+        if (resolvingIssueData?.auto_alerts?.trigger_type === "km" && !resolveCurrentKm) {
+           alert("Por favor, informe o KM da resolução para o alerta.");
+           return;
+        }
+      } else {
+        if (!resolveNotes.trim()) {
+           alert("Por favor, informe a descrição/motivo do aguardo.");
+           return;
+        }
       }
     }
 
@@ -292,32 +436,81 @@ export default function MaintenanceTab() {
 
       // Upload photos if any
       const uploadedPhotos: string[] = [];
-      for (let i = 0; i < resolvePhotos.length; i++) {
-         const file = resolvePhotos[i];
-         const path = `${user?.id || 'unknown'}/resolution/${Date.now()}_${i}.jpg`;
-         const { error: uploadError } = await supabase.storage
-            .from("checklist-photos")
-            .upload(path, file);
-         if (!uploadError) uploadedPhotos.push(path);
+      if (resolveSubStatus === "resolved") {
+        for (let i = 0; i < resolvePhotos.length; i++) {
+           const file = resolvePhotos[i];
+           const path = `${user?.id || 'unknown'}/resolution/${Date.now()}_${i}.jpg`;
+           const { error: uploadError } = await supabase.storage
+              .from("checklist-photos")
+              .upload(path, file);
+           if (!uploadError) uploadedPhotos.push(path);
+        }
       }
 
-      const { error: updateError } = await supabase
-        .from("checklist_issues")
-        .update({
+      const calculatedValueSum = resolveSubStatus === "resolved" ? resolveNfs.reduce((acc, nf) => {
+        const nfSum = nf.items.reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0);
+        return acc + nfSum;
+      }, 0) : 0;
+
+      const nfsJSONString = resolveSubStatus === "resolved" ? JSON.stringify(resolveNfs) : null;
+
+      let updateError;
+      try {
+        const updatePayload: any = resolveSubStatus === "waiting" ? {
+          status: "waiting",
+          resolution_notes: resolveNotes,
+          resolution_nf: null,
+          resolution_nfs: null,
+          resolution_value: 0,
+          resolution_photos: null,
+          resolved_at: null,
+          resolved_by: null,
+        } : {
           status: "resolved",
           resolution_notes: resolveNotes,
-          resolution_nf: resolveNf,
-          resolution_value: resolveValue ? Number(resolveValue) : null,
+          resolution_nf: nfsJSONString,
+          resolution_nfs: resolveNfs,
+          resolution_value: calculatedValueSum,
           resolution_photos: uploadedPhotos,
           resolved_at: new Date().toISOString(),
           resolved_by: user?.id,
-        })
-        .in("id", selectedIdsToResolve);
+        };
+
+        const { error } = await supabase
+          .from("checklist_issues")
+          .update(updatePayload as any)
+          .in("id", selectedIdsToResolve);
+        updateError = error;
+      } catch (e: any) {
+        const updatePayload: any = resolveSubStatus === "waiting" ? {
+          status: "waiting",
+          resolution_notes: resolveNotes,
+          resolution_nf: null,
+          resolution_value: 0,
+          resolution_photos: null,
+          resolved_at: null,
+          resolved_by: null,
+        } : {
+          status: "resolved",
+          resolution_notes: resolveNotes,
+          resolution_nf: nfsJSONString,
+          resolution_value: calculatedValueSum,
+          resolution_photos: uploadedPhotos,
+          resolved_at: new Date().toISOString(),
+          resolved_by: user?.id,
+        };
+
+        const { error } = await supabase
+          .from("checklist_issues")
+          .update(updatePayload)
+          .in("id", selectedIdsToResolve);
+        updateError = error;
+      }
         
       if (updateError) throw updateError;
 
       // Check if we need to update a date-based auto_alert
-      if (resolvingIssueData?.auto_alerts?.trigger_type === "date" && resolveNextDate) {
+      if (resolveSubStatus === "resolved" && resolvingIssueData?.auto_alerts?.trigger_type === "date" && resolveNextDate) {
          await supabase.from("auto_alerts").update({
             trigger_date: resolveNextDate,
             warning_days: resolveWarningDays ? Number(resolveWarningDays) : resolvingIssueData.auto_alerts.warning_days
@@ -325,7 +518,7 @@ export default function MaintenanceTab() {
       }
 
       // Check if we need to update a km-based auto_alert
-      if (resolvingIssueData?.auto_alerts?.trigger_type === "km" && resolveCurrentKm) {
+      if (resolveSubStatus === "resolved" && resolvingIssueData?.auto_alerts?.trigger_type === "km" && resolveCurrentKm) {
          await supabase.from("auto_alerts").update({
             last_km: Number(resolveCurrentKm),
             interval_km: resolveIntervalKm ? Number(resolveIntervalKm) : resolvingIssueData.auto_alerts.interval_km,
@@ -345,6 +538,14 @@ export default function MaintenanceTab() {
       setResolveCurrentKm("");
       setResolveIntervalKm("");
       setResolveWarningKm("");
+      setResolveNfs([
+        {
+          id: Date.now().toString(),
+          nf_number: "",
+          nf_key: "",
+          items: [{ id: `item-${Date.now()}`, name: "", quantity: 1, unit_price: 0 }]
+        }
+      ]);
       setSqlError(null);
       fetchIssues();
     } catch (err: any) {
@@ -471,7 +672,15 @@ export default function MaintenanceTab() {
     );
 
   const pendingCount = issues.filter((i) => i.status === "pending").length;
+  const waitingCount = issues.filter((i) => i.status === "waiting").length;
   const resolvedCount = issues.filter((i) => i.status === "resolved").length;
+
+  const filteredAlertsForTracking = alerts.filter((alert) => {
+    const titleMatch = (alert.title || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const vehicleMatch = (alert.vehicles?.plate || "").toLowerCase().includes(searchTerm.toLowerCase()) || (alert.vehicles?.model || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const driverMatch = (alert.profiles?.full_name || "").toLowerCase().includes(searchTerm.toLowerCase());
+    return titleMatch || vehicleMatch || driverMatch;
+  });
 
   return (
     <div className="space-y-6">
@@ -490,8 +699,24 @@ export default function MaintenanceTab() {
               <AlertCircle size={16} />
               Pendentes
               {pendingCount > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-xs bg-red-100 text-red-600 rounded-full">
+                <span className="ml-1 px-2 py-0.5 text-xs bg-red-100 text-red-600 rounded-full font-bold">
                   {pendingCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => { setActiveTab("waiting"); setSelectedRows([]); }}
+              className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                activeTab === "waiting"
+                  ? "text-primary border-b-2 border-primary bg-primary/5"
+                  : "text-text-muted hover:text-text-main hover:bg-gray-50"
+              }`}
+            >
+              <Clock size={16} />
+              Aguardando
+              {waitingCount > 0 && (
+                <span className="ml-1 px-2 py-0.5 text-xs bg-amber-100 text-amber-600 rounded-full font-bold">
+                  {waitingCount}
                 </span>
               )}
             </button>
@@ -506,8 +731,24 @@ export default function MaintenanceTab() {
               <CheckCircle size={16} />
               Resolvidos
               {resolvedCount > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-xs bg-green-100 text-green-600 rounded-full">
+                <span className="ml-1 px-2 py-0.5 text-xs bg-green-100 text-green-600 rounded-full font-bold">
                   {resolvedCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => { setActiveTab("tracking"); setSelectedRows([]); }}
+              className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                activeTab === "tracking"
+                  ? "text-primary border-b-2 border-primary bg-primary/5"
+                  : "text-text-muted hover:text-text-main hover:bg-gray-50"
+              }`}
+            >
+              <Wrench size={16} />
+              Acompanhamento
+              {alerts.length > 0 && (
+                <span className="ml-1 px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full font-bold font-sans">
+                  {alerts.length}
                 </span>
               )}
             </button>
@@ -515,17 +756,237 @@ export default function MaintenanceTab() {
         </div>
       </div>
 
-      {/* Lista de Pendências */}
-      <div className="bento-card !p-0 overflow-hidden">
+      {activeTab === "tracking" ? (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-app-border shadow-sm">
+            <div>
+              <h3 className="text-base font-black text-text-main tracking-tight flex items-center gap-2 font-sans">
+                <Wrench size={18} className="text-primary text-blue-600" />
+                Acompanhamento de Manutenções
+              </h3>
+              <p className="text-xs text-text-muted mt-1 font-sans">
+                Monitore as revisões por KM e prazos por data configurados nos alertas de sua frota.
+              </p>
+            </div>
+            
+            <div className="relative w-full md:w-80">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+              />
+              <input
+                type="text"
+                placeholder="Filtrar veículo, motorista ou item..."
+                className="h-9 w-full pl-9 pr-4 bg-app-bg rounded-xl text-xs border border-app-border focus:ring-1 focus:ring-primary focus:outline-none"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {filteredAlertsForTracking.length === 0 ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-app-border shadow-sm">
+              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Wrench size={32} />
+              </div>
+              <h4 className="text-sm font-bold text-text-main font-sans">Nenhuma manutenção monitorada encontrada</h4>
+              <p className="text-xs text-text-muted max-w-sm mx-auto mt-1 font-sans">
+                Cadastre novas regras de alertas de KM ou Data na aba "Alertas" para iniciar o acompanhamento.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredAlertsForTracking.map((alert) => {
+                const isKm = alert.trigger_type === "km";
+                
+                // Dynamic Calculations
+                let statusBadgeColor = "bg-green-50 text-green-700 border-green-200";
+                let statusText = "Em dia";
+                let progressPct = 0;
+                let statsContent = null;
+                
+                if (isKm) {
+                  const currentKm = odometers[alert.target_vehicle_id] || 0;
+                  const intervalKm = Number(alert.interval_km) || 0;
+                  const lastKm = Number(alert.last_km) || 0;
+                  const targetKm = lastKm + intervalKm;
+                  const remainingKm = targetKm - currentKm;
+                  
+                  if (intervalKm > 0) {
+                    progressPct = ((currentKm - lastKm) / intervalKm) * 100;
+                  }
+                  progressPct = Math.max(0, Math.round(progressPct));
+                  const clampedProgressPct = Math.min(100, progressPct);
+                  
+                  const isOverdue = remainingKm <= 0;
+                  const isNear = remainingKm > 0 && remainingKm <= (Number(alert.warning_km) || 1000);
+                  
+                  if (isOverdue) {
+                    statusBadgeColor = "bg-red-50 text-red-700 border-red-200 animate-pulse";
+                    statusText = "Atrasada / Vencida";
+                  } else if (isNear) {
+                    statusBadgeColor = "bg-orange-50 text-orange-700 border-orange-200";
+                    statusText = "Vence em breve";
+                  }
+                  
+                  statsContent = (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-3 gap-2 bg-zinc-50 p-3 rounded-2xl border border-zinc-100">
+                        <div className="text-center">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">KM Atual</span>
+                          <span className="text-xs font-bold text-zinc-700 font-sans">{currentKm.toLocaleString("pt-BR")} KM</span>
+                        </div>
+                        <div className="text-center border-x border-zinc-200">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">Falta</span>
+                          <span className={`text-xs font-black font-sans ${isOverdue ? "text-red-650" : "text-zinc-700"}`}>
+                            {isOverdue ? `${Math.abs(remainingKm).toLocaleString("pt-BR")} KM d+` : `${remainingKm.toLocaleString("pt-BR")} KM`}
+                          </span>
+                        </div>
+                        <div className="text-center">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">KM Alvo</span>
+                          <span className="text-xs font-bold text-primary font-mono">{targetKm.toLocaleString("pt-BR")} KM</span>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 font-sans">
+                          <span>Desgaste / Intervalo ({intervalKm.toLocaleString("pt-BR")} KM)</span>
+                          <span>{progressPct}%</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              isOverdue 
+                                ? "bg-red-500" 
+                                : isNear 
+                                ? "bg-orange-500" 
+                                : "bg-green-500"
+                            }`}
+                            style={{ width: `${clampedProgressPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // Date-based Alert
+                  let daysRemaining = 0;
+                  let targetDateStr = "Não Definida";
+                  let isOverdue = false;
+                  let isNear = false;
+                  
+                  if (alert.trigger_date) {
+                    const targetDate = new Date(alert.trigger_date + "T00:00:00");
+                    targetDateStr = targetDate.toLocaleDateString("pt-BR");
+                    
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const diffTime = targetDate.getTime() - today.getTime();
+                    daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    isOverdue = daysRemaining < 0;
+                    isNear = daysRemaining >= 0 && daysRemaining <= (Number(alert.warning_days) || 7);
+                    
+                    if (isOverdue) {
+                      statusBadgeColor = "bg-red-50 text-red-700 border-red-200";
+                      statusText = `Atrasada (${Math.abs(daysRemaining)} d)`;
+                    } else if (isNear) {
+                      statusBadgeColor = "bg-orange-50 text-orange-700 border-orange-200";
+                      statusText = daysRemaining === 0 ? "Vence HOJE" : `Vence em ${daysRemaining} dias`;
+                    } else {
+                      statusBadgeColor = "bg-green-50 text-green-700 border-green-200";
+                      statusText = `Vence em ${daysRemaining} dias`;
+                    }
+                  }
+                  
+                  statsContent = (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 bg-zinc-50 p-3 rounded-2xl border border-zinc-100">
+                        <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+                          <Calendar size={18} />
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">Agendada Para</span>
+                          <span className="text-sm font-bold text-zinc-700 font-sans">{targetDateStr}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">Tempo Restante</span>
+                          <span className={`text-sm font-black font-sans ${isOverdue ? "text-red-655 font-black font-sans" : "text-zinc-700"}`}>
+                            {isOverdue ? `Atraso ${Math.abs(daysRemaining)} d` : `${daysRemaining} dias`}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="text-[10px] text-zinc-400 italic text-center font-medium font-sans">
+                        Alerta configurado com antecedência de {alert.warning_days || 0} dias.
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div key={alert.id} className="bg-white rounded-3xl border border-app-border p-5 shadow-sm space-y-4 hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between">
+                    <div className="space-y-3">
+                      {/* Header */}
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-650 font-sans">
+                              {isKm ? "Quilometragem (KM)" : "Calendário (Data)"}
+                            </span>
+                            <span className={`text-[9px] font-bold uppercase tracking-wide border px-2 py-0.5 rounded-full font-sans ${statusBadgeColor}`}>
+                              {statusText}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-black text-text-main line-clamp-1 font-sans" title={alert.title}>
+                            {alert.title}
+                          </h4>
+                        </div>
+                        <div className="p-2 bg-primary/5 text-primary rounded-xl shrink-0">
+                          {isKm ? <Gauge size={16} /> : <Calendar size={16} />}
+                        </div>
+                      </div>
+                      
+                      {/* Targets */}
+                      <div className="border-t border-zinc-100 pt-3 space-y-1 text-xs text-text-muted">
+                        {alert.vehicles && (
+                          <div className="flex justify-between font-sans">
+                            <span>Veículo:</span>
+                            <span className="font-bold text-text-main">{alert.vehicles.plate} {alert.vehicles.model ? `(${alert.vehicles.model})` : ""}</span>
+                          </div>
+                        )}
+                        {alert.profiles && (
+                          <div className="flex justify-between font-sans">
+                            <span>Motorista:</span>
+                            <span className="font-bold text-text-main">{alert.profiles.full_name}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-zinc-100 pt-4">
+                      {statsContent}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Lista de Pendências */
+        <div className="bento-card !p-0 overflow-hidden">
         <div className="p-5 border-b border-app-border flex items-center justify-between">
           <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
             {activeTab === "pending"
               ? "Pendências de Manutenção"
-              : "Manutenções Resolvidas"}
+              : activeTab === "waiting"
+                ? "Manutenções em Aguardo"
+                : "Manutenções Resolvidas"}
           </span>
 
           <div className="flex items-center gap-4">
-            {selectedRows.length > 0 && activeTab === "pending" && user?.role === "admin" && (
+            {selectedRows.length > 0 && (activeTab === "pending" || activeTab === "waiting") && user?.role === "admin" && (
               <button
                 onClick={handleBulkDelete}
                 className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors uppercase tracking-wider"
@@ -575,6 +1036,18 @@ export default function MaintenanceTab() {
                     Todas as manutenções estão em dia.
                   </p>
                 </>
+              ) : activeTab === "waiting" ? (
+                <>
+                  <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center">
+                    <Clock size={32} className="text-amber-500" />
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Nenhuma pendência em aguardo encontrada!
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Insira itens em "Aguardando" se precisar aguardar peças ou serviços.
+                  </p>
+                </>
               ) : (
                 <>
                   <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
@@ -595,7 +1068,7 @@ export default function MaintenanceTab() {
             <table className="w-full text-left">
               <thead className="bg-app-bg/50">
                 <tr>
-                  {activeTab === "pending" && user?.role === "admin" && (
+                  {(activeTab === "pending" || activeTab === "waiting") && user?.role === "admin" && (
                     <th className="px-5 py-3 w-10">
                       <input
                         type="checkbox"
@@ -645,7 +1118,7 @@ export default function MaintenanceTab() {
                       key={issue.id}
                       className={`transition-colors ${selectedRows.includes(issue.id) ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-gray-50'}`}
                     >
-                      {activeTab === "pending" && user?.role === "admin" && (
+                      {(activeTab === "pending" || activeTab === "waiting") && user?.role === "admin" && (
                         <td className="px-5 py-4 w-10">
                           <input
                             type="checkbox"
@@ -738,6 +1211,47 @@ export default function MaintenanceTab() {
                           </div>
                         )}
 
+                        {issue.status === "waiting" && (
+                          <div className="flex items-start justify-end gap-4 text-left">
+                            <div className="flex-1 max-w-[200px]">
+                              <div className="text-xs text-amber-600 font-bold flex items-center gap-1">
+                                <Clock size={12} />
+                                Em Aguardo
+                              </div>
+                              {issue.resolution_notes && (
+                                <div className="text-zinc-500 text-[11px] mt-1 italic break-words leading-tight">
+                                  "{issue.resolution_notes}"
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex justify-end items-center gap-1.5 shrink-0">
+                              {user?.role === "admin" && (
+                                <button
+                                  onClick={() => openResolveModal(issue, 'delete')}
+                                  title="Excluir pendência"
+                                  className="w-8 h-8 flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors border border-red-100"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleRevertIssue(issue)}
+                                title="Voltar para Pendentes"
+                                className="w-8 h-8 flex items-center justify-center bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors border border-orange-100"
+                              >
+                                <Undo size={14} />
+                              </button>
+                              <button
+                                onClick={() => openResolveModal(issue)}
+                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 text-xs font-bold transition-colors"
+                              >
+                                <CheckCircle2 size={12} />
+                                Resolver
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {issue.status === "resolved" && (
                           <div className="flex items-start justify-end gap-6 text-left">
                             <div className="flex-1 max-w-[200px]">
@@ -752,13 +1266,54 @@ export default function MaintenanceTab() {
                                 </div>
                               )}
                               
-                              {issue.resolution_nf && (
-                                <div className="text-zinc-600 text-[10px] mt-1 font-bold uppercase tracking-widest">
-                                  NF: {issue.resolution_nf}
-                                </div>
-                              )}
-                              {issue.resolution_value > 0 && (
-                                <div className="text-primary text-[10px] font-black uppercase tracking-widest">
+                              {issue.resolution_nf && (() => {
+                                try {
+                                  const nfs = JSON.parse(issue.resolution_nf);
+                                  if (Array.isArray(nfs)) {
+                                    return (
+                                      <div className="mt-2 space-y-2 bg-zinc-50 border border-zinc-150 rounded-xl p-2 max-w-[200px]">
+                                        <div className="text-[9px] uppercase font-bold text-zinc-400">Notas Fiscais:</div>
+                                        {nfs.map((nf: any, idx: number) => {
+                                          const nfSum = nf.items?.reduce((curSum: number, item: any) => curSum + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0) || 0;
+                                          return (
+                                            <div key={nf.id || idx} className="text-[10px] border-b border-zinc-200 last:border-b-0 pb-1.5 last:pb-0 space-y-0.5">
+                                              <div className="flex justify-between items-center font-bold text-zinc-700">
+                                                <span>NF #{nf.nf_number || "S/N"}</span>
+                                                <span className="text-primary font-black">R$ {nfSum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                              </div>
+                                              {nf.nf_key && (
+                                                <div className="text-[9px] text-zinc-500 font-mono break-all leading-tight">
+                                                  <span className="text-[8px] uppercase text-zinc-400 font-semibold block">Chave:</span>
+                                                  {nf.nf_key}
+                                                </div>
+                                              )}
+                                              {nf.items && nf.items.length > 0 && (
+                                                <div className="mt-1 bg-white border border-zinc-100 rounded p-1 space-y-0.5">
+                                                  {nf.items.map((item: any, itemIdx: number) => (
+                                                    <div key={item.id || itemIdx} className="flex justify-between text-[9px] text-zinc-650">
+                                                      <span className="truncate max-w-[110px]" title={item.name}>{item.name} <span className="text-zinc-400">({item.quantity}x)</span></span>
+                                                      <span className="font-semibold text-zinc-700 shrink-0">R$ {(item.quantity * item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    );
+                                  }
+                                } catch (e) {
+                                  // fallback
+                                }
+                                return (
+                                  <div className="text-zinc-600 text-[10px] mt-1 font-bold uppercase tracking-widest">
+                                    NF: {issue.resolution_nf}
+                                  </div>
+                                );
+                              })()}
+                              {(!issue.resolution_nf || !issue.resolution_nf.startsWith("[")) && issue.resolution_value > 0 && (
+                                <div className="text-primary text-[10px] font-black uppercase tracking-widest mt-1">
                                   Valor: R$ {issue.resolution_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </div>
                               )}
@@ -834,6 +1389,7 @@ export default function MaintenanceTab() {
           </div>
         )}
       </div>
+      )}
 
       {/* Modal de Imagem */}
       {selectedImage && (
@@ -927,13 +1483,46 @@ export default function MaintenanceTab() {
 
       {resolvingIssueId && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-2">
               {modalActionType === "resolve" ? "Resolver Pendência" : "Excluir Pendência"}
             </h3>
             <p className="text-sm text-gray-500 mb-4">
               {resolvingIssueData?.item_title}
             </p>
+
+            {modalActionType === "resolve" && (
+              <div className="mb-4 bg-gray-50 p-1.5 rounded-xl flex border border-gray-200 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResolveSubStatus("resolved");
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    resolveSubStatus === "resolved"
+                      ? "bg-primary text-white shadow-sm"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  <CheckCircle size={14} />
+                  Solucionar / Resolver
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResolveSubStatus("waiting");
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    resolveSubStatus === "waiting"
+                      ? "bg-amber-500 text-white shadow-sm"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  }`}
+                >
+                  <Clock size={14} />
+                  Colocar em Aguardo
+                </button>
+              </div>
+            )}
             <div className="space-y-4">
               {resolvingIssueData?.grouped_issues &&
                 resolvingIssueData.grouped_issues.length > 1 && (
@@ -1012,34 +1601,231 @@ export default function MaintenanceTab() {
                   </div>
                 )}
 
-              {modalActionType === "resolve" && !sqlError && (
+              {modalActionType === "resolve" && !sqlError && resolveSubStatus === "resolved" && (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Nota Fiscal (opcional)
-                        </label>
+                  {/* NF Section */}
+                  <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-1">
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-150">
+                      <span className="text-xs font-black uppercase text-zinc-500 tracking-wider">Notas Fiscais (NFs)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResolveNfs([
+                            ...resolveNfs,
+                            {
+                              id: Date.now().toString(),
+                              nf_number: "",
+                              nf_key: "",
+                              items: [{ id: `item-${Date.now()}`, name: "", quantity: 1, unit_price: 0 }]
+                            }
+                          ]);
+                        }}
+                        className="text-xs font-bold text-primary flex items-center gap-1 hover:underline cursor-pointer"
+                      >
+                        <Plus size={14} />
+                        Nova NF
+                      </button>
+                    </div>
+
+                    {resolveNfs.map((nf, nfIdx) => {
+                      const nfTotal = nf.items.reduce((acc: number, item: any) => acc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0);
+                      return (
+                        <div key={nf.id} className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3 relative">
+                          {resolveNfs.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResolveNfs(resolveNfs.filter(n => n.id !== nf.id));
+                              }}
+                              className="absolute top-3 right-3 text-red-500 hover:text-red-700 cursor-pointer"
+                              title="Remover NF"
+                            >
+                              <X size={16} />
+                            </button>
+                          )}
+                          <div className="text-xs font-black uppercase text-zinc-400">Nota Fiscal #{nfIdx + 1}</div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Número da NF</label>
+                              <input
+                                className="w-full px-3 py-1.5 border border-gray-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium"
+                                type="text"
+                                placeholder="Ex: 10452"
+                                value={nf.nf_number}
+                                onChange={(e) => {
+                                  const updated = [...resolveNfs];
+                                  updated[nfIdx].nf_number = e.target.value;
+                                  setResolveNfs(updated);
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Total da NF</label>
+                              <div className="w-full px-3 py-1.5 border border-zinc-200 bg-zinc-100 rounded-xl text-xs font-bold text-zinc-700">
+                                R$ {nfTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Chave da NF (44 dígitos)</label>
+                            <input
+                              className="w-full px-3 py-1.5 border border-gray-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-mono"
+                              type="text"
+                              maxLength={44}
+                              placeholder="44 dígitos numéricos"
+                              value={nf.nf_key}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, "");
+                                const updated = [...resolveNfs];
+                                updated[nfIdx].nf_key = val;
+                                setResolveNfs(updated);
+                              }}
+                            />
+                            {nf.nf_key && nf.nf_key.length !== 44 && (
+                              <span className="text-[9px] text-orange-600 block mt-0.5">Aviso: Deve conter exatamente 44 dígitos ({nf.nf_key.length}/44).</span>
+                            )}
+                          </div>
+
+                          {/* Items Section inside NF */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-black uppercase text-zinc-400">Itens / Peças desta NF</span>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAddItemDialog(true)}
+                                  className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
+                                >
+                                  + Cadastrar Peça
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [...resolveNfs];
+                                    updated[nfIdx].items.push({ id: Date.now().toString(), name: "", quantity: 1, unit_price: 0 });
+                                    setResolveNfs(updated);
+                                  }}
+                                  className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
+                                >
+                                  + Adicionar Item
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              {nf.items.map((item: any, itemIdx: number) => (
+                                <div key={item.id} className="grid grid-cols-12 gap-2 items-center bg-white border border-zinc-150 p-2 rounded-xl relative">
+                                  <div className="col-span-11 sm:col-span-5">
+                                    <select
+                                      className="w-full bg-white border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                                      value={item.name}
+                                      onChange={(e) => {
+                                        const updated = [...resolveNfs];
+                                        updated[nfIdx].items[itemIdx].name = e.target.value;
+                                        setResolveNfs(updated);
+                                      }}
+                                    >
+                                      <option value="">-- Selecione item --</option>
+                                      {catalogItems.map(pName => (
+                                        <option key={pName} value={pName}>{pName}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="col-span-5 sm:col-span-3">
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      placeholder="Qtd"
+                                      title="Quantidade"
+                                      className="w-full border border-gray-300 rounded-lg px-1.5 py-1 text-xs text-center focus:ring-1 focus:ring-primary focus:outline-none font-medium"
+                                      value={item.quantity || ""}
+                                      onChange={(e) => {
+                                        const updated = [...resolveNfs];
+                                        updated[nfIdx].items[itemIdx].quantity = Number(e.target.value);
+                                        setResolveNfs(updated);
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="col-span-6 sm:col-span-3">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      placeholder="Unit R$"
+                                      title="Valor Unitário"
+                                      className="w-full border border-gray-300 rounded-lg px-1.5 py-1 text-xs text-right focus:ring-1 focus:ring-primary focus:outline-none font-semibold"
+                                      value={item.unit_price || ""}
+                                      onChange={(e) => {
+                                        const updated = [...resolveNfs];
+                                        updated[nfIdx].items[itemIdx].unit_price = Number(e.target.value);
+                                        setResolveNfs(updated);
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="col-span-12 sm:col-span-1 flex justify-end sm:justify-center">
+                                    {nf.items.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const updated = [...resolveNfs];
+                                          updated[nfIdx].items = updated[nfIdx].items.filter(it => it.id !== item.id);
+                                          setResolveNfs(updated);
+                                        }}
+                                        className="text-red-500 hover:text-red-700 hover:scale-110 shrink-0 p-1 rounded hover:bg-red-50"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Registered item catalog form dialog */}
+                  {showAddItemDialog && (
+                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl space-y-3">
+                      <div className="text-xs font-black uppercase text-orange-700 tracking-wider">Cadastrar Nova Peça/Serviço no Catálogo</div>
+                      <div className="flex gap-2">
                         <input
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                           type="text"
-                          placeholder="Número da NF"
-                          value={resolveNf}
-                          onChange={(e) => setResolveNf(e.target.value)}
+                          placeholder="Ex: Amortecedor Dianteiro, Alinhamento"
+                          className="flex-1 bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                          value={newItemName}
+                          onChange={(e) => setNewItemName(e.target.value)}
                         />
-                     </div>
-                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Valor (opcional)
-                        </label>
-                        <input
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                          type="number"
-                          step="0.01"
-                          placeholder="R$ 0,00"
-                          value={resolveValue}
-                          onChange={(e) => setResolveValue(e.target.value)}
-                        />
-                     </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRegisterCatalogItem(newItemName)}
+                          className="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-dark cursor-pointer shrink-0"
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowAddItemDialog(false); setNewItemName(""); }}
+                          className="px-3 py-1.5 bg-zinc-200 text-zinc-700 text-xs font-bold rounded-xl hover:bg-zinc-300 cursor-pointer shrink-0"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dynamic General Consolidated Total */}
+                  <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 flex justify-between items-center">
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-primary tracking-widest block">Total Consolidado</span>
+                      <span className="text-xs text-zinc-500">Soma de todas as Notas Fiscais e Itens</span>
+                    </div>
+                    <div className="text-xl font-black text-primary">
+                      R$ {resolveNfs.reduce((acc, nf) => acc + nf.items.reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </div>
                   </div>
 
                   <div>
@@ -1176,6 +1962,25 @@ export default function MaintenanceTab() {
                 </div>
               )}
 
+              {modalActionType === "resolve" && !sqlError && resolveSubStatus === "waiting" && (
+                <div className="space-y-4">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <label className="block text-sm font-semibold text-amber-950 mb-1 flex items-center gap-1.5">
+                      <Clock size={16} className="text-amber-600" />
+                      Motivo / Descrição do Aguardo *
+                    </label>
+                    <textarea
+                      required
+                      className="w-full bg-white px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent font-medium text-sm text-gray-800"
+                      rows={4}
+                      placeholder="Descreva o motivo pelo qual esta pendência está em aguardo (ex: aguardando peça do distribuidor, aguardando aprovação de orçamento...)"
+                      value={resolveNotes}
+                      onChange={(e) => setResolveNotes(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
               {modalActionType === "resolve" && sqlError && (
                 <div className="bg-white p-6 rounded-3xl border border-app-border shadow-sm mb-4">
                    <h3 className="text-sm font-black text-danger uppercase tracking-tight mb-2">Atenção!</h3>
@@ -1210,9 +2015,27 @@ ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
                   type="button"
                   onClick={confirmModalAction}
                   disabled={isResolving || selectedIdsToResolve.length === 0}
-                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${modalActionType === "resolve" ? "bg-primary hover:bg-primary-dark" : "bg-red-600 hover:bg-red-700"}`}
+                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${
+                    modalActionType === "resolve"
+                      ? resolveSubStatus === "waiting"
+                        ? "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500"
+                        : "bg-primary hover:bg-primary-dark"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
                 >
-                  {isResolving ? (modalActionType === "resolve" ? "Resolvendo..." : "Excluindo...") : (modalActionType === "resolve" ? "Confirmar Resolução" : "Confirmar Exclusão")}
+                  {isResolving ? (
+                    modalActionType === "resolve"
+                      ? resolveSubStatus === "waiting"
+                        ? "Sinalizando..."
+                        : "Resolvendo..."
+                      : "Excluindo..."
+                  ) : (
+                    modalActionType === "resolve"
+                      ? resolveSubStatus === "waiting"
+                        ? "Confirmar Aguardo"
+                        : "Confirmar Resolução"
+                      : "Confirmar Exclusão"
+                  )}
                 </button>
               </div>
             </div>

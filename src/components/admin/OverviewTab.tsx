@@ -51,10 +51,19 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
         .from('vehicles')
         .select('*', { count: 'exact', head: true });
 
-      const { count: issueCount } = await supabase
+      const { data: issuesData } = await supabase
         .from('checklist_issues')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
+        .select('vehicle_id, trailer_id, item_title')
+        .in('status', ['pending', 'waiting']);
+
+      const uniqueIssuesSet = new Set<string>();
+      (issuesData || []).forEach((issue) => {
+        const vehicleKey = issue.vehicle_id || issue.trailer_id || 'no-vehicle';
+        const titleKey = (issue.item_title || '').trim().toLowerCase();
+        uniqueIssuesSet.add(`${vehicleKey}_${titleKey}`);
+      });
+
+      const issueCount = uniqueIssuesSet.size;
 
       const { data: perfData } = await supabase
         .from('driver_performance')

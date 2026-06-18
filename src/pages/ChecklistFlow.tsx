@@ -73,6 +73,7 @@ export default function ChecklistFlow() {
   const [existingIssues, setExistingIssues] = useState<any[]>([]);
   const [isScheduled, setIsScheduled] = useState(false);
   const [isInternal, setIsInternal] = useState(false);
+  const [manualChecklistActivate, setManualChecklistActivate] = useState(true);
   const [isTrailerOnly, setIsTrailerOnly] = useState(false);
   const [requireExternalPhotos, setRequireExternalPhotos] = useState(true);
   const [requireFuelReceiptPhoto, setRequireFuelReceiptPhoto] = useState(true);
@@ -368,6 +369,9 @@ export default function ChecklistFlow() {
       }
       if (settingsRes.data && settingsRes.data.require_location !== undefined) {
         setRequireLocation(settingsRes.data.require_location === true);
+      }
+      if (settingsRes.data && settingsRes.data.manual_checklist_activate !== undefined) {
+        setManualChecklistActivate(settingsRes.data.manual_checklist_activate !== false);
       }
       if (settingsRes.data) {
         setKmLimitSettings({
@@ -820,6 +824,26 @@ export default function ChecklistFlow() {
       setLoading(false);
     }
   };
+
+  if (!manualChecklistActivate && !isScheduled && !isInternal) {
+    return (
+      <div className="min-h-screen bg-app-bg flex flex-col items-center justify-center p-6 text-center max-w-xl mx-auto">
+        <div className="w-16 h-16 bg-red-50 text-red-650 rounded-full flex items-center justify-center mb-6">
+          <AlertCircle size={32} />
+        </div>
+        <h2 className="text-lg font-black text-text-main mb-2">Checklist Manual Desativado</h2>
+        <p className="text-sm text-text-muted mb-8 leading-relaxed">
+          A empresa configurou a obrigatoriedade de iniciar o checklist a partir de uma escala programada. Por favor, utilize uma das escalas disponíveis na tela inicial do aplicativo.
+        </p>
+        <button
+          onClick={() => navigate("/")}
+          className="w-full h-12 bg-primary text-white font-bold rounded-xl shadow-md cursor-pointer hover:bg-opacity-90 active:scale-95 transition-all text-sm animate-pulse-subtle"
+        >
+          Voltar para Início
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-app-bg pb-32">

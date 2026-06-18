@@ -217,6 +217,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = async () => {
     await supabase.auth.signOut().catch(() => {});
     setUser(null);
+    localStorage.removeItem('checkdrive_last_visited_path');
     
     // Security: Clear all offline cache on logout
     try {
