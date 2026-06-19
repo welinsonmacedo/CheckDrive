@@ -22,6 +22,7 @@ import {
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import ManualIssueModal from "./ManualIssueModal";
+import IssueDetailsModal from "./IssueDetailsModal";
 
 export default function MaintenanceTab() {
   const { user } = useAuth();
@@ -36,6 +37,7 @@ export default function MaintenanceTab() {
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
+  const [selectedViewIssue, setSelectedViewIssue] = useState<any | null>(null);
   const [zoom, setZoom] = useState(1);
 
   const [resolvingIssueData, setResolvingIssueData] = useState<any | null>(
@@ -457,9 +459,15 @@ export default function MaintenanceTab() {
       ]);
       setSqlError(null);
       fetchIssues();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Erro ao resolver. Tente novamente.");
+      if (err.message && (err.message.includes("Could not find the 'resolution_nf' column") || err.message.includes('column "resolution_nf" of relation "checklist_issues" does not exist'))) {
+        setSqlError("Oops, the database needs updating!");
+      } else if (err.message && err.message.includes("checklist_issues_status_check")) {
+        setSqlError("Oops, the database needs updating exactly for status check!");
+      } else {
+        alert("Erro ao resolver. Tente novamente: " + err.message);
+      }
     } finally {
       setIsResolving(false);
     }
@@ -1140,6 +1148,13 @@ export default function MaintenanceTab() {
                                 </button>
                               )}
                               <button
+                                onClick={() => setSelectedViewIssue(issue)}
+                                title="Ver Detalhes / Imprimir"
+                                className="w-8 h-8 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors border border-blue-100"
+                              >
+                                <Eye size={14} />
+                              </button>
+                              <button
                                 onClick={() => handleRevertIssue(issue)}
                                 title="Voltar para Pendentes"
                                 className="w-8 h-8 flex items-center justify-center bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors border border-orange-100"
@@ -1253,6 +1268,13 @@ export default function MaintenanceTab() {
                             </div>
 
                             <div className="flex flex-col gap-2">
+                              <button
+                                onClick={() => setSelectedViewIssue(issue)}
+                                title="Ver Detalhes / Imprimir"
+                                className="w-8 h-8 flex items-center justify-center bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-colors"
+                              >
+                                <Eye size={16} />
+                              </button>
                               <button
                                 onClick={() => handleRevertIssue(issue)}
                                 title="Reabrir pendência"
@@ -1791,49 +1813,104 @@ export default function MaintenanceTab() {
                 </div>
               )}
 
-              <div className="flex bg-gray-50 -mx-6 -mb-6 px-6 py-4 justify-end gap-3 rounded-b-xl border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResolvingIssueId(null);
-                    setResolvingIssueData(null);
-                    setSelectedIdsToResolve([]);
-                  }}
-                  disabled={isResolving}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmModalAction}
-                  disabled={isResolving || selectedIdsToResolve.length === 0}
-                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${
-                    modalActionType === "resolve"
-                      ? resolveSubStatus === "waiting"
-                        ? "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500"
-                        : "bg-primary hover:bg-primary-dark"
-                      : "bg-red-650 hover:bg-red-750"
-                  }`}
-                >
-                  {isResolving ? (
-                    modalActionType === "resolve"
-                      ? resolveSubStatus === "waiting"
-                        ? "Sinalizando..."
-                        : "Resolvendo..."
-                      : "Excluindo..."
+              {/* SQL Missing columns trigger panel */}
+              {modalActionType === "resolve" && sqlError && (
+                <div className="bg-zinc-50 p-6 rounded-3xl border border-rose-200 h-full overflow-y-auto space-y-4 text-left">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={24} className="text-red-500" />
+                    <h3 className="text-base font-black text-zinc-900 uppercase tracking-tight">Esquema do Banco de Dados Desatualizado</h3>
+                  </div>
+                  {sqlError === "Oops, the database needs updating exactly for status check!" ? (
+                    <>
+                      <p className="text-sm text-zinc-500 leading-relaxed text-left">
+                        A funcionalidade de colocar manutenção "Em Aguardo" requer uma atualização na restrição da coluna <code>status</code> na tabela <strong>checklist_issues</strong> que permita este novo estado. Copie o script SQL abaixo e aplique-o no editor de SQL do seu painel do Supabase:
+                      </p>
+                      <div className="p-4 bg-zinc-900 rounded-2xl overflow-x-auto text-xs font-mono text-zinc-200 shadow-xl border border-zinc-800 text-left">
+                        <pre>
+{`-- Atualiza a restrição de status permitidos para incluir 'waiting'
+ALTER TABLE checklist_issues DROP CONSTRAINT checklist_issues_status_check;
+ALTER TABLE checklist_issues ADD CONSTRAINT checklist_issues_status_check CHECK (status IN ('pending', 'resolved', 'ignored', 'waiting'));`}
+                        </pre>
+                      </div>
+                    </>
                   ) : (
-                    modalActionType === "resolve"
-                      ? resolveSubStatus === "waiting"
-                        ? "Confirmar Aguardo"
-                        : "Confirmar Resolução"
-                      : "Confirmar Exclusão"
+                    <>
+                      <p className="text-sm text-zinc-500 leading-relaxed text-left">
+                        Para habilitar o salvamento unificado de <strong>Notas Fiscais, Custos de Peças e Anexos de Imagens</strong>, é necessário expandir a tabela checklist_issues através do seu console do Supabase. Copie o script SQL abaixo e aplique-o em seu painel:
+                      </p>
+                      <div className="p-4 bg-zinc-900 rounded-2xl overflow-x-auto text-xs font-mono text-zinc-200 shadow-xl border border-zinc-800 text-left">
+                        <pre>
+{`ALTER TABLE public.checklist_issues 
+ADD COLUMN IF NOT EXISTS resolution_nf TEXT,
+ADD COLUMN IF NOT EXISTS resolution_value NUMERIC,
+ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
+                        </pre>
+                      </div>
+                    </>
                   )}
-                </button>
-              </div>
+                  <div className="flex gap-3 pt-2 text-left">
+                    <button
+                      onClick={() => setSqlError(null)}
+                      className="px-5 py-2.5 bg-primary text-white rounded-xl text-xs font-black shadow-lg hover:bg-primary-dark transition-all cursor-pointer"
+                    >
+                      Voltar e tentar novamente
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!sqlError && (
+                <div className="flex bg-gray-50 -mx-6 -mb-6 px-6 py-4 justify-end gap-3 rounded-b-xl border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResolvingIssueId(null);
+                      setResolvingIssueData(null);
+                      setSelectedIdsToResolve([]);
+                    }}
+                    disabled={isResolving}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmModalAction}
+                    disabled={isResolving || selectedIdsToResolve.length === 0}
+                    className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${
+                      modalActionType === "resolve"
+                        ? resolveSubStatus === "waiting"
+                          ? "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500"
+                          : "bg-primary hover:bg-primary-dark"
+                        : "bg-red-650 hover:bg-red-750"
+                    }`}
+                  >
+                    {isResolving ? (
+                      modalActionType === "resolve"
+                        ? resolveSubStatus === "waiting"
+                          ? "Sinalizando..."
+                          : "Resolvendo..."
+                        : "Excluindo..."
+                    ) : (
+                      modalActionType === "resolve"
+                        ? resolveSubStatus === "waiting"
+                          ? "Confirmar Aguardo"
+                          : "Confirmar Resolução"
+                        : "Confirmar Exclusão"
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
+      )}
+
+      {selectedViewIssue && (
+        <IssueDetailsModal
+          issue={selectedViewIssue}
+          onClose={() => setSelectedViewIssue(null)}
+        />
       )}
     </div>
   );

@@ -22,6 +22,7 @@ import {
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import ManualIssueModal from "@/src/modules/company/components/ManualIssueModal";
+import IssueDetailsModal from "./IssueDetailsModal";
 
 export default function MaintenanceTab() {
   const { user } = useAuth();
@@ -36,6 +37,7 @@ export default function MaintenanceTab() {
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
+  const [selectedViewIssue, setSelectedViewIssue] = useState<any | null>(null);
   const [zoom, setZoom] = useState(1);
 
   const [resolvingIssueData, setResolvingIssueData] = useState<any | null>(
@@ -538,6 +540,8 @@ export default function MaintenanceTab() {
       console.error(err);
       if (err.message && (err.message.includes("Could not find the 'resolution_nf' column") || err.message.includes('column "resolution_nf" of relation "checklist_issues" does not exist'))) {
         setSqlError("Oops, the database needs updating!");
+      } else if (err.message && err.message.includes("checklist_issues_status_check")) {
+        setSqlError("Oops, the database needs updating exactly for status check!");
       } else {
         alert("Erro ao resolver. Tente novamente: " + err.message);
       }
@@ -1221,6 +1225,13 @@ export default function MaintenanceTab() {
                                 </button>
                               )}
                               <button
+                                onClick={() => setSelectedViewIssue(issue)}
+                                title="Ver Detalhes / Imprimir"
+                                className="w-8 h-8 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors border border-blue-100"
+                              >
+                                <Eye size={14} />
+                              </button>
+                              <button
                                 onClick={() => handleRevertIssue(issue)}
                                 title="Voltar para Pendentes"
                                 className="w-8 h-8 flex items-center justify-center bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors border border-orange-100"
@@ -1333,6 +1344,13 @@ export default function MaintenanceTab() {
                             </div>
 
                             <div className="flex flex-col gap-2">
+                              <button
+                                onClick={() => setSelectedViewIssue(issue)}
+                                title="Ver Detalhes / Imprimir"
+                                className="w-8 h-8 flex items-center justify-center bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-colors"
+                              >
+                                <Eye size={16} />
+                              </button>
                               <button
                                 onClick={() => handleRevertIssue(issue)}
                                 title="Reabrir pendência"
@@ -2092,17 +2110,34 @@ export default function MaintenanceTab() {
                     <AlertCircle size={24} className="text-red-500" />
                     <h3 className="text-base font-black text-zinc-900 uppercase tracking-tight">Esquema do Banco de Dados Desatualizado</h3>
                   </div>
-                  <p className="text-sm text-zinc-500 leading-relaxed text-left">
-                    Para habilitar o salvamento unificado de <strong>Notas Fiscais, Custos de Peças e Anexos de Imagens</strong>, é necessário expandir a tabela checklist_issues através do seu console do Supabase. Copie o script SQL abaixo e aplique-o em seu painel:
-                  </p>
-                  <div className="p-4 bg-zinc-900 rounded-2xl overflow-x-auto text-xs font-mono text-zinc-200 shadow-xl border border-zinc-800 text-left">
-                    <pre>
+                  {sqlError === "Oops, the database needs updating exactly for status check!" ? (
+                    <>
+                      <p className="text-sm text-zinc-500 leading-relaxed text-left">
+                        A funcionalidade de colocar manutenção "Em Aguardo" requer uma atualização na restrição da coluna <code>status</code> na tabela <strong>checklist_issues</strong> que permita este novo estado. Copie o script SQL abaixo e aplique-o no editor de SQL do seu painel do Supabase:
+                      </p>
+                      <div className="p-4 bg-zinc-900 rounded-2xl overflow-x-auto text-xs font-mono text-zinc-200 shadow-xl border border-zinc-800 text-left">
+                        <pre>
+{`-- Atualiza a restrição de status permitidos para incluir 'waiting'
+ALTER TABLE checklist_issues DROP CONSTRAINT checklist_issues_status_check;
+ALTER TABLE checklist_issues ADD CONSTRAINT checklist_issues_status_check CHECK (status IN ('pending', 'resolved', 'ignored', 'waiting'));`}
+                        </pre>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-zinc-500 leading-relaxed text-left">
+                        Para habilitar o salvamento unificado de <strong>Notas Fiscais, Custos de Peças e Anexos de Imagens</strong>, é necessário expandir a tabela checklist_issues através do seu console do Supabase. Copie o script SQL abaixo e aplique-o em seu painel:
+                      </p>
+                      <div className="p-4 bg-zinc-900 rounded-2xl overflow-x-auto text-xs font-mono text-zinc-200 shadow-xl border border-zinc-800 text-left">
+                        <pre>
 {`ALTER TABLE public.checklist_issues 
 ADD COLUMN IF NOT EXISTS resolution_nf TEXT,
 ADD COLUMN IF NOT EXISTS resolution_value NUMERIC,
 ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
-                    </pre>
-                  </div>
+                        </pre>
+                      </div>
+                    </>
+                  )}
                   <div className="flex gap-3 pt-2 text-left">
                     <button
                       onClick={() => setSqlError(null)}
@@ -2179,6 +2214,13 @@ ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
             )}
           </div>
         </div>
+      )}
+
+      {selectedViewIssue && (
+        <IssueDetailsModal
+          issue={selectedViewIssue}
+          onClose={() => setSelectedViewIssue(null)}
+        />
       )}
     </div>
   );
