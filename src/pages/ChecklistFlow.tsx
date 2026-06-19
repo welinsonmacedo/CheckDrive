@@ -811,6 +811,138 @@ export default function ChecklistFlow() {
         }
       }
 
+      if (type === "fuel") {
+        try {
+          const litersItem = options.items.find(
+            (i: any) => i.input_type === "fuel_liters"
+          );
+          let liters = 0;
+          if (litersItem && formData.itemValues[litersItem.id]) {
+            liters = parseFloat(
+              formData.itemValues[litersItem.id]
+                .toString()
+                .replace(",", ".")
+            );
+          } else {
+            // Fallback to title detection
+            const titleEntry = Object.entries(itemTitles).find(
+              ([_, title]: any) => {
+                const t = title.toLowerCase();
+                return (
+                  t.includes("litro") ||
+                  t.includes("quantidade") ||
+                  t.includes("valor") ||
+                  t.includes("lts")
+                );
+              }
+            );
+            if (titleEntry && formData.itemValues[titleEntry[0]]) {
+              liters = parseFloat(
+                formData.itemValues[titleEntry[0]]
+                  .toString()
+                  .replace(",", ".")
+              );
+            }
+          }
+
+          const currentOdo = parseInt(formData.km) || 0;
+          const vehicleId =
+            isInternal && isTrailerOnly ? null : formData.vehicleId || null;
+
+          if (vehicleId && liters > 0) {
+            let startOdo = currentOdo;
+            let distance = 0;
+            let startDate = submission.created_at;
+            let shouldInsert = false;
+
+            const schedIdNum = scheduleId ? parseInt(scheduleId) : null;
+            let schedule_start_date: string | null = null;
+            if (schedIdNum && !isNaN(schedIdNum)) {
+              const { data: sData } = await supabase
+                .from("schedules")
+                .select("id, start_checklist_id, start_at, created_at")
+                .eq("id", schedIdNum)
+                .single();
+              if (sData) {
+                schedule_start_date = sData.start_at || sData.created_at;
+                if (sData.start_checklist_id) {
+                  const { data: startChecklistObj } = await supabase
+                    .from("checklist_submissions")
+                    .select("created_at")
+                    .eq("id", sData.start_checklist_id)
+                    .single();
+                  if (startChecklistObj) {
+                    schedule_start_date = startChecklistObj.created_at;
+                  }
+                }
+              }
+            }
+
+            if (schedule_start_date) {
+              const { data: priorFuels } = await supabase
+                .from("checklist_submissions")
+                .select("id, odometer, created_at")
+                .eq("vehicle_id", vehicleId)
+                .eq("type", "fuel")
+                .gte("created_at", schedule_start_date)
+                .lt("created_at", submission.created_at)
+                .order("created_at", { ascending: true });
+
+              if (priorFuels && priorFuels.length === 1) {
+                const f1 = priorFuels[0];
+                startOdo = f1.odometer || 0;
+                distance = currentOdo - startOdo;
+                startDate = f1.created_at;
+                shouldInsert = true;
+              }
+            } else {
+              // Fallback to last fuel checklist if not attached to a schedule
+              const { data: lastFuels } = await supabase
+                .from("checklist_submissions")
+                .select("id, odometer, created_at")
+                .eq("vehicle_id", vehicleId)
+                .eq("type", "fuel")
+                .lt("created_at", submission.created_at)
+                .order("created_at", { ascending: false })
+                .limit(1);
+
+              if (lastFuels && lastFuels.length > 0) {
+                const prevSub = lastFuels[0];
+                startOdo = prevSub.odometer || 0;
+                distance = currentOdo - startOdo;
+                startDate = prevSub.created_at;
+                shouldInsert = true;
+              }
+            }
+
+            if (shouldInsert) {
+              if (distance < 0) distance = 0;
+              const average = liters > 0 ? distance / liters : 0;
+
+              // Insert automatically into vehicle_averages
+              await supabase.from("vehicle_averages").insert([{
+                company_id: companyId,
+                vehicle_id: vehicleId,
+                driver_id: user.id,
+                schedule_id: isNaN(schedIdNum as any) ? null : schedIdNum,
+                fuel_submission_id: submission.id,
+                start_date: startDate,
+                end_date: submission.created_at,
+                start_odometer: startOdo,
+                end_odometer: currentOdo,
+                distance: distance,
+                liters: liters,
+                average: average,
+                status: "pending", // Initially 'pending' so managers need to review
+                notes: "Calculado automaticamente na submissão (2º abastecimento posterior à escala)"
+              }]);
+            }
+          }
+        } catch (avgErr) {
+          console.error("Failed to auto-generate vehicle_average:", avgErr);
+        }
+      }
+
       const cacheKey = scheduleId
         ? `checklist_draft_schedule_${scheduleId}`
         : `checklist_draft_${type || "start"}`;

@@ -19,6 +19,12 @@ export default function ChecklistEditModal({
   const [odometer, setOdometer] = useState(
     submission.odometer?.toString() || "",
   );
+  const [createdAt, setCreatedAt] = useState(() => {
+    if (!submission.created_at) return "";
+    const d = new Date(submission.created_at);
+    const tzOffset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+  });
   const [itemValues, setItemValues] = useState<Record<string, string>>(
     submission.details?.itemValues || {},
   );
@@ -245,6 +251,7 @@ export default function ChecklistEditModal({
       }
 
       const oldDetails = submission.details || {};
+      const newCreatedAtISO = createdAt ? new Date(createdAt).toISOString() : submission.created_at;
       const editHistoryEntry = {
         edited_at: new Date().toISOString(),
         previous_odometer: submission.odometer,
@@ -253,6 +260,8 @@ export default function ChecklistEditModal({
         new_items: itemValues,
         previous_defects: oldDetails.defects || {},
         new_defects: updatedDefects,
+        previous_created_at: submission.created_at,
+        new_created_at: newCreatedAtISO,
       };
 
       const updatedDetails = {
@@ -261,6 +270,7 @@ export default function ChecklistEditModal({
         defects: updatedDefects,
         is_edited: true,
         edited_at: editHistoryEntry.edited_at,
+        adjusted_date: newCreatedAtISO,
         edit_history: [...(oldDetails.edit_history || []), editHistoryEntry],
       };
 
@@ -278,6 +288,7 @@ export default function ChecklistEditModal({
         .update({
           odometer: parseInt(odometer) || 0,
           status: finalStatus,
+          created_at: newCreatedAtISO,
           details: updatedDetails,
         })
         .eq("id", submission.id);
@@ -383,17 +394,31 @@ export default function ChecklistEditModal({
               Informações Gerais
             </h4>
 
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                KM Registrado
-              </label>
-              <input
-                type="number"
-                value={odometer}
-                onChange={(e) => setOdometer(e.target.value)}
-                className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-sm font-bold outline-none focus:border-primary transition-all"
-                placeholder="Insira o KM..."
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                  KM Registrado
+                </label>
+                <input
+                  type="number"
+                  value={odometer}
+                  onChange={(e) => setOdometer(e.target.value)}
+                  className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-sm font-bold outline-none focus:border-primary transition-all"
+                  placeholder="Insira o KM..."
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                  Data do Checklist
+                </label>
+                <input
+                  type="datetime-local"
+                  value={createdAt}
+                  onChange={(e) => setCreatedAt(e.target.value)}
+                  className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-sm font-bold outline-none focus:border-primary transition-all"
+                />
+              </div>
             </div>
           </div>
 

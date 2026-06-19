@@ -70,21 +70,7 @@ export default function MaintenanceTab() {
     }
   ]);
 
-  const DEFAULT_CATALOG_ITEMS = [
-    "Pneu Dianteiro",
-    "Pneu Traseiro",
-    "Pastilha de Freio",
-    "Lona de Freio",
-    "Troca de Óleo de Motor",
-    "Filtro de Óleo",
-    "Filtro de Combustível",
-    "Filtro de Ar",
-    "Mão de Obra Mecânica",
-    "Troca de Lâmpada (Farol)",
-    "Alinhamento e Balanceamento",
-    "Lâmpada de Sinaleira",
-    "Líquido de Arrefecimento"
-  ];
+  const DEFAULT_CATALOG_ITEMS: string[] = [];
 
   const [catalogItems, setCatalogItems] = useState<string[]>(DEFAULT_CATALOG_ITEMS);
   const [newItemName, setNewItemName] = useState("");
@@ -1482,131 +1468,316 @@ export default function MaintenanceTab() {
       )}
 
       {resolvingIssueId && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">
-              {modalActionType === "resolve" ? "Resolver Pendência" : "Excluir Pendência"}
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              {resolvingIssueData?.item_title}
-            </p>
+        <div className="fixed inset-0 bg-zinc-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6 md:p-8 transition-all duration-300">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl h-[92vh] max-h-[92vh] flex flex-col overflow-hidden relative border border-zinc-100 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-zinc-100 flex items-center justify-between shrink-0 bg-zinc-50/50">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border text-left ${
+                    modalActionType === "resolve"
+                      ? resolveSubStatus === "waiting"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-rose-50 text-rose-700 border-rose-200"
+                  }`}>
+                    {modalActionType === "resolve"
+                      ? resolveSubStatus === "waiting"
+                        ? "Aguardando Peças / Serviço"
+                        : "Solucionar Pendência de Manutenção"
+                      : "Excluir Registro de Pendência"}
+                  </span>
+                  {resolvingIssueData?.vehicles?.plate && (
+                    <span className="text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono font-bold uppercase">
+                      Veículo: {resolvingIssueData.vehicles.plate}
+                    </span>
+                  )}
+                  {resolvingIssueData?.trailers?.plate && (
+                    <span className="text-xs bg-zinc-200 text-zinc-700 px-2 py-0.5 rounded font-mono font-bold uppercase">
+                      Semirreboque: {resolvingIssueData.trailers.plate}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-lg font-black text-zinc-900 mt-1 flex items-center gap-2 text-left">
+                  {resolvingIssueData?.item_title || "Sem Título"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setResolvingIssueId(null);
+                  setResolvingIssueData(null);
+                  setSelectedIdsToResolve([]);
+                  setSqlError(null);
+                }}
+                disabled={isResolving}
+                className="p-2 text-zinc-400 hover:text-zinc-650 hover:bg-zinc-100 rounded-full transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-            {modalActionType === "resolve" && (
-              <div className="mb-4 bg-gray-50 p-1.5 rounded-xl flex border border-gray-200 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResolveSubStatus("resolved");
-                  }}
-                  className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    resolveSubStatus === "resolved"
-                      ? "bg-primary text-white shadow-sm"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                  }`}
-                >
-                  <CheckCircle size={14} />
-                  Solucionar / Resolver
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResolveSubStatus("waiting");
-                  }}
-                  className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    resolveSubStatus === "waiting"
-                      ? "bg-amber-500 text-white shadow-sm"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                  }`}
-                >
-                  <Clock size={14} />
-                  Colocar em Aguardo
-                </button>
+            {/* Sub Status Switcher (Only for Resolve) */}
+            {modalActionType === "resolve" && !sqlError && (
+              <div className="px-6 pt-5 shrink-0 text-left">
+                <div className="bg-zinc-100 p-1 rounded-2xl flex border border-zinc-200/50 max-w-md">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResolveSubStatus("resolved");
+                    }}
+                    className={`flex-1 py-1.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      resolveSubStatus === "resolved"
+                        ? "bg-white text-emerald-800 shadow-sm font-black"
+                        : "text-zinc-500 hover:text-zinc-805"
+                    }`}
+                  >
+                    <CheckCircle size={15} className={resolveSubStatus === "resolved" ? "text-emerald-500" : ""} />
+                    Solucionar / Resolver
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResolveSubStatus("waiting");
+                    }}
+                    className={`flex-1 py-1.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      resolveSubStatus === "waiting"
+                        ? "bg-white text-amber-800 shadow-sm font-black"
+                        : "text-zinc-500 hover:text-zinc-805"
+                    }`}
+                  >
+                    <Clock size={15} className={resolveSubStatus === "waiting" ? "text-amber-500" : ""} />
+                    Colocar em Aguardo
+                  </button>
+                </div>
               </div>
             )}
-            <div className="space-y-4">
-              {resolvingIssueData?.grouped_issues &&
-                resolvingIssueData.grouped_issues.length > 1 && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {modalActionType === "resolve" ? "Selecione as ocorrências para resolver:" : "Selecione as ocorrências para excluir:"}
-                    </label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
-                      {resolvingIssueData.grouped_issues.map((gi: any) => (
-                        <label
-                          key={gi.id}
-                          className="flex items-start gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            className="mt-1 flex-shrink-0 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                            checked={selectedIdsToResolve.includes(gi.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedIdsToResolve([
-                                  ...selectedIdsToResolve,
-                                  gi.id,
-                                ]);
+
+            {/* Content Body Container */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 text-left">
+              {modalActionType === "resolve" && !sqlError && resolveSubStatus === "resolved" && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full min-h-0">
+                  {/* Left Column: Context, General Fields and Alert info */}
+                  <div className="lg:col-span-6 flex flex-col space-y-6 overflow-y-auto pr-3 min-h-0 text-left">
+                    
+                    {/* Occurrences Box */}
+                    {resolvingIssueData?.grouped_issues && resolvingIssueData.grouped_issues.length > 1 && (
+                      <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <label className="block text-xs font-black text-zinc-500 uppercase tracking-wider">
+                            Várias ocorrências agrupadas para este defeito:
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (selectedIdsToResolve.length === resolvingIssueData.grouped_issues.length) {
+                                setSelectedIdsToResolve([]);
                               } else {
-                                setSelectedIdsToResolve(
-                                  selectedIdsToResolve.filter(
-                                    (id) => id !== gi.id,
-                                  ),
-                                );
+                                setSelectedIdsToResolve(resolvingIssueData.grouped_issues.map((g: any) => g.id));
+                              }
+                            }}
+                            className="text-xs text-primary font-bold hover:underline"
+                          >
+                            {selectedIdsToResolve.length === resolvingIssueData.grouped_issues.length ? "Desmarcar todas" : "Selecionar todas"}
+                          </button>
+                        </div>
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1 border border-zinc-200 rounded-xl p-2 bg-white">
+                          {resolvingIssueData.grouped_issues.map((gi: any) => (
+                            <label
+                              key={gi.id}
+                              className="flex items-start gap-3 p-2 hover:bg-zinc-50 rounded-xl cursor-pointer transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-1 flex-shrink-0 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                                checked={selectedIdsToResolve.includes(gi.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedIdsToResolve([...selectedIdsToResolve, gi.id]);
+                                  } else {
+                                    setSelectedIdsToResolve(selectedIdsToResolve.filter((id) => id !== gi.id));
+                                  }
+                                }}
+                              />
+                              <div className="flex-1 text-xs text-left">
+                                <div className="font-extrabold text-zinc-900 text-left">
+                                  {new Date(gi.created_at).toLocaleString('pt-BR')}
+                                </div>
+                                {gi.description && (
+                                  <div className="text-zinc-600 mt-0.5 font-medium italic text-left">
+                                    "{gi.description}"
+                                  </div>
+                                )}
+                                {gi.profiles && (
+                                  <div className="text-zinc-400 font-bold text-[10px] uppercase mt-0.5 text-left">
+                                    Por: {gi.profiles.full_name}
+                                  </div>
+                                )}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Alert Calibration Panel */}
+                    {resolvingIssueData?.auto_alerts?.trigger_type === 'km' && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
+                        <div className="flex items-center gap-2">
+                          <Gauge className="text-blue-500" size={18} />
+                          <h4 className="text-xs font-black text-blue-700 uppercase tracking-widest">Alerta de Quilometragem (KM)</h4>
+                        </div>
+                        <p className="text-xs text-blue-800/80 leading-relaxed font-semibold">
+                          Indique o hodômetro atual e os parâmetros do alerta para reprogramar os avisos futuros.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">KM Atual do Serv. *</label>
+                            <input
+                              type="number"
+                              value={resolveCurrentKm}
+                              onChange={(e) => setResolveCurrentKm(e.target.value)}
+                              required
+                              placeholder="Fração/KM"
+                              className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Próximo Ciclo (KM)</label>
+                            <input
+                              type="number"
+                              value={resolveIntervalKm}
+                              onChange={(e) => setResolveIntervalKm(e.target.value)}
+                              required
+                              placeholder="Ciclo KM"
+                              className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Aparecer Antes (KM)</label>
+                            <input
+                              type="number"
+                              value={resolveWarningKm}
+                              onChange={(e) => setResolveWarningKm(e.target.value)}
+                              required
+                              placeholder="Aviso KM"
+                              className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+
+                        {resolveCurrentKm && resolveIntervalKm && (
+                          <div className="pt-2 border-t border-blue-200/60 flex flex-col gap-1 text-[11px] text-blue-900 font-bold">
+                            <span className="flex items-center gap-1.5 text-left">
+                              • Próximo vencimento programado: <strong>{Number(resolveCurrentKm) + Number(resolveIntervalKm)} KM</strong>
+                            </span>
+                            {resolveWarningKm && (
+                              <span className="flex items-center gap-1.5 text-left">
+                                • Alerta aparecerá no painel em: <strong className="text-amber-700">{Number(resolveCurrentKm) + Number(resolveIntervalKm) - Number(resolveWarningKm)} KM</strong>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {resolvingIssueData?.auto_alerts?.trigger_type === 'date' && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="text-orange-500" size={18} />
+                          <h4 className="text-xs font-black text-orange-700 uppercase tracking-widest">Alerta Temporal (Prazo/Data)</h4>
+                        </div>
+                        <p className="text-xs text-orange-800/80 leading-relaxed font-semibold text-left">
+                          Pendência vinculada a vencimento calendarizado. Defina os prazos adequados.
+                        </p>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Próximo Vencimento</label>
+                            <input
+                              type="date"
+                              value={resolveNextDate}
+                              onChange={(e) => setResolveNextDate(e.target.value)}
+                              required
+                              className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Notificar com (Dias)</label>
+                            <input
+                              type="number"
+                              value={resolveWarningDays}
+                              onChange={(e) => setResolveWarningDays(e.target.value)}
+                              placeholder={resolvingIssueData.auto_alerts.warning_days?.toString() || "15"}
+                              className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Photo Uploader */}
+                    <div className="text-left">
+                      <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
+                        Fotos de Comprovação / Serviço (Opcional)
+                      </label>
+                      <div className="flex flex-wrap gap-3 mb-2">
+                        {resolvePhotos.map((p, i) => (
+                          <div key={i} className="relative w-20 h-20 rounded-2xl border border-zinc-200 overflow-hidden shadow-sm group">
+                            <img referrerPolicy="no-referrer" src={URL.createObjectURL(p)} alt="doc" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={() => setResolvePhotos(resolvePhotos.filter((_, idx) => idx !== i))}
+                                className="bg-red-500 text-white rounded-full p-1 hover:scale-110 hover:bg-red-650 transition-all cursor-pointer animate-none"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        <label className="w-20 h-20 rounded-2xl border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center text-zinc-400 hover:text-primary hover:border-primary cursor-pointer transition-all bg-zinc-50 hover:bg-zinc-100/50">
+                          <Camera size={22} className="mb-0.5 text-zinc-400" />
+                          <span className="text-[9px] font-bold uppercase tracking-wider">Adicionar</span>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            multiple
+                            onChange={(e) => {
+                              if (e.target.files) {
+                                const newFiles = Array.from(e.target.files);
+                                setResolvePhotos([...resolvePhotos, ...newFiles]);
                               }
                             }}
                           />
-                          <div className="flex-1 text-xs text-gray-700">
-                            <div className="font-semibold">
-                              {new Date(gi.created_at).toLocaleString()}
-                            </div>
-                            {gi.description && (
-                              <div className="text-gray-500 truncate">
-                                {gi.description}
-                              </div>
-                            )}
-                            {gi.profiles && (
-                              <div className="text-gray-400">
-                                Por: {gi.profiles.full_name}
-                              </div>
-                            )}
-                          </div>
                         </label>
-                      ))}
+                      </div>
                     </div>
-                    <div className="flex justify-end mt-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (
-                            selectedIdsToResolve.length ===
-                            resolvingIssueData.grouped_issues.length
-                          ) {
-                            setSelectedIdsToResolve([]);
-                          } else {
-                            setSelectedIdsToResolve(
-                              resolvingIssueData.grouped_issues.map(
-                                (g: any) => g.id,
-                              ),
-                            );
-                          }
-                        }}
-                        className="text-xs text-primary font-medium hover:underline"
-                      >
-                        {selectedIdsToResolve.length ===
-                        resolvingIssueData.grouped_issues.length
-                          ? "Desmarcar todos"
-                          : "Marcar todos"}
-                      </button>
+
+                    {/* Operational Notes */}
+                    <div className="text-left">
+                      <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
+                        Observações da Solução / Memorando
+                      </label>
+                      <textarea
+                        className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm"
+                        rows={3}
+                        placeholder="Descreva as soluções, procedimentos internos ou prestador de serviço envolvido..."
+                        value={resolveNotes}
+                        onChange={(e) => setResolveNotes(e.target.value)}
+                      />
                     </div>
                   </div>
-                )}
 
-              {modalActionType === "resolve" && !sqlError && resolveSubStatus === "resolved" && (
-                <div className="space-y-4">
-                  {/* NF Section */}
-                  <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-1">
-                    <div className="flex justify-between items-center pb-2 border-b border-gray-150">
-                      <span className="text-xs font-black uppercase text-zinc-500 tracking-wider">Notas Fiscais (NFs)</span>
+                  {/* Right Column: Ledger-style Financial Invoicing & Pieces */}
+                  <div className="lg:col-span-6 flex flex-col h-full border-t lg:border-t-0 lg:border-l border-zinc-100 lg:pl-8 min-h-0 text-left">
+                    <div className="flex justify-between items-center pb-3 border-b border-zinc-100 text-left">
+                      <div className="text-left">
+                        <span className="text-xs font-black uppercase text-zinc-900 tracking-wider">Notas Fiscais (NFs) & Peças</span>
+                        <p className="text-[11px] text-zinc-500 mt-0.5">Vincule custos, chaves e notas ao histórico</p>
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
@@ -1620,384 +1791,333 @@ export default function MaintenanceTab() {
                             }
                           ]);
                         }}
-                        className="text-xs font-bold text-primary flex items-center gap-1 hover:underline cursor-pointer"
+                        className="px-3 py-1.5 bg-primary/5 hover:bg-primary/10 text-xs font-extrabold text-primary rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer border border-primary/10 animate-none"
                       >
                         <Plus size={14} />
                         Nova NF
                       </button>
                     </div>
 
-                    {resolveNfs.map((nf, nfIdx) => {
-                      const nfTotal = nf.items.reduce((acc: number, item: any) => acc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0);
-                      return (
-                        <div key={nf.id} className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3 relative">
-                          {resolveNfs.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setResolveNfs(resolveNfs.filter(n => n.id !== nf.id));
-                              }}
-                              className="absolute top-3 right-3 text-red-500 hover:text-red-700 cursor-pointer"
-                              title="Remover NF"
-                            >
-                              <X size={16} />
-                            </button>
-                          )}
-                          <div className="text-xs font-black uppercase text-zinc-400">Nota Fiscal #{nfIdx + 1}</div>
+                    {/* Scrollable invoice stack */}
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2 mt-4 min-h-0">
+                      {resolveNfs.map((nf, nfIdx) => {
+                        const nfTotal = nf.items.reduce((acc: number, item: any) => acc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0);
+                        return (
+                          <div key={nf.id} className="bg-zinc-50/50 border border-zinc-200 rounded-2xl p-4 space-y-4 relative group hover:shadow-md hover:border-zinc-300/80 transition-all duration-200 text-left animate-none">
+                            {resolveNfs.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setResolveNfs(resolveNfs.filter(n => n.id !== nf.id));
+                                }}
+                                className="absolute top-3 right-3 text-zinc-400 hover:text-red-500 p-1 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                title="Remover Nota Fiscal"
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                            <div className="text-xs font-bold text-zinc-400 tracking-widest uppercase">Nota Fiscal #{nfIdx + 1}</div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-black text-zinc-500 mb-1 uppercase tracking-wide">Número da NF</label>
+                                <input
+                                  className="w-full bg-white px-3 py-2 border border-zinc-200 rounded-xl text-xs font-bold text-zinc-800 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                                  type="text"
+                                  placeholder="Nº da Nota"
+                                  value={nf.nf_number}
+                                  onChange={(e) => {
+                                    const updated = [...resolveNfs];
+                                    updated[nfIdx].nf_number = e.target.value;
+                                    setResolveNfs(updated);
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-black text-zinc-500 mb-1 uppercase tracking-wide">Subtotal da NF</label>
+                                <div className="w-full px-3 py-2 border border-zinc-200 bg-zinc-100 rounded-xl text-xs font-extrabold text-zinc-700 shadow-inner">
+                                  R$ {nfTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </div>
+                              </div>
+                            </div>
+
                             <div>
-                              <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Número da NF</label>
+                              <label className="block text-[10px] font-black text-zinc-500 mb-1 uppercase tracking-wide">Chave da NF (44 dígitos)</label>
                               <input
-                                className="w-full px-3 py-1.5 border border-gray-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-medium"
+                                className="w-full bg-white px-3 py-2 border border-zinc-200 rounded-xl text-xs font-mono text-zinc-700 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all hover:border-zinc-300"
                                 type="text"
-                                placeholder="Ex: 10452"
-                                value={nf.nf_number}
+                                maxLength={44}
+                                placeholder="Insira a chave de 44 dígitos numéricos"
+                                value={nf.nf_key}
                                 onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, "");
                                   const updated = [...resolveNfs];
-                                  updated[nfIdx].nf_number = e.target.value;
+                                  updated[nfIdx].nf_key = val;
                                   setResolveNfs(updated);
                                 }}
                               />
+                              {nf.nf_key && nf.nf_key.length !== 44 && (
+                                <span className="text-[10px] text-orange-655 block mt-1 font-semibold animate-pulse">Aviso: Deve conter exatamente 44 dígitos ({nf.nf_key.length}/44).</span>
+                              )}
                             </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Total da NF</label>
-                              <div className="w-full px-3 py-1.5 border border-zinc-200 bg-zinc-100 rounded-xl text-xs font-bold text-zinc-700">
-                                R$ {nfTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+
+                            {/* Catalog Piece selector */}
+                            <div className="space-y-3 pt-3 border-t border-zinc-200/50">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">Itens e Peças Atreladas</span>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowAddItemDialog(true)}
+                                    className="text-[10px] font-extrabold text-primary hover:underline cursor-pointer flex items-center gap-0.5"
+                                  >
+                                    + Cadastrar Peça
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...resolveNfs];
+                                      updated[nfIdx].items.push({ id: Date.now().toString(), name: "", quantity: 1, unit_price: 0 });
+                                      setResolveNfs(updated);
+                                    }}
+                                    className="text-[10px] font-extrabold text-primary hover:underline cursor-pointer flex items-center gap-0.5"
+                                  >
+                                    + Adicionar Item
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          </div>
 
-                          <div>
-                            <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest">Chave da NF (44 dígitos)</label>
-                            <input
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent font-mono"
-                              type="text"
-                              maxLength={44}
-                              placeholder="44 dígitos numéricos"
-                              value={nf.nf_key}
-                              onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, "");
-                                const updated = [...resolveNfs];
-                                updated[nfIdx].nf_key = val;
-                                setResolveNfs(updated);
-                              }}
-                            />
-                            {nf.nf_key && nf.nf_key.length !== 44 && (
-                              <span className="text-[9px] text-orange-600 block mt-0.5">Aviso: Deve conter exatamente 44 dígitos ({nf.nf_key.length}/44).</span>
-                            )}
-                          </div>
-
-                          {/* Items Section inside NF */}
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] font-black uppercase text-zinc-400">Itens / Peças desta NF</span>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setShowAddItemDialog(true)}
-                                  className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
-                                >
-                                  + Cadastrar Peça
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = [...resolveNfs];
-                                    updated[nfIdx].items.push({ id: Date.now().toString(), name: "", quantity: 1, unit_price: 0 });
-                                    setResolveNfs(updated);
-                                  }}
-                                  className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
-                                >
-                                  + Adicionar Item
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              {nf.items.map((item: any, itemIdx: number) => (
-                                <div key={item.id} className="grid grid-cols-12 gap-2 items-center bg-white border border-zinc-150 p-2 rounded-xl relative">
-                                  <div className="col-span-11 sm:col-span-5">
-                                    <select
-                                      className="w-full bg-white border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                                      value={item.name}
-                                      onChange={(e) => {
-                                        const updated = [...resolveNfs];
-                                        updated[nfIdx].items[itemIdx].name = e.target.value;
-                                        setResolveNfs(updated);
-                                      }}
-                                    >
-                                      <option value="">-- Selecione item --</option>
-                                      {catalogItems.map(pName => (
-                                        <option key={pName} value={pName}>{pName}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div className="col-span-5 sm:col-span-3">
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      placeholder="Qtd"
-                                      title="Quantidade"
-                                      className="w-full border border-gray-300 rounded-lg px-1.5 py-1 text-xs text-center focus:ring-1 focus:ring-primary focus:outline-none font-medium"
-                                      value={item.quantity || ""}
-                                      onChange={(e) => {
-                                        const updated = [...resolveNfs];
-                                        updated[nfIdx].items[itemIdx].quantity = Number(e.target.value);
-                                        setResolveNfs(updated);
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="col-span-6 sm:col-span-3">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      placeholder="Unit R$"
-                                      title="Valor Unitário"
-                                      className="w-full border border-gray-300 rounded-lg px-1.5 py-1 text-xs text-right focus:ring-1 focus:ring-primary focus:outline-none font-semibold"
-                                      value={item.unit_price || ""}
-                                      onChange={(e) => {
-                                        const updated = [...resolveNfs];
-                                        updated[nfIdx].items[itemIdx].unit_price = Number(e.target.value);
-                                        setResolveNfs(updated);
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="col-span-12 sm:col-span-1 flex justify-end sm:justify-center">
-                                    {nf.items.length > 1 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
+                              <div className="space-y-2">
+                                {nf.items.map((item: any, itemIdx: number) => (
+                                  <div key={item.id} className="grid grid-cols-12 gap-2 items-center bg-white border border-zinc-150 p-2 rounded-xl">
+                                    <div className="col-span-12 sm:col-span-5">
+                                      <select
+                                        className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                                        value={item.name}
+                                        onChange={(e) => {
                                           const updated = [...resolveNfs];
-                                          updated[nfIdx].items = updated[nfIdx].items.filter(it => it.id !== item.id);
+                                          updated[nfIdx].items[itemIdx].name = e.target.value;
                                           setResolveNfs(updated);
                                         }}
-                                        className="text-red-500 hover:text-red-700 hover:scale-110 shrink-0 p-1 rounded hover:bg-red-50"
                                       >
-                                        <X size={14} />
-                                      </button>
-                                    )}
+                                        <option value="">-- Selecione item/peça --</option>
+                                        {catalogItems.map(pName => (
+                                          <option key={pName} value={pName}>{pName}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="col-span-4 sm:col-span-3">
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        placeholder="Qtd"
+                                        className="w-full border border-zinc-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary font-bold"
+                                        value={item.quantity || ""}
+                                        onChange={(e) => {
+                                          const updated = [...resolveNfs];
+                                          updated[nfIdx].items[itemIdx].quantity = Number(e.target.value);
+                                          setResolveNfs(updated);
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="col-span-5 sm:col-span-3">
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        placeholder="Unit R$"
+                                        className="w-full border border-zinc-200 rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-primary font-bold"
+                                        value={item.unit_price || ""}
+                                        onChange={(e) => {
+                                          const updated = [...resolveNfs];
+                                          updated[nfIdx].items[itemIdx].unit_price = Number(e.target.value);
+                                          setResolveNfs(updated);
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="col-span-3 sm:col-span-1 flex justify-center">
+                                      {nf.items.length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const updated = [...resolveNfs];
+                                            updated[nfIdx].items = updated[nfIdx].items.filter(it => it.id !== item.id);
+                                            setResolveNfs(updated);
+                                          }}
+                                          className="text-zinc-400 hover:text-red-500 hover:bg-neutral-50 p-1 rounded-lg"
+                                        >
+                                          <X size={14} />
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
                           </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Catalog registration drawer (Inline nested overlay) */}
+                    {showAddItemDialog && (
+                      <div className="mt-3 p-4 bg-orange-50 border border-orange-200 rounded-2xl space-y-2 shrink-0 text-left">
+                        <div className="text-xs font-black uppercase text-orange-700 tracking-wider">Criar Novo Serviço ou Peça</div>
+                        <p className="text-[11px] text-orange-800">O item cadastrado ficará permanentemente disponível no catálogo para todas as NFs.</p>
+                        <div className="flex gap-2 pt-1">
+                          <input
+                            type="text"
+                            placeholder="Nome (Ex: Filtro de Cabine)"
+                            className="flex-1 bg-white border border-orange-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none font-bold"
+                            value={newItemName}
+                            onChange={(e) => setNewItemName(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRegisterCatalogItem(newItemName)}
+                            className="px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-bold rounded-xl shrink-0 cursor-pointer"
+                          >
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setShowAddItemDialog(false); setNewItemName(""); }}
+                            className="px-3 py-1.5 bg-white border border-zinc-200 text-zinc-700 text-xs font-bold rounded-xl shrink-0 cursor-pointer"
+                          >
+                            X
+                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Registered item catalog form dialog */}
-                  {showAddItemDialog && (
-                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-2xl space-y-3">
-                      <div className="text-xs font-black uppercase text-orange-700 tracking-wider">Cadastrar Nova Peça/Serviço no Catálogo</div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="Ex: Amortecedor Dianteiro, Alinhamento"
-                          className="flex-1 bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                          value={newItemName}
-                          onChange={(e) => setNewItemName(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleRegisterCatalogItem(newItemName)}
-                          className="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary-dark cursor-pointer shrink-0"
-                        >
-                          Salvar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setShowAddItemDialog(false); setNewItemName(""); }}
-                          className="px-3 py-1.5 bg-zinc-200 text-zinc-700 text-xs font-bold rounded-xl hover:bg-zinc-300 cursor-pointer shrink-0"
-                        >
-                          Cancelar
-                        </button>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Dynamic General Consolidated Total */}
-                  <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 flex justify-between items-center">
-                    <div>
-                      <span className="text-[10px] font-black uppercase text-primary tracking-widest block">Total Consolidado</span>
-                      <span className="text-xs text-zinc-500">Soma de todas as Notas Fiscais e Itens</span>
-                    </div>
-                    <div className="text-xl font-black text-primary">
-                      R$ {resolveNfs.reduce((acc, nf) => acc + nf.items.reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    {/* Grand Total Footer Dashboard panel inside Column 2 */}
+                    <div className="bg-emerald-50/50 border border-emerald-200 rounded-2xl p-4 mt-4 flex items-center justify-between shrink-0">
+                      <div>
+                        <span className="text-[10px] font-black uppercase text-emerald-800 tracking-widest block font-sans">Total Acumulado das NFs</span>
+                        <span className="text-[11px] text-zinc-500">Soma calculada em tempo real</span>
+                      </div>
+                      <div className="text-2xl font-black text-emerald-700">
+                        R$ {resolveNfs.reduce((acc, nf) => acc + nf.items.reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
                     </div>
                   </div>
-
-                  <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                       Fotos do Serviço (opcional)
-                     </label>
-                     <div className="flex flex-wrap gap-2 mb-2">
-                        {resolvePhotos.map((p, i) => (
-                           <div key={i} className="relative w-16 h-16 rounded border border-gray-200 overflow-hidden">
-                              <img src={URL.createObjectURL(p)} alt="doc" className="w-full h-full object-cover" />
-                              <button onClick={() => setResolvePhotos(resolvePhotos.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5"><X size={10} /></button>
-                           </div>
-                        ))}
-                        <label className="w-16 h-16 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary cursor-pointer transition-colors bg-gray-50">
-                           <Camera size={20} />
-                           <input type="file" className="hidden" accept="image/*" multiple onChange={(e) => {
-                             if (e.target.files) {
-                               const newFiles = Array.from(e.target.files);
-                               setResolvePhotos([...resolvePhotos, ...newFiles]);
-                             }
-                           }} />
-                        </label>
-                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Observações da solução (opcional)
-                    </label>
-                    <textarea
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                      rows={3}
-                      placeholder="Descreva como a pendência foi resolvida..."
-                      value={resolveNotes}
-                      onChange={(e) => setResolveNotes(e.target.value)}
-                    />
-                  </div>
-
-                  {resolvingIssueData?.auto_alerts?.trigger_type === 'km' && (
-                    <div className="bg-blue-50 p-4 border border-blue-200 rounded-xl space-y-3 relative overflow-hidden">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Gauge className="text-blue-500" size={16} />
-                        <h4 className="text-xs font-black text-blue-700 uppercase tracking-widest">Alerta Automático (KM)</h4>
-                      </div>
-                      <p className="text-xs text-blue-800/80 mb-3 block animate-pulse">
-                        Este alerta é baseado em quilometragem (KM). Informe o KM real do veículo nesta manutenção para recalcular os próximos avisos.
-                      </p>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                         <div>
-                           <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">KM do Serviço *</label>
-                           <input
-                             type="number"
-                             value={resolveCurrentKm}
-                             onChange={(e) => setResolveCurrentKm(e.target.value)}
-                             required
-                             placeholder="Ex: 120500"
-                             className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-bold"
-                           />
-                         </div>
-                         <div>
-                           <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Intervalo KM</label>
-                           <input
-                             type="number"
-                             value={resolveIntervalKm}
-                             onChange={(e) => setResolveIntervalKm(e.target.value)}
-                             required
-                             placeholder="Ex: 10000"
-                             className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                           />
-                         </div>
-                         <div>
-                           <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Antecedência (KM)</label>
-                           <input
-                             type="number"
-                             value={resolveWarningKm}
-                             onChange={(e) => setResolveWarningKm(e.target.value)}
-                             required
-                             placeholder="Ex: 1000"
-                             className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                           />
-                         </div>
-                      </div>
-
-                      {resolveCurrentKm && resolveIntervalKm && (
-                        <div className="pt-2.5 border-t border-blue-200/60 flex flex-col gap-1 text-[11px] text-blue-900 font-bold">
-                          <span className="flex items-center gap-1.5">
-                            • Próximo vencimento do alerta: <strong className="text-blue-700">{Number(resolveCurrentKm) + Number(resolveIntervalKm)} KM</strong>
-                          </span>
-                          {resolveWarningKm && (
-                            <span className="flex items-center gap-1.5">
-                              • Início dos avisos no feed: <strong className="text-amber-700">{Number(resolveCurrentKm) + Number(resolveIntervalKm) - Number(resolveWarningKm)} KM</strong>
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {resolvingIssueData?.auto_alerts?.trigger_type === 'date' && (
-                    <div className="bg-orange-50 p-4 border border-orange-200 rounded-xl space-y-3 relative overflow-hidden">
-                      <div className="flex items-center gap-2 mb-1">
-                        <AlertCircle className="text-orange-500" size={16} />
-                        <h4 className="text-xs font-black text-orange-700 uppercase tracking-widest">Alerta Automático (Data)</h4>
-                      </div>
-                      <p className="text-xs text-orange-800/80 mb-3 block">
-                        Esta pendência foi gerada por um alerta. Ao resolvê-la, defina a próxima data de vencimento.
-                      </p>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                         <div>
-                           <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Próxima Data</label>
-                           <input
-                             type="date"
-                             value={resolveNextDate}
-                             onChange={(e) => setResolveNextDate(e.target.value)}
-                             required
-                             className="w-full bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                           />
-                         </div>
-                         <div>
-                           <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Avisar com (Dias)</label>
-                           <input
-                             type="number"
-                             value={resolveWarningDays}
-                             onChange={(e) => setResolveWarningDays(e.target.value)}
-                             placeholder={resolvingIssueData.auto_alerts.warning_days?.toString() || "15"}
-                             className="w-full bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                           />
-                         </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
+              {/* Resolution in Waiting Status View */}
               {modalActionType === "resolve" && !sqlError && resolveSubStatus === "waiting" && (
-                <div className="space-y-4">
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <label className="block text-sm font-semibold text-amber-950 mb-1 flex items-center gap-1.5">
-                      <Clock size={16} className="text-amber-600" />
-                      Motivo / Descrição do Aguardo *
-                    </label>
-                    <textarea
-                      required
-                      className="w-full bg-white px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent font-medium text-sm text-gray-800"
-                      rows={4}
-                      placeholder="Descreva o motivo pelo qual esta pendência está em aguardo (ex: aguardando peça do distribuidor, aguardando aprovação de orçamento...)"
-                      value={resolveNotes}
-                      onChange={(e) => setResolveNotes(e.target.value)}
-                    />
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full min-h-0 text-left">
+                  {/* Left checklist selection */}
+                  <div className="lg:col-span-6 flex flex-col space-y-4 overflow-y-auto pr-3 min-h-0">
+                    <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
+                      <label className="block text-xs font-black text-zinc-500 uppercase tracking-wider text-left">
+                        Ocorrências agrupadas para colocar em aguardo:
+                      </label>
+                      <div className="space-y-2 border border-zinc-200 rounded-xl p-2 bg-white max-h-72 overflow-y-auto">
+                        {resolvingIssueData?.grouped_issues && resolvingIssueData.grouped_issues.length > 1 ? (
+                          resolvingIssueData.grouped_issues.map((gi: any) => (
+                            <div key={gi.id} className="flex gap-3 p-2 bg-zinc-50 rounded-lg text-left">
+                              <input
+                                type="checkbox"
+                                className="mt-1 flex-shrink-0 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-not-allowed"
+                                checked={selectedIdsToResolve.includes(gi.id)}
+                                disabled
+                              />
+                              <div className="text-xs text-left">
+                                <div className="font-extrabold text-zinc-950 text-left">{new Date(gi.created_at).toLocaleString('pt-BR')}</div>
+                                {gi.description ? <div className="text-zinc-500 italic mt-0.5 text-left">"{gi.description}"</div> : null}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-3 text-xs text-zinc-400 font-medium text-left">Esta pendência individual será movida para sinalizada em aguardo.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Waiting form */}
+                  <div className="lg:col-span-6 flex flex-col justify-center h-full space-y-4 pl-3 border-t lg:border-t-0 lg:border-l border-zinc-100 lg:pl-8 text-left">
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-3 text-left">
+                      <div className="flex items-center gap-2">
+                        <Clock size={20} className="text-amber-600" />
+                        <span className="text-sm font-black text-amber-950 uppercase tracking-wider text-left">Motivo do Aguardo *</span>
+                      </div>
+                      <p className="text-xs text-amber-900/80 leading-relaxed font-semibold text-left">
+                        Informe o motivo da retenção do veículo ou pendência de peça, orçamento, etc. Isso ficará visível no painel administrativo.
+                      </p>
+                      <textarea
+                        required
+                        className="w-full bg-white px-4 py-3 border border-amber-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm font-semibold text-zinc-800 shadow-inner"
+                        rows={5}
+                        placeholder="Exemplo: Aguardando remessa do distribuidor para o farol traseiro esquerdo. Orçamento aprovado pela gerência."
+                        value={resolveNotes}
+                        onChange={(e) => setResolveNotes(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
+              {/* Exclusion/Delete View */}
+              {modalActionType === "delete" && (
+                <div className="flex flex-col items-center justify-center p-8 max-w-xl mx-auto h-full text-center space-y-6">
+                  <div className="w-16 h-16 bg-red-50 border border-red-205 text-red-600 rounded-full flex items-center justify-center shadow-inner">
+                    <Trash2 size={32} />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-black text-zinc-900 text-center">Tem certeza que deseja excluir esta pendência?</h3>
+                    <p className="text-sm text-zinc-500 text-center">
+                      Isto removerá definitivamente {selectedIdsToResolve.length === 1 ? "o registro selecionado" : "os registros selecionados"} da base de dados física. Esta operação não pode ser desfeita.
+                    </p>
+                  </div>
+                  {resolvingIssueData?.grouped_issues && resolvingIssueData.grouped_issues.length > 1 && (
+                    <div className="w-full text-left bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 space-y-2">
+                      <span className="text-[10px] font-black uppercase text-zinc-400 tracking-widest block font-sans text-left">Ocorrências Selecionadas</span>
+                      <div className="max-h-36 overflow-y-auto pr-1 space-y-1">
+                        {resolvingIssueData.grouped_issues.filter((g: any) => selectedIdsToResolve.includes(g.id)).map((gi: any) => (
+                          <div key={gi.id} className="text-xs text-zinc-700 py-1 border-b border-zinc-150 last:border-0 font-medium text-left">
+                            <strong>{new Date(gi.created_at).toLocaleDateString('pt-BR')}</strong> - {gi.description || "Sem notas de descrição"}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SQL Missing columns trigger panel */}
               {modalActionType === "resolve" && sqlError && (
-                <div className="bg-white p-6 rounded-3xl border border-app-border shadow-sm mb-4">
-                   <h3 className="text-sm font-black text-danger uppercase tracking-tight mb-2">Atenção!</h3>
-                   <p className="text-sm text-zinc-600 mb-4">Para poder salvar Nota Fiscal, Valor e Fotos da solução, precisamos adicionar as colunas no Supabase. Copie o SQL abaixo e cole no painel do Supabase:</p>
-                   <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl overflow-x-auto text-xs font-mono text-zinc-600">
-                     <pre>
+                <div className="bg-zinc-50 p-6 rounded-3xl border border-rose-200 h-full overflow-y-auto space-y-4 text-left">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={24} className="text-red-500" />
+                    <h3 className="text-base font-black text-zinc-900 uppercase tracking-tight">Esquema do Banco de Dados Desatualizado</h3>
+                  </div>
+                  <p className="text-sm text-zinc-500 leading-relaxed text-left">
+                    Para habilitar o salvamento unificado de <strong>Notas Fiscais, Custos de Peças e Anexos de Imagens</strong>, é necessário expandir a tabela checklist_issues através do seu console do Supabase. Copie o script SQL abaixo e aplique-o em seu painel:
+                  </p>
+                  <div className="p-4 bg-zinc-900 rounded-2xl overflow-x-auto text-xs font-mono text-zinc-200 shadow-xl border border-zinc-800 text-left">
+                    <pre>
 {`ALTER TABLE public.checklist_issues 
 ADD COLUMN IF NOT EXISTS resolution_nf TEXT,
 ADD COLUMN IF NOT EXISTS resolution_value NUMERIC,
 ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
-                     </pre>
-                   </div>
-                   <button onClick={() => setSqlError(null)} className="mt-4 px-4 py-2 bg-zinc-200 text-zinc-700 rounded-lg text-sm font-bold">Voltar e tentar novamente</button>
+                    </pre>
+                  </div>
+                  <div className="flex gap-3 pt-2 text-left">
+                    <button
+                      onClick={() => setSqlError(null)}
+                      className="px-5 py-2.5 bg-primary text-white rounded-xl text-xs font-black shadow-lg hover:bg-primary-dark transition-all cursor-pointer"
+                    >
+                      Voltar e tentar novamente
+                    </button>
+                  </div>
                 </div>
               )}
+            </div>
 
-              <div className="flex bg-gray-50 -mx-6 -mb-6 px-6 py-4 justify-end gap-3 rounded-b-xl border-t border-gray-200">
+            {/* Sticky Actions Footer */}
+            {!sqlError && (
+              <div className="flex bg-zinc-50/50 px-6 py-4 justify-end gap-3 rounded-b-3xl border-t border-zinc-100 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -2007,7 +2127,7 @@ ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
                     setSqlError(null);
                   }}
                   disabled={isResolving}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                  className="px-5 py-2.5 text-xs font-extrabold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-805 rounded-xl transition-all border border-zinc-200 cursor-pointer uppercase tracking-wider"
                 >
                   Cancelar
                 </button>
@@ -2015,30 +2135,48 @@ ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
                   type="button"
                   onClick={confirmModalAction}
                   disabled={isResolving || selectedIdsToResolve.length === 0}
-                  className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-50 ${
+                  className={`px-5 py-2.5 text-xs font-black text-white rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer shadow-md uppercase tracking-wider ${
                     modalActionType === "resolve"
                       ? resolveSubStatus === "waiting"
-                        ? "bg-amber-600 hover:bg-amber-700 focus:ring-amber-500"
-                        : "bg-primary hover:bg-primary-dark"
-                      : "bg-red-600 hover:bg-red-700"
+                        ? "bg-amber-600 hover:bg-amber-655 active:scale-95 shadow-amber-600/10"
+                        : "bg-emerald-600 hover:bg-emerald-655 active:scale-95 shadow-emerald-600/10"
+                      : "bg-rose-600 hover:bg-rose-700 active:scale-95 shadow-rose-600/10"
                   }`}
                 >
                   {isResolving ? (
-                    modalActionType === "resolve"
-                      ? resolveSubStatus === "waiting"
-                        ? "Sinalizando..."
-                        : "Resolvendo..."
-                      : "Excluindo..."
+                    <>
+                      <Clock size={14} className="animate-spin" />
+                      {modalActionType === "resolve"
+                        ? resolveSubStatus === "waiting"
+                          ? "Sinalizando..."
+                          : "Resolvendo..."
+                        : "Excluindo..."}
+                    </>
                   ) : (
-                    modalActionType === "resolve"
-                      ? resolveSubStatus === "waiting"
-                        ? "Confirmar Aguardo"
-                        : "Confirmar Resolução"
-                      : "Confirmar Exclusão"
+                    <>
+                      {modalActionType === "resolve" ? (
+                        resolveSubStatus === "waiting" ? (
+                          <>
+                            <Clock size={14} />
+                            Confirmar Aguardo
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle size={14} />
+                            Gravar Solução
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <Trash2 size={14} />
+                          Confirmar Exclusão
+                        </>
+                      )}
+                    </>
                   )}
                 </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}

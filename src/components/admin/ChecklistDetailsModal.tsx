@@ -365,7 +365,7 @@ export default function ChecklistDetailsModal({
               </h3>
               <p className="text-[10px] font-bold text-gray-400 uppercase">
                 Nº {selectedSub.id?.split("-")[0]} •{" "}
-                {new Date(selectedSub.created_at).toLocaleString()}
+                {new Date(selectedSub.details?.adjusted_date || selectedSub.created_at).toLocaleString()}
                 {selectedSub.details?.is_edited &&
                   ` • Editado em ${new Date(selectedSub.details.edited_at).toLocaleString()}`}
               </p>
@@ -442,7 +442,7 @@ export default function ChecklistDetailsModal({
                 Detalhes do Checklist {selectedSub.id?.split("-")[0]}
               </h1>
               <p className="text-sm font-bold text-zinc-500 tracking-widest uppercase">
-                {new Date(selectedSub.created_at).toLocaleString()}
+                {new Date(selectedSub.details?.adjusted_date || selectedSub.created_at).toLocaleString()}
               </p>
             </div>
             {/* Informações básicas */}

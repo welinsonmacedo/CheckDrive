@@ -196,8 +196,7 @@ export default function DriverRankingDetailsModal({
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ type: "spring", damping: 25, stiffness: 350 }}
-        className="bg-white rounded-[24px] shadow-2xl border border-slate-100 w-full max-w-4xl my-auto flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block overflow-hidden"
+        transition={{ type: "spring", damping: 25, stiffness: 350 }}        className="bg-white rounded-[24px] shadow-2xl border border-slate-100 w-full max-w-[95vw] md:max-w-6xl xl:max-w-7xl my-auto flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block overflow-hidden"
       >
         {/* Top Accent line */}
         <div className="absolute top-0 left-0 right-0 h-[5px] bg-gradient-to-r from-sky-400 via-indigo-500 to-fuchsia-500" />
@@ -262,7 +261,7 @@ export default function DriverRankingDetailsModal({
         </div>
 
         {/* Content Panel Scroll */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 print:overflow-visible print:h-auto max-h-[80vh]">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 print:overflow-visible print:h-auto max-h-[85vh]">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 space-y-3">
               <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
@@ -307,7 +306,7 @@ export default function DriverRankingDetailsModal({
                 </div>
 
                 {/* 2. Checklists Counter */}
-                <div className="bg-gradient-to-br from-emerald-50/20 to-emerald-50/5 border border-emerald-100/50 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+                 <div className="bg-gradient-to-br from-emerald-50/20 to-emerald-50/5 border border-emerald-100/50 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-[9px] font-black uppercase text-emerald-600 tracking-wider">
@@ -360,221 +359,225 @@ export default function DriverRankingDetailsModal({
 
               </div>
 
-              {/* Submissions Section */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                    <Award size={14} className="text-emerald-500 mt-[-2px]" />
-                    Atividades Realizadas (Últimos Checklists)
-                  </h3>
-                  <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
-                    {submissions.length} inspeções
-                  </span>
-                </div>
+              {/* Grid split for checklists and penalties/schedules */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start print:block">
+                
+                {/* Left Side: Submissions Table */}
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                      <Award size={14} className="text-emerald-500 mt-[-2px]" />
+                      Atividades Realizadas (Últimos Checklists)
+                    </h3>
+                    <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
+                      {submissions.length} inspeções
+                    </span>
+                  </div>
 
-                {submissions.length > 0 ? (
-                  <div className="overflow-hidden border border-slate-105 rounded-2xl bg-white shadow-sm">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50/70 border-b border-slate-100">
-                          <tr>
-                            <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
-                              Data / Hora
-                            </th>
-                            <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
-                              Inspeção / Ocorrência
-                            </th>
-                            <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
-                              Veículo
-                            </th>
-                            <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
-                              Rota Associada
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {submissions.map((sub) => (
-                            <tr key={sub.id} className="hover:bg-slate-50/20 transition-all">
-                              <td className="px-5 py-3.5 whitespace-nowrap">
-                                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                                  <Clock size={12} className="text-slate-400 shrink-0" />
-                                  <span>{new Date(sub.created_at).toLocaleDateString("pt-BR")}</span>
-                                  <span className="text-[10px] text-slate-400 font-semibold font-mono">
-                                    {new Date(sub.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-5 py-3.5 whitespace-nowrap">
-                                <span className="text-[10px] font-black uppercase text-indigo-750 bg-indigo-50/50 border border-indigo-100/50 px-2 py-0.5 rounded-md">
-                                  {sub.type === "start" ? "Início Viagem" 
-                                   : sub.type === "end" ? "Fim Viagem" 
-                                   : sub.type === "fuel" ? "Abastecimento" 
-                                   : sub.type === "yard" ? "Pátio" 
-                                   : sub.type}
-                                </span>
-                              </td>
-                              <td className="px-5 py-3.5 whitespace-nowrap">
-                                <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/55">
-                                  {sub.vehicles?.plate || "N/A"}
-                                </span>
-                              </td>
-                              <td className="px-5 py-3.5">
-                                <div className="flex items-center gap-1.5 text-xs text-slate-550 font-bold max-w-xs truncate">
-                                  <MapPin size={11} className="text-slate-400 shrink-0" />
-                                  <span>
-                                    {sub.routes ? `${sub.routes.origin} → ${sub.routes.destination}` : "Lançamento Avulso"}
-                                  </span>
-                                </div>
-                              </td>
+                  {submissions.length > 0 ? (
+                    <div className="overflow-hidden border border-slate-105 rounded-2xl bg-white shadow-sm">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead className="bg-slate-50/70 border-b border-slate-100">
+                            <tr>
+                              <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                                Data / Hora
+                              </th>
+                              <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                                Tipo
+                              </th>
+                              <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                                Veículo
+                              </th>
+                              <th className="px-5 py-3 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                                Rota Associada
+                              </th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {submissions.map((sub) => (
+                              <tr key={sub.id} className="hover:bg-slate-50/20 transition-all">
+                                <td className="px-5 py-3.5 whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                                    <Clock size={12} className="text-slate-400 shrink-0" />
+                                    <span>{new Date(sub.created_at).toLocaleDateString("pt-BR")}</span>
+                                    <span className="text-[10px] text-slate-400 font-semibold font-mono">
+                                      {new Date(sub.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-5 py-3.5 whitespace-nowrap">
+                                  <span className="text-[10px] font-black uppercase text-indigo-750 bg-indigo-50/50 border border-indigo-100/50 px-2 py-0.5 rounded-md">
+                                    {sub.type === "start" ? "Início Viagem" 
+                                     : sub.type === "end" ? "Fim Viagem" 
+                                     : sub.type === "fuel" ? "Abastecimento" 
+                                     : sub.type === "yard" ? "Pátio" 
+                                     : sub.type}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3.5 whitespace-nowrap">
+                                  <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/55">
+                                    {sub.vehicles?.plate || "N/A"}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-3.5">
+                                  <div className="flex items-center gap-1.5 text-xs text-slate-550 font-bold max-w-xs truncate">
+                                    <MapPin size={11} className="text-slate-400 shrink-0" />
+                                    <span>
+                                      {sub.routes ? `${sub.routes.origin} → ${sub.routes.destination}` : "Lançamento Avulso"}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-10 bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl">
-                    <User size={24} className="text-slate-350 mx-auto mb-2" />
-                    <p className="text-xs font-black text-slate-600 uppercase tracking-wider">Nenhuma Atividade Registrada</p>
-                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Nenhum checklist associado no período selecionado.</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Missed / Audit Logs Section */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                    <AlertTriangle size={14} className="text-rose-500 mt-[-2px]" />
-                    Ficha de Ocorrências e Descontos Administrativos
-                  </h3>
-                  <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
-                    Histórico Geral
-                  </span>
+                  ) : (
+                    <div className="text-center py-10 bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl">
+                      <User size={24} className="text-slate-350 mx-auto mb-2" />
+                      <p className="text-xs font-black text-slate-600 uppercase tracking-wider">Nenhuma Atividade Registrada</p>
+                      <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Nenhum checklist associado no período selecionado.</p>
+                    </div>
+                  )}
                 </div>
 
-                {auditLogs.filter((a) => a.type === "penalty" || a.type === "manual").length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {auditLogs
-                      .filter((a) => a.type === "penalty" || a.type === "manual")
-                      .map((audit) => (
-                        <div
-                          key={audit.id}
-                          className="bg-white border border-rose-100/60 p-4 rounded-2xl flex items-start gap-3.5 hover:shadow-md transition-shadow duration-150 bg-gradient-to-br from-rose-50/10 to-transparent"
-                        >
-                          <div className="p-2 bg-rose-55 text-rose-500 rounded-xl shrink-0">
-                            <AlertTriangle size={15} />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="block text-xs font-black text-slate-850 leading-snug truncate capitalize">
-                              {audit.reason}
-                            </span>
-                            <div className="flex items-center gap-1.5 mt-2">
-                              <span className="text-[10px] font-mono font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
-                                -{audit.amount} {appSettings?.system_type === "cash" ? "R$" : "Pts"}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-bold">
-                                em {new Date(audit.created_at).toLocaleDateString("pt-BR")}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-10 border border-dashed border-emerald-100 rounded-3xl bg-emerald-50/5">
-                    <ShieldCheck size={28} className="text-emerald-500 mb-2.5" />
-                    <p className="text-xs font-black text-emerald-800 uppercase tracking-widest">Ficha Limpa Sem Ocorrências</p>
-                    <p className="text-[10px] text-emerald-600/70 font-semibold mt-1">Este motorista cumpre 100% dos procedimentos exigidos.</p>
-                  </div>
-                )}
-              </div>
+                {/* Right Side: Penalties and Schedules */}
+                <div className="lg:col-span-5 space-y-6">
+                  {/* Missed / Audit Logs Section */}
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                      <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                        <AlertTriangle size={14} className="text-rose-500 mt-[-2px]" />
+                        Ficha de Ocorrências e Descontos
+                      </h3>
+                      <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
+                        Histórico Geral
+                      </span>
+                    </div>
 
-              {/* Schedules Section */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                    <Calendar size={14} className="text-amber-500 mt-[-2px]" />
-                    Escalas de Viagem Programadas no Mês
-                  </h3>
-                  <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
-                    Planejamento Operacional
-                  </span>
+                    {auditLogs.filter((a) => a.type === "penalty" || a.type === "manual").length > 0 ? (
+                      <div className="grid grid-cols-1 gap-4">
+                        {auditLogs
+                          .filter((a) => a.type === "penalty" || a.type === "manual")
+                          .map((audit) => (
+                            <div
+                              key={audit.id}
+                              className="bg-white border border-rose-100/60 p-4 rounded-2xl flex items-start gap-3.5 hover:shadow-md transition-shadow duration-150 bg-gradient-to-br from-rose-50/10 to-transparent"
+                            >
+                              <div className="p-2 bg-rose-55 text-rose-500 rounded-xl shrink-0">
+                                <AlertTriangle size={15} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <span className="block text-xs font-black text-slate-850 leading-snug truncate capitalize">
+                                  {audit.reason}
+                                </span>
+                                <div className="flex items-center gap-1.5 mt-2">
+                                  <span className="text-[10px] font-mono font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
+                                    -{audit.amount} {appSettings?.system_type === "cash" ? "R$" : "Pts"}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-bold">
+                                    em {new Date(audit.created_at).toLocaleDateString("pt-BR")}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-10 border border-dashed border-emerald-100 rounded-3xl bg-emerald-50/5">
+                        <ShieldCheck size={28} className="text-emerald-500 mb-2.5" />
+                        <p className="text-xs font-black text-emerald-800 uppercase tracking-widest">Ficha Limpa Sem Ocorrências</p>
+                        <p className="text-[10px] text-emerald-600/70 font-semibold mt-1">Este motorista cumpre todos os procedimentos.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Schedules Section */}
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                      <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                        <Calendar size={14} className="text-amber-500 mt-[-2px]" />
+                        Escalas de Viagem Programadas
+                      </h3>
+                    </div>
+
+                    {schedules.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-4 max-h-[300px] overflow-y-auto pr-1">
+                        {schedules.map((s) => {
+                          const applyStart =
+                            scoreProfile?.apply_penalty_start !== false;
+                          const applyEnd =
+                            scoreProfile?.apply_penalty_end !== false;
+                          const applyFuel =
+                            scoreProfile?.apply_penalty_fuel !== false;
+
+                          const missingStart = applyStart && !s.start_checklist_id;
+                          const missingEnd = applyEnd && !s.end_checklist_id;
+                          const missingFuel =
+                            applyFuel &&
+                            s.requires_fueling !== false &&
+                            !s.fuel_checklist_id;
+                          const isOk = !missingStart && !missingEnd && !missingFuel;
+
+                          return (
+                            <div
+                              key={s.id}
+                              className={`p-4 rounded-2xl border transition-all hover:shadow-md flex flex-col justify-between ${
+                                isOk 
+                                  ? "bg-gradient-to-br from-emerald-50/15 to-transparent border-slate-200/80 hover:border-emerald-250" 
+                                  : "bg-gradient-to-br from-rose-50/15 to-transparent border-rose-100/70 hover:border-rose-250"
+                              }`}
+                            >
+                              <div>
+                                <div className="flex justify-between items-center mb-3">
+                                  <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-wide">
+                                    <Clock size={11} />
+                                    {new Date(s.start_at).toLocaleDateString("pt-BR")}
+                                  </span>
+                                  <span
+                                    className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                      isOk 
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-150" 
+                                        : "bg-rose-50 text-rose-700 border-rose-150"
+                                    }`}
+                                  >
+                                    {isOk ? "Completa" : "Pendente"}
+                                  </span>
+                                </div>
+
+                                <div className="text-xs font-black text-slate-850 leading-relaxed flex items-center gap-2">
+                                  <MapPin size={12} className="text-slate-400 shrink-0" />
+                                  <span>
+                                    {s.routes ? `${s.routes.origin} → ${s.routes.destination}` : "Rota Indefinida"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {!isOk && (
+                                <div className="text-[9px] text-rose-600 bg-rose-50 border border-rose-100/50 p-2 rounded-lg font-black uppercase tracking-wider mt-3 flex items-center gap-1.5">
+                                  <Info size={11} className="shrink-0" />
+                                  <span>Faltou: {[
+                                    missingStart && "Início",
+                                    missingEnd && "Fim",
+                                    missingFuel && "Combustível"
+                                  ].filter(Boolean).join(", ")}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="py-10 text-center bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl">
+                        <Calendar size={24} className="text-slate-350 mx-auto mb-2" />
+                        <p className="text-xs font-black text-slate-600 uppercase tracking-widest">Sem Escalas Registradas</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {schedules.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {schedules.map((s) => {
-                      const applyStart =
-                        scoreProfile?.apply_penalty_start !== false;
-                      const applyEnd =
-                        scoreProfile?.apply_penalty_end !== false;
-                      const applyFuel =
-                        scoreProfile?.apply_penalty_fuel !== false;
-
-                      const missingStart = applyStart && !s.start_checklist_id;
-                      const missingEnd = applyEnd && !s.end_checklist_id;
-                      const missingFuel =
-                        applyFuel &&
-                        s.requires_fueling !== false &&
-                        !s.fuel_checklist_id;
-                      const isOk = !missingStart && !missingEnd && !missingFuel;
-
-                      return (
-                        <div
-                          key={s.id}
-                          className={`p-4 rounded-2xl border transition-all hover:shadow-md flex flex-col justify-between ${
-                            isOk 
-                              ? "bg-gradient-to-br from-emerald-50/15 to-transparent border-slate-200/80 hover:border-emerald-250" 
-                              : "bg-gradient-to-br from-rose-50/15 to-transparent border-rose-100/70 hover:border-rose-250"
-                          }`}
-                        >
-                          <div>
-                            <div className="flex justify-between items-center mb-3">
-                              <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 uppercase tracking-wide">
-                                <Clock size={11} />
-                                {new Date(s.start_at).toLocaleDateString("pt-BR")}
-                              </span>
-                              <span
-                                className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                                  isOk 
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-150" 
-                                    : "bg-rose-50 text-rose-700 border-rose-150"
-                                }`}
-                              >
-                                {isOk ? "Completa" : "Com Pendência"}
-                              </span>
-                            </div>
-
-                            <div className="text-xs font-black text-slate-850 leading-relaxed flex items-center gap-2">
-                              <MapPin size={12} className="text-slate-400 shrink-0" />
-                              <span>
-                                {s.routes ? `${s.routes.origin} → ${s.routes.destination}` : "Rota Indefinida"}
-                              </span>
-                            </div>
-                          </div>
-
-                          {!isOk && (
-                            <div className="text-[9px] text-rose-600 bg-rose-50 border border-rose-100/50 p-2 rounded-lg font-black uppercase tracking-wider mt-3 flex items-center gap-1.5">
-                              <Info size={11} className="shrink-0" />
-                              <span>Faltou: {[
-                                missingStart && "Início",
-                                missingEnd && "Fim",
-                                missingFuel && "Combustível"
-                              ].filter(Boolean).join(", ")}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="col-span-full py-10 text-center bg-slate-50/50 border border-dashed border-slate-200 rounded-3xl">
-                    <Calendar size={24} className="text-slate-350 mx-auto mb-2" />
-                    <p className="text-xs font-black text-slate-600 uppercase tracking-widest">Sem Escalas Registradas</p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1">Este motorista não possui viagens programadas neste período.</p>
-                  </div>
-                )}
               </div>
             </>
           )}

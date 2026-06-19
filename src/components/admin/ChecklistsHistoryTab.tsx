@@ -128,7 +128,7 @@ export default function ChecklistsHistoryTab({ onViewDetails }: ChecklistsHistor
                 ) : filtered.length > 0 ? filtered.map((sub) => (
                   <tr key={sub.id} className="hover:bg-app-bg/30">
                     <td className="px-5 py-4 text-[10px] font-bold">
-                      {new Date(sub.created_at).toLocaleDateString()} {new Date(sub.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(sub.details?.adjusted_date || sub.created_at).toLocaleDateString()} {new Date(sub.details?.adjusted_date || sub.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="px-5 py-4 text-xs font-bold">{sub.profiles?.full_name}</td>
                     <td className="px-5 py-4 text-xs font-mono">{sub.vehicles?.plate}</td>

@@ -146,7 +146,7 @@ export default function VehicleDetailsModal({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl my-auto flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-[95vw] md:max-w-6xl xl:max-w-7xl my-auto flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block"
       >
         {/* Header */}
         <div className="p-5 border-b border-app-border flex items-center justify-between bg-zinc-50 relative">
@@ -202,7 +202,7 @@ export default function VehicleDetailsModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8 print:overflow-visible print:h-auto">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 print:overflow-visible print:h-auto">
           {loading ? (
             <div className="text-center py-20 animate-pulse text-sm font-bold text-text-muted uppercase">
               Carregando detalhes...
@@ -210,189 +210,198 @@ export default function VehicleDetailsModal({
           ) : (
             <>
               {/* Summary Stats */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-zinc-50 border border-app-border p-4 rounded-xl flex flex-col items-center justify-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-zinc-50 border border-app-border p-4 rounded-xl flex flex-col items-center justify-center shadow-sm">
                   <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1 text-center">
                     Checklists
                   </span>
-                  <span className="text-2xl font-black text-text-main">
+                  <span className="text-3xl font-black text-text-main">
                     {calculateSubmissionsCnt()}
                   </span>
                 </div>
-                <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex flex-col items-center justify-center">
+                <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl flex flex-col items-center justify-center shadow-sm">
                   <span className="text-[10px] font-bold text-orange-700 uppercase tracking-widest mb-1 text-center">
                     Pendências (Abertas)
                   </span>
-                  <span className="text-xl font-black text-orange-700">
+                  <span className="text-2xl font-black text-orange-700">
                     {calculatePendingIssues()}
                   </span>
                 </div>
-                <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex flex-col items-center justify-center">
+                <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex flex-col items-center justify-center shadow-sm">
                   <span className="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-1 text-center">
                     Manutenções Resolvidas
                   </span>
-                  <span className="text-xl font-black text-green-700">
+                  <span className="text-2xl font-black text-green-700">
                     {calculateResolvedIssues()}
                   </span>
                 </div>
               </div>
 
-              {/* Issues Section */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                  <Wrench size={16} className="text-orange-600" /> Ocorrências /
-                  Manutenções
-                </h3>
-                <div className="overflow-hidden border border-app-border rounded-xl">
-                  <table className="w-full text-left">
-                    <thead className="bg-zinc-50">
-                      <tr>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Data
-                        </th>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Item
-                        </th>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Status
-                        </th>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Motorista
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-app-border">
-                      {issues.length > 0 ? (
-                        issues.map((iss) => (
-                          <tr key={iss.id} className="hover:bg-zinc-50/50">
-                            <td className="px-4 py-3">
-                              <div className="font-bold text-xs text-text-main">
-                                {new Date(iss.created_at).toLocaleDateString()}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-xs font-bold text-text-main">
-                              <div>{iss.item_title}</div>
-                              {iss.description && (
-                                <div className="text-[10px] text-text-muted font-normal mt-0.5 max-w-[200px] whitespace-normal break-words">
-                                  {iss.description}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              {iss.status === "pending" ? (
-                                <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-700 text-[9px] font-black uppercase tracking-wider">
-                                  Pendente
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 text-[9px] font-black uppercase tracking-wider">
-                                  Resolvido
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-1.5 font-medium text-[10px] text-text-muted">
-                                <User size={12} />
-                                {iss.profiles?.full_name || "Desconhecido"}
-                              </div>
-                            </td>
+              {/* Grid split for Issues and Submissions */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start print:block">
+                
+                {/* Issues Section */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2 border-b border-app-border pb-1">
+                    <Wrench size={16} className="text-orange-600" /> Ocorrências /
+                    Manutenções
+                  </h3>
+                  <div className="overflow-hidden border border-app-border rounded-xl shadow-sm bg-white">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead className="bg-zinc-50 border-b border-app-border">
+                          <tr>
+                            <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Data
+                            </th>
+                            <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Item
+                            </th>
+                            <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Status
+                            </th>
+                            <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Motorista
+                            </th>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="px-4 py-6 text-center text-xs font-bold text-text-muted italic"
-                          >
-                            Nenhuma ocorrência registrada neste período.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody className="divide-y divide-app-border">
+                          {issues.length > 0 ? (
+                            issues.map((iss) => (
+                              <tr key={iss.id} className="hover:bg-zinc-50/50">
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="font-bold text-xs text-text-main">
+                                    {new Date(iss.created_at).toLocaleDateString()}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-xs font-bold text-text-main">
+                                  <div>{iss.item_title}</div>
+                                  {iss.description && (
+                                    <div className="text-[10px] text-text-muted font-normal mt-0.5 max-w-[200px] whitespace-normal break-words">
+                                      {iss.description}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  {iss.status === "pending" ? (
+                                    <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-700 text-[9px] font-black uppercase tracking-wider border border-orange-200">
+                                      Pendente
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 text-[9px] font-black uppercase tracking-wider border border-green-200">
+                                      Resolvido
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5 font-medium text-[10px] text-text-muted">
+                                    <User size={12} />
+                                    {iss.profiles?.full_name || "Desconhecido"}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td
+                                colSpan={4}
+                                className="px-4 py-6 text-center text-xs font-bold text-text-muted italic"
+                              >
+                                Nenhuma ocorrência registrada neste período.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Submissions Section */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2">
-                  <CheckCircle size={16} className="text-green-600" />{" "}
-                  Checklists Realizados
-                </h3>
-                <div className="overflow-hidden border border-app-border rounded-xl">
-                  <table className="w-full text-left">
-                    <thead className="bg-zinc-50">
-                      <tr>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Data / Hora
-                        </th>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Tipo
-                        </th>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Lugar (Rota)
-                        </th>
-                        <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                          Motorista
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-app-border">
-                      {submissions.length > 0 ? (
-                        submissions.map((sub) => (
-                          <tr key={sub.id} className="hover:bg-zinc-50/50">
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2 font-bold text-xs text-text-main">
-                                <Clock size={12} className="text-text-muted" />
-                                {new Date(
-                                  sub.created_at,
-                                ).toLocaleDateString()}{" "}
-                                às{" "}
-                                {new Date(sub.created_at).toLocaleTimeString(
-                                  [],
-                                  { hour: "2-digit", minute: "2-digit" },
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-xs font-bold text-text-main uppercase">
-                              {sub.type === "start"
-                                ? "Início de Viagem"
-                                : sub.type === "end"
-                                  ? "Fim de Viagem"
-                                  : sub.type === "fuel"
-                                    ? "Abastecimento"
-                                    : sub.type === "yard"
-                                      ? "Pátio"
-                                      : sub.type}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2 font-medium text-[10px] text-text-muted">
-                                <MapPin size={12} />
-                                {sub.routes
-                                  ? `${sub.routes.origin} → ${sub.routes.destination}`
-                                  : "Não Informada"}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-1.5 font-medium text-[10px] text-text-muted">
-                                <User size={12} />
-                                {sub.profiles?.full_name || "Desconhecido"}
-                              </div>
-                            </td>
+                {/* Submissions Section */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-black text-text-main uppercase tracking-widest flex items-center gap-2 border-b border-app-border pb-1">
+                    <CheckCircle size={16} className="text-green-600" />{" "}
+                    Checklists Realizados
+                  </h3>
+                  <div className="overflow-hidden border border-app-border rounded-xl shadow-sm bg-white">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead className="bg-zinc-50 border-b border-app-border">
+                          <tr>
+                            <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Data / Hora
+                            </th>
+                            <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Tipo
+                            </th>
+                            <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Lugar (Rota)
+                            </th>
+                            <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                              Motorista
+                            </th>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="px-4 py-6 text-center text-xs font-bold text-text-muted italic"
-                          >
-                            Nenhum checklist registrado neste período.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody className="divide-y divide-app-border">
+                          {submissions.length > 0 ? (
+                            submissions.map((sub) => (
+                              <tr key={sub.id} className="hover:bg-zinc-50/50">
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="flex items-center gap-2 font-bold text-xs text-text-main">
+                                    <Clock size={12} className="text-text-muted" />
+                                    {new Date(
+                                      sub.created_at,
+                                    ).toLocaleDateString()}{" "}
+                                    às{" "}
+                                    {new Date(sub.created_at).toLocaleTimeString(
+                                      [],
+                                      { hour: "2-digit", minute: "2-digit" },
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-xs font-bold text-text-main uppercase whitespace-nowrap">
+                                  {sub.type === "start"
+                                    ? "Início de Viagem"
+                                    : sub.type === "end"
+                                      ? "Fim de Viagem"
+                                      : sub.type === "fuel"
+                                        ? "Abastecimento"
+                                        : sub.type === "yard"
+                                          ? "Pátio"
+                                          : sub.type}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2 font-medium text-[10px] text-text-muted">
+                                    <MapPin size={12} />
+                                    {sub.routes
+                                      ? `${sub.routes.origin} → ${sub.routes.destination}`
+                                      : "Não Informada"}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5 font-medium text-[10px] text-text-muted cursor-default">
+                                    <User size={12} />
+                                    {sub.profiles?.full_name || "Desconhecido"}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td
+                                colSpan={4}
+                                className="px-4 py-6 text-center text-xs font-bold text-text-muted italic"
+                              >
+                                Nenhum checklist registrado neste período.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
+
               </div>
             </>
           )}

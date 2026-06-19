@@ -151,7 +151,7 @@ export default function VehicleDetailsModal({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 30 }}
         transition={{ type: "spring", damping: 25, stiffness: 350 }}
-        className="bg-white rounded-[24px] shadow-2xl border border-slate-100 w-full max-w-4xl my-auto flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block overflow-hidden"
+        className="bg-white rounded-[24px] shadow-2xl border border-slate-100 w-full max-w-[95vw] md:max-w-6xl xl:max-w-7xl my-auto flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block overflow-hidden"
       >
         {/* Top Decorative bar */}
         <div className="absolute top-0 left-0 right-0 h-[5px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
@@ -218,7 +218,7 @@ export default function VehicleDetailsModal({
         </div>
 
         {/* Content Section */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 print:overflow-visible print:h-auto max-h-[80vh]">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 print:overflow-visible print:h-auto max-h-[85vh]">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 space-y-3">
               <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
@@ -294,8 +294,11 @@ export default function VehicleDetailsModal({
                 </div>
               </div>
 
-              {/* Issues / Anomalies Block */}
-              <div className="space-y-4">
+              {/* Grid split for Issues and Submissions */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start print:block">
+
+                {/* Issues / Anomalies Block */}
+                <div className="space-y-4">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                   <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
                     <Wrench size={14} className="text-amber-500 mt-[-2px] animate-pulse" />
@@ -453,6 +456,8 @@ export default function VehicleDetailsModal({
                     <p className="text-[10px] text-slate-400 font-bold mt-1">Nenhum checklist de viagem foi lançado neste período.</p>
                   </div>
                 )}
+              </div>
+
               </div>
             </>
           )}

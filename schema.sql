@@ -768,3 +768,37 @@ ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS plan_id UUID REFERENCES pu
 
 -- Linkar plans existentes
 UPDATE public.companies SET plan_id = (SELECT id FROM public.saas_plans WHERE name = companies.plan_name LIMIT 1) WHERE plan_name IS NOT NULL AND plan_id IS NULL;
+
+-- TABELA DEDICADA DE MÉDIAS DE CONSUMO
+CREATE TABLE IF NOT EXISTS public.vehicle_averages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE,
+    vehicle_id UUID REFERENCES public.vehicles(id) ON DELETE CASCADE,
+    driver_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    schedule_id UUID REFERENCES public.schedules(id) ON DELETE SET NULL,
+    fuel_submission_id UUID REFERENCES public.checklist_submissions(id) ON DELETE SET NULL,
+    start_date TIMESTAMP WITH TIME ZONE,
+    end_date TIMESTAMP WITH TIME ZONE,
+    start_odometer INTEGER,
+    end_odometer INTEGER,
+    distance INTEGER,
+    liters NUMERIC,
+    average NUMERIC,
+    status TEXT DEFAULT 'reviewed',
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.vehicle_averages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone authenticated can read vehicle_averages" ON public.vehicle_averages;
+CREATE POLICY "Anyone authenticated can read vehicle_averages" ON public.vehicle_averages
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "Managers can manage vehicle_averages" ON public.vehicle_averages;
+CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
+  FOR ALL TO authenticated USING (is_manager());
+
+CREATE TRIGGER set_company_id_vehicle_averages BEFORE INSERT ON public.vehicle_averages FOR EACH ROW EXECUTE FUNCTION set_company_id_on_insert();
+

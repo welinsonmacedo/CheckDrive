@@ -110,17 +110,17 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
 
       const { data: activity } = await supabase
         .from('checklist_submissions')
-        .select(`id, created_at, status, type, profiles (full_name), vehicles (plate)`)
+        .select(`id, created_at, details, status, type, profiles (full_name), vehicles (plate)`)
         .order('created_at', { ascending: false }).limit(6);
       setRecentActivity(activity || []);
 
       const { data: rankData } = await supabase
         .from('driver_performance')
-        .select(`score, profiles!inner(full_name, role)`)
+        .select(`score, profiles!inner(full_name, role, participates_in_ranking)`)
         .eq('profiles.role', 'driver')
         .order('score', { ascending: false });
       
-      const filteredRanks = (rankData || []).filter((r: any) => !r.profiles?.full_name?.endsWith('//INTERNO')).slice(0, 3);
+      const filteredRanks = (rankData || []).filter((r: any) => r.profiles?.participates_in_ranking !== false && !r.profiles?.full_name?.endsWith('//INTERNO')).slice(0, 3);
       setRankings(filteredRanks);
     } catch (error) {
       console.error('Error fetching overview', error);
@@ -149,65 +149,54 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
         return;
       }
 
-      const { data: allChecklists, error: checklistsError } = await supabase
-        .from('checklist_submissions')
-        .select('*, vehicles(plate)');
+      // 1. Fetch active issues to count current active/pending defects per vehicle
+      const { data: activeIssues, error: issuesError } = await supabase
+        .from('checklist_issues')
+        .select('id, vehicle_id, trailer_id, item_title')
+        .in('status', ['pending', 'waiting']);
 
-      if (checklistsError) {
-        console.error('Erro ao buscar checklists:', checklistsError);
-        setVehiclesWithPending([]);
-        setLoadingVehicles(false);
-        return;
+      if (issuesError) {
+        console.error('Erro ao buscar active issues:', issuesError);
       }
 
-      const checklistsWithDefects = allChecklists?.filter(c => {
-        if (c.status === 'com_defeitos' || c.status === 'defect') {
-          return true;
-        }
-        if (c.details && c.details.itemValues) {
-          const values = Object.values(c.details.itemValues);
-          return values.some((v: any) => v === 'defect' || v === 'defeito');
-        }
-        return false;
-      }) || [];
-
-      // Fetch checklists items titles
-      const { data: allItems } = await supabase.from('checklist_items').select('id, title');
-      const itemTitleMap: { [key: string]: string } = {};
-      if (allItems) {
-        allItems.forEach((i: any) => {
-          itemTitleMap[i.id] = decodeItemTitle(i.title).title;
-        });
-      }
-
-      const defectCountByVehicle: { [key: string]: number } = {};
-      const itemDefectCounts: { [key: string]: number } = {};
-      
-      checklistsWithDefects.forEach(c => {
-        const vehicleId = c.vehicle_id;
+      const activeDefectCountByVehicle: { [key: string]: Set<string> } = {};
+      (activeIssues || []).forEach((issue) => {
+        const vehicleId = issue.vehicle_id || issue.trailer_id;
         if (vehicleId) {
-          defectCountByVehicle[vehicleId] = (defectCountByVehicle[vehicleId] || 0) + 1;
-        }
-
-        if (c.details && c.details.itemValues) {
-          Object.entries(c.details.itemValues).forEach(([itemId, value]) => {
-            if (value === 'defect' || value === 'defeito') {
-               const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(itemId);
-               const title = itemTitleMap[itemId] || (isUUID ? 'Desconhecido' : itemId);
-               
-               if (title !== 'Desconhecido') {
-                 itemDefectCounts[title] = (itemDefectCounts[title] || 0) + 1;
-               }
-            }
-          });
+          const itemTitleClean = (issue.item_title || '').trim().toLowerCase();
+          if (!activeDefectCountByVehicle[vehicleId]) {
+            activeDefectCountByVehicle[vehicleId] = new Set<string>();
+          }
+          activeDefectCountByVehicle[vehicleId].add(itemTitleClean);
         }
       });
 
-      const frequent = Object.entries(itemDefectCounts).map(([name, count]) => ({ name, count })).sort((a,b) => b.count - a.count).slice(0, 5);
+      // 2. Fetch all historical issues to build high-quality Principais Reincidências (frequent defects chart)
+      const { data: allIssues, error: allIssuesError } = await supabase
+        .from('checklist_issues')
+        .select('item_title');
+
+      if (allIssuesError) {
+        console.error('Erro ao buscar todos os defeitos:', allIssuesError);
+      }
+
+      const itemDefectCounts: { [key: string]: number } = {};
+      (allIssues || []).forEach((issue) => {
+        const title = decodeItemTitle(issue.item_title).title;
+        if (title && title !== 'Desconhecido') {
+          itemDefectCounts[title] = (itemDefectCounts[title] || 0) + 1;
+        }
+      });
+
+      const frequent = Object.entries(itemDefectCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
       setFrequentDefects(frequent);
 
+      // 3. Map vehicles with their actual current active defects count
       const vehiclesWithDefects = vehicles.map(vehicle => {
-        const defectCount = defectCountByVehicle[vehicle.id] || 0;
+        const defectCount = activeDefectCountByVehicle[vehicle.id]?.size || 0;
         
         return {
           ...vehicle,
@@ -556,7 +545,7 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
                       </span>
                       <span className="text-[9px] text-gray-400 font-bold shrink-0 flex items-center gap-1">
                         <Clock size={10} />
-                        {getRelativeTime(activity.created_at)}
+                        {getRelativeTime(activity.details?.adjusted_date || activity.created_at)}
                       </span>
                     </div>
 

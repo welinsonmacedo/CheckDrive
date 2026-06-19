@@ -65,21 +65,7 @@ export default function MaintenanceTab() {
     }
   ]);
 
-  const DEFAULT_CATALOG_ITEMS = [
-    "Pneu Dianteiro",
-    "Pneu Traseiro",
-    "Pastilha de Freio",
-    "Lona de Freio",
-    "Troca de Óleo de Motor",
-    "Filtro de Óleo",
-    "Filtro de Combustível",
-    "Filtro de Ar",
-    "Mão de Obra Mecânica",
-    "Troca de Lâmpada (Farol)",
-    "Alinhamento e Balanceamento",
-    "Lâmpada de Sinaleira",
-    "Líquido de Arrefecimento"
-  ];
+  const DEFAULT_CATALOG_ITEMS: string[] = [];
 
   const [catalogItems, setCatalogItems] = useState<string[]>(DEFAULT_CATALOG_ITEMS);
   const [newItemName, setNewItemName] = useState("");
@@ -1750,7 +1736,7 @@ export default function MaintenanceTab() {
                   {/* Photos Upload of the Service */}
                   <div>
                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                       Fotos do Serviço (opcional)
+                       Fotos de Comprovação / Serviço (Opcional)
                      </label>
                      <div className="flex flex-wrap gap-2 mb-2">
                         {resolvePhotos.map((p, i) => (
