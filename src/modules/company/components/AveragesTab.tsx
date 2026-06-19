@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { motion } from 'motion/react';
 import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer, Plus, PlusCircle, Trash2, Droplet, Camera } from 'lucide-react';
+import { usePersistentState } from '@/src/hooks/usePersistentState';
 
 export default function AveragesTab() {
-  const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers' | 'schedules'>('vehicles');
+  const [activeTab, setActiveTab] = usePersistentState<'vehicles' | 'drivers' | 'schedules'>('averages_activeTab', 'vehicles');
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [fuelLiterItems, setFuelLiterItems] = useState<any[]>([]);
@@ -13,12 +14,12 @@ export default function AveragesTab() {
   const [loading, setLoading] = useState(true);
   
   // Date filters
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = usePersistentState('averages_startDate', '');
+  const [endDate, setEndDate] = usePersistentState('averages_endDate', '');
   
   // Extra filters
-  const [filterVehicle, setFilterVehicle] = useState('');
-  const [filterDriver, setFilterDriver] = useState('');
+  const [filterVehicle, setFilterVehicle] = usePersistentState('averages_filterVehicle', '');
+  const [filterDriver, setFilterDriver] = usePersistentState('averages_filterDriver', '');
 
   // Add scale for media modal state
   const [showAddModal, setShowAddModal] = useState(false);

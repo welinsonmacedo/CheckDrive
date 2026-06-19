@@ -30,7 +30,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import SchedulesTab from "@/src/modules/company/components/SchedulesTab";
 import AdmUsersTab from "@/src/modules/company/components/AdmUsersTab";
 import DriversTab from "@/src/modules/company/components/DriversTab";
@@ -60,7 +60,14 @@ import { runSilentAudit } from "@/src/lib/auditService";
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
-  const [activeTab, setActiveTab ] = useState("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "overview";
+  const setActiveTab = (tab: string) => {
+    setSearchParams((prev) => {
+      prev.set("tab", tab);
+      return prev;
+    });
+  };
   const [appSettings, setAppSettings] = useState({
     system_type: "points",
     initial_value: 1000,

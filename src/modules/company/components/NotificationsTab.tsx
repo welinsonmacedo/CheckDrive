@@ -16,10 +16,11 @@ import {
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
+import { usePersistentState } from "@/src/hooks/usePersistentState";
 
 export default function NotificationsTab() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"issues" | "alerts">("issues");
+  const [activeTab, setActiveTab] = usePersistentState<"issues" | "alerts">("notifications_activeTab", "issues");
   const [loading, setLoading] = useState(true);
   const [issues, setIssues] = useState<any[]>([]);
   const [alertIssues, setAlertIssues] = useState<any[]>([]);

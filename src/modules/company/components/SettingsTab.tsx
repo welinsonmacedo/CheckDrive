@@ -21,6 +21,8 @@ import ScoreProfilesSettingsSection from "@/src/modules/company/components/Score
 import IntegrationsTab from "@/src/modules/company/components/IntegrationsTab";
 import ScoreCloseModal from "@/src/modules/company/components/ScoreCloseModal";
 
+import { usePersistentState } from "@/src/hooks/usePersistentState";
+
 interface SettingsTabProps {
   appSettings: any;
   setAppSettings: (settings: any) => void;
@@ -33,9 +35,9 @@ export default function SettingsTab({
   fetchData,
 }: SettingsTabProps) {
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<
+  const [activeTab, setActiveTab] = usePersistentState<
     "global" | "profiles" | "vehicles" | "manual_penalties" | "integrations"
-  >("global");
+  >("settings_activeTab", "global");
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
 
   const [sqlError, setSqlError] = useState<string | null>(null);

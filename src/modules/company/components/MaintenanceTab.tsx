@@ -23,15 +23,17 @@ import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import ManualIssueModal from "@/src/modules/company/components/ManualIssueModal";
 import IssueDetailsModal from "./IssueDetailsModal";
+import { usePersistentState } from "@/src/hooks/usePersistentState";
 
 export default function MaintenanceTab() {
   const { user } = useAuth();
   const [issues, setIssues] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [odometers, setOdometers] = useState<Record<string, number>>({});
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = usePersistentState("maintenance_searchTerm", "");
+  const [alertFilter, setAlertFilter] = usePersistentState<"all" | "driver" | "alert_km" | "alert_date" | "expired">("maintenance_alertFilter", "all");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"pending" | "waiting" | "resolved" | "tracking">("pending");
+  const [activeTab, setActiveTab] = usePersistentState<"pending" | "waiting" | "resolved" | "tracking">("maintenance_activeTab", "pending");
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
@@ -650,6 +652,25 @@ export default function MaintenanceTab() {
   // Filtrar issues por status e search
   const filteredIssues = issues
     .filter((issue) => issue.status === activeTab)
+    .filter((issue) => {
+      if (alertFilter === "all") return true;
+      if (alertFilter === "driver") return !issue.auto_alert_id;
+      if (alertFilter === "alert_km") return issue.auto_alerts?.trigger_type === "km";
+      if (alertFilter === "alert_date") return issue.auto_alerts?.trigger_type === "date";
+      if (alertFilter === "expired") {
+        if (!issue.auto_alerts) return false;
+        if (issue.auto_alerts.trigger_type === "date" && issue.auto_alerts.trigger_date) {
+            return new Date(issue.auto_alerts.trigger_date) < new Date();
+        }
+        if (issue.auto_alerts.trigger_type === "km" && issue.auto_alerts.interval_km) {
+            // Se o odometro atual > interval_km
+            const currentKm = odometers[issue.vehicle_id] || issue.auto_alerts.last_km || 0;
+            return currentKm >= issue.auto_alerts.interval_km;
+        }
+        return false;
+      }
+      return true;
+    })
     .filter(
       (issue) =>
         issue.vehicles?.plate
@@ -994,19 +1015,33 @@ export default function MaintenanceTab() {
               Lançar Nova
             </button>
 
-            <div className="relative">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-              />
+            <div className="flex items-center gap-2">
+              <select
+                value={alertFilter}
+                onChange={(e) => setAlertFilter(e.target.value as any)}
+                className="h-8 px-3 bg-app-bg rounded-lg text-[10px] border border-app-border font-bold text-gray-600 focus:ring-1 focus:ring-primary focus:outline-none uppercase tracking-wider"
+              >
+                <option value="all">Todos os Tipos</option>
+                <option value="driver">Relato de Motoristas</option>
+                <option value="alert_km">Alertas de KM</option>
+                <option value="alert_date">Alertas de Data</option>
+                <option value="expired">Atrasados / Vencidos</option>
+              </select>
 
-              <input
-                type="text"
-                placeholder="Filtrar placa, item ou motorista..."
-                className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] border border-app-border w-64"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              <div className="relative">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+                />
+
+                <input
+                  type="text"
+                  placeholder="Filtrar placa, item ou motorista..."
+                  className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] border border-app-border w-56 lg:w-64"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </div>
           </div>
         </div>

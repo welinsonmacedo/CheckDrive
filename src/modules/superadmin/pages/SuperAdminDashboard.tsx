@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/src/lib/supabase';
 import { Building2, Users, Database, Activity, Plus, Edit2, ShieldAlert, CreditCard, BarChart3, LayoutDashboard, Truck, ClipboardCheck, LogOut } from 'lucide-react';
 import type { User } from '@/src/modules/shared/types';
@@ -31,7 +31,14 @@ import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'companies' | 'plans' | 'usage'>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get('tab') as 'overview' | 'companies' | 'plans' | 'usage') || 'overview';
+  const setActiveTab = (tab: 'overview' | 'companies' | 'plans' | 'usage') => {
+    setSearchParams((prev) => {
+      prev.set("tab", tab);
+      return prev;
+    });
+  };
   
   const [companies, setCompanies] = useState<Company[]>([]);
   const [companyStats, setCompanyStats] = useState<{ [companyId: string]: { users: number, vehicles: number, submissions: number, issues: number } }>({});

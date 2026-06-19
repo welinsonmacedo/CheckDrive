@@ -24,17 +24,20 @@ import {
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DefectPrintModal from "@/src/modules/company/components/DefectPrintModal";
+import { usePersistentState } from "@/src/hooks/usePersistentState";
 
 export default function ReportsTab() {
-  const [activeReport, setActiveReport] = useState<
+  const [activeReport, setActiveReport] = usePersistentState<
     "defects" | "mileage"
-  >("defects");
+  >("reports_activeReport", "defects");
 
   // Date filters
-  const [startDate, setStartDate] = useState(
+  const [startDate, setStartDate] = usePersistentState(
+    "reports_startDate",
     format(startOfMonth(new Date()), "yyyy-MM-dd"),
   );
-  const [endDate, setEndDate] = useState(
+  const [endDate, setEndDate] = usePersistentState(
+    "reports_endDate",
     format(endOfMonth(new Date()), "yyyy-MM-dd"),
   );
 

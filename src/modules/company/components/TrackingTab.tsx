@@ -25,6 +25,7 @@ import {
 import { motion } from 'framer-motion';
 import VehicleDetailsModal from '@/src/modules/company/components/VehicleDetailsModal';
 import DriverRankingDetailsModal from '@/src/modules/company/components/DriverRankingDetailsModal';
+import { usePersistentState } from '@/src/hooks/usePersistentState';
 
 export default function TrackingTab() {
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -35,9 +36,9 @@ export default function TrackingTab() {
   const [latestOdometer, setLatestOdometer] = useState<Record<string, number>>({});
   
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [vehicleTypeFilter, setVehicleTypeFilter] = useState('');
-  const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers' | 'baits'>('vehicles');
+  const [searchTerm, setSearchTerm] = usePersistentState('tracking_searchTerm', '');
+  const [vehicleTypeFilter, setVehicleTypeFilter] = usePersistentState('tracking_vehicleTypeFilter', '');
+  const [activeTab, setActiveTab] = usePersistentState<'vehicles' | 'drivers' | 'baits'>('tracking_activeTab', 'vehicles');
   
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
