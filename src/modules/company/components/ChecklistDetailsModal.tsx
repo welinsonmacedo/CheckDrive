@@ -28,6 +28,15 @@ export default function ChecklistDetailsModal({
   selectedSub,
   onClose,
 }: ChecklistDetailsModalProps) {
+  useEffect(() => {
+    if (selectedSub) {
+      document.body.classList.add('modal-open-for-print');
+    }
+    return () => {
+      document.body.classList.remove('modal-open-for-print');
+    };
+  }, [selectedSub]);
+
   const [loadPhotos, setLoadPhotos] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);

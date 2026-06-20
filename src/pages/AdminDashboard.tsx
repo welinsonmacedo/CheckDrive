@@ -28,6 +28,7 @@ import {
   Navigation,
   HardDrive,
   MessageSquare,
+  PackageSearch,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useNavigate } from "react-router-dom";
@@ -39,6 +40,7 @@ import RoutesTab from "../components/admin/RoutesTab";
 import ChecklistSetupTab from "../components/admin/ChecklistSetupTab";
 import ChecklistsHistoryTab from "../components/admin/ChecklistsHistoryTab";
 import MaintenanceTab from "../components/admin/MaintenanceTab";
+import InventoryTab from "../components/admin/InventoryTab";
 import FuelTab from "../components/admin/FuelTab";
 import BaitsTab from "../components/admin/BaitsTab";
 import TrackingTab from "../components/admin/TrackingTab";
@@ -229,6 +231,12 @@ export default function AdminDashboard() {
       icon: AlertTriangle,
       label: "Pendências",
       color: "from-red-500 to-orange-500",
+    },
+    {
+      id: "inventory",
+      icon: PackageSearch,
+      label: "Estoque",
+      color: "from-teal-500 to-emerald-500",
     },
     {
       id: "abastecimentos",
@@ -556,6 +564,7 @@ export default function AdminDashboard() {
                 />
               )}
               {activeTab === "maintenance" && <MaintenanceTab />}
+              {activeTab === "inventory" && <InventoryTab />}
               {activeTab === "abastecimentos" && <FuelTab />}
               {activeTab === "averages" && <AveragesTab />}
               {activeTab === "schedules" && (

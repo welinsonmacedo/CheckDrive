@@ -19,7 +19,8 @@ import {
   RefreshCw,
   Info,
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  Wrench
 } from "lucide-react";
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -28,7 +29,7 @@ import { usePersistentState } from "@/src/hooks/usePersistentState";
 
 export default function ReportsTab() {
   const [activeReport, setActiveReport] = usePersistentState<
-    "defects" | "mileage"
+    "defects" | "mileage" | "history" | "purchases"
   >("reports_activeReport", "defects");
 
   // Date filters
@@ -60,13 +61,164 @@ export default function ReportsTab() {
   // Mileage Data
   const [mileageData, setMileageData] = useState<any[]>([]);
 
+  // History Data
+  const [vehiclesAndTrailers, setVehiclesAndTrailers] = useState<any[]>([]);
+  const [selectedHistoryEntityId, setSelectedHistoryEntityId] = useState("");
+  const [historyData, setHistoryData] = useState<any[]>([]);
+
+  // Purchases Data
+  const [purchasesData, setPurchasesData] = useState<any[]>([]);
+  const [purchasesSearchTerm, setPurchasesSearchTerm] = useState("");
+  const [purchasesFilterOrigin, setPurchasesFilterOrigin] = useState<"all" | "stock" | "maintenance">("all");
+
+  const fetchHistoryEntities = async () => {
+    try {
+      const [{ data: vs }, { data: ts }] = await Promise.all([
+        supabase.from("vehicles").select("id, plate").order("plate"),
+        supabase.from("trailers").select("id, plate").order("plate")
+      ]);
+      const combined = [
+        ...(vs || []).map(v => ({ ...v, type: "vehicle" })),
+        ...(ts || []).map(t => ({ ...t, type: "trailer" }))
+      ];
+      setVehiclesAndTrailers(combined);
+    } catch (err) {
+      console.warn("Could not load entities", err);
+    }
+  };
+
+  const fetchHistoryReport = async (entityId: string) => {
+    if (!entityId) return;
+    setLoading(true);
+    try {
+      const entity = vehiclesAndTrailers.find((e) => e.id === entityId);
+      if (!entity) {
+         setLoading(false);
+         return;
+      }
+
+      const column = entity.type === "vehicle" ? "vehicle_id" : "trailer_id";
+
+      const { data, error } = await supabase
+        .from("checklist_issues")
+        .select("*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)")
+        .eq(column, entityId)
+        .gte("created_at", `${startDate}T00:00:00Z`)
+        .lte("created_at", `${endDate}T23:59:59Z`)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      
+      const filteredData = (data || []).filter((d: any) => {
+        // Exclude issues that were resolved automatically (not manually by an admin/user)
+        if (d.status === "resolved" && !d.resolved_by) return false;
+        
+        // Also exclude if there's any text in description or notes indicating it was auto-resolved by checklist
+        const notesStr = String(d.resolution_notes || "").toLowerCase();
+        if (d.status === "resolved" && notesStr.includes("automaticamente pelo check list")) return false;
+
+        return true;
+      });
+
+      setHistoryData(filteredData);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPurchasesReport = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch from inventory_transactions
+      const { data: stockTransactions, error: errStock } = await supabase
+        .from("inventory_transactions")
+        .select(`*, inventory_items(name)`)
+        .eq("type", "in")
+        .gte("created_at", `${startDate}T00:00:00Z`)
+        .lte("created_at", `${endDate}T23:59:59Z`);
+
+      if (errStock) throw errStock;
+
+      // 2. Fetch from checklist_issues
+      const { data: issuesData, error: errIssues } = await supabase
+        .from("checklist_issues")
+        .select(`*, vehicles(plate), trailers(plate)`)
+        .eq("status", "resolved")
+        .not("resolution_nfs", "is", null)
+        .gte("updated_at", `${startDate}T00:00:00Z`)
+        .lte("updated_at", `${endDate}T23:59:59Z`);
+
+      if (errIssues) throw errIssues;
+
+      const combinedPurchases: any[] = [];
+
+      // Process stock transactions
+      (stockTransactions || []).forEach((t: any) => {
+        combinedPurchases.push({
+          id: `stock-${t.id}`,
+          date: t.created_at,
+          nf_number: t.nf_number || "S/N",
+          origin: "stock",
+          item_name: t.inventory_items?.name || t.item_id,
+          quantity: t.quantity,
+          unit_price: t.unit_price,
+          total_price: t.total_price || (t.quantity * t.unit_price),
+          context: "Compra para Estoque"
+        });
+      });
+
+      // Process issues
+      (issuesData || []).forEach((i: any) => {
+        const vehicleInfo = i.vehicles?.plate || i.trailers?.plate || "Sem Placa";
+        const nfs = Array.isArray(i.resolution_nfs) ? i.resolution_nfs : [];
+        nfs.forEach((nf: any) => {
+          const items = Array.isArray(nf.items) ? nf.items : [];
+          items.forEach((item: any) => {
+            combinedPurchases.push({
+              id: `issue-${i.id}-${nf.nf_number}-${item.name}`,
+              date: i.updated_at,
+              nf_number: nf.nf_number || "S/N",
+              origin: "maintenance",
+              item_name: item.name,
+              quantity: item.quantity || 1,
+              unit_price: item.unit_price || 0,
+              total_price: (item.quantity || 1) * (item.unit_price || 0),
+              context: `Solução: ${i.item_title} (${vehicleInfo})`
+            });
+          });
+        });
+      });
+
+      // Sort by date descending
+      combinedPurchases.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      setPurchasesData(combinedPurchases);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeReport === "defects") {
       fetchDefectsReport();
     } else if (activeReport === "mileage") {
       fetchMileageReport();
+    } else if (activeReport === "history") {
+      fetchHistoryEntities();
+    } else if (activeReport === "purchases") {
+      fetchPurchasesReport();
     }
   }, [activeReport, startDate, endDate]);
+
+  useEffect(() => {
+    if (activeReport === "history" && selectedHistoryEntityId && vehiclesAndTrailers.length > 0) {
+      fetchHistoryReport(selectedHistoryEntityId);
+    }
+  }, [selectedHistoryEntityId, activeReport, startDate, endDate, vehiclesAndTrailers]);
 
   const fetchMileageReport = async () => {
     setLoading(true);
@@ -239,6 +391,29 @@ export default function ReportsTab() {
               <Truck size={14} className="stroke-[2.2]" />
               <span>Relatório Quilometragem</span>
             </button>
+            <button
+              onClick={() => setActiveReport("history")}
+              className={`px-4.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeReport === "history" 
+                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40" 
+                  : "text-gray-550 hover:text-gray-800 hover:bg-gray-100/50"
+              }`}
+            >
+              <FileText size={14} className="stroke-[2.2]" />
+              <span>Histórico Veículo</span>
+            </button>
+
+            <button
+              onClick={() => setActiveReport("purchases")}
+              className={`px-4.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeReport === "purchases" 
+                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40" 
+                  : "text-gray-550 hover:text-gray-800 hover:bg-gray-100/50"
+              }`}
+            >
+              <TrendingUp size={14} className="stroke-[2.2]" />
+              <span>Compras / NFs</span>
+            </button>
           </div>
 
           {/* Date Picker Ribbon */}
@@ -269,6 +444,8 @@ export default function ReportsTab() {
               onClick={() => {
                 if (activeReport === "defects") fetchDefectsReport();
                 else if (activeReport === "mileage") fetchMileageReport();
+                else if (activeReport === "history") fetchHistoryReport(selectedHistoryEntityId);
+                else if (activeReport === "purchases") fetchPurchasesReport();
               }}
               className="h-10 w-10 bg-white border border-gray-200 hover:border-gray-300 rounded-xl hover:bg-gray-50 flex items-center justify-center transition-colors shadow-sm text-gray-500 hover:text-indigo-600 shrink-0"
               title="Recarregar Relatório"
@@ -692,6 +869,231 @@ export default function ReportsTab() {
                               <td className="px-5 py-4 text-right whitespace-nowrap">
                                 <span className="text-xs font-black font-mono text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100/50">
                                   + {item.distance.toLocaleString("pt-BR")} KM
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 4. REPORT TYPE: HISTORY */}
+            {activeReport === "history" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 print:hidden">
+                  <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2">
+                    Selecione o Veículo / Reboque
+                  </label>
+                  <select
+                    className="w-full sm:w-1/2 p-2.5 rounded-xl border border-gray-300 bg-white text-sm font-bold text-gray-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm"
+                    value={selectedHistoryEntityId}
+                    onChange={(e) => setSelectedHistoryEntityId(e.target.value)}
+                  >
+                    <option value="">Selecione um equipamento...</option>
+                    {vehiclesAndTrailers.map((entity) => (
+                      <option key={entity.id} value={entity.id}>
+                        {entity.plate} ({entity.type === "vehicle" ? "Veículo" : "Reboque"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedHistoryEntityId ? (
+                  <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible">
+                    <div className="p-4 border-b border-gray-200/80 bg-gray-50/50 flex justify-between items-center">
+                      <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-2">
+                        <Wrench size={15} className="text-indigo-600" />
+                        Histórico de Manutenções
+                      </h3>
+                      <div className="text-[10px] font-bold text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-lg">
+                        Total de Ocorrências: {historyData.length}
+                      </div>
+                    </div>
+
+                    <div className="flex-1 overflow-auto max-h-[600px] print:max-h-none print:overflow-visible">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-gray-50/70 sticky top-0 border-b border-gray-200/80 z-10">
+                          <tr>
+                            <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                              Data
+                            </th>
+                            <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                              Status
+                            </th>
+                            <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                              Item Reportado
+                            </th>
+                            <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                              Custo (R$)
+                            </th>
+                            <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right print:hidden">
+                              Ficha
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {historyData.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={5}
+                                className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black"
+                              >
+                                Nenhum registro de manutenção para este equipamento
+                              </td>
+                            </tr>
+                          ) : (
+                            historyData.map((d: any) => (
+                              <tr key={d.id} className="hover:bg-gray-50/30 transition-colors">
+                                <td className="px-5 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                                  {format(parseISO(d.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                                </td>
+                                <td className="px-5 py-4 text-xs font-bold whitespace-nowrap">
+                                  {d.status === "resolved" ? (
+                                    <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Resolvido</span>
+                                  ) : (
+                                    <span className="text-rose-600 bg-rose-50 px-2 py-1 rounded-md animate-pulse">Pendente</span>
+                                  )}
+                                </td>
+                                <td className="px-5 py-4">
+                                  <div className="text-xs font-bold text-gray-750">
+                                    {d.item_title}
+                                  </div>
+                                  <div className="text-[11px] text-gray-450 mt-1 max-w-[450px] leading-relaxed break-words print:line-clamp-none">
+                                    {d.description || "Sem descrições adicionais registradas."}
+                                  </div>
+                                </td>
+                                <td className="px-5 py-4 text-xs font-mono font-bold text-gray-700 whitespace-nowrap">
+                                  R$ {Number(d.resolution_value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-5 py-4 text-right print:hidden whitespace-nowrap">
+                                  <button
+                                    onClick={() => setSelectedDefectToPrint(d)}
+                                    title="Imprimir Ficha de Reparo"
+                                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50/60 rounded-xl transition-all inline-flex border border-transparent hover:border-indigo-100"
+                                  >
+                                    <Printer size={14} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-400 font-bold uppercase tracking-widest text-[10px] print:hidden">
+                    Selecione um veículo para visualizar seu histórico.
+                  </div>
+                )}
+              </div>
+            )}
+            {/* 5. REPORT TYPE: PURCHASES / NFs */}
+            {activeReport === "purchases" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 print:hidden flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                  <div className="flex-1 w-full relative max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <input
+                      type="text"
+                      placeholder="Buscar por NF ou Item (ex: Pneu, Filtro)..."
+                      className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder:text-gray-400 font-medium"
+                      value={purchasesSearchTerm}
+                      onChange={(e) => setPurchasesSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black tracking-widest uppercase text-gray-500">Origem:</span>
+                    <select
+                      className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-indigo-500 cursor-pointer"
+                      value={purchasesFilterOrigin}
+                      onChange={(e) => setPurchasesFilterOrigin(e.target.value as any)}
+                    >
+                      <option value="all">Todas as Origens</option>
+                      <option value="stock">Estoque</option>
+                      <option value="maintenance">Manutenção (Resolvidos)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible">
+                  <div className="p-4 border-b border-gray-200/80 bg-gray-50/50 flex justify-between items-center">
+                    <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-2">
+                      <TrendingUp size={15} className="text-indigo-600" />
+                      Extrato de Compras / NFs
+                    </h3>
+                    <div className="text-[10px] font-bold text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-lg">
+                      {purchasesData
+                        .filter(p => purchasesFilterOrigin === "all" ? true : p.origin === purchasesFilterOrigin)
+                        .filter(p => {
+                          const s = purchasesSearchTerm.toLowerCase();
+                          return String(p.nf_number).toLowerCase().includes(s) || String(p.item_name).toLowerCase().includes(s);
+                        }).length
+                      } Registros
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-auto max-h-[600px] print:max-h-none print:overflow-visible">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-gray-50/70 sticky top-0 border-b border-gray-200/80 z-10">
+                        <tr>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Data</th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">NF</th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Item</th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Qtd</th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Vr Unit</th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Subtotal</th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Contexto</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {purchasesData
+                          .filter(p => purchasesFilterOrigin === "all" ? true : p.origin === purchasesFilterOrigin)
+                          .filter(p => {
+                            const s = purchasesSearchTerm.toLowerCase();
+                            return String(p.nf_number).toLowerCase().includes(s) || String(p.item_name).toLowerCase().includes(s);
+                          }).length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black">
+                              Nenhum registro encontrado
+                            </td>
+                          </tr>
+                        ) : (
+                          purchasesData
+                            .filter(p => purchasesFilterOrigin === "all" ? true : p.origin === purchasesFilterOrigin)
+                            .filter(p => {
+                              const s = purchasesSearchTerm.toLowerCase();
+                              return String(p.nf_number).toLowerCase().includes(s) || String(p.item_name).toLowerCase().includes(s);
+                            })
+                            .map((p: any) => (
+                            <tr key={p.id} className="hover:bg-gray-50/30 transition-colors">
+                              <td className="px-5 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                                {format(parseISO(p.date), "dd/MM/yyyy", { locale: ptBR })}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-bold font-mono text-indigo-700 whitespace-nowrap">
+                                {p.nf_number}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-bold text-gray-800">
+                                {p.item_name}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-bold text-gray-600 whitespace-nowrap">
+                                x{p.quantity}
+                              </td>
+                              <td className="px-5 py-4 text-xs text-gray-500 whitespace-nowrap">
+                                R$ {Number(p.unit_price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-mono font-bold text-gray-800 whitespace-nowrap">
+                                R$ {Number(p.total_price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-5 py-4">
+                                <span className={`inline-flex px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${
+                                  p.origin === "stock" ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600"
+                                }`}>
+                                  {p.context}
                                 </span>
                               </td>
                             </tr>

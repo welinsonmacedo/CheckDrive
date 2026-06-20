@@ -18,6 +18,7 @@ import {
   Clock,
   TrendingUp,
   Wrench,
+  Package,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -58,6 +59,8 @@ export default function MaintenanceTab() {
   const [resolvePhotos, setResolvePhotos] = useState<File[]>([]);
   const [sqlError, setSqlError] = useState<string | null>(null);
   const [resolveNextDate, setResolveNextDate] = useState("");
+  const [resolveComments, setResolveComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState("");
   const [resolveWarningDays, setResolveWarningDays] = useState("");
   const [resolveCurrentKm, setResolveCurrentKm] = useState("");
   const [resolveIntervalKm, setResolveIntervalKm] = useState("");
@@ -70,14 +73,15 @@ export default function MaintenanceTab() {
       id: "first",
       nf_number: "",
       nf_key: "",
-      items: [{ id: "first-item", name: "", quantity: 1, unit_price: 0 }]
+      items: [{ id: "first-item", item_id: "", name: "", quantity: 1, unit_price: 0 }]
     }
   ]);
+  const [resolveStockItems, setResolveStockItems] = useState<any[]>([]);
 
-  const DEFAULT_CATALOG_ITEMS: string[] = [];
-
-  const [catalogItems, setCatalogItems] = useState<string[]>(DEFAULT_CATALOG_ITEMS);
+  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [newItemName, setNewItemName] = useState("");
+  const [newItemCategory, setNewItemCategory] = useState("");
+  const [newItemSku, setNewItemSku] = useState("");
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
 
   useEffect(() => {
@@ -122,22 +126,15 @@ export default function MaintenanceTab() {
   async function fetchCatalog() {
     try {
       const { data, error } = await supabase
-        .from("maintenance_items_catalog")
-        .select("name")
+        .from("inventory_items")
+        .select("*")
         .order("name");
       
-      if (!error && data && data.length > 0) {
-        const dbNames = data.map((item: any) => item.name);
-        const uniqueNames = Array.from(new Set([...DEFAULT_CATALOG_ITEMS, ...dbNames]));
-        setCatalogItems(uniqueNames);
-      } else {
-        const local = localStorage.getItem("maintenance_catalog_items");
-        if (local) {
-          setCatalogItems(JSON.parse(local));
-        }
+      if (!error && data) {
+        setInventoryItems(data);
       }
     } catch (err) {
-      console.warn("Could not load catalog from DB, using defaults:", err);
+      console.warn("Could not load catalog from DB", err);
     }
   }
 
@@ -145,16 +142,10 @@ export default function MaintenanceTab() {
     const trimmed = name.trim();
     if (!trimmed) return;
     
-    if (catalogItems.some(item => item.toLowerCase() === trimmed.toLowerCase())) {
+    if (inventoryItems.some(item => item.name.toLowerCase() === trimmed.toLowerCase())) {
       alert("Este item já está cadastrado!");
       return;
     }
-    
-    const updated = [...catalogItems, trimmed].sort();
-    setCatalogItems(updated);
-    localStorage.setItem("maintenance_catalog_items", JSON.stringify(updated));
-    setNewItemName("");
-    setShowAddItemDialog(false);
     
     try {
       const { data: profile } = await supabase
@@ -163,14 +154,27 @@ export default function MaintenanceTab() {
         .eq("id", user?.id)
         .single();
         
-      if (profile?.company_id) {
-        await supabase.from("maintenance_items_catalog").insert({
-          company_id: profile.company_id,
-          name: trimmed
-        });
+      const payload = {
+        name: trimmed,
+        category: newItemCategory.trim(),
+        sku: newItemSku.trim(),
+        current_quantity: 0,
+        company_id: profile?.company_id
+      };
+      
+      const { data: newItem, error } = await supabase.from("inventory_items").insert(payload).select().single();
+      if (!error && newItem) {
+        setInventoryItems([...inventoryItems, newItem].sort((a,b) => a.name.localeCompare(b.name)));
+        setNewItemName("");
+        setNewItemCategory("");
+        setNewItemSku("");
+        setShowAddItemDialog(false);
+      } else {
+        throw error;
       }
     } catch (err) {
       console.warn("Could not save registered item to Supabase", err);
+      alert("Erro ao cadastrar peça.");
     }
   }
 
@@ -323,52 +327,59 @@ export default function MaintenanceTab() {
     setResolvingIssueData(issue);
     setResolvingIssueId(issue.grouped_ids || [issue.id]);
     setSelectedIdsToResolve(issue.grouped_ids || [issue.id]);
-    setResolveNotes(issue.status === "waiting" ? (issue.resolution_notes || "") : "");
-    setResolveSubStatus("resolved");
+    setResolveNotes(issue.resolution_notes || "");
+    setResolveSubStatus(issue.status === "waiting" ? "waiting" : "resolved");
     setResolveNf("");
-    setResolveValue("");
+    setResolveValue(issue.resolution_value?.toString() || "");
     setResolvePhotos([]);
+    setResolveComments(issue.resolution_comments || []);
+    setNewComment("");
     setSqlError(null);
     setResolveNextDate("");
     setResolveWarningDays("");
     setResolveCurrentKm("");
     setResolveIntervalKm("");
     setResolveWarningKm("");
-    setResolveNfs([
-      {
-        id: Date.now().toString(),
-        nf_number: "",
-        nf_key: "",
-        items: [{ id: `item-${Date.now()}`, name: "", quantity: 1, unit_price: 0 }]
-      }
-    ]);
+
+    if (issue.resolution_nfs && Array.isArray(issue.resolution_nfs) && issue.resolution_nfs.length > 0) {
+      setResolveNfs(issue.resolution_nfs);
+    } else {
+      setResolveNfs([
+        {
+          id: Date.now().toString(),
+          nf_number: "",
+          nf_key: "",
+          items: [{ id: `item-${Date.now()}`, item_id: "", name: "", quantity: 1, unit_price: 0 }]
+        }
+      ]);
+    }
+    setResolveStockItems([]);
     setShowAddItemDialog(false);
 
     if (issue.auto_alerts) {
-      if (issue.auto_alerts.trigger_type === "km") {
-        setResolveIntervalKm(issue.auto_alerts.interval_km?.toString() || "");
-        setResolveWarningKm(issue.auto_alerts.warning_km?.toString() || "");
-        
-        // Initial estimate of KM
-        const estimatedKm = Number(issue.auto_alerts.last_km || 0) + Number(issue.auto_alerts.interval_km || 0);
-        setResolveCurrentKm(estimatedKm.toString());
+      // Sempre inicializa campos de KM e Data se for um alerta automático
+      setResolveIntervalKm(issue.auto_alerts.interval_km?.toString() || "");
+      setResolveWarningKm(issue.auto_alerts.warning_km?.toString() || "");
+      setResolveWarningDays(issue.auto_alerts.warning_days?.toString() || "");
+      setResolveNextDate(issue.auto_alerts.trigger_date || "");
+      
+      // Initial estimate of KM
+      const estimatedKm = Number(issue.auto_alerts.last_km || 0) + Number(issue.auto_alerts.interval_km || 0);
+      setResolveCurrentKm(estimatedKm.toString());
 
-        // Fetch real-time current odometer of the vehicle if available
-        if (issue.vehicle_id) {
-          supabase
-            .from("checklist_submissions")
-            .select("odometer")
-            .eq("vehicle_id", issue.vehicle_id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .then(({ data }) => {
-              if (data && data.length > 0 && data[0].odometer) {
-                setResolveCurrentKm(data[0].odometer.toString());
-              }
-            });
-        }
-      } else if (issue.auto_alerts.trigger_type === "date") {
-        setResolveWarningDays(issue.auto_alerts.warning_days?.toString() || "");
+      // Fetch real-time current odometer of the vehicle if available
+      if (issue.vehicle_id) {
+        supabase
+          .from("checklist_submissions")
+          .select("odometer")
+          .eq("vehicle_id", issue.vehicle_id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .then(({ data }) => {
+            if (data && data.length > 0 && data[0].odometer) {
+              setResolveCurrentKm(data[0].odometer.toString());
+            }
+          });
       }
     }
   }
@@ -426,42 +437,56 @@ export default function MaintenanceTab() {
 
       // Upload photos if any
       const uploadedPhotos: string[] = [];
-      if (resolveSubStatus === "resolved") {
-        for (let i = 0; i < resolvePhotos.length; i++) {
-           const file = resolvePhotos[i];
-           const path = `${user?.id || 'unknown'}/resolution/${Date.now()}_${i}.jpg`;
-           const { error: uploadError } = await supabase.storage
-              .from("checklist-photos")
-              .upload(path, file);
-           if (!uploadError) uploadedPhotos.push(path);
-        }
+      for (let i = 0; i < resolvePhotos.length; i++) {
+        const file = resolvePhotos[i];
+        const path = `${user?.id || 'unknown'}/resolution/${Date.now()}_${i}.jpg`;
+        const { error: uploadError } = await supabase.storage
+           .from("checklist-photos")
+           .upload(path, file);
+        if (!uploadError) uploadedPhotos.push(path);
       }
 
-      const calculatedValueSum = resolveSubStatus === "resolved" ? resolveNfs.reduce((acc, nf) => {
+      const calculatedValueSumNfs = resolveNfs.reduce((acc, nf) => {
         const nfSum = nf.items.reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0);
         return acc + nfSum;
-      }, 0) : 0;
+      }, 0);
+      const calculatedValueSumStock = resolveStockItems.reduce((acc, item) => {
+        return acc + (Number(item.quantity || 1) * Number(item.unit_price || 0));
+      }, 0);
+      const calculatedValueSum = calculatedValueSumNfs + calculatedValueSumStock;
 
-      const nfsJSONString = resolveSubStatus === "resolved" ? JSON.stringify(resolveNfs) : null;
+      const validResolveNfs = resolveNfs.filter(nf => nf.nf_number?.trim() || nf.nf_key?.trim() || nf.items?.some((i: any) => i.name?.trim()));
+      const nfsJSONString = JSON.stringify(validResolveNfs);
+      const stockJSONString = JSON.stringify(resolveStockItems);
+      
+      let allComments = resolveComments;
+      if (newComment.trim()) {
+        allComments = [...allComments, {
+          id: Date.now().toString(),
+          text: newComment.trim(),
+          created_at: new Date().toISOString(),
+          user_name: user?.user_metadata?.name || user?.email || 'Admin',
+        }];
+      }
 
       let updateError;
       try {
         const updatePayload: any = resolveSubStatus === "waiting" ? {
           status: "waiting",
           resolution_notes: resolveNotes,
-          resolution_nf: null,
-          resolution_nfs: null,
-          resolution_value: 0,
-          resolution_photos: null,
-          resolved_at: null,
-          resolved_by: null,
+          resolution_comments: allComments,
+          resolution_nf: nfsJSONString,
+          resolution_nfs: validResolveNfs.length > 0 ? validResolveNfs : null,
+          resolution_value: calculatedValueSum,
+          ...(uploadedPhotos.length > 0 ? { resolution_photos: uploadedPhotos } : {}),
         } : {
           status: "resolved",
           resolution_notes: resolveNotes,
+          resolution_comments: allComments,
           resolution_nf: nfsJSONString,
-          resolution_nfs: resolveNfs,
+          resolution_nfs: validResolveNfs.length > 0 ? validResolveNfs : null,
           resolution_value: calculatedValueSum,
-          resolution_photos: uploadedPhotos,
+          ...(uploadedPhotos.length > 0 ? { resolution_photos: uploadedPhotos } : {}),
           resolved_at: new Date().toISOString(),
           resolved_by: user?.id,
         };
@@ -475,45 +500,80 @@ export default function MaintenanceTab() {
         const updatePayload: any = resolveSubStatus === "waiting" ? {
           status: "waiting",
           resolution_notes: resolveNotes,
-          resolution_nf: null,
-          resolution_value: 0,
-          resolution_photos: null,
-          resolved_at: null,
-          resolved_by: null,
+          resolution_comments: allComments,
+          resolution_nfs: validResolveNfs.length > 0 ? validResolveNfs : null,
+          resolution_value: calculatedValueSum,
+          ...(uploadedPhotos.length > 0 ? { resolution_photos: uploadedPhotos } : {}),
         } : {
           status: "resolved",
           resolution_notes: resolveNotes,
-          resolution_nf: nfsJSONString,
+          resolution_comments: allComments,
+          resolution_nfs: validResolveNfs.length > 0 ? validResolveNfs : null,
           resolution_value: calculatedValueSum,
-          resolution_photos: uploadedPhotos,
+          ...(uploadedPhotos.length > 0 ? { resolution_photos: uploadedPhotos } : {}),
           resolved_at: new Date().toISOString(),
           resolved_by: user?.id,
         };
-
         const { error } = await supabase
           .from("checklist_issues")
-          .update(updatePayload)
+          .update(updatePayload as any)
           .in("id", selectedIdsToResolve);
         updateError = error;
       }
         
       if (updateError) throw updateError;
-
-      // Check if we need to update a date-based auto_alert
-      if (resolveSubStatus === "resolved" && resolvingIssueData?.auto_alerts?.trigger_type === "date" && resolveNextDate) {
-         await supabase.from("auto_alerts").update({
-            trigger_date: resolveNextDate,
-            warning_days: resolveWarningDays ? Number(resolveWarningDays) : resolvingIssueData.auto_alerts.warning_days
-         }).eq("id", resolvingIssueData.auto_alert_id);
+      
+      try {
+        if (resolveSubStatus === "resolved" && resolvingIssueData?.status !== "resolved") {
+          for (const item of resolveStockItems) {
+            if (item.item_id && Number(item.quantity) > 0) {
+              const total = Number(item.quantity || 1) * Number(item.unit_price || 0);
+              await supabase.from("inventory_transactions").insert({
+                item_id: item.item_id,
+                type: "out",
+                quantity: -Math.abs(Number(item.quantity)),
+                unit_price: Number(item.unit_price),
+                total_price: total,
+                notes: `Estoque utilizado para pendência. ${resolvingIssueData?.item_title || ""}`,
+                company_id: inventoryItems[0]?.company_id || null,
+                created_by: user?.id
+              });
+              
+              // decrement
+              const { data: currentItemData } = await supabase.from("inventory_items").select("current_quantity").eq("id", item.item_id).single();
+              if (currentItemData) {
+                 await supabase.from("inventory_items").update({
+                    current_quantity: Number(currentItemData.current_quantity) - Math.abs(Number(item.quantity))
+                 }).eq("id", item.item_id);
+              }
+            }
+          }
+          fetchCatalog(); // refresh inventory
+        }
+      } catch (err) {
+        console.warn("Could not deduct from inventory", err);
       }
 
-      // Check if we need to update a km-based auto_alert
-      if (resolveSubStatus === "resolved" && resolvingIssueData?.auto_alerts?.trigger_type === "km" && resolveCurrentKm) {
-         await supabase.from("auto_alerts").update({
-            last_km: Number(resolveCurrentKm),
-            interval_km: resolveIntervalKm ? Number(resolveIntervalKm) : resolvingIssueData.auto_alerts.interval_km,
-            warning_km: resolveWarningKm ? Number(resolveWarningKm) : resolvingIssueData.auto_alerts.warning_km
-         }).eq("id", resolvingIssueData.auto_alert_id);
+      // Update auto_alert if it exists
+      if (resolveSubStatus === "resolved" && resolvingIssueData?.auto_alert_id) {
+         const alertPayload: any = {};
+         
+         if (resolveCurrentKm) {
+            alertPayload.last_km = Number(resolveCurrentKm);
+            alertPayload.interval_km = resolveIntervalKm ? Number(resolveIntervalKm) : resolvingIssueData.auto_alerts.interval_km;
+            alertPayload.warning_km = resolveWarningKm ? Number(resolveWarningKm) : resolvingIssueData.auto_alerts.warning_km;
+         }
+         
+         if (resolveNextDate) {
+            alertPayload.trigger_date = resolveNextDate;
+            alertPayload.warning_days = resolveWarningDays ? Number(resolveWarningDays) : resolvingIssueData.auto_alerts.warning_days;
+         }
+
+         if (Object.keys(alertPayload).length > 0) {
+            await supabase.from("auto_alerts")
+              .update(alertPayload)
+              .eq("id", resolvingIssueData.auto_alert_id);
+         }
       }
 
       setResolvingIssueId(null);
@@ -533,9 +593,10 @@ export default function MaintenanceTab() {
           id: Date.now().toString(),
           nf_number: "",
           nf_key: "",
-          items: [{ id: `item-${Date.now()}`, name: "", quantity: 1, unit_price: 0 }]
+          items: [{ id: `item-${Date.now()}`, item_id: "", name: "", quantity: 1, unit_price: 0 }]
         }
       ]);
+      setResolveStockItems([]);
       setSqlError(null);
       fetchIssues();
     } catch (err: any) {
@@ -663,9 +724,11 @@ export default function MaintenanceTab() {
             return new Date(issue.auto_alerts.trigger_date) < new Date();
         }
         if (issue.auto_alerts.trigger_type === "km" && issue.auto_alerts.interval_km) {
-            // Se o odometro atual > interval_km
-            const currentKm = odometers[issue.vehicle_id] || issue.auto_alerts.last_km || 0;
-            return currentKm >= issue.auto_alerts.interval_km;
+            // Se o odometro atual >= last_km + interval_km
+            const lastKm = issue.auto_alerts.last_km || 0;
+            const intervalKm = issue.auto_alerts.interval_km || 0;
+            const currentKm = odometers[issue.vehicle_id] || lastKm || 0;
+            return currentKm >= (lastKm + intervalKm);
         }
         return false;
       }
@@ -1194,6 +1257,20 @@ export default function MaintenanceTab() {
                             {issue.description}
                           </div>
                         )}
+                        {issue.status === "waiting" && issue.resolution_notes && (
+                          <div className="mt-2 bg-amber-50 p-2 rounded-lg border border-amber-100 max-w-xs">
+                            <div className="text-[10px] font-bold text-amber-700 uppercase mb-0.5">Comentário / Tratativa:</div>
+                            <div className="text-xs text-amber-900/80 italic break-words">
+                              {issue.resolution_notes}
+                            </div>
+                            {issue.resolution_comments && issue.resolution_comments.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-amber-200/50">
+                                <span className="text-[9px] font-bold text-amber-800 uppercase block mb-1">Último andamento:</span>
+                                <div className="text-xs text-amber-900 italic line-clamp-2">"{issue.resolution_comments[issue.resolution_comments.length - 1].text}"</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {issue.report_count > 1 && (
                           <div className="mt-2 inline-flex items-center gap-1 bg-red-100 text-red-700 text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wider">
                             <AlertCircle size={12} />
@@ -1237,18 +1314,7 @@ export default function MaintenanceTab() {
                         )}
 
                         {issue.status === "waiting" && (
-                          <div className="flex items-start justify-end gap-4 text-left">
-                            <div className="flex-1 max-w-[200px]">
-                              <div className="text-xs text-amber-600 font-bold flex items-center gap-1">
-                                <Clock size={12} />
-                                Em Aguardo
-                              </div>
-                              {issue.resolution_notes && (
-                                <div className="text-zinc-500 text-[11px] mt-1 italic break-words leading-tight">
-                                  "{issue.resolution_notes}"
-                                </div>
-                              )}
-                            </div>
+                          <div className="flex items-start justify-end gap-2 text-left">
                             <div className="flex justify-end items-center gap-1.5 shrink-0">
                               {user?.role === "admin" && (
                                 <button
@@ -1275,10 +1341,10 @@ export default function MaintenanceTab() {
                               </button>
                               <button
                                 onClick={() => openResolveModal(issue)}
-                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 text-xs font-bold transition-colors"
+                                className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 text-xs font-bold transition-colors"
                               >
-                                <CheckCircle2 size={12} />
-                                Resolver
+                                <Clock size={12} />
+                                Editar / Resolver
                               </button>
                             </div>
                           </div>
@@ -1300,49 +1366,55 @@ export default function MaintenanceTab() {
                               
                               {issue.resolution_nf && (() => {
                                 try {
-                                  const nfs = JSON.parse(issue.resolution_nf);
+                                  let nfs = JSON.parse(issue.resolution_nf);
                                   if (Array.isArray(nfs)) {
-                                    return (
-                                      <div className="mt-2 space-y-2 bg-zinc-50 border border-zinc-150 rounded-xl p-2 max-w-[200px]">
-                                        <div className="text-[9px] uppercase font-bold text-zinc-400">Notas Fiscais:</div>
-                                        {nfs.map((nf: any, idx: number) => {
-                                          const nfSum = nf.items?.reduce((curSum: number, item: any) => curSum + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0) || 0;
-                                          return (
-                                            <div key={nf.id || idx} className="text-[10px] border-b border-zinc-200 last:border-b-0 pb-1.5 last:pb-0 space-y-0.5">
-                                              <div className="flex justify-between items-center font-bold text-zinc-700">
-                                                <span>NF #{nf.nf_number || "S/N"}</span>
-                                                <span className="text-primary font-black">R$ {nfSum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                    nfs = nfs.filter(nf => nf.nf_number?.trim() || nf.nf_key?.trim() || nf.items?.some((i: any) => i.name?.trim()));
+                                    if (nfs.length > 0) {
+                                      return (
+                                        <div className="mt-2 space-y-2 bg-zinc-50 border border-zinc-150 rounded-xl p-2 max-w-[200px]">
+                                          <div className="text-[9px] uppercase font-bold text-zinc-400">Notas Fiscais:</div>
+                                          {nfs.map((nf: any, idx: number) => {
+                                            const nfSum = nf.items?.reduce((curSum: number, item: any) => curSum + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0) || 0;
+                                            return (
+                                              <div key={nf.id || idx} className="text-[10px] border-b border-zinc-200 last:border-b-0 pb-1.5 last:pb-0 space-y-0.5">
+                                                <div className="flex justify-between items-center font-bold text-zinc-700">
+                                                  <span>NF #{nf.nf_number || "S/N"}</span>
+                                                  <span className="text-primary font-black">R$ {nfSum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                </div>
+                                                {nf.nf_key && (
+                                                  <div className="text-[9px] text-zinc-500 font-mono break-all leading-tight">
+                                                    <span className="text-[8px] uppercase text-zinc-400 font-semibold block">Chave:</span>
+                                                    {nf.nf_key}
+                                                  </div>
+                                                )}
+                                                {nf.items && nf.items.length > 0 && (
+                                                  <div className="mt-1 bg-white border border-zinc-100 rounded p-1 space-y-0.5">
+                                                    {nf.items.map((item: any, itemIdx: number) => (
+                                                      <div key={item.id || itemIdx} className="flex justify-between text-[9px] text-zinc-650">
+                                                        <span className="truncate max-w-[110px]" title={item.name}>{item.name} <span className="text-zinc-400">({item.quantity}x)</span></span>
+                                                        <span className="font-semibold text-zinc-700 shrink-0">R$ {(item.quantity * item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                )}
                                               </div>
-                                              {nf.nf_key && (
-                                                <div className="text-[9px] text-zinc-500 font-mono break-all leading-tight">
-                                                  <span className="text-[8px] uppercase text-zinc-400 font-semibold block">Chave:</span>
-                                                  {nf.nf_key}
-                                                </div>
-                                              )}
-                                              {nf.items && nf.items.length > 0 && (
-                                                <div className="mt-1 bg-white border border-zinc-100 rounded p-1 space-y-0.5">
-                                                  {nf.items.map((item: any, itemIdx: number) => (
-                                                    <div key={item.id || itemIdx} className="flex justify-between text-[9px] text-zinc-650">
-                                                      <span className="truncate max-w-[110px]" title={item.name}>{item.name} <span className="text-zinc-400">({item.quantity}x)</span></span>
-                                                      <span className="font-semibold text-zinc-700 shrink-0">R$ {(item.quantity * item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    );
+                                            );
+                                          })}
+                                        </div>
+                                      );
+                                    }
                                   }
                                 } catch (e) {
                                   // fallback
+                                  if (issue.resolution_nf.trim() !== "" && issue.resolution_nf !== "[]" && issue.resolution_nf !== `[{"nf_number":"","nf_key":"","items":[{"id":"item-1","item_id":"","name":"","quantity":1,"unit_price":0}]}]`) {
+                                    return (
+                                      <div className="text-zinc-600 text-[10px] mt-1 font-bold uppercase tracking-widest">
+                                        NF: {issue.resolution_nf}
+                                      </div>
+                                    );
+                                  }
                                 }
-                                return (
-                                  <div className="text-zinc-600 text-[10px] mt-1 font-bold uppercase tracking-widest">
-                                    NF: {issue.resolution_nf}
-                                  </div>
-                                );
+                                return null;
                               })()}
                               {(!issue.resolution_nf || !issue.resolution_nf.startsWith("[")) && issue.resolution_value > 0 && (
                                 <div className="text-primary text-[10px] font-black uppercase tracking-widest mt-1">
@@ -1608,7 +1680,7 @@ export default function MaintenanceTab() {
 
             {/* Content Body Container */}
             <div className="flex-1 min-h-0 overflow-y-auto p-6 text-left">
-              {modalActionType === "resolve" && !sqlError && resolveSubStatus === "resolved" && (
+              {modalActionType === "resolve" && !sqlError && (resolveSubStatus === "resolved" || resolveSubStatus === "waiting") && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full min-h-0">
                   {/* Left Column: Context, General Fields and Alert info */}
                   <div className="lg:col-span-6 flex flex-col space-y-6 overflow-y-auto pr-3 min-h-0 text-left">
@@ -1674,97 +1746,95 @@ export default function MaintenanceTab() {
                     )}
 
                     {/* Alert Calibration Panel */}
-                    {resolvingIssueData?.auto_alerts?.trigger_type === 'km' && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
-                        <div className="flex items-center gap-2">
-                          <Gauge className="text-blue-500" size={18} />
-                          <h4 className="text-xs font-black text-blue-700 uppercase tracking-widest">Alerta de Quilometragem (KM)</h4>
-                        </div>
-                        <p className="text-xs text-blue-800/80 leading-relaxed font-semibold">
-                          Indique o hodômetro atual e os parâmetros do alerta para reprogramar os avisos futuros.
-                        </p>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">KM Atual do Serv. *</label>
-                            <input
-                              type="number"
-                              value={resolveCurrentKm}
-                              onChange={(e) => setResolveCurrentKm(e.target.value)}
-                              required
-                              placeholder="Fração/KM"
-                              className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-bold"
-                            />
+                    {resolvingIssueData?.auto_alert_id && (
+                      <div className="space-y-4">
+                        {/* KM Section */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
+                          <div className="flex items-center gap-2">
+                            <Gauge className="text-blue-500" size={18} />
+                            <h4 className="text-xs font-black text-blue-700 uppercase tracking-widest">Alerta de Quilometragem (KM)</h4>
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Próximo Ciclo (KM)</label>
-                            <input
-                              type="number"
-                              value={resolveIntervalKm}
-                              onChange={(e) => setResolveIntervalKm(e.target.value)}
-                              required
-                              placeholder="Ciclo KM"
-                              className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            />
+                          <p className="text-xs text-blue-800/80 leading-relaxed font-semibold text-left">
+                            Indique o hodômetro atual e os parâmetros do alerta para reprogramar os avisos futuros.
+                          </p>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">KM Atual do Serv. *</label>
+                              <input
+                                type="number"
+                                value={resolveCurrentKm}
+                                onChange={(e) => setResolveCurrentKm(e.target.value)}
+                                placeholder="Fração/KM"
+                                className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-bold"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Próximo Ciclo (KM)</label>
+                              <input
+                                type="number"
+                                value={resolveIntervalKm}
+                                onChange={(e) => setResolveIntervalKm(e.target.value)}
+                                placeholder="Ciclo KM"
+                                className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Aparecer Antes (KM)</label>
+                              <input
+                                type="number"
+                                value={resolveWarningKm}
+                                onChange={(e) => setResolveWarningKm(e.target.value)}
+                                placeholder="Aviso KM"
+                                className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">Aparecer Antes (KM)</label>
-                            <input
-                              type="number"
-                              value={resolveWarningKm}
-                              onChange={(e) => setResolveWarningKm(e.target.value)}
-                              required
-                              placeholder="Aviso KM"
-                              className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            />
-                          </div>
-                        </div>
 
-                        {resolveCurrentKm && resolveIntervalKm && (
-                          <div className="pt-2 border-t border-blue-200/60 flex flex-col gap-1 text-[11px] text-blue-900 font-bold">
-                            <span className="flex items-center gap-1.5 text-left">
-                              • Próximo vencimento programado: <strong>{Number(resolveCurrentKm) + Number(resolveIntervalKm)} KM</strong>
-                            </span>
-                            {resolveWarningKm && (
+                          {resolveCurrentKm && resolveIntervalKm && (
+                            <div className="pt-2 border-t border-blue-200/60 flex flex-col gap-1 text-[11px] text-blue-900 font-bold">
                               <span className="flex items-center gap-1.5 text-left">
-                                • Alerta aparecerá no painel em: <strong className="text-amber-700">{Number(resolveCurrentKm) + Number(resolveIntervalKm) - Number(resolveWarningKm)} KM</strong>
+                                • Próximo vencimento programado: <strong>{Number(resolveCurrentKm) + Number(resolveIntervalKm)} KM</strong>
                               </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {resolvingIssueData?.auto_alerts?.trigger_type === 'date' && (
-                      <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="text-orange-500" size={18} />
-                          <h4 className="text-xs font-black text-orange-700 uppercase tracking-widest">Alerta Temporal (Prazo/Data)</h4>
+                              {resolveWarningKm && (
+                                <span className="flex items-center gap-1.5 text-left">
+                                  • Alerta aparecerá no painel em: <strong className="text-amber-700">{Number(resolveCurrentKm) + Number(resolveIntervalKm) - Number(resolveWarningKm)} KM</strong>
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <p className="text-xs text-orange-800/80 leading-relaxed font-semibold text-left">
-                          Pendência vinculada a vencimento calendarizado. Defina os prazos adequados.
-                        </p>
-                        
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Próximo Vencimento</label>
-                            <input
-                              type="date"
-                              value={resolveNextDate}
-                              onChange={(e) => setResolveNextDate(e.target.value)}
-                              required
-                              className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                            />
+
+                        {/* Date Section */}
+                        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="text-orange-500" size={18} />
+                            <h4 className="text-xs font-black text-orange-700 uppercase tracking-widest">Alerta Temporal (Prazo/Data)</h4>
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Notificar com (Dias)</label>
-                            <input
-                              type="number"
-                              value={resolveWarningDays}
-                              onChange={(e) => setResolveWarningDays(e.target.value)}
-                              placeholder={resolvingIssueData.auto_alerts.warning_days?.toString() || "15"}
-                              className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                            />
+                          <p className="text-xs text-orange-800/80 leading-relaxed font-semibold text-left">
+                            Pendência vinculada a vencimento calendarizado. Defina os prazos adequados.
+                          </p>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Próximo Vencimento</label>
+                              <input
+                                type="date"
+                                value={resolveNextDate}
+                                onChange={(e) => setResolveNextDate(e.target.value)}
+                                className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">Notificar com (Dias)</label>
+                              <input
+                                type="number"
+                                value={resolveWarningDays}
+                                onChange={(e) => setResolveWarningDays(e.target.value)}
+                                placeholder="Dias de antecedência"
+                                className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1810,17 +1880,50 @@ export default function MaintenanceTab() {
                     </div>
 
                     {/* Operational Notes */}
-                    <div className="text-left">
-                      <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
-                        Observações da Solução / Memorando
-                      </label>
-                      <textarea
-                        className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm"
-                        rows={3}
-                        placeholder="Descreva as soluções, procedimentos internos ou prestador de serviço envolvido..."
-                        value={resolveNotes}
-                        onChange={(e) => setResolveNotes(e.target.value)}
-                      />
+                    <div className="text-left space-y-4">
+                      <div>
+                        <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
+                          Observação Principal / Memorando
+                        </label>
+                        <textarea
+                          className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm"
+                          rows={3}
+                          placeholder="Descreva a tratariva principal, orçamentos, peças, etc..."
+                          value={resolveNotes}
+                          onChange={(e) => setResolveNotes(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Comments History */}
+                      <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4">
+                        <label className="block text-[11px] font-black text-zinc-600 mb-3 uppercase tracking-wider">Histórico de Comentários / Andamento</label>
+                        
+                        {resolveComments && resolveComments.length > 0 ? (
+                          <div className="space-y-3 mb-4 max-h-48 overflow-y-auto pr-2">
+                            {resolveComments.map((comment: any) => (
+                              <div key={comment.id} className="bg-white border text-left border-zinc-200 p-3 rounded-xl">
+                                <div className="flex justify-between items-center mb-1.5">
+                                  <span className="text-[10px] font-bold text-zinc-800">{comment.user_name}</span>
+                                  <span className="text-[9px] text-zinc-500 font-medium">{new Date(comment.created_at).toLocaleString('pt-BR')}</span>
+                                </div>
+                                <p className="text-xs text-zinc-700 whitespace-pre-wrap leading-relaxed">{comment.text}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-4 text-zinc-400 text-xs italic mb-4">Nenhum comentário registrado no histórico.</div>
+                        )}
+                        
+                        <div>
+                          <textarea
+                            className="w-full px-3 py-2 border border-zinc-200 bg-white rounded-xl focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary text-xs font-medium text-zinc-800 transition-all shadow-sm"
+                            rows={2}
+                            placeholder="Adicionar novo comentário do andamento..."
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -1840,7 +1943,7 @@ export default function MaintenanceTab() {
                               id: Date.now().toString(),
                               nf_number: "",
                               nf_key: "",
-                              items: [{ id: `item-${Date.now()}`, name: "", quantity: 1, unit_price: 0 }]
+                              items: [{ id: `item-${Date.now()}`, item_id: "", name: "", quantity: 1, unit_price: 0 }]
                             }
                           ]);
                         }}
@@ -1930,7 +2033,7 @@ export default function MaintenanceTab() {
                                     type="button"
                                     onClick={() => {
                                       const updated = [...resolveNfs];
-                                      updated[nfIdx].items.push({ id: Date.now().toString(), name: "", quantity: 1, unit_price: 0 });
+                                      updated[nfIdx].items.push({ id: Date.now().toString(), item_id: "", name: "", quantity: 1, unit_price: 0 });
                                       setResolveNfs(updated);
                                     }}
                                     className="text-[10px] font-extrabold text-primary hover:underline cursor-pointer flex items-center gap-0.5"
@@ -1946,16 +2049,24 @@ export default function MaintenanceTab() {
                                     <div className="col-span-12 sm:col-span-5">
                                       <select
                                         className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                                        value={item.name}
+                                        value={item.item_id || ""}
                                         onChange={(e) => {
                                           const updated = [...resolveNfs];
-                                          updated[nfIdx].items[itemIdx].name = e.target.value;
+                                          const selectedId = e.target.value;
+                                          updated[nfIdx].items[itemIdx].item_id = selectedId;
+                                          
+                                          const found = inventoryItems.find(i => i.id === selectedId);
+                                          if (found) {
+                                            updated[nfIdx].items[itemIdx].name = found.name;
+                                          } else {
+                                            updated[nfIdx].items[itemIdx].name = "";
+                                          }
                                           setResolveNfs(updated);
                                         }}
                                       >
                                         <option value="">-- Selecione item/peça --</option>
-                                        {catalogItems.map(pName => (
-                                          <option key={pName} value={pName}>{pName}</option>
+                                        {inventoryItems.map(invItem => (
+                                          <option key={invItem.id} value={invItem.id}>{invItem.name}</option>
                                         ))}
                                       </select>
                                     </div>
@@ -1981,9 +2092,12 @@ export default function MaintenanceTab() {
                                         className="w-full border border-zinc-200 rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-primary font-bold"
                                         value={item.unit_price || ""}
                                         onChange={(e) => {
-                                          const updated = [...resolveNfs];
-                                          updated[nfIdx].items[itemIdx].unit_price = Number(e.target.value);
-                                          setResolveNfs(updated);
+                                          const val = e.target.value.replace(',', '.');
+                                          if (val === '' || !isNaN(Number(val))) {
+                                            const updated = [...resolveNfs];
+                                            updated[nfIdx].items[itemIdx].unit_price = val;
+                                            setResolveNfs(updated);
+                                          }
                                         }}
                                       />
                                     </div>
@@ -2011,32 +2125,138 @@ export default function MaintenanceTab() {
                       })}
                     </div>
 
+                    <div className="bg-blue-50/50 border border-blue-200 rounded-2xl p-4 mt-4 space-y-3 shrink-0 text-left">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-primary" />
+                          <span className="text-xs font-black uppercase text-blue-800 tracking-wider">Peças Utilizadas do Estoque</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setResolveStockItems([...resolveStockItems, { id: `stock-${Date.now()}`, item_id: "", name: "", quantity: 1, unit_price: 0 }]);
+                          }}
+                          className="bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1.5 rounded-lg text-[10px] font-extrabold transition-colors cursor-pointer"
+                        >
+                          + Adicionar Peça
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-blue-600 font-medium">As peças listadas abaixo serão descontadas automaticamente do estoque atual e somadas ao custo final.</p>
+
+                      {resolveStockItems.length > 0 && (
+                        <div className="space-y-2 mt-2">
+                          {resolveStockItems.map((item: any, itemIdx: number) => (
+                            <div key={item.id} className="grid grid-cols-12 gap-2 items-center bg-white border border-blue-100 p-2 rounded-xl shadow-sm">
+                              <div className="col-span-12 sm:col-span-5">
+                                <select
+                                  className="w-full bg-white border border-blue-200 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                                  value={item.item_id || ""}
+                                  onChange={(e) => {
+                                    const updated = [...resolveStockItems];
+                                    const selectedId = e.target.value;
+                                    updated[itemIdx].item_id = selectedId;
+                                    
+                                    const found = inventoryItems.find(i => i.id === selectedId);
+                                    if (found) {
+                                      updated[itemIdx].name = found.name;
+                                      updated[itemIdx].unit_price = Number(found.average_cost) || 0; // set avg cost automatically
+                                    } else {
+                                      updated[itemIdx].name = "";
+                                      updated[itemIdx].unit_price = 0;
+                                    }
+                                    setResolveStockItems(updated);
+                                  }}
+                                >
+                                  <option value="">-- Selecione peça do estoque --</option>
+                                  {inventoryItems.map(invItem => (
+                                    <option key={invItem.id} value={invItem.id}>{invItem.name} (Atual: {invItem.current_quantity})</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="col-span-4 sm:col-span-3">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  placeholder="Qtd"
+                                  className="w-full border border-blue-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-primary font-bold"
+                                  value={item.quantity || ""}
+                                  onChange={(e) => {
+                                    const updated = [...resolveStockItems];
+                                    updated[itemIdx].quantity = Number(e.target.value);
+                                    setResolveStockItems(updated);
+                                  }}
+                                />
+                              </div>
+                              <div className="col-span-5 sm:col-span-3">
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  placeholder="Custo Unit R$"
+                                  className="w-full border border-blue-200 rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-primary font-bold bg-zinc-50"
+                                  value={item.unit_price || ""}
+                                  readOnly
+                                  title="Custo unitário baseado no custo médio da peça (somente leitura)"
+                                />
+                              </div>
+                              <div className="col-span-3 sm:col-span-1 flex justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setResolveStockItems(resolveStockItems.filter(it => it.id !== item.id));
+                                  }}
+                                  className="text-zinc-400 hover:text-red-500 hover:bg-neutral-50 p-1 rounded-lg"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Catalog registration drawer (Inline nested overlay) */}
                     {showAddItemDialog && (
                       <div className="mt-3 p-4 bg-orange-50 border border-orange-200 rounded-2xl space-y-2 shrink-0 text-left">
-                        <div className="text-xs font-black uppercase text-orange-700 tracking-wider">Criar Novo Serviço ou Peça</div>
-                        <p className="text-[11px] text-orange-800">O item cadastrado ficará permanentemente disponível no catálogo para todas as NFs.</p>
-                        <div className="flex gap-2 pt-1">
+                        <div className="text-xs font-black uppercase text-orange-700 tracking-wider">Cadastrar Nova Peça no Estoque</div>
+                        <p className="text-[11px] text-orange-800">O item será cadastrado em seu estoque e ficará disponível para todas as NFs.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
                           <input
                             type="text"
-                            placeholder="Nome (Ex: Filtro de Cabine)"
-                            className="flex-1 bg-white border border-orange-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none font-bold"
+                            placeholder="Nome * (Ex: Amortecedor Dianteiro)"
+                            className="bg-white border border-orange-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none font-bold"
                             value={newItemName}
                             onChange={(e) => setNewItemName(e.target.value)}
                           />
+                          <input
+                            type="text"
+                            placeholder="SKU/Código"
+                            className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                            value={newItemSku}
+                            onChange={(e) => setNewItemSku(e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Categoria"
+                            className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                            value={newItemCategory}
+                            onChange={(e) => setNewItemCategory(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex gap-2 justify-end mt-2">
+                          <button
+                            type="button"
+                            onClick={() => { setShowAddItemDialog(false); setNewItemName(""); setNewItemCategory(""); setNewItemSku(""); }}
+                            className="px-3 py-1.5 bg-white border border-zinc-200 text-zinc-700 text-xs font-bold rounded-xl shrink-0 cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleRegisterCatalogItem(newItemName)}
                             className="px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-bold rounded-xl shrink-0 cursor-pointer"
                           >
-                            Salvar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setShowAddItemDialog(false); setNewItemName(""); }}
-                            className="px-3 py-1.5 bg-white border border-zinc-200 text-zinc-700 text-xs font-bold rounded-xl shrink-0 cursor-pointer"
-                          >
-                            X
+                            Salvar Peça
                           </button>
                         </div>
                       </div>
@@ -2045,67 +2265,12 @@ export default function MaintenanceTab() {
                     {/* Grand Total Footer Dashboard panel inside Column 2 */}
                     <div className="bg-emerald-50/50 border border-emerald-200 rounded-2xl p-4 mt-4 flex items-center justify-between shrink-0">
                       <div>
-                        <span className="text-[10px] font-black uppercase text-emerald-800 tracking-widest block font-sans">Total Acumulado das NFs</span>
+                        <span className="text-[10px] font-black uppercase text-emerald-800 tracking-widest block font-sans">Custo Total (NFs + Estoque)</span>
                         <span className="text-[11px] text-zinc-500">Soma calculada em tempo real</span>
                       </div>
                       <div className="text-2xl font-black text-emerald-700">
-                        R$ {resolveNfs.reduce((acc, nf) => acc + nf.items.reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        R$ {(resolveNfs.reduce((acc, nf) => acc + nf.items.reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0), 0) + resolveStockItems.reduce((acc, item) => acc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Resolution in Waiting Status View */}
-              {modalActionType === "resolve" && !sqlError && resolveSubStatus === "waiting" && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full min-h-0 text-left">
-                  {/* Left checklist selection */}
-                  <div className="lg:col-span-6 flex flex-col space-y-4 overflow-y-auto pr-3 min-h-0">
-                    <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
-                      <label className="block text-xs font-black text-zinc-500 uppercase tracking-wider text-left">
-                        Ocorrências agrupadas para colocar em aguardo:
-                      </label>
-                      <div className="space-y-2 border border-zinc-200 rounded-xl p-2 bg-white max-h-72 overflow-y-auto">
-                        {resolvingIssueData?.grouped_issues && resolvingIssueData.grouped_issues.length > 1 ? (
-                          resolvingIssueData.grouped_issues.map((gi: any) => (
-                            <div key={gi.id} className="flex gap-3 p-2 bg-zinc-50 rounded-lg text-left">
-                              <input
-                                type="checkbox"
-                                className="mt-1 flex-shrink-0 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary cursor-not-allowed"
-                                checked={selectedIdsToResolve.includes(gi.id)}
-                                disabled
-                              />
-                              <div className="text-xs text-left">
-                                <div className="font-extrabold text-zinc-950 text-left">{new Date(gi.created_at).toLocaleString('pt-BR')}</div>
-                                {gi.description ? <div className="text-zinc-500 italic mt-0.5 text-left">"{gi.description}"</div> : null}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="p-3 text-xs text-zinc-400 font-medium text-left">Esta pendência individual será movida para sinalizada em aguardo.</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Waiting form */}
-                  <div className="lg:col-span-6 flex flex-col justify-center h-full space-y-4 pl-3 border-t lg:border-t-0 lg:border-l border-zinc-100 lg:pl-8 text-left">
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-3 text-left">
-                      <div className="flex items-center gap-2">
-                        <Clock size={20} className="text-amber-600" />
-                        <span className="text-sm font-black text-amber-950 uppercase tracking-wider text-left">Motivo do Aguardo *</span>
-                      </div>
-                      <p className="text-xs text-amber-900/80 leading-relaxed font-semibold text-left">
-                        Informe o motivo da retenção do veículo ou pendência de peça, orçamento, etc. Isso ficará visível no painel administrativo.
-                      </p>
-                      <textarea
-                        required
-                        className="w-full bg-white px-4 py-3 border border-amber-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm font-semibold text-zinc-800 shadow-inner"
-                        rows={5}
-                        placeholder="Exemplo: Aguardando remessa do distribuidor para o farol traseiro esquerdo. Orçamento aprovado pela gerência."
-                        value={resolveNotes}
-                        onChange={(e) => setResolveNotes(e.target.value)}
-                      />
                     </div>
                   </div>
                 </div>
@@ -2161,14 +2326,15 @@ ALTER TABLE checklist_issues ADD CONSTRAINT checklist_issues_status_check CHECK 
                   ) : (
                     <>
                       <p className="text-sm text-zinc-500 leading-relaxed text-left">
-                        Para habilitar o salvamento unificado de <strong>Notas Fiscais, Custos de Peças e Anexos de Imagens</strong>, é necessário expandir a tabela checklist_issues através do seu console do Supabase. Copie o script SQL abaixo e aplique-o em seu painel:
+                        Para habilitar o salvamento unificado de <strong>Notas Fiscais, Custos de Peças, Comentários e Anexos de Imagens</strong>, é necessário expandir a tabela checklist_issues através do seu console do Supabase. Copie o script SQL abaixo e aplique-o em seu painel:
                       </p>
                       <div className="p-4 bg-zinc-900 rounded-2xl overflow-x-auto text-xs font-mono text-zinc-200 shadow-xl border border-zinc-800 text-left">
                         <pre>
 {`ALTER TABLE public.checklist_issues 
 ADD COLUMN IF NOT EXISTS resolution_nf TEXT,
 ADD COLUMN IF NOT EXISTS resolution_value NUMERIC,
-ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
+ADD COLUMN IF NOT EXISTS resolution_photos JSONB,
+ADD COLUMN IF NOT EXISTS resolution_comments JSONB;`}
                         </pre>
                       </div>
                     </>
@@ -2228,7 +2394,7 @@ ADD COLUMN IF NOT EXISTS resolution_photos JSONB;`}
                         resolveSubStatus === "waiting" ? (
                           <>
                             <Clock size={14} />
-                            Confirmar Aguardo
+                            Salvar Alterações
                           </>
                         ) : (
                           <>

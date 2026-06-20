@@ -9,7 +9,7 @@ export default function RoutesTab() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  const [routeForm, setRouteForm] = useState<{id: string, origin: string, destination: string, stops: string[], distance_km: string}>({ id: '', origin: '', destination: '', stops: [], distance_km: '' });
+  const [routeForm, setRouteForm] = useState<{id: string, origin: string, destination: string, stops: string[], distance_km: string, modality_id: string}>({ id: '', origin: '', destination: '', stops: [], distance_km: '', modality_id: '' });
 
   const fetchData = async () => {
     setLoading(true);
@@ -40,7 +40,8 @@ export default function RoutesTab() {
           origin: routeForm.origin,
           destination: routeForm.destination,
           stops: routeForm.stops,
-          distance_km: routeForm.distance_km ? parseFloat(routeForm.distance_km) : null
+          distance_km: routeForm.distance_km ? parseFloat(routeForm.distance_km) : null,
+          modality_id: routeForm.modality_id || null
         }).eq('id', routeForm.id);
         if (error) throw error;
       } else {
@@ -48,11 +49,12 @@ export default function RoutesTab() {
           origin: routeForm.origin,
           destination: routeForm.destination,
           stops: routeForm.stops,
-          distance_km: routeForm.distance_km ? parseFloat(routeForm.distance_km) : null
+          distance_km: routeForm.distance_km ? parseFloat(routeForm.distance_km) : null,
+          modality_id: routeForm.modality_id || null
         }]);
         if (error) throw error;
       }
-      setRouteForm({ id: '', origin: '', destination: '', stops: [], distance_km: '' });
+      setRouteForm({ id: '', origin: '', destination: '', stops: [], distance_km: '', modality_id: '' });
       fetchData();
     } catch (error: any) {
       alert('Erro: ' + error.message);
@@ -100,6 +102,7 @@ export default function RoutesTab() {
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Origem</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Paradas</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Destino</th>
+                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Modalidade</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Distância</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right">Ações</th>
                 </tr>
@@ -118,11 +121,14 @@ export default function RoutesTab() {
                       ) : '-'}
                     </td>
                     <td className="px-5 py-4 text-xs font-bold">{r.destination}</td>
+                    <td className="px-5 py-4 text-xs font-medium text-text-muted">
+                      {modalities.find(m => m.id === r.modality_id)?.name || '-'}
+                    </td>
                     <td className="px-5 py-4 text-xs font-medium text-text-muted">{r.distance_km ? `${r.distance_km} km` : '-'}</td>
                     <td className="px-5 py-4 text-right flex items-center justify-end gap-2">
                        <button
                          onClick={() => {
-                           setRouteForm({ id: r.id, origin: r.origin || '', destination: r.destination || '', stops: r.stops || [], distance_km: r.distance_km?.toString() || '' });
+                           setRouteForm({ id: r.id, origin: r.origin || '', destination: r.destination || '', stops: r.stops || [], distance_km: r.distance_km?.toString() || '', modality_id: r.modality_id || '' });
                            window.scrollTo({ top: 0, behavior: 'smooth' });
                          }}
                          className="p-1.5 rounded-lg hover:bg-zinc-100 text-text-muted hover:text-primary transition-colors title='Editar Rota'"
@@ -214,6 +220,20 @@ export default function RoutesTab() {
           </div>
 
           <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Modalidade</label>
+            <select
+              className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary cursor-pointer"
+              value={routeForm.modality_id}
+              onChange={e => setRouteForm({ ...routeForm, modality_id: e.target.value })}
+            >
+              <option value="">Selecione uma modalidade</option>
+              {modalities.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Restringir a Modalidades Visuais</label>
             <div className="p-3 border border-app-border rounded-xl bg-app-bg space-y-2 max-h-32 overflow-y-auto">
                {modalities.length === 0 ? (
@@ -261,7 +281,7 @@ export default function RoutesTab() {
             {routeForm.id && (
                <button
                  type="button"
-                 onClick={() => setRouteForm({ id: '', origin: '', destination: '', stops: [], distance_km: '' })}
+                 onClick={() => setRouteForm({ id: '', origin: '', destination: '', stops: [], distance_km: '', modality_id: '' })}
                  className="flex-1 h-12 bg-app-bg text-text-main border border-app-border font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-100 transition-all shadow-sm"
                >
                  Cancelar

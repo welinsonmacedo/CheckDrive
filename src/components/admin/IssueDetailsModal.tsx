@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { X, Printer, MapPin, Calendar, CheckCircle2, AlertCircle, User, FileText, Wrench, Clock } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -11,6 +11,15 @@ export default function IssueDetailsModal({
   issue,
   onClose,
 }: IssueDetailsModalProps) {
+  useEffect(() => {
+    if (issue) {
+      document.body.classList.add('modal-open-for-print');
+    }
+    return () => {
+      document.body.classList.remove('modal-open-for-print');
+    };
+  }, [issue]);
+
   if (!issue) return null;
 
   const getImageUrl = (path: string | null) => {
@@ -32,8 +41,8 @@ export default function IssueDetailsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm print:p-0 print:bg-white print:block overflow-y-auto">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col relative print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm print:static print:p-0 print:bg-white print:block overflow-y-auto print:w-auto print:h-auto">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col relative print:static print:my-0 print:max-w-none print:shadow-none print:rounded-none print:border-0 print:block">
         
         {/* Header (No print for Actions) */}
         <div className="p-6 border-b border-zinc-100 flex items-center justify-between sticky top-0 bg-white z-10 rounded-t-3xl print:hidden">
