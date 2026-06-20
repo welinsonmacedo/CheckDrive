@@ -73,12 +73,16 @@ export default function MaintenanceTab() {
       id: "first",
       nf_number: "",
       nf_key: "",
+      supplier_id: "",
       items: [{ id: "first-item", item_id: "", name: "", quantity: 1, unit_price: 0 }]
     }
   ]);
   const [resolveStockItems, setResolveStockItems] = useState<any[]>([]);
 
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  const [inventorySuppliers, setInventorySuppliers] = useState<any[]>([]);
+  const [newSupplierForm, setNewSupplierForm] = useState({ name: "", cnpj_cpf: "", contact_name: "", phone: "" });
+  const [showAddSupplierDialog, setShowAddSupplierDialog] = useState(false);
   const [newItemName, setNewItemName] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newItemSku, setNewItemSku] = useState("");
@@ -125,16 +129,57 @@ export default function MaintenanceTab() {
 
   async function fetchCatalog() {
     try {
-      const { data, error } = await supabase
-        .from("inventory_items")
-        .select("*")
-        .order("name");
+      const [itemsRes, suppliersRes] = await Promise.all([
+        supabase.from("inventory_items").select("*").order("name"),
+        supabase.from("inventory_suppliers").select("*").order("name")
+      ]);
       
-      if (!error && data) {
-        setInventoryItems(data);
+      if (!itemsRes.error && itemsRes.data) {
+        setInventoryItems(itemsRes.data);
+      }
+      if (!suppliersRes.error && suppliersRes.data) {
+        setInventorySuppliers(suppliersRes.data);
       }
     } catch (err) {
       console.warn("Could not load catalog from DB", err);
+    }
+  }
+
+  async function handleRegisterSupplier() {
+    const trimmed = newSupplierForm.name.trim();
+    if (!trimmed) return;
+    
+    if (inventorySuppliers.some(sup => sup.name.toLowerCase() === trimmed.toLowerCase())) {
+      alert("Este fornecedor já está cadastrado!");
+      return;
+    }
+    
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("company_id")
+        .eq("id", user?.id)
+        .single();
+        
+      const payload = {
+        name: trimmed,
+        cnpj_cpf: newSupplierForm.cnpj_cpf.trim(),
+        contact_name: newSupplierForm.contact_name.trim(),
+        phone: newSupplierForm.phone.trim(),
+        company_id: profile?.company_id
+      };
+      
+      const { data: newSupp, error } = await supabase.from("inventory_suppliers").insert(payload).select().single();
+      if (!error && newSupp) {
+        setInventorySuppliers([...inventorySuppliers, newSupp].sort((a,b) => a.name.localeCompare(b.name)));
+        setNewSupplierForm({ name: "", cnpj_cpf: "", contact_name: "", phone: "" });
+        setShowAddSupplierDialog(false);
+      } else {
+        throw error;
+      }
+    } catch (err) {
+      console.error("Error registering supplier:", err);
+      alert("Erro ao cadastrar fornecedor. Tente novamente.");
     }
   }
 
@@ -1974,7 +2019,34 @@ export default function MaintenanceTab() {
                             )}
                             <div className="text-xs font-bold text-zinc-400 tracking-widest uppercase">Nota Fiscal #{nfIdx + 1}</div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-black text-zinc-500 mb-1 uppercase tracking-wide">Fornecedor da NF</label>
+                                <div className="flex gap-2">
+                                  <select
+                                    className="flex-1 bg-white px-3 py-2 border border-zinc-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                                    value={nf.supplier_id || ""}
+                                    onChange={(e) => {
+                                      const updated = [...resolveNfs];
+                                      updated[nfIdx].supplier_id = e.target.value;
+                                      setResolveNfs(updated);
+                                    }}
+                                  >
+                                    <option value="">Selecione...</option>
+                                    {inventorySuppliers.map(s => (
+                                      <option key={s.id} value={s.id}>{s.name}</option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowAddSupplierDialog(true)}
+                                    className="px-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 rounded-xl text-zinc-600 transition-colors"
+                                    title="Cadastrar Novo Fornecedor"
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                </div>
+                              </div>
                               <div>
                                 <label className="block text-[10px] font-black text-zinc-500 mb-1 uppercase tracking-wide">Número da NF</label>
                                 <input
@@ -1991,7 +2063,7 @@ export default function MaintenanceTab() {
                               </div>
                               <div>
                                 <label className="block text-[10px] font-black text-zinc-500 mb-1 uppercase tracking-wide">Subtotal da NF</label>
-                                <div className="w-full px-3 py-2 border border-zinc-200 bg-zinc-100 rounded-xl text-xs font-extrabold text-zinc-700 shadow-inner">
+                                <div className="w-full px-3 py-2 border border-zinc-200 bg-zinc-100 rounded-xl text-xs font-extrabold text-zinc-700 shadow-inner truncate">
                                   R$ {nfTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </div>
                               </div>
@@ -2214,6 +2286,54 @@ export default function MaintenanceTab() {
                         </div>
                       )}
                     </div>
+
+                    {/* Supplier registration drawer */}
+                    {showAddSupplierDialog && (
+                      <div className="mt-3 p-4 bg-purple-50 border border-purple-200 rounded-2xl space-y-2 shrink-0 text-left">
+                        <div className="text-xs font-black uppercase text-purple-700 tracking-wider">Cadastrar Novo Fornecedor</div>
+                        <p className="text-[11px] text-purple-800">O fornecedor ficará disponível para vínculo nas notas fiscais.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+                          <input
+                            type="text"
+                            placeholder="Nome / Razão Social *"
+                            className="bg-white border border-purple-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none font-bold col-span-1 md:col-span-2"
+                            value={newSupplierForm.name}
+                            onChange={(e) => setNewSupplierForm({...newSupplierForm, name: e.target.value})}
+                          />
+                          <input
+                            type="text"
+                            placeholder="CNPJ/CPF"
+                            className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                            value={newSupplierForm.cnpj_cpf}
+                            onChange={(e) => setNewSupplierForm({...newSupplierForm, cnpj_cpf: e.target.value})}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Telefone"
+                            className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                            value={newSupplierForm.phone}
+                            onChange={(e) => setNewSupplierForm({...newSupplierForm, phone: e.target.value})}
+                          />
+                        </div>
+                        <div className="flex gap-2 justify-end mt-2">
+                          <button
+                            type="button"
+                            onClick={() => { setShowAddSupplierDialog(false); setNewSupplierForm({name:"", cnpj_cpf:"", contact_name:"", phone:""}); }}
+                            className="px-3 py-1.5 bg-white border border-zinc-200 text-zinc-700 text-xs font-bold rounded-xl shrink-0 cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRegisterSupplier}
+                            className="px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-bold rounded-xl shrink-0 cursor-pointer"
+                            disabled={!newSupplierForm.name.trim()}
+                          >
+                            Salvar Fornecedor
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Catalog registration drawer (Inline nested overlay) */}
                     {showAddItemDialog && (
