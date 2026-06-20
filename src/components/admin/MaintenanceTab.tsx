@@ -155,23 +155,20 @@ export default function MaintenanceTab() {
     }
     
     try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("company_id")
-        .eq("id", user?.id)
-        .single();
-        
-      const payload = {
+      const payload: any = {
         name: trimmed,
         cnpj_cpf: newSupplierForm.cnpj_cpf.trim(),
         contact_name: newSupplierForm.contact_name.trim(),
-        phone: newSupplierForm.phone.trim(),
-        company_id: profile?.company_id
+        phone: newSupplierForm.phone.trim()
       };
       
-      const { data: newSupp, error } = await supabase.from("inventory_suppliers").insert(payload).select().single();
-      if (!error && newSupp) {
-        setInventorySuppliers([...inventorySuppliers, newSupp].sort((a,b) => a.name.localeCompare(b.name)));
+      if (inventoryItems.length > 0 && inventoryItems[0].company_id) {
+        payload.company_id = inventoryItems[0].company_id;
+      }
+      
+      const { error } = await supabase.from("inventory_suppliers").insert(payload);
+      if (!error) {
+        await fetchCatalog();
         setNewSupplierForm({ name: "", cnpj_cpf: "", contact_name: "", phone: "" });
         setShowAddSupplierDialog(false);
       } else {
@@ -193,23 +190,20 @@ export default function MaintenanceTab() {
     }
     
     try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("company_id")
-        .eq("id", user?.id)
-        .single();
-        
-      const payload = {
+      const payload: any = {
         name: trimmed,
         category: newItemCategory.trim(),
         sku: newItemSku.trim(),
-        current_quantity: 0,
-        company_id: profile?.company_id
+        current_quantity: 0
       };
+
+      if (inventoryItems.length > 0 && inventoryItems[0].company_id) {
+        payload.company_id = inventoryItems[0].company_id;
+      }
       
-      const { data: newItem, error } = await supabase.from("inventory_items").insert(payload).select().single();
-      if (!error && newItem) {
-        setInventoryItems([...inventoryItems, newItem].sort((a,b) => a.name.localeCompare(b.name)));
+      const { error } = await supabase.from("inventory_items").insert(payload);
+      if (!error) {
+        await fetchCatalog();
         setNewItemName("");
         setNewItemCategory("");
         setNewItemSku("");
