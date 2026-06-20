@@ -23,6 +23,7 @@ import {
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import ManualIssueModal from "./ManualIssueModal";
+import { SupplierModal } from "./SupplierModal";
 import IssueDetailsModal from "./IssueDetailsModal";
 import { usePersistentState } from "@/src/hooks/usePersistentState";
 
@@ -81,7 +82,6 @@ export default function MaintenanceTab() {
 
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
   const [inventorySuppliers, setInventorySuppliers] = useState<any[]>([]);
-  const [newSupplierForm, setNewSupplierForm] = useState({ name: "", cnpj_cpf: "", contact_name: "", phone: "" });
   const [showAddSupplierDialog, setShowAddSupplierDialog] = useState(false);
   const [newItemName, setNewItemName] = useState("");
   const [newItemCategory, setNewItemCategory] = useState("");
@@ -142,41 +142,6 @@ export default function MaintenanceTab() {
       }
     } catch (err) {
       console.warn("Could not load catalog from DB", err);
-    }
-  }
-
-  async function handleRegisterSupplier() {
-    const trimmed = newSupplierForm.name.trim();
-    if (!trimmed) return;
-    
-    if (inventorySuppliers.some(sup => sup.name.toLowerCase() === trimmed.toLowerCase())) {
-      alert("Este fornecedor já está cadastrado!");
-      return;
-    }
-    
-    try {
-      const payload: any = {
-        name: trimmed,
-        cnpj_cpf: newSupplierForm.cnpj_cpf.trim(),
-        contact_name: newSupplierForm.contact_name.trim(),
-        phone: newSupplierForm.phone.trim()
-      };
-      
-      if (inventoryItems.length > 0 && inventoryItems[0].company_id) {
-        payload.company_id = inventoryItems[0].company_id;
-      }
-      
-      const { error } = await supabase.from("inventory_suppliers").insert(payload);
-      if (!error) {
-        await fetchCatalog();
-        setNewSupplierForm({ name: "", cnpj_cpf: "", contact_name: "", phone: "" });
-        setShowAddSupplierDialog(false);
-      } else {
-        throw error;
-      }
-    } catch (err) {
-      console.error("Error registering supplier:", err);
-      alert("Erro ao cadastrar fornecedor. Tente novamente.");
     }
   }
 
@@ -2037,51 +2002,15 @@ export default function MaintenanceTab() {
                   </div>
 
                   {/* Supplier registration drawer */}
-                  {showAddSupplierDialog && (
-                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl space-y-3 mb-4">
-                      <div className="text-xs font-black uppercase text-purple-700 tracking-wider">Cadastrar Novo Fornecedor</div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
-                        <input
-                          type="text"
-                          placeholder="Nome / Razão Social *"
-                          className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none col-span-1 md:col-span-2 font-bold"
-                          value={newSupplierForm.name}
-                          onChange={(e) => setNewSupplierForm({...newSupplierForm, name: e.target.value})}
-                        />
-                        <input
-                          type="text"
-                          placeholder="CNPJ/CPF"
-                          className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                          value={newSupplierForm.cnpj_cpf}
-                          onChange={(e) => setNewSupplierForm({...newSupplierForm, cnpj_cpf: e.target.value})}
-                        />
-                        <input
-                          type="text"
-                          placeholder="Telefone"
-                          className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                          value={newSupplierForm.phone}
-                          onChange={(e) => setNewSupplierForm({...newSupplierForm, phone: e.target.value})}
-                        />
-                      </div>
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          type="button"
-                          onClick={() => { setShowAddSupplierDialog(false); setNewSupplierForm({name:"", cnpj_cpf:"", contact_name:"", phone:""}); }}
-                          className="px-3 py-1.5 bg-zinc-200 text-zinc-700 text-xs font-bold rounded-xl hover:bg-zinc-300 cursor-pointer shrink-0"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleRegisterSupplier}
-                          className="px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-bold rounded-xl cursor-pointer shrink-0"
-                          disabled={!newSupplierForm.name.trim()}
-                        >
-                          Salvar Fornecedor
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <SupplierModal 
+                    show={showAddSupplierDialog} 
+                    onClose={() => setShowAddSupplierDialog(false)}
+                    onSaved={() => {
+                      setShowAddSupplierDialog(false);
+                      fetchCatalog();
+                    }}
+                    supplierToEdit={null}
+                  />
 
                   {/* Registered item catalog form dialog */}
                   {showAddItemDialog && (

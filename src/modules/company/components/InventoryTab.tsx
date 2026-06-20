@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import { Package, Truck, FileText, Plus, Search, Edit2, Trash2, X, Check, FileCheck, Layers } from "lucide-react";
+import { SupplierModal } from "../../../components/admin/SupplierModal";
 
 export default function InventoryTab() {
   const { user } = useAuth();
@@ -478,71 +479,15 @@ CREATE TABLE IF NOT EXISTS public.inventory_transactions (
         </div>
       )}
 
-      {/* Supplier Modal */}
-      {showSupplierModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white max-w-md w-full rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-5 border-b border-zinc-200 flex justify-between items-center">
-              <h3 className="font-bold text-lg text-zinc-800">{supplierForm.id ? "Editar Fornecedor" : "Novo Fornecedor"}</h3>
-              <button onClick={() => setShowSupplierModal(false)} className="text-zinc-500 hover:text-zinc-800 cursor-pointer"><X size={20} /></button>
-            </div>
-            <div className="p-6 space-y-4 overflow-y-auto">
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 mb-1">Razão Social / Nome *</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary font-semibold"
-                  value={supplierForm.name}
-                  onChange={(e) => setSupplierForm({...supplierForm, name: e.target.value})}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 mb-1">CNPJ/CPF</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                  value={supplierForm.cnpj_cpf}
-                  onChange={(e) => setSupplierForm({...supplierForm, cnpj_cpf: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 mb-1">Pessoa de Contato</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                  value={supplierForm.contact_name}
-                  onChange={(e) => setSupplierForm({...supplierForm, contact_name: e.target.value})}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 mb-1">Telefone</label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                    value={supplierForm.phone}
-                    onChange={(e) => setSupplierForm({...supplierForm, phone: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                    value={supplierForm.email}
-                    onChange={(e) => setSupplierForm({...supplierForm, email: e.target.value})}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="p-4 border-t border-zinc-200 flex justify-end gap-2 bg-zinc-50">
-              <button onClick={() => setShowSupplierModal(false)} className="px-4 py-2 text-sm font-bold text-zinc-600 hover:bg-zinc-200 rounded-lg cursor-pointer">Cancelar</button>
-              <button onClick={handleSaveSupplier} disabled={!supplierForm.name} className="px-4 py-2 text-sm font-bold bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-50 cursor-pointer">Salvar</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SupplierModal 
+        show={showSupplierModal} 
+        onClose={() => setShowSupplierModal(false)}
+        onSaved={() => {
+          setShowSupplierModal(false);
+          fetchData();
+        }}
+        supplierToEdit={supplierForm.id ? supplierForm : null}
+      />
 
       {/* NF Modal */}
       {showNfModal && (
