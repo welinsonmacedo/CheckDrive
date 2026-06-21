@@ -1,7 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 
 export function SupplierModal({
   show,
