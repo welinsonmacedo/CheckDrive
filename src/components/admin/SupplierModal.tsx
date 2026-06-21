@@ -74,7 +74,7 @@ export function SupplierModal({
       onSaved();
     } catch (e: any) {
       console.error(e);
-      alert("Erro ao salvar fornecedor.");
+      alert(`Erro ao salvar fornecedor: ${e.message || 'Desconhecido'}`);
     }
   };
 

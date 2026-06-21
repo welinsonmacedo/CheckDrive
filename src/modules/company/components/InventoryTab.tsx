@@ -65,7 +65,17 @@ export default function InventoryTab() {
 
   const handleSaveItem = async () => {
     try {
-      const payload = {
+      let company_id = null;
+      if (!itemForm.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("company_id")
+          .eq("id", user?.id)
+          .single();
+        if (profile) company_id = profile.company_id;
+      }
+
+      const payload: any = {
         name: itemForm.name,
         sku: itemForm.sku,
         category: itemForm.category,
@@ -73,15 +83,22 @@ export default function InventoryTab() {
         current_quantity: Number(itemForm.current_quantity)
       };
 
+      if (!itemForm.id && company_id) {
+        payload.company_id = company_id;
+      }
+
       if (itemForm.id) {
-        await supabase.from("inventory_items").update(payload).eq("id", itemForm.id);
+        const { error } = await supabase.from("inventory_items").update(payload).eq("id", itemForm.id);
+        if (error) throw error;
       } else {
-        await supabase.from("inventory_items").insert(payload);
+        const { error } = await supabase.from("inventory_items").insert(payload);
+        if (error) throw error;
       }
       setShowItemModal(false);
       fetchData();
-    } catch (e) {
-      alert("Erro ao salvar produto");
+    } catch (e: any) {
+      console.error(e);
+      alert(`Erro ao salvar produto: ${e.message || 'Desconhecido'}`);
     }
   };
 
@@ -109,12 +126,20 @@ export default function InventoryTab() {
 
   const handleSaveNf = async () => {
     try {
+      let company_id = null;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("company_id")
+        .eq("id", user?.id)
+        .single();
+      if (profile) company_id = profile.company_id;
+
       // Entradas (Inbound) logic
       for (const it of nfForm.items) {
         if (!it.item_id) continue;
         const total = Number(it.quantity) * Number(it.unit_price);
-        // Insert transaction
-        await supabase.from("inventory_transactions").insert({
+        
+        const txPayload: any = {
           item_id: it.item_id,
           supplier_id: nfForm.supplier_id || null,
           type: "in",
@@ -126,7 +151,12 @@ export default function InventoryTab() {
           date: nfForm.date || new Date().toISOString(),
           notes: nfForm.notes,
           created_by: user?.id
-        });
+        };
+        if (company_id) txPayload.company_id = company_id;
+
+        // Insert transaction
+        const { error: txError } = await supabase.from("inventory_transactions").insert(txPayload);
+        if (txError) throw txError;
 
         // Update item stock
         const targetItem = items.find(i => i.id === it.item_id);
@@ -136,16 +166,18 @@ export default function InventoryTab() {
           const oldTotalValue = Number(targetItem.current_quantity) * Number(targetItem.average_cost || 0);
           const newAvgCost = (oldTotalValue + total) / newQty;
           
-          await supabase.from("inventory_items").update({ 
+          const { error: updateError } = await supabase.from("inventory_items").update({ 
             current_quantity: newQty,
             average_cost: newAvgCost
           }).eq("id", it.item_id);
+          if (updateError) throw updateError;
         }
       }
       setShowNfModal(false);
       fetchData();
-    } catch (e) {
-      alert("Erro ao salvar NF");
+    } catch (e: any) {
+      console.error(e);
+      alert(`Erro ao salvar NF: ${e.message || 'Desconhecido'}`);
     }
   };
 
@@ -199,7 +231,22 @@ CREATE TABLE IF NOT EXISTS public.inventory_transactions (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   created_by UUID REFERENCES auth.users(id),
   company_id UUID REFERENCES public.companies(id)
-);`}</pre>
+);
+
+-- Habilitar RLS e criar políticas
+ALTER TABLE public.inventory_suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all actions for company users (suppliers)" ON public.inventory_suppliers
+  FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid()));
+
+CREATE POLICY "Allow all actions for company users (items)" ON public.inventory_items
+  FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid()));
+
+CREATE POLICY "Allow all actions for company users (transactions)" ON public.inventory_transactions
+  FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid()));
+`}</pre>
             </div>
             <button
               onClick={fetchData}

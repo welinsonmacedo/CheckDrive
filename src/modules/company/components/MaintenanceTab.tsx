@@ -176,9 +176,9 @@ export default function MaintenanceTab() {
       } else {
         throw error;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn("Could not save registered item to Supabase", err);
-      alert("Erro ao cadastrar peça.");
+      alert(`Erro ao cadastrar peça: ${err.message || 'Desconhecido'}`);
     }
   }
 
@@ -529,33 +529,45 @@ export default function MaintenanceTab() {
       
       try {
         if (resolveSubStatus === "resolved" && resolvingIssueData?.status !== "resolved") {
+          let company_id = inventoryItems[0]?.company_id || null;
+          if (!company_id) {
+            const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user?.id).single();
+            if (profile) company_id = profile.company_id;
+          }
+
           for (const item of resolveStockItems) {
             if (item.item_id && Number(item.quantity) > 0) {
               const total = Number(item.quantity || 1) * Number(item.unit_price || 0);
-              await supabase.from("inventory_transactions").insert({
+              
+              const txPayload: any = {
                 item_id: item.item_id,
                 type: "out",
                 quantity: -Math.abs(Number(item.quantity)),
                 unit_price: Number(item.unit_price),
                 total_price: total,
                 notes: `Estoque utilizado para pendência. ${resolvingIssueData?.item_title || ""}`,
-                company_id: inventoryItems[0]?.company_id || null,
                 created_by: user?.id
-              });
+              };
+              if (company_id) txPayload.company_id = company_id;
+
+              const { error: txError } = await supabase.from("inventory_transactions").insert(txPayload);
+              if (txError) throw txError;
               
               // decrement
               const { data: currentItemData } = await supabase.from("inventory_items").select("current_quantity").eq("id", item.item_id).single();
               if (currentItemData) {
-                 await supabase.from("inventory_items").update({
+                 const { error: upError } = await supabase.from("inventory_items").update({
                     current_quantity: Number(currentItemData.current_quantity) - Math.abs(Number(item.quantity))
                  }).eq("id", item.item_id);
+                 if (upError) throw upError;
               }
             }
           }
           fetchCatalog(); // refresh inventory
         }
-      } catch (err) {
-        console.warn("Could not deduct from inventory", err);
+      } catch (err: any) {
+        console.error("Could not deduct from inventory", err);
+        alert(`Atenção: A pendência foi solucionada mas houve um erro ao baixar o estoque: ${err.message || ''}`);
       }
 
       // Update auto_alert if it exists
