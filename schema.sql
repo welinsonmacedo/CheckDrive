@@ -802,3 +802,64 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
 
 CREATE TRIGGER set_company_id_vehicle_averages BEFORE INSERT ON public.vehicle_averages FOR EACH ROW EXECUTE FUNCTION set_company_id_on_insert();
 
+-- TABELAS DE INVENTÁRIO (ESTOQUE)
+CREATE TABLE IF NOT EXISTS public.inventory_suppliers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  cnpj_cpf TEXT,
+  contact_name TEXT,
+  phone TEXT,
+  email TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  company_id UUID REFERENCES public.companies(id)
+);
+
+CREATE TABLE IF NOT EXISTS public.inventory_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sku TEXT,
+  name TEXT NOT NULL,
+  category TEXT,
+  brand TEXT,
+  min_quantity NUMERIC DEFAULT 0,
+  current_quantity NUMERIC DEFAULT 0,
+  average_cost NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  company_id UUID REFERENCES public.companies(id)
+);
+
+CREATE TABLE IF NOT EXISTS public.inventory_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  item_id UUID REFERENCES public.inventory_items(id) ON DELETE CASCADE,
+  supplier_id UUID REFERENCES public.inventory_suppliers(id),
+  type TEXT NOT NULL,
+  quantity NUMERIC NOT NULL,
+  unit_price NUMERIC,
+  total_price NUMERIC,
+  nf_number TEXT,
+  nf_key TEXT,
+  date TIMESTAMPTZ DEFAULT NOW(),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+  company_id UUID REFERENCES public.companies(id)
+);
+
+-- RLS e Políticas para Inventário
+ALTER TABLE public.inventory_suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all actions for company users (suppliers)" ON public.inventory_suppliers
+  FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid()));
+
+CREATE POLICY "Allow all actions for company users (items)" ON public.inventory_items
+  FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid()));
+
+CREATE POLICY "Allow all actions for company users (transactions)" ON public.inventory_transactions
+  FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid()));
+
+-- Multi-tenant Triggers para Inventário
+CREATE TRIGGER set_company_id_inventory_suppliers BEFORE INSERT ON public.inventory_suppliers FOR EACH ROW EXECUTE FUNCTION set_company_id_on_insert();
+CREATE TRIGGER set_company_id_inventory_items BEFORE INSERT ON public.inventory_items FOR EACH ROW EXECUTE FUNCTION set_company_id_on_insert();
+CREATE TRIGGER set_company_id_inventory_transactions BEFORE INSERT ON public.inventory_transactions FOR EACH ROW EXECUTE FUNCTION set_company_id_on_insert();
+

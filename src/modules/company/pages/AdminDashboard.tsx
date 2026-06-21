@@ -57,6 +57,7 @@ import FeedbackTab from "@/src/modules/company/components/FeedbackTab";
 import NotificationsTab from "@/src/modules/company/components/NotificationsTab";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
+import { GlobalSearch } from "@/src/modules/company/components/GlobalSearch";
 import { runSilentAudit } from "@/src/lib/auditService";
 
 export default function AdminDashboard() {
@@ -121,7 +122,9 @@ export default function AdminDashboard() {
 
       const { data: alertsData } = await supabase
         .from("auto_alerts")
-        .select("id, trigger_type, trigger_date, warning_days, interval_km, last_km, warning_km, target_vehicle_id")
+        .select(
+          "id, trigger_type, trigger_date, warning_days, interval_km, last_km, warning_km, target_vehicle_id",
+        )
         .eq("company_id", user.company_id)
         .eq("active", true);
 
@@ -141,7 +144,9 @@ export default function AdminDashboard() {
       let triggeredAlertsCount = 0;
       (alertsData || []).forEach((alert) => {
         if (alert.trigger_type === "date" && alert.trigger_date) {
-          const warningDays = alert.warning_days ? Number(alert.warning_days) : 0;
+          const warningDays = alert.warning_days
+            ? Number(alert.warning_days)
+            : 0;
           const targetDate = new Date(alert.trigger_date + "T00:00:00");
           const thresholdDate = new Date(targetDate);
           thresholdDate.setDate(targetDate.getDate() - warningDays);
@@ -156,7 +161,9 @@ export default function AdminDashboard() {
         ) {
           const vehicleOdometer = latestOdometer[alert.target_vehicle_id] || 0;
           const warningThreshold =
-            Number(alert.last_km) + Number(alert.interval_km) - Number(alert.warning_km);
+            Number(alert.last_km) +
+            Number(alert.interval_km) -
+            Number(alert.warning_km);
           if (vehicleOdometer >= warningThreshold) {
             triggeredAlertsCount++;
           }
@@ -182,17 +189,17 @@ export default function AdminDashboard() {
     if (!user) return;
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update({ company_id: null })
-        .eq('id', user.id);
-        
+        .eq("id", user.id);
+
       if (error) throw error;
-      
+
       await refreshProfile();
-      navigate('/sa/dashboard');
+      navigate("/sa/dashboard");
     } catch (err) {
-      console.error('Erro ao sair do painel da empresa:', err);
-      alert('Erro ao sair do painel da empresa.');
+      console.error("Erro ao sair do painel da empresa:", err);
+      alert("Erro ao sair do painel da empresa.");
     }
   };
 
@@ -279,18 +286,18 @@ export default function AdminDashboard() {
     );
   };
 
-  const navItems: Array<{ id: string; icon: any; label: string; color: string; disabled?: boolean }> = [
+  const navItems: Array<{
+    id: string;
+    icon: any;
+    label: string;
+    color: string;
+    disabled?: boolean;
+  }> = [
     {
       id: "overview",
       icon: LayoutDashboard,
       label: "Painel",
       color: "from-blue-500 to-cyan-500",
-    },
-    {
-      id: "notifications",
-      icon: Bell,
-      label: "Notificações",
-      color: "from-indigo-600 to-purple-600",
     },
     {
       id: "tracking",
@@ -462,20 +469,10 @@ export default function AdminDashboard() {
                         : "text-gray-400 group-hover/item:text-gray-600"
                   }
                 />
-                {item.id === "notifications" && notifCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 rounded-full w-2.5 h-2.5 border border-white" />
-                )}
               </div>
               <span className="text-sm font-semibold flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
                 {item.label}
               </span>
-              {item.id === "notifications" && notifCount > 0 && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-tight tabular-nums transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 duration-300 ${
-                  activeTab === item.id ? "bg-white text-indigo-700" : "bg-red-500 text-white"
-                }`}>
-                  {notifCount}
-                </span>
-              )}
               {activeTab === item.id && !item.disabled && (
                 <ChevronRight
                   size={16}
@@ -569,64 +566,72 @@ export default function AdminDashboard() {
             </div>
           )}
         </nav>
-
-        {/* Botão Logout */}
-        <div className="p-4 border-t border-gray-100 bg-white/95 whitespace-nowrap overflow-hidden">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-red-50 hover:bg-red-100 transition-all duration-200 group/logout"
-          >
-            <div className="min-w-[20px] flex items-center justify-center">
-              <LogOut size={20} className="text-red-600" />
-            </div>
-            <span className="text-sm font-semibold flex-1 text-left text-red-700 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-              Sair do Sistema
-            </span>
-            <div className="w-6 h-6 rounded-full bg-red-200/50 flex items-center justify-center opacity-0 group-hover/logout:opacity-100 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100 min-w-[24px]">
-              <ChevronRight size={14} className="text-red-600" />
-            </div>
-          </motion.button>
-
-          <div className="mt-4 p-3 bg-gray-50 rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold text-gray-400 uppercase">
-                Sistema
-              </span>
-              <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                Online
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 whitespace-nowrap">
-              Desenvolvido Welinson Macedo.
-            </p>
-          </div>
-        </div>
       </aside>
 
       {/* Main Content */}
-      <div className={`dashboard-scroll-area flex-1 flex flex-col h-full print:h-auto print:overflow-visible ${activeTab === 'notifications' ? 'overflow-hidden' : 'overflow-y-auto'} ${selectedSub ? 'print:hidden' : ''}`}>
+      <div
+        className={`dashboard-scroll-area flex-1 flex flex-col h-full print:h-auto print:overflow-visible ${activeTab === "notifications" ? "overflow-hidden" : "overflow-y-auto"} ${selectedSub ? "print:hidden" : ""}`}
+      >
         {/* Top Bar */}
-        <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-8 py-4 flex items-center justify-between print:hidden">
-          <div>
-            <h2 className="text-2xl font-black text-gray-800">
-              {[...navItems, ...registerItems].find((i) => i.id === activeTab)
-                ?.label || "Dashboard"}
-            </h2>
+        <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-4 md:px-8 py-2 md:py-3 flex items-center justify-between print:hidden">
+          <div className="flex items-center gap-4 lg:gap-8 flex-1">
+            {/* Search Input */}
+            <GlobalSearch
+              onNavigate={(tab) => {
+                if (activeTab !== tab) {
+                  setActiveTab(tab);
+                  if (window.innerWidth < 1024) setSidebarOpen(false);
+                }
+              }}
+            />
           </div>
-          {user?.role === "superadmin" && (
+
+          <div className="flex items-center gap-3 lg:gap-4 ml-4">
+            {/* Notifications */}
             <button
-              onClick={handleExitImpersonation}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/40 rounded-xl transition-all font-bold text-xs uppercase tracking-wider shadow-sm border border-purple-200/50"
+              onClick={() => setActiveTab("notifications")}
+              className="relative p-2 bg-gray-50 hover:bg-gray-100 rounded-xl text-gray-600 transition-colors border border-gray-200/50"
             >
-              Voltar ao SaaS / Super Admin
+              <Bell
+                size={18}
+                className={activeTab === "notifications" ? "text-primary" : ""}
+              />
+              {notifCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
+              )}
             </button>
-          )}
+
+            {/* Profile */}
+            <div className="flex items-center gap-3 pl-2 lg:pl-3 border-l border-gray-200">
+              <div className="hidden sm:block text-right">
+                <p className="text-sm font-bold text-gray-800 leading-tight">
+                  {user?.name || "Administrador"}
+                </p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold leading-tight mt-0.5">
+                  {user?.role || "Gestão de Frota"}
+                </p>
+              </div>
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md cursor-pointer border-2 border-white ring-1 ring-gray-200 hover:shadow-lg transition-shadow">
+                {user?.name ? user.name.charAt(0).toUpperCase() : "A"}
+              </div>
+            </div>
+
+            {/* Super Admin Back button */}
+            {user?.role === "superadmin" && (
+              <button
+                onClick={handleExitImpersonation}
+                className="hidden xl:flex items-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/40 rounded-xl transition-all font-bold text-xs uppercase tracking-wider shadow-sm border border-purple-200/50"
+              >
+                Sair
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content Area */}
-        <div className={`flex-1 p-8 ${activeTab === 'notifications' ? 'flex flex-col overflow-hidden h-full' : 'space-y-6'}`}>
+        <div
+          className={`flex-1 p-8 ${activeTab === "notifications" ? "flex flex-col overflow-hidden h-full" : "space-y-6"}`}
+        >
           {/* Vehicles with Pending Section */}
 
           {/* Tab Content */}
@@ -637,7 +642,7 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className={`print:h-auto print:overflow-visible ${activeTab === 'notifications' ? 'flex-1 flex flex-col overflow-hidden h-full' : ''}`}
+              className={`print:h-auto print:overflow-visible ${activeTab === "notifications" ? "flex-1 flex flex-col overflow-hidden h-full" : ""}`}
             >
               {activeTab === "overview" && (
                 <OverviewTab
@@ -683,13 +688,11 @@ export default function AdminDashboard() {
               {activeTab === "audit" && user?.role === "admin" && (
                 <AuditTab appSettings={appSettings} />
               )}
-              {activeTab === "feedback" && user?.role === "admin" && <FeedbackTab />}
-              {activeTab === "database" && (
-                <DatabaseTab />
+              {activeTab === "feedback" && user?.role === "admin" && (
+                <FeedbackTab />
               )}
-              {activeTab === "alerts" && (
-                <AlertsTab />
-              )}
+              {activeTab === "database" && <DatabaseTab />}
+              {activeTab === "alerts" && <AlertsTab />}
               {activeTab === "settings" && user?.role === "admin" && (
                 <SettingsTab
                   appSettings={appSettings}
