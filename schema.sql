@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id),
     email TEXT UNIQUE NOT NULL,
+    cpf TEXT,
     full_name TEXT NOT NULL,
     role TEXT CHECK (role IN ('driver', 'admin', 'standard', 'superadmin')) DEFAULT 'driver',
     driver_type TEXT DEFAULT 'Interno/Pátio',

@@ -17,6 +17,7 @@ export default function AdmUsersTab() {
     id: "",
     fullName: "",
     email: "",
+    cpf: "",
     role: "standard",
     password: "",
     isInternal: false,
@@ -27,6 +28,7 @@ export default function AdmUsersTab() {
       id: "",
       fullName: "",
       email: "",
+      cpf: "",
       role: "standard",
       password: "",
       isInternal: false,
@@ -74,6 +76,7 @@ export default function AdmUsersTab() {
           .from("profiles")
           .update({
             full_name: parsedName,
+            cpf: userForm.cpf || null,
             role: userForm.role,
             modality_ids: userForm.modalityIds,
           })
@@ -107,6 +110,7 @@ export default function AdmUsersTab() {
                 id: data.user.id,
                 email: userForm.email,
                 full_name: parsedName,
+                cpf: userForm.cpf || null,
                 role: userForm.role,
                 modality_ids: userForm.modalityIds,
                 active: true,
@@ -125,6 +129,7 @@ export default function AdmUsersTab() {
               .update({
                 role: userForm.role,
                 full_name: parsedName,
+                cpf: userForm.cpf || null,
                 modality_ids: userForm.modalityIds,
               })
               .eq("id", data.user.id);
@@ -136,6 +141,7 @@ export default function AdmUsersTab() {
         id: "",
         fullName: "",
         email: "",
+        cpf: "",
         role: "standard",
         password: "",
         isInternal: false,
@@ -186,30 +192,38 @@ export default function AdmUsersTab() {
     if (!user?.company_id) return true;
     try {
       const { data: company, error: companyErr } = await supabase
-        .from('companies')
-        .select('max_users')
-        .eq('id', user.company_id)
+        .from("companies")
+        .select("max_users")
+        .eq("id", user.company_id)
         .single();
-      
+
       if (companyErr || !company) {
-        console.warn("Could not fetch company limits, skipping check.", companyErr);
+        console.warn(
+          "Could not fetch company limits, skipping check.",
+          companyErr,
+        );
         return true;
       }
 
       const { count, error: countErr } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', user.company_id)
-        .eq('active', true);
+        .from("profiles")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", user.company_id)
+        .eq("active", true);
 
       if (countErr) {
-        console.warn("Could not query profiles count, skipping check.", countErr);
+        console.warn(
+          "Could not query profiles count, skipping check.",
+          countErr,
+        );
         return true;
       }
 
       const limit = company.max_users || 10;
       if ((count || 0) >= limit) {
-        alert(`Limite de usuários do seu plano atingido (${limit} usuários). Entre em contato para fazer um upgrade.`);
+        alert(
+          `Limite de usuários do seu plano atingido (${limit} usuários). Entre em contato para fazer um upgrade.`,
+        );
         return false;
       }
       return true;
@@ -366,6 +380,7 @@ export default function AdmUsersTab() {
                               id: user.id,
                               fullName: cleanName || "",
                               email: user.email || "",
+                              cpf: user.cpf || "",
                               role: user.role || "standard",
                               password: "",
                               isInternal: false,
@@ -460,6 +475,16 @@ export default function AdmUsersTab() {
                 className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
                 required={!userForm.id}
                 disabled={!!userForm.id}
+              />
+
+              <input
+                type="text"
+                placeholder="CPF"
+                value={userForm.cpf}
+                onChange={(e) =>
+                  setUserForm({ ...userForm, cpf: e.target.value })
+                }
+                className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
               />
 
               {!userForm.id && (

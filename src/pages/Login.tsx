@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 export default function Login() {
   const navigate = useNavigate();
   const { isAuthenticated, loading: authLoading, user } = useAuth();
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,9 +41,32 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    let authEmail = loginId.trim();
+
+    // Se o usuário não digitou um "@", vamos assumir que pode ser um CPF
+    if (!authEmail.includes('@')) {
+      const digitsOnly = authEmail.replace(/\D/g, '');
+      
+      // Busca pelo CPF exato digitado ou apenas os dígitos
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('email')
+        .or(`cpf.eq.${authEmail},cpf.eq.${digitsOnly}`)
+        .limit(1);
+
+      if (profileData && profileData.length > 0) {
+        authEmail = profileData[0].email;
+      } else {
+        setError('CPF não encontrado ou e-mail inválido.');
+        setLoading(false);
+        return;
+      }
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail, password });
     if (error) {
-      setError('E-mail ou senha inválidos.');
+      setError('Credenciais inválidas.');
       setLoading(false);
     } else if (!data.user) {
       setError('Falha ao autenticar.');
@@ -65,13 +88,13 @@ export default function Login() {
           <form onSubmit={handleLogin} className="space-y-4">
             {error && <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100">{error}</div>}
             <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">E-mail</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">E-mail ou CPF</label>
               <input
-                type="email"
+                type="text"
                 required
                 className="w-full h-12 px-4 rounded-xl border border-zinc-100 bg-zinc-50 focus:bg-white focus:ring-2 focus:ring-zinc-900 outline-none transition-all font-bold text-sm"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
               />
             </div>
             <div className="space-y-1">

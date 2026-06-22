@@ -83,6 +83,7 @@ export default function AdminDashboard() {
   const [vehiclesWithPending, setVehiclesWithPending] = useState<any[]>([]);
   const [openDropdowns, setOpenDropdowns] = useState<string[]>([]);
   const [notifCount, setNotifCount] = useState(0);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const [selectedSub, setSelectedSub] = useState<any | null>(null);
 
@@ -602,18 +603,47 @@ export default function AdminDashboard() {
             </button>
 
             {/* Profile */}
-            <div className="flex items-center gap-3 pl-2 lg:pl-3 border-l border-gray-200">
-              <div className="hidden sm:block text-right">
-                <p className="text-sm font-bold text-gray-800 leading-tight">
-                  {user?.name || "Administrador"}
-                </p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold leading-tight mt-0.5">
-                  {user?.role || "Gestão de Frota"}
-                </p>
-              </div>
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md cursor-pointer border-2 border-white ring-1 ring-gray-200 hover:shadow-lg transition-shadow">
-                {user?.name ? user.name.charAt(0).toUpperCase() : "A"}
-              </div>
+            <div className="relative">
+              <button
+                type="button"
+                className="flex items-center gap-3 pl-2 lg:pl-3 border-l border-gray-200 cursor-pointer focus:outline-none"
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+              >
+                <div className="hidden sm:block text-right">
+                  <p className="text-sm font-bold text-gray-800 leading-tight select-none">
+                    {user?.name || "Administrador"}
+                  </p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide font-semibold leading-tight mt-0.5 select-none">
+                    {user?.role || "Gestão de Frota"}
+                  </p>
+                </div>
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md hover:shadow-lg transition-shadow border-2 border-white ring-1 ring-gray-200">
+                  {user?.name ? user.name.charAt(0).toUpperCase() : "A"}
+                </div>
+              </button>
+
+              {/* Dropdown Menu */}
+              {showProfileMenu && (
+                <>
+                  {/* Backdrop for click outside */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowProfileMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden z-50">
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        handleLogout();
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors text-sm font-semibold"
+                    >
+                      <LogOut size={16} />
+                      Sair
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Super Admin Back button */}

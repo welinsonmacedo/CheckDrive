@@ -20,7 +20,7 @@ import {
   Info,
   ShieldAlert,
   ArrowRight,
-  Wrench
+  Wrench,
 } from "lucide-react";
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,7 +29,7 @@ import { usePersistentState } from "@/src/hooks/usePersistentState";
 
 export default function ReportsTab() {
   const [activeReport, setActiveReport] = usePersistentState<
-    "defects" | "mileage" | "history" | "purchases"
+    "defects" | "mileage" | "history" | "purchases" | "schedules"
   >("reports_activeReport", "defects");
 
   // Date filters
@@ -47,7 +47,9 @@ export default function ReportsTab() {
     any | null
   >(null);
 
-  const [printMode, setPrintMode] = useState<"all" | "pending" | "resolved">("all");
+  const [printMode, setPrintMode] = useState<"all" | "pending" | "resolved">(
+    "all",
+  );
 
   // Defects Data
   const [defectsData, setDefectsData] = useState<any[]>([]);
@@ -69,17 +71,22 @@ export default function ReportsTab() {
   // Purchases Data
   const [purchasesData, setPurchasesData] = useState<any[]>([]);
   const [purchasesSearchTerm, setPurchasesSearchTerm] = useState("");
-  const [purchasesFilterOrigin, setPurchasesFilterOrigin] = useState<"all" | "stock" | "maintenance">("all");
+  const [purchasesFilterOrigin, setPurchasesFilterOrigin] = useState<
+    "all" | "stock" | "maintenance"
+  >("all");
+
+  // Schedules Data
+  const [schedulesData, setSchedulesData] = useState<any[]>([]);
 
   const fetchHistoryEntities = async () => {
     try {
       const [{ data: vs }, { data: ts }] = await Promise.all([
         supabase.from("vehicles").select("id, plate").order("plate"),
-        supabase.from("trailers").select("id, plate").order("plate")
+        supabase.from("trailers").select("id, plate").order("plate"),
       ]);
       const combined = [
-        ...(vs || []).map(v => ({ ...v, type: "vehicle" })),
-        ...(ts || []).map(t => ({ ...t, type: "trailer" }))
+        ...(vs || []).map((v) => ({ ...v, type: "vehicle" })),
+        ...(ts || []).map((t) => ({ ...t, type: "trailer" })),
       ];
       setVehiclesAndTrailers(combined);
     } catch (err) {
@@ -93,29 +100,35 @@ export default function ReportsTab() {
     try {
       const entity = vehiclesAndTrailers.find((e) => e.id === entityId);
       if (!entity) {
-         setLoading(false);
-         return;
+        setLoading(false);
+        return;
       }
 
       const column = entity.type === "vehicle" ? "vehicle_id" : "trailer_id";
 
       const { data, error } = await supabase
         .from("checklist_issues")
-        .select("*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)")
+        .select(
+          "*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)",
+        )
         .eq(column, entityId)
         .gte("created_at", `${startDate}T00:00:00Z`)
         .lte("created_at", `${endDate}T23:59:59Z`)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      
+
       const filteredData = (data || []).filter((d: any) => {
         // Exclude issues that were resolved automatically (not manually by an admin/user)
         if (d.status === "resolved" && !d.resolved_by) return false;
-        
+
         // Also exclude if there's any text in description or notes indicating it was auto-resolved by checklist
         const notesStr = String(d.resolution_notes || "").toLowerCase();
-        if (d.status === "resolved" && notesStr.includes("automaticamente pelo check list")) return false;
+        if (
+          d.status === "resolved" &&
+          notesStr.includes("automaticamente pelo check list")
+        )
+          return false;
 
         return true;
       });
@@ -164,14 +177,15 @@ export default function ReportsTab() {
           item_name: t.inventory_items?.name || t.item_id,
           quantity: t.quantity,
           unit_price: t.unit_price,
-          total_price: t.total_price || (t.quantity * t.unit_price),
-          context: "Compra para Estoque"
+          total_price: t.total_price || t.quantity * t.unit_price,
+          context: "Compra para Estoque",
         });
       });
 
       // Process issues
       (issuesData || []).forEach((i: any) => {
-        const vehicleInfo = i.vehicles?.plate || i.trailers?.plate || "Sem Placa";
+        const vehicleInfo =
+          i.vehicles?.plate || i.trailers?.plate || "Sem Placa";
         const nfs = Array.isArray(i.resolution_nfs) ? i.resolution_nfs : [];
         nfs.forEach((nf: any) => {
           const items = Array.isArray(nf.items) ? nf.items : [];
@@ -185,16 +199,47 @@ export default function ReportsTab() {
               quantity: item.quantity || 1,
               unit_price: item.unit_price || 0,
               total_price: (item.quantity || 1) * (item.unit_price || 0),
-              context: `Solução: ${i.item_title} (${vehicleInfo})`
+              context: `Solução: ${i.item_title} (${vehicleInfo})`,
             });
           });
         });
       });
 
       // Sort by date descending
-      combinedPurchases.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      combinedPurchases.sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      );
 
       setPurchasesData(combinedPurchases);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSchedulesReport = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("schedules")
+        .select(
+          `
+          id, start_at, end_at, requires_fueling,
+          profiles(full_name),
+          vehicles(plate),
+          routes(origin, destination),
+          start_check:checklist_submissions!schedules_start_checklist_id_fkey(odometer),
+          end_check:checklist_submissions!schedules_end_checklist_id_fkey(odometer),
+          fuel_check:checklist_submissions!schedules_fuel_checklist_id_fkey(type)
+        `,
+        )
+        .gte("start_at", `${startDate}T00:00:00Z`)
+        .lte("start_at", `${endDate}T23:59:59Z`)
+        .order("start_at", { ascending: false });
+
+      if (error) throw error;
+      setSchedulesData(data || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -211,14 +256,26 @@ export default function ReportsTab() {
       fetchHistoryEntities();
     } else if (activeReport === "purchases") {
       fetchPurchasesReport();
+    } else if (activeReport === "schedules") {
+      fetchSchedulesReport();
     }
   }, [activeReport, startDate, endDate]);
 
   useEffect(() => {
-    if (activeReport === "history" && selectedHistoryEntityId && vehiclesAndTrailers.length > 0) {
+    if (
+      activeReport === "history" &&
+      selectedHistoryEntityId &&
+      vehiclesAndTrailers.length > 0
+    ) {
       fetchHistoryReport(selectedHistoryEntityId);
     }
-  }, [selectedHistoryEntityId, activeReport, startDate, endDate, vehiclesAndTrailers]);
+  }, [
+    selectedHistoryEntityId,
+    activeReport,
+    startDate,
+    endDate,
+    vehiclesAndTrailers,
+  ]);
 
   const fetchMileageReport = async () => {
     setLoading(true);
@@ -236,8 +293,12 @@ export default function ReportsTab() {
       if (error) throw error;
 
       // Fetch trailers separately safely
-      const { data: trailersReq } = await supabase.from("trailers").select("id, plate");
-      const trailersMap = new Map((trailersReq || []).map((t: any) => [t.id, t.plate]));
+      const { data: trailersReq } = await supabase
+        .from("trailers")
+        .select("id, plate");
+      const trailersMap = new Map(
+        (trailersReq || []).map((t: any) => [t.id, t.plate]),
+      );
 
       // Calculate mileage per vehicle/trailer and driver combination
       const mileageStats: Record<string, any> = {};
@@ -247,7 +308,8 @@ export default function ReportsTab() {
         const subsByVehicle: Record<string, any[]> = {};
         data.forEach((sub: any) => {
           if (!sub.vehicles?.plate) return;
-          if (!subsByVehicle[sub.vehicles.plate]) subsByVehicle[sub.vehicles.plate] = [];
+          if (!subsByVehicle[sub.vehicles.plate])
+            subsByVehicle[sub.vehicles.plate] = [];
           subsByVehicle[sub.vehicles.plate].push(sub);
         });
 
@@ -281,8 +343,10 @@ export default function ReportsTab() {
               };
             }
             mileageStats[vKey].submissionsCount += 1;
-            if (sub.odometer < mileageStats[vKey].minOdometer) mileageStats[vKey].minOdometer = sub.odometer;
-            if (sub.odometer > mileageStats[vKey].maxOdometer) mileageStats[vKey].maxOdometer = sub.odometer;
+            if (sub.odometer < mileageStats[vKey].minOdometer)
+              mileageStats[vKey].minOdometer = sub.odometer;
+            if (sub.odometer > mileageStats[vKey].maxOdometer)
+              mileageStats[vKey].maxOdometer = sub.odometer;
             mileageStats[vKey].distance += diff;
 
             // Credit diff to Trailer
@@ -301,8 +365,10 @@ export default function ReportsTab() {
                 };
               }
               mileageStats[tKey].submissionsCount += 1;
-              if (sub.odometer < mileageStats[tKey].minOdometer) mileageStats[tKey].minOdometer = sub.odometer;
-              if (sub.odometer > mileageStats[tKey].maxOdometer) mileageStats[tKey].maxOdometer = sub.odometer;
+              if (sub.odometer < mileageStats[tKey].minOdometer)
+                mileageStats[tKey].minOdometer = sub.odometer;
+              if (sub.odometer > mileageStats[tKey].maxOdometer)
+                mileageStats[tKey].maxOdometer = sub.odometer;
               mileageStats[tKey].distance += diff;
             }
           });
@@ -362,29 +428,27 @@ export default function ReportsTab() {
   return (
     <div className="space-y-6">
       <div className={selectedDefectToPrint ? "print:hidden" : ""}>
-        
         {/* Modern Tabs and Date Selector controls */}
         <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-center gap-4 bg-white p-4.5 rounded-2xl shadow-sm border border-gray-200/80 print:hidden">
-          
           {/* Elegant Pill Tabs */}
           <div className="flex p-1 bg-gray-50/80 border border-gray-200/80 rounded-xl space-x-1 shrink-0 w-fit self-start xl:self-auto">
             <button
               onClick={() => setActiveReport("defects")}
               className={`px-4.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-                activeReport === "defects" 
-                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40" 
+                activeReport === "defects"
+                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40"
                   : "text-gray-550 hover:text-gray-800 hover:bg-gray-100/50"
               }`}
             >
               <AlertTriangle size={14} className="stroke-[2.2]" />
               <span>Inspeção de Defeitos</span>
             </button>
-            
+
             <button
               onClick={() => setActiveReport("mileage")}
               className={`px-4.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-                activeReport === "mileage" 
-                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40" 
+                activeReport === "mileage"
+                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40"
                   : "text-gray-550 hover:text-gray-800 hover:bg-gray-100/50"
               }`}
             >
@@ -394,8 +458,8 @@ export default function ReportsTab() {
             <button
               onClick={() => setActiveReport("history")}
               className={`px-4.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-                activeReport === "history" 
-                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40" 
+                activeReport === "history"
+                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40"
                   : "text-gray-550 hover:text-gray-800 hover:bg-gray-100/50"
               }`}
             >
@@ -406,20 +470,35 @@ export default function ReportsTab() {
             <button
               onClick={() => setActiveReport("purchases")}
               className={`px-4.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
-                activeReport === "purchases" 
-                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40" 
+                activeReport === "purchases"
+                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40"
                   : "text-gray-550 hover:text-gray-800 hover:bg-gray-100/50"
               }`}
             >
               <TrendingUp size={14} className="stroke-[2.2]" />
               <span>Compras / NFs</span>
             </button>
+
+            <button
+              onClick={() => setActiveReport("schedules")}
+              className={`px-4.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeReport === "schedules"
+                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40"
+                  : "text-gray-550 hover:text-gray-800 hover:bg-gray-100/50"
+              }`}
+            >
+              <Calendar size={14} className="stroke-[2.2]" />
+              <span>Escalas</span>
+            </button>
           </div>
 
           {/* Date Picker Ribbon */}
           <div className="flex items-center gap-3.5 w-full xl:w-auto">
             <div className="relative flex-1 sm:flex-initial sm:w-44">
-              <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
+              <Calendar
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                size={13}
+              />
               <input
                 type="date"
                 value={startDate}
@@ -427,11 +506,16 @@ export default function ReportsTab() {
                 className="w-full h-10 pl-9.5 pr-4 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-sm"
               />
             </div>
-            
-            <span className="text-gray-400 font-extrabold text-[10px] uppercase tracking-wider">até</span>
-            
+
+            <span className="text-gray-400 font-extrabold text-[10px] uppercase tracking-wider">
+              até
+            </span>
+
             <div className="relative flex-1 sm:flex-initial sm:w-44">
-              <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={13} />
+              <Calendar
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                size={13}
+              />
               <input
                 type="date"
                 value={endDate}
@@ -444,8 +528,10 @@ export default function ReportsTab() {
               onClick={() => {
                 if (activeReport === "defects") fetchDefectsReport();
                 else if (activeReport === "mileage") fetchMileageReport();
-                else if (activeReport === "history") fetchHistoryReport(selectedHistoryEntityId);
+                else if (activeReport === "history")
+                  fetchHistoryReport(selectedHistoryEntityId);
                 else if (activeReport === "purchases") fetchPurchasesReport();
+                else if (activeReport === "schedules") fetchSchedulesReport();
               }}
               className="h-10 w-10 bg-white border border-gray-200 hover:border-gray-300 rounded-xl hover:bg-gray-50 flex items-center justify-center transition-colors shadow-sm text-gray-500 hover:text-indigo-600 shrink-0"
               title="Recarregar Relatório"
@@ -459,7 +545,9 @@ export default function ReportsTab() {
         <div className="hidden print:block mb-8 border-b border-gray-200 pb-5">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest leading-none mb-1">Relatórios Operacionais</p>
+              <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest leading-none mb-1">
+                Relatórios Operacionais
+              </p>
               <h1 className="text-xl font-black text-gray-800 tracking-tight">
                 {activeReport === "defects"
                   ? "Inspeção de Defeitos e Sinistros"
@@ -470,7 +558,9 @@ export default function ReportsTab() {
               <p className="text-[10px] font-bold text-gray-500 leading-normal">
                 {`Filtro: ${format(parseISO(startDate), "dd/MM/yyyy")} a ${format(parseISO(endDate), "dd/MM/yyyy")}`}
               </p>
-              <p className="text-[8px] uppercase tracking-wider font-extrabold text-gray-400 mt-1">SGI - Sistema Integrado</p>
+              <p className="text-[8px] uppercase tracking-wider font-extrabold text-gray-400 mt-1">
+                SGI - Sistema Integrado
+              </p>
             </div>
           </div>
         </div>
@@ -480,19 +570,28 @@ export default function ReportsTab() {
           {activeReport === "defects" ? (
             <>
               <button
-                onClick={() => { setPrintMode("pending"); setTimeout(() => window.print(), 100); }}
+                onClick={() => {
+                  setPrintMode("pending");
+                  setTimeout(() => window.print(), 100);
+                }}
                 className="flex items-center gap-2 h-9 px-3.5 bg-rose-50 border border-rose-100/60 hover:bg-rose-100 text-rose-600 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all hover:shadow-sm"
               >
                 <Printer size={13} /> Somente Pendentes
               </button>
               <button
-                onClick={() => { setPrintMode("resolved"); setTimeout(() => window.print(), 100); }}
+                onClick={() => {
+                  setPrintMode("resolved");
+                  setTimeout(() => window.print(), 100);
+                }}
                 className="flex items-center gap-2 h-9 px-3.5 bg-emerald-50 border border-emerald-100/60 hover:bg-emerald-100 text-emerald-600 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all hover:shadow-sm"
               >
                 <Printer size={13} /> Somente Resolvidos
               </button>
               <button
-                onClick={() => { setPrintMode("all"); setTimeout(() => window.print(), 100); }}
+                onClick={() => {
+                  setPrintMode("all");
+                  setTimeout(() => window.print(), 100);
+                }}
                 className="flex items-center gap-2 h-9 px-3.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all hover:shadow-sm"
               >
                 <Printer size={13} /> Imprimir Todos
@@ -525,7 +624,6 @@ export default function ReportsTab() {
             {/* 1. REPORT TYPE: DEFECTS */}
             {activeReport === "defects" && (
               <div className="space-y-6">
-                
                 {/* Micro Stats Row for Defects */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm flex items-center gap-4 relative overflow-hidden group">
@@ -575,7 +673,6 @@ export default function ReportsTab() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-                  
                   {/* Top recurrence list on the left side */}
                   <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-200/80 shadow-sm p-5 self-stretch flex flex-col justify-between print:hidden">
                     <div>
@@ -583,7 +680,7 @@ export default function ReportsTab() {
                         <TrendingUp size={14} className="text-indigo-500" />
                         Mais Frequentes
                       </h3>
-                      
+
                       <div className="space-y-4">
                         {defectsStats.mostCommon.length === 0 ? (
                           <p className="text-xs text-gray-400 italic py-6 text-center">
@@ -593,8 +690,12 @@ export default function ReportsTab() {
                           defectsStats.mostCommon.map((item, idx) => (
                             <div key={idx} className="flex flex-col gap-1.5">
                               <div className="flex justify-between items-center text-xs font-bold text-gray-700">
-                                <span className="truncate pr-2 font-medium">{item.title}</span>
-                                <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded text-[10px] font-bold font-mono">{item.count}</span>
+                                <span className="truncate pr-2 font-medium">
+                                  {item.title}
+                                </span>
+                                <span className="text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded text-[10px] font-bold font-mono">
+                                  {item.count}
+                                </span>
                               </div>
                               <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                                 <motion.div
@@ -613,27 +714,41 @@ export default function ReportsTab() {
 
                     <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl text-[10px] text-gray-450 font-bold leading-normal mt-6">
                       <div className="flex items-start gap-2">
-                        <Info size={14} className="text-gray-400 shrink-0 mt-0.5" />
-                        <p>O gráfico acima reúne as 5 anomalias mais recorrentes reportadas por motoristas nos checklists.</p>
+                        <Info
+                          size={14}
+                          className="text-gray-400 shrink-0 mt-0.5"
+                        />
+                        <p>
+                          O gráfico acima reúne as 5 anomalias mais recorrentes
+                          reportadas por motoristas nos checklists.
+                        </p>
                       </div>
                     </div>
                   </div>
 
                   {/* Defects Tables Block - Expanded in Print */}
                   <div className="lg:col-span-3 space-y-6">
-                    
                     {/* A. Pending Defects List */}
-                    <div className={`bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible ${printMode === "resolved" ? "print:hidden" : ""}`}>
+                    <div
+                      className={`bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible ${printMode === "resolved" ? "print:hidden" : ""}`}
+                    >
                       <div className="p-4 border-b border-gray-200/80 bg-rose-50/20 flex justify-between items-center">
                         <h3 className="text-xs font-black text-rose-700 uppercase tracking-widest flex items-center gap-2">
-                          <AlertTriangle size={15} className="text-rose-500 animate-pulse" />
+                          <AlertTriangle
+                            size={15}
+                            className="text-rose-500 animate-pulse"
+                          />
                           Inspeções com Pendências Ativas
                         </h3>
                         <span className="text-[10px] bg-rose-50 border border-rose-100/60 text-rose-600 font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                          {defectsData.filter(d => d.status === "pending").length} abertos
+                          {
+                            defectsData.filter((d) => d.status === "pending")
+                              .length
+                          }{" "}
+                          abertos
                         </span>
                       </div>
-                      
+
                       <div className="flex-1 overflow-auto max-h-[400px] print:max-h-none print:overflow-visible">
                         <table className="w-full text-left border-collapse">
                           <thead className="bg-gray-50/70 sticky top-0 border-b border-gray-200/80 z-10">
@@ -653,7 +768,8 @@ export default function ReportsTab() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
-                            {defectsData.filter(d => d.status === "pending").length === 0 ? (
+                            {defectsData.filter((d) => d.status === "pending")
+                              .length === 0 ? (
                               <tr>
                                 <td
                                   colSpan={4}
@@ -663,37 +779,49 @@ export default function ReportsTab() {
                                 </td>
                               </tr>
                             ) : (
-                              defectsData.filter(d => d.status === "pending").map((d) => (
-                                <tr key={d.id} className="hover:bg-gray-50/30 transition-colors">
-                                  <td className="px-5 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
-                                    {format(parseISO(d.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                                  </td>
-                                  <td className="px-5 py-4 text-xs font-black text-gray-800 whitespace-nowrap font-mono">
-                                    {d.vehicles?.plate
-                                      ? d.trailers?.plate
-                                        ? `${d.vehicles.plate} / ${d.trailers.plate}`
-                                        : d.vehicles.plate
-                                      : d.trailers?.plate || "-"}
-                                  </td>
-                                  <td className="px-5 py-4">
-                                    <div className="text-xs font-bold text-gray-750">
-                                      {d.item_title}
-                                    </div>
-                                    <div className="text-[11px] text-gray-450 mt-1 max-w-[450px] leading-relaxed break-words print:line-clamp-none">
-                                      {d.description || "Sem descrições adicionais registradas."}
-                                    </div>
-                                  </td>
-                                  <td className="px-5 py-4 text-right print:hidden whitespace-nowrap">
-                                    <button
-                                      onClick={() => setSelectedDefectToPrint(d)}
-                                      title="Imprimir Ficha de Reparo"
-                                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50/60 rounded-xl transition-all inline-flex border border-transparent hover:border-indigo-100"
-                                    >
-                                      <Printer size={14} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))
+                              defectsData
+                                .filter((d) => d.status === "pending")
+                                .map((d) => (
+                                  <tr
+                                    key={d.id}
+                                    className="hover:bg-gray-50/30 transition-colors"
+                                  >
+                                    <td className="px-5 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                                      {format(
+                                        parseISO(d.created_at),
+                                        "dd/MM/yyyy",
+                                        { locale: ptBR },
+                                      )}
+                                    </td>
+                                    <td className="px-5 py-4 text-xs font-black text-gray-800 whitespace-nowrap font-mono">
+                                      {d.vehicles?.plate
+                                        ? d.trailers?.plate
+                                          ? `${d.vehicles.plate} / ${d.trailers.plate}`
+                                          : d.vehicles.plate
+                                        : d.trailers?.plate || "-"}
+                                    </td>
+                                    <td className="px-5 py-4">
+                                      <div className="text-xs font-bold text-gray-750">
+                                        {d.item_title}
+                                      </div>
+                                      <div className="text-[11px] text-gray-450 mt-1 max-w-[450px] leading-relaxed break-words print:line-clamp-none">
+                                        {d.description ||
+                                          "Sem descrições adicionais registradas."}
+                                      </div>
+                                    </td>
+                                    <td className="px-5 py-4 text-right print:hidden whitespace-nowrap">
+                                      <button
+                                        onClick={() =>
+                                          setSelectedDefectToPrint(d)
+                                        }
+                                        title="Imprimir Ficha de Reparo"
+                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50/60 rounded-xl transition-all inline-flex border border-transparent hover:border-indigo-100"
+                                      >
+                                        <Printer size={14} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))
                             )}
                           </tbody>
                         </table>
@@ -701,17 +829,26 @@ export default function ReportsTab() {
                     </div>
 
                     {/* B. Resolved Defects List */}
-                    <div className={`bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible ${printMode === "pending" ? "print:hidden" : ""}`}>
+                    <div
+                      className={`bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible ${printMode === "pending" ? "print:hidden" : ""}`}
+                    >
                       <div className="p-4 border-b border-gray-200/80 bg-emerald-50/15 flex justify-between items-center">
                         <h3 className="text-xs font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2">
-                          <CheckCircle2 size={15} className="text-emerald-500" />
+                          <CheckCircle2
+                            size={15}
+                            className="text-emerald-500"
+                          />
                           Histórico de Ocorrências Solucionadas
                         </h3>
                         <span className="text-[10px] bg-emerald-55 border border-emerald-150 text-emerald-700 font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                          {defectsData.filter(d => d.status === "resolved").length} resolvidos
+                          {
+                            defectsData.filter((d) => d.status === "resolved")
+                              .length
+                          }{" "}
+                          resolvidos
                         </span>
                       </div>
-                      
+
                       <div className="flex-1 overflow-auto max-h-[400px] print:max-h-none print:overflow-visible">
                         <table className="w-full text-left border-collapse">
                           <thead className="bg-gray-50/70 sticky top-0 border-b border-gray-200/80 z-10">
@@ -734,7 +871,8 @@ export default function ReportsTab() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
-                            {defectsData.filter(d => d.status === "resolved").length === 0 ? (
+                            {defectsData.filter((d) => d.status === "resolved")
+                              .length === 0 ? (
                               <tr>
                                 <td
                                   colSpan={5}
@@ -744,46 +882,63 @@ export default function ReportsTab() {
                                 </td>
                               </tr>
                             ) : (
-                              defectsData.filter(d => d.status === "resolved").map((d) => (
-                                <tr key={d.id} className="hover:bg-gray-50/30 transition-colors">
-                                  <td className="px-5 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
-                                    {format(parseISO(d.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                                  </td>
-                                  <td className="px-5 py-4 text-xs font-bold text-emerald-600 whitespace-nowrap">
-                                    {d.resolved_at ? format(parseISO(d.resolved_at), "dd/MM/yyyy", { locale: ptBR }) : "-"}
-                                  </td>
-                                  <td className="px-5 py-4 text-xs font-black text-gray-800 whitespace-nowrap font-mono">
-                                    {d.vehicles?.plate
-                                      ? d.trailers?.plate
-                                        ? `${d.vehicles.plate} / ${d.trailers.plate}`
-                                        : d.vehicles.plate
-                                      : d.trailers?.plate || "-"}
-                                  </td>
-                                  <td className="px-5 py-4">
-                                    <div className="text-xs font-bold text-gray-750">
-                                      {d.item_title}
-                                    </div>
-                                    <div className="text-[11px] text-gray-450 mt-1 max-w-[450px] leading-relaxed break-words print:line-clamp-none">
-                                      {d.description || "Sem descrições adicionais."}
-                                    </div>
-                                  </td>
-                                  <td className="px-5 py-4 text-right print:hidden whitespace-nowrap">
-                                    <button
-                                      onClick={() => setSelectedDefectToPrint(d)}
-                                      title="Imprimir Ficha de Reparo"
-                                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50/60 rounded-xl transition-all inline-flex border border-transparent hover:border-indigo-100"
-                                    >
-                                      <Printer size={14} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))
+                              defectsData
+                                .filter((d) => d.status === "resolved")
+                                .map((d) => (
+                                  <tr
+                                    key={d.id}
+                                    className="hover:bg-gray-50/30 transition-colors"
+                                  >
+                                    <td className="px-5 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                                      {format(
+                                        parseISO(d.created_at),
+                                        "dd/MM/yyyy",
+                                        { locale: ptBR },
+                                      )}
+                                    </td>
+                                    <td className="px-5 py-4 text-xs font-bold text-emerald-600 whitespace-nowrap">
+                                      {d.resolved_at
+                                        ? format(
+                                            parseISO(d.resolved_at),
+                                            "dd/MM/yyyy",
+                                            { locale: ptBR },
+                                          )
+                                        : "-"}
+                                    </td>
+                                    <td className="px-5 py-4 text-xs font-black text-gray-800 whitespace-nowrap font-mono">
+                                      {d.vehicles?.plate
+                                        ? d.trailers?.plate
+                                          ? `${d.vehicles.plate} / ${d.trailers.plate}`
+                                          : d.vehicles.plate
+                                        : d.trailers?.plate || "-"}
+                                    </td>
+                                    <td className="px-5 py-4">
+                                      <div className="text-xs font-bold text-gray-750">
+                                        {d.item_title}
+                                      </div>
+                                      <div className="text-[11px] text-gray-450 mt-1 max-w-[450px] leading-relaxed break-words print:line-clamp-none">
+                                        {d.description ||
+                                          "Sem descrições adicionais."}
+                                      </div>
+                                    </td>
+                                    <td className="px-5 py-4 text-right print:hidden whitespace-nowrap">
+                                      <button
+                                        onClick={() =>
+                                          setSelectedDefectToPrint(d)
+                                        }
+                                        title="Imprimir Ficha de Reparo"
+                                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50/60 rounded-xl transition-all inline-flex border border-transparent hover:border-indigo-100"
+                                      >
+                                        <Printer size={14} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))
                             )}
                           </tbody>
                         </table>
                       </div>
                     </div>
-
                   </div>
                 </div>
               </div>
@@ -799,7 +954,7 @@ export default function ReportsTab() {
                       Acúmulo de Quilometragem por Equipamento (SGI)
                     </h3>
                   </div>
-                  
+
                   <div className="flex-1 overflow-auto print:overflow-visible">
                     <table className="w-full text-left border-collapse">
                       <thead className="bg-gray-50/75 sticky top-0 border-b border-gray-200/80 z-10">
@@ -839,7 +994,10 @@ export default function ReportsTab() {
                           </tr>
                         ) : (
                           mileageData.map((item: any, idx: number) => (
-                            <tr key={idx} className="hover:bg-gray-50/30 transition-colors">
+                            <tr
+                              key={idx}
+                              className="hover:bg-gray-50/30 transition-colors"
+                            >
                               <td className="px-5 py-4 text-xs font-black text-gray-800 whitespace-nowrap">
                                 {item.driverName}
                               </td>
@@ -849,8 +1007,8 @@ export default function ReportsTab() {
                               <td className="px-5 py-4 text-xs whitespace-nowrap">
                                 <span
                                   className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
-                                    item.type === "Veículo" 
-                                      ? "bg-blue-50 text-blue-700 border-blue-100" 
+                                    item.type === "Veículo"
+                                      ? "bg-blue-50 text-blue-700 border-blue-100"
                                       : "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100"
                                   }`}
                                 >
@@ -895,7 +1053,8 @@ export default function ReportsTab() {
                     <option value="">Selecione um equipamento...</option>
                     {vehiclesAndTrailers.map((entity) => (
                       <option key={entity.id} value={entity.id}>
-                        {entity.plate} ({entity.type === "vehicle" ? "Veículo" : "Reboque"})
+                        {entity.plate} (
+                        {entity.type === "vehicle" ? "Veículo" : "Reboque"})
                       </option>
                     ))}
                   </select>
@@ -941,20 +1100,32 @@ export default function ReportsTab() {
                                 colSpan={5}
                                 className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black"
                               >
-                                Nenhum registro de manutenção para este equipamento
+                                Nenhum registro de manutenção para este
+                                equipamento
                               </td>
                             </tr>
                           ) : (
                             historyData.map((d: any) => (
-                              <tr key={d.id} className="hover:bg-gray-50/30 transition-colors">
+                              <tr
+                                key={d.id}
+                                className="hover:bg-gray-50/30 transition-colors"
+                              >
                                 <td className="px-5 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
-                                  {format(parseISO(d.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                                  {format(
+                                    parseISO(d.created_at),
+                                    "dd/MM/yyyy",
+                                    { locale: ptBR },
+                                  )}
                                 </td>
                                 <td className="px-5 py-4 text-xs font-bold whitespace-nowrap">
                                   {d.status === "resolved" ? (
-                                    <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Resolvido</span>
+                                    <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">
+                                      Resolvido
+                                    </span>
                                   ) : (
-                                    <span className="text-rose-600 bg-rose-50 px-2 py-1 rounded-md animate-pulse">Pendente</span>
+                                    <span className="text-rose-600 bg-rose-50 px-2 py-1 rounded-md animate-pulse">
+                                      Pendente
+                                    </span>
                                   )}
                                 </td>
                                 <td className="px-5 py-4">
@@ -962,11 +1133,17 @@ export default function ReportsTab() {
                                     {d.item_title}
                                   </div>
                                   <div className="text-[11px] text-gray-450 mt-1 max-w-[450px] leading-relaxed break-words print:line-clamp-none">
-                                    {d.description || "Sem descrições adicionais registradas."}
+                                    {d.description ||
+                                      "Sem descrições adicionais registradas."}
                                   </div>
                                 </td>
                                 <td className="px-5 py-4 text-xs font-mono font-bold text-gray-700 whitespace-nowrap">
-                                  R$ {Number(d.resolution_value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                  R${" "}
+                                  {Number(
+                                    d.resolution_value || 0,
+                                  ).toLocaleString("pt-BR", {
+                                    minimumFractionDigits: 2,
+                                  })}
                                 </td>
                                 <td className="px-5 py-4 text-right print:hidden whitespace-nowrap">
                                   <button
@@ -996,7 +1173,10 @@ export default function ReportsTab() {
               <div className="space-y-6">
                 <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 print:hidden flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                   <div className="flex-1 w-full relative max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                    <Search
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                      size={16}
+                    />
                     <input
                       type="text"
                       placeholder="Buscar por NF ou Item (ex: Pneu, Filtro)..."
@@ -1005,17 +1185,23 @@ export default function ReportsTab() {
                       onChange={(e) => setPurchasesSearchTerm(e.target.value)}
                     />
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black tracking-widest uppercase text-gray-500">Origem:</span>
+                    <span className="text-[10px] font-black tracking-widest uppercase text-gray-500">
+                      Origem:
+                    </span>
                     <select
                       className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-indigo-500 cursor-pointer"
                       value={purchasesFilterOrigin}
-                      onChange={(e) => setPurchasesFilterOrigin(e.target.value as any)}
+                      onChange={(e) =>
+                        setPurchasesFilterOrigin(e.target.value as any)
+                      }
                     >
                       <option value="all">Todas as Origens</option>
                       <option value="stock">Estoque</option>
-                      <option value="maintenance">Manutenção (Resolvidos)</option>
+                      <option value="maintenance">
+                        Manutenção (Resolvidos)
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -1027,13 +1213,22 @@ export default function ReportsTab() {
                       Extrato de Compras / NFs
                     </h3>
                     <div className="text-[10px] font-bold text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-lg">
-                      {purchasesData
-                        .filter(p => purchasesFilterOrigin === "all" ? true : p.origin === purchasesFilterOrigin)
-                        .filter(p => {
-                          const s = purchasesSearchTerm.toLowerCase();
-                          return String(p.nf_number).toLowerCase().includes(s) || String(p.item_name).toLowerCase().includes(s);
-                        }).length
-                      } Registros
+                      {
+                        purchasesData
+                          .filter((p) =>
+                            purchasesFilterOrigin === "all"
+                              ? true
+                              : p.origin === purchasesFilterOrigin,
+                          )
+                          .filter((p) => {
+                            const s = purchasesSearchTerm.toLowerCase();
+                            return (
+                              String(p.nf_number).toLowerCase().includes(s) ||
+                              String(p.item_name).toLowerCase().includes(s)
+                            );
+                          }).length
+                      }{" "}
+                      Registros
                     </div>
                   </div>
 
@@ -1041,60 +1236,218 @@ export default function ReportsTab() {
                     <table className="w-full text-left border-collapse">
                       <thead className="bg-gray-50/70 sticky top-0 border-b border-gray-200/80 z-10">
                         <tr>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Data</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">NF</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Item</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Qtd</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Vr Unit</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Subtotal</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Contexto</th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Data
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            NF
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Item
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Qtd
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Vr Unit
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Subtotal
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Contexto
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {purchasesData
-                          .filter(p => purchasesFilterOrigin === "all" ? true : p.origin === purchasesFilterOrigin)
-                          .filter(p => {
+                          .filter((p) =>
+                            purchasesFilterOrigin === "all"
+                              ? true
+                              : p.origin === purchasesFilterOrigin,
+                          )
+                          .filter((p) => {
                             const s = purchasesSearchTerm.toLowerCase();
-                            return String(p.nf_number).toLowerCase().includes(s) || String(p.item_name).toLowerCase().includes(s);
+                            return (
+                              String(p.nf_number).toLowerCase().includes(s) ||
+                              String(p.item_name).toLowerCase().includes(s)
+                            );
                           }).length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black">
+                            <td
+                              colSpan={7}
+                              className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black"
+                            >
                               Nenhum registro encontrado
                             </td>
                           </tr>
                         ) : (
                           purchasesData
-                            .filter(p => purchasesFilterOrigin === "all" ? true : p.origin === purchasesFilterOrigin)
-                            .filter(p => {
+                            .filter((p) =>
+                              purchasesFilterOrigin === "all"
+                                ? true
+                                : p.origin === purchasesFilterOrigin,
+                            )
+                            .filter((p) => {
                               const s = purchasesSearchTerm.toLowerCase();
-                              return String(p.nf_number).toLowerCase().includes(s) || String(p.item_name).toLowerCase().includes(s);
+                              return (
+                                String(p.nf_number).toLowerCase().includes(s) ||
+                                String(p.item_name).toLowerCase().includes(s)
+                              );
                             })
                             .map((p: any) => (
-                            <tr key={p.id} className="hover:bg-gray-50/30 transition-colors">
-                              <td className="px-5 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
-                                {format(parseISO(p.date), "dd/MM/yyyy", { locale: ptBR })}
-                              </td>
-                              <td className="px-5 py-4 text-xs font-bold font-mono text-indigo-700 whitespace-nowrap">
-                                {p.nf_number}
-                              </td>
-                              <td className="px-5 py-4 text-xs font-bold text-gray-800">
-                                {p.item_name}
-                              </td>
-                              <td className="px-5 py-4 text-xs font-bold text-gray-600 whitespace-nowrap">
-                                x{p.quantity}
-                              </td>
-                              <td className="px-5 py-4 text-xs text-gray-500 whitespace-nowrap">
-                                R$ {Number(p.unit_price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                              </td>
-                              <td className="px-5 py-4 text-xs font-mono font-bold text-gray-800 whitespace-nowrap">
-                                R$ {Number(p.total_price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              <tr
+                                key={p.id}
+                                className="hover:bg-gray-50/30 transition-colors"
+                              >
+                                <td className="px-5 py-4 text-xs font-semibold text-gray-500 whitespace-nowrap">
+                                  {format(parseISO(p.date), "dd/MM/yyyy", {
+                                    locale: ptBR,
+                                  })}
+                                </td>
+                                <td className="px-5 py-4 text-xs font-bold font-mono text-indigo-700 whitespace-nowrap">
+                                  {p.nf_number}
+                                </td>
+                                <td className="px-5 py-4 text-xs font-bold text-gray-800">
+                                  {p.item_name}
+                                </td>
+                                <td className="px-5 py-4 text-xs font-bold text-gray-600 whitespace-nowrap">
+                                  x{p.quantity}
+                                </td>
+                                <td className="px-5 py-4 text-xs text-gray-500 whitespace-nowrap">
+                                  R${" "}
+                                  {Number(p.unit_price || 0).toLocaleString(
+                                    "pt-BR",
+                                    { minimumFractionDigits: 2 },
+                                  )}
+                                </td>
+                                <td className="px-5 py-4 text-xs font-mono font-bold text-gray-800 whitespace-nowrap">
+                                  R${" "}
+                                  {Number(p.total_price || 0).toLocaleString(
+                                    "pt-BR",
+                                    { minimumFractionDigits: 2 },
+                                  )}
+                                </td>
+                                <td className="px-5 py-4">
+                                  <span
+                                    className={`inline-flex px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${
+                                      p.origin === "stock"
+                                        ? "bg-blue-50 text-blue-600"
+                                        : "bg-purple-50 text-purple-600"
+                                    }`}
+                                  >
+                                    {p.context}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 6. REPORT TYPE: SCHEDULES */}
+            {activeReport === "schedules" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col">
+                  <div className="p-4 border-b border-gray-200/80 bg-gray-50/50 flex justify-between items-center">
+                    <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-2">
+                      <Calendar size={15} className="text-indigo-600" />
+                      Histórico Geral de Escalas
+                    </h3>
+                  </div>
+
+                  <div className="flex-1 overflow-auto max-h-[600px] print:max-h-none print:overflow-visible">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-gray-50/75 sticky top-0 border-b border-gray-200/80 z-10">
+                        <tr>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Data
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Motorista / Veículo
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Rota
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            KM Início
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            KM Fim
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            Abastecimento
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {schedulesData.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={6}
+                              className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black"
+                            >
+                              Nenhuma escala encontrada neste período
+                            </td>
+                          </tr>
+                        ) : (
+                          schedulesData.map((sch: any) => (
+                            <tr
+                              key={sch.id}
+                              className="hover:bg-gray-50/30 transition-colors"
+                            >
+                              <td className="px-5 py-4 text-xs font-semibold text-gray-600 whitespace-nowrap">
+                                {format(
+                                  parseISO(sch.start_at),
+                                  "dd/MM/yy HH:mm",
+                                  { locale: ptBR },
+                                )}
                               </td>
                               <td className="px-5 py-4">
-                                <span className={`inline-flex px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${
-                                  p.origin === "stock" ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600"
-                                }`}>
-                                  {p.context}
-                                </span>
+                                <p className="text-xs font-bold text-gray-800">
+                                  {sch.profiles?.full_name}
+                                </p>
+                                <p className="text-[10px] uppercase font-black tracking-widest text-indigo-600 mt-1">
+                                  {sch.vehicles?.plate}
+                                </p>
+                              </td>
+                              <td className="px-5 py-4 text-xs font-bold text-gray-700 whitespace-nowrap">
+                                {sch.routes?.origin && sch.routes?.destination
+                                  ? `${sch.routes.origin} → ${sch.routes.destination}`
+                                  : "Indefinida"}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-mono font-bold text-gray-600">
+                                {sch.start_check?.odometer
+                                  ? `${sch.start_check.odometer.toLocaleString("pt-BR")} km`
+                                  : "-"}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-mono font-bold text-gray-600">
+                                {sch.end_check?.odometer
+                                  ? `${sch.end_check.odometer.toLocaleString("pt-BR")} km`
+                                  : "-"}
+                              </td>
+                              <td className="px-5 py-4">
+                                {sch.requires_fueling ? (
+                                  sch.fuel_check ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest">
+                                      <CheckCircle2 size={12} />
+                                      Realizado
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-rose-50 text-rose-700 text-[10px] font-black uppercase tracking-widest">
+                                      <AlertTriangle size={12} />
+                                      Pendente
+                                    </span>
+                                  )
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-gray-50 text-gray-500 text-[10px] font-black uppercase tracking-widest">
+                                    Não Exigido
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           ))

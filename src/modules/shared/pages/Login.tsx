@@ -1,29 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/src/lib/supabase';
-import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/src/lib/supabase";
+import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { isAuthenticated, loading: authLoading, isProfileLoading, user } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const {
+    isAuthenticated,
+    loading: authLoading,
+    isProfileLoading,
+    user,
+  } = useAuth();
+  const [loginId, setLoginId] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
 
   useEffect(() => {
     if (!authLoading && !isProfileLoading && isAuthenticated) {
-      const savedPath = localStorage.getItem('checkdrive_last_visited_path');
-      if (savedPath && savedPath !== '/' && savedPath !== '/login' && savedPath !== '/dashboard') {
+      const savedPath = localStorage.getItem("checkdrive_last_visited_path");
+      if (
+        savedPath &&
+        savedPath !== "/" &&
+        savedPath !== "/login" &&
+        savedPath !== "/dashboard"
+      ) {
         navigate(savedPath, { replace: true });
       } else {
-        if (user?.role === 'superadmin') {
-          navigate('/saas', { replace: true });
+        if (user?.role === "superadmin") {
+          navigate("/saas", { replace: true });
         } else {
-          navigate('/dashboard', { replace: true });
+          navigate("/dashboard", { replace: true });
         }
       }
     }
@@ -32,9 +42,11 @@ export default function Login() {
   useEffect(() => {
     let sub: any;
     const checkState = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session && !authLoading && !isProfileLoading && !isAuthenticated) {
-        setError('Perfil não encontrado. Contate o administrador do sistema.');
+        setError("Perfil não encontrado. Contate o administrador do sistema.");
         setLoading(false);
       }
     };
@@ -44,7 +56,7 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (lockedUntil && Date.now() < lockedUntil) {
       const waitSeconds = Math.ceil((lockedUntil - Date.now()) / 1000);
       setError(`Muitas tentativas. Aguarde ${waitSeconds} segundos.`);
@@ -53,19 +65,45 @@ export default function Login() {
 
     setLoading(true);
     setError(null);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    let authEmail = loginId.trim();
+
+    // Se o usuário não digitou um "@", vamos assumir que pode ser um CPF
+    if (!authEmail.includes("@")) {
+      const digitsOnly = authEmail.replace(/\D/g, "");
+
+      // Busca pelo CPF exato digitado ou apenas os dígitos
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("email")
+        .or(`cpf.eq.${authEmail},cpf.eq.${digitsOnly}`)
+        .limit(1);
+
+      if (profileData && profileData.length > 0) {
+        authEmail = profileData[0].email;
+      } else {
+        setError("CPF não encontrado ou e-mail inválido.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password,
+    });
     if (error) {
       const newAttempts = loginAttempts + 1;
       setLoginAttempts(newAttempts);
       if (newAttempts >= 5) {
         setLockedUntil(Date.now() + 60000); // lock for 1 minute
-        setError('Muitas tentativas falsas. Acesso bloqueado por 1 minuto.');
+        setError("Muitas tentativas falsas. Acesso bloqueado por 1 minuto.");
       } else {
-        setError('E-mail ou senha inválidos.');
+        setError("E-mail ou senha inválidos.");
       }
       setLoading(false);
     } else if (!data.user) {
-      setError('Falha ao autenticar.');
+      setError("Falha ao autenticar.");
       setLoading(false);
     } else {
       setLoginAttempts(0);
@@ -78,23 +116,35 @@ export default function Login() {
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden border border-zinc-200">
         <div className="p-8">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-zinc-900 mb-2 italic">CheckDrive</h1>
-            <p className="text-zinc-500 text-sm italic font-bold uppercase tracking-widest">Gestão de Frotas</p>
+            <h1 className="text-3xl font-bold tracking-tight text-zinc-900 mb-2 italic">
+              CheckDrive
+            </h1>
+            <p className="text-zinc-500 text-sm italic font-bold uppercase tracking-widest">
+              Gestão de Frotas
+            </p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
-            {error && <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100">{error}</div>}
+            {error && (
+              <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100">
+                {error}
+              </div>
+            )}
             <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">E-mail</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">
+                E-mail ou CPF
+              </label>
               <input
-                type="email"
+                type="text"
                 required
                 className="w-full h-12 px-4 rounded-xl border border-zinc-100 bg-zinc-50 focus:bg-white focus:ring-2 focus:ring-zinc-900 outline-none transition-all font-bold text-sm"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
               />
             </div>
             <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Senha</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">
+                Senha
+              </label>
               <input
                 type="password"
                 required
@@ -105,10 +155,12 @@ export default function Login() {
             </div>
             <button
               type="submit"
-              disabled={loading || (lockedUntil !== null && Date.now() < lockedUntil)}
+              disabled={
+                loading || (lockedUntil !== null && Date.now() < lockedUntil)
+              }
               className="w-full h-14 bg-zinc-900 text-zinc-50 font-black text-xs uppercase tracking-[0.2em] rounded-2xl hover:opacity-90 transition-all mt-4 disabled:opacity-50"
             >
-              {loading ? 'Entrando...' : 'Entrar'}
+              {loading ? "Entrando..." : "Entrar"}
             </button>
           </form>
         </div>
