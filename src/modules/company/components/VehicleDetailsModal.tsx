@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Calendar,
@@ -14,7 +15,7 @@ import {
   ArrowRight,
   Info,
   Layers,
-  CircleDot
+  CircleDot,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/src/lib/supabase";
@@ -144,7 +145,7 @@ export default function VehicleDetailsModal({
     };
   }, []);
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-50 flex items-start justify-center p-4 overflow-y-auto print:absolute print:inset-0 print:p-0 print:bg-white print:backdrop-blur-none print:z-[99999] print:block">
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -155,7 +156,7 @@ export default function VehicleDetailsModal({
       >
         {/* Top Decorative bar */}
         <div className="absolute top-0 left-0 right-0 h-[5px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-        
+
         {/* Header Section */}
         <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-gradient-to-b from-slate-50/50 to-white relative pt-8">
           <div className="flex items-center gap-4">
@@ -191,7 +192,21 @@ export default function VehicleDetailsModal({
                 <option value="current">Período Atual</option>
                 {closings.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {new Date(`${c.period_start}T12:00:00Z`).toLocaleDateString("pt-BR", { month: 'short', year: '2-digit' })} ({new Date(`${c.period_start}T12:00:00Z`).toLocaleDateString("pt-BR", { day: '2-digit' })} a {new Date(`${c.period_end}T12:00:00Z`).toLocaleDateString("pt-BR", { day: '2-digit' })})
+                    {new Date(`${c.period_start}T12:00:00Z`).toLocaleDateString(
+                      "pt-BR",
+                      { month: "short", year: "2-digit" },
+                    )}{" "}
+                    (
+                    {new Date(`${c.period_start}T12:00:00Z`).toLocaleDateString(
+                      "pt-BR",
+                      { day: "2-digit" },
+                    )}{" "}
+                    a{" "}
+                    {new Date(`${c.period_end}T12:00:00Z`).toLocaleDateString(
+                      "pt-BR",
+                      { day: "2-digit" },
+                    )}
+                    )
                   </option>
                 ))}
               </select>
@@ -244,10 +259,17 @@ export default function VehicleDetailsModal({
                     <span className="text-3xl font-black text-indigo-950 font-mono">
                       {calculateSubmissionsCnt()}
                     </span>
-                    <span className="text-[10px] text-indigo-400 font-bold">realizados</span>
+                    <span className="text-[10px] text-indigo-400 font-bold">
+                      realizados
+                    </span>
                   </div>
                   <div className="mt-3.5 w-full bg-indigo-100/40 h-1 rounded-full overflow-hidden">
-                    <div className="bg-indigo-500 h-full rounded-full" style={{ width: `${Math.min(100, calculateSubmissionsCnt() * 5)}%` }} />
+                    <div
+                      className="bg-indigo-500 h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, calculateSubmissionsCnt() * 5)}%`,
+                      }}
+                    />
                   </div>
                 </div>
 
@@ -265,10 +287,17 @@ export default function VehicleDetailsModal({
                     <span className="text-3xl font-black text-amber-950 font-mono">
                       {calculatePendingIssues()}
                     </span>
-                    <span className="text-[10px] text-amber-500 font-bold">abertas</span>
+                    <span className="text-[10px] text-amber-500 font-bold">
+                      abertas
+                    </span>
                   </div>
                   <div className="mt-3.5 w-full bg-amber-100/40 h-1 rounded-full overflow-hidden">
-                    <div className="bg-amber-500 h-full rounded-full" style={{ width: `${Math.min(100, calculatePendingIssues() * 20)}%` }} />
+                    <div
+                      className="bg-amber-500 h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, calculatePendingIssues() * 20)}%`,
+                      }}
+                    />
                   </div>
                 </div>
 
@@ -286,178 +315,239 @@ export default function VehicleDetailsModal({
                     <span className="text-3xl font-black text-emerald-950 font-mono">
                       {calculateResolvedIssues()}
                     </span>
-                    <span className="text-[10px] text-emerald-500 font-bold">manutenções</span>
+                    <span className="text-[10px] text-emerald-500 font-bold">
+                      manutenções
+                    </span>
                   </div>
                   <div className="mt-3.5 w-full bg-emerald-100/40 h-1 rounded-full overflow-hidden">
-                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(100, calculateResolvedIssues() * 15)}%` }} />
+                    <div
+                      className="bg-emerald-500 h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, calculateResolvedIssues() * 15)}%`,
+                      }}
+                    />
                   </div>
                 </div>
               </div>
 
               {/* Grid split for Issues and Submissions */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start print:block">
-
                 {/* Issues / Anomalies Block */}
                 <div className="space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                    <Wrench size={14} className="text-amber-500 mt-[-2px] animate-pulse" />
-                    Ocorrências & Falhas Reportadas
-                  </h3>
-                  <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
-                    {issues.length} {issues.length === 1 ? 'registro' : 'registros'}
-                  </span>
-                </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                      <Wrench
+                        size={14}
+                        className="text-amber-500 mt-[-2px] animate-pulse"
+                      />
+                      Ocorrências & Falhas Reportadas
+                    </h3>
+                    <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
+                      {issues.length}{" "}
+                      {issues.length === 1 ? "registro" : "registros"}
+                    </span>
+                  </div>
 
-                {issues.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-3.5">
-                    {issues.map((iss) => (
-                      <div 
-                        key={iss.id} 
-                        className={`bg-white border rounded-2xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-150 hover:shadow-md ${
-                          iss.status === 'pending' ? 'border-amber-100 bg-amber-50/5 hover:border-amber-200' : 'border-slate-200/60 hover:border-slate-350'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3.5 min-w-0">
-                          <div className={`p-2 rounded-xl shrink-0 ${iss.status === 'pending' ? 'bg-amber-100/40 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
-                            <CircleDot size={15} className="mt-[2px]" />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-xs font-bold text-slate-800 leading-snug">{iss.item_title}</span>
-                            {iss.description && (
-                              <p className="text-[11px] text-slate-500 mt-1 max-w-[500px] break-words">
-                                {iss.description}
-                              </p>
-                            )}
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2.5">
-                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
-                                <Calendar size={11} />
-                                {new Date(iss.created_at).toLocaleDateString("pt-BR")}
+                  {issues.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-3.5">
+                      {issues.map((iss) => (
+                        <div
+                          key={iss.id}
+                          className={`bg-white border rounded-2xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all duration-150 hover:shadow-md ${
+                            iss.status === "pending"
+                              ? "border-amber-100 bg-amber-50/5 hover:border-amber-200"
+                              : "border-slate-200/60 hover:border-slate-350"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3.5 min-w-0">
+                            <div
+                              className={`p-2 rounded-xl shrink-0 ${iss.status === "pending" ? "bg-amber-100/40 text-amber-600" : "bg-slate-100 text-slate-500"}`}
+                            >
+                              <CircleDot size={15} className="mt-[2px]" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-slate-800 leading-snug">
+                                {iss.item_title}
                               </span>
-                              <span className="w-1.5 h-1.5 bg-slate-250 rounded-full" />
-                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
-                                <User size={11} />
-                                {iss.profiles?.full_name || "Desconhecido"}
-                              </span>
+                              {iss.description && (
+                                <p className="text-[11px] text-slate-500 mt-1 max-w-[500px] break-words">
+                                  {iss.description}
+                                </p>
+                              )}
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2.5">
+                                <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                                  <Calendar size={11} />
+                                  {new Date(iss.created_at).toLocaleDateString(
+                                    "pt-BR",
+                                  )}
+                                </span>
+                                <span className="w-1.5 h-1.5 bg-slate-250 rounded-full" />
+                                <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                                  <User size={11} />
+                                  {iss.profiles?.full_name || "Desconhecido"}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="shrink-0 flex items-center gap-2">
-                          <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
-                            iss.status === 'pending' 
-                              ? 'bg-amber-50 text-amber-700 border-amber-200/60' 
-                              : 'bg-emerald-55/60 text-emerald-700 border-emerald-150'
-                          }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${iss.status === 'pending' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                            {iss.status === 'pending' ? 'Pendente' : 'Resolvido'}
-                          </span>
+                          <div className="shrink-0 flex items-center gap-2">
+                            <span
+                              className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border flex items-center gap-1.5 ${
+                                iss.status === "pending"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200/60"
+                                  : "bg-emerald-55/60 text-emerald-700 border-emerald-150"
+                              }`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${iss.status === "pending" ? "bg-amber-500" : "bg-emerald-500"}`}
+                              />
+                              {iss.status === "pending"
+                                ? "Pendente"
+                                : "Resolvido"}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-10 border border-dashed border-slate-200 rounded-3xl bg-slate-50/30">
-                    <CheckCircle size={28} className="text-emerald-400 mb-2.5" />
-                    <p className="text-xs font-black text-slate-700 uppercase tracking-widest">Veículo 100% Operacional</p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1">Nenhuma ocorrência ou falha aberta no período.</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Submissions Section */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
-                    <CheckCircle size={14} className="text-indigo-500 mt-[-2px]" />
-                    Inspeções & Checklists Realizados
-                  </h3>
-                  <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
-                    {submissions.length} {submissions.length === 1 ? 'inspeção' : 'inspeções'}
-                  </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-10 border border-dashed border-slate-200 rounded-3xl bg-slate-50/30">
+                      <CheckCircle
+                        size={28}
+                        className="text-emerald-400 mb-2.5"
+                      />
+                      <p className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                        Veículo 100% Operacional
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1">
+                        Nenhuma ocorrência ou falha aberta no período.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {submissions.length > 0 ? (
-                  <div className="overflow-hidden border border-slate-100 rounded-2xl bg-white shadow-sm">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50/70 border-b border-slate-100">
-                          <tr>
-                            <th className="px-5 py-3.5 text-[9px] font-black text-slate-450 uppercase tracking-widest">
-                              Data & Hora
-                            </th>
-                            <th className="px-5 py-3.5 text-[9px] font-black text-slate-450 uppercase tracking-widest">
-                              Tipo de Inspeção
-                            </th>
-                            <th className="px-5 py-3.5 text-[9px] font-black text-slate-450 uppercase tracking-widest">
-                              Rota / Programada
-                            </th>
-                            <th className="px-5 py-3.5 text-[9px] font-black text-slate-450 uppercase tracking-widest">
-                              Lançado por
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {submissions.map((sub) => (
-                            <tr key={sub.id} className="hover:bg-slate-50/30 transition-all">
-                              <td className="px-5 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-2 text-xs font-bold text-slate-750">
-                                  <Clock size={12} className="text-slate-400 shrink-0" />
-                                  <span>{new Date(sub.created_at).toLocaleDateString("pt-BR")}</span>
-                                  <span className="text-[10px] text-slate-400 font-semibold font-mono">
-                                    {new Date(sub.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-5 py-4 whitespace-nowrap">
-                                <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${
-                                  sub.type === "start" ? "bg-indigo-50 border-indigo-100/50 text-indigo-750" 
-                                  : sub.type === "end" ? "bg-purple-50 border-purple-100/50 text-purple-750"
-                                  : sub.type === "fuel" ? "bg-fuchsia-50 border-fuchsia-100/50 text-fuchsia-750"
-                                  : "bg-slate-55 border-slate-150 text-slate-650"
-                                }`}>
-                                  {sub.type === "start"
-                                    ? "Início de Viagem"
-                                    : sub.type === "end"
-                                      ? "Fim de Viagem"
-                                      : sub.type === "fuel"
-                                        ? "Abastecimento"
-                                        : sub.type === "yard"
-                                          ? "Pátio"
-                                          : sub.type}
-                                </span>
-                              </td>
-                              <td className="px-5 py-4">
-                                <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                                  <MapPin size={11} className="text-slate-400 shrink-0" />
-                                  <span className="truncate max-w-[200px]">
-                                    {sub.routes
-                                      ? `${sub.routes.origin} → ${sub.routes.destination}`
-                                      : "Espontânea / Sem Rota"}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="px-5 py-4 whitespace-nowrap">
-                                <div className="flex items-center gap-1 text-xs text-slate-600 font-bold">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-1" />
-                                  {sub.profiles?.full_name || "Membro"}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                {/* Submissions Section */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                    <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                      <CheckCircle
+                        size={14}
+                        className="text-indigo-500 mt-[-2px]"
+                      />
+                      Inspeções & Checklists Realizados
+                    </h3>
+                    <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
+                      {submissions.length}{" "}
+                      {submissions.length === 1 ? "inspeção" : "inspeções"}
+                    </span>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-10 border border-dashed border-slate-200 rounded-3xl bg-slate-50/30">
-                    <Layers size={28} className="text-slate-300 mb-2.5" />
-                    <p className="text-xs font-black text-slate-700 uppercase tracking-widest">Sem Inspeções</p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1">Nenhum checklist de viagem foi lançado neste período.</p>
-                  </div>
-                )}
-              </div>
 
+                  {submissions.length > 0 ? (
+                    <div className="overflow-hidden border border-slate-100 rounded-2xl bg-white shadow-sm">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead className="bg-slate-50/70 border-b border-slate-100">
+                            <tr>
+                              <th className="px-5 py-3.5 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                                Data & Hora
+                              </th>
+                              <th className="px-5 py-3.5 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                                Tipo de Inspeção
+                              </th>
+                              <th className="px-5 py-3.5 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                                Rota / Programada
+                              </th>
+                              <th className="px-5 py-3.5 text-[9px] font-black text-slate-450 uppercase tracking-widest">
+                                Lançado por
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {submissions.map((sub) => (
+                              <tr
+                                key={sub.id}
+                                className="hover:bg-slate-50/30 transition-all"
+                              >
+                                <td className="px-5 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-2 text-xs font-bold text-slate-750">
+                                    <Clock
+                                      size={12}
+                                      className="text-slate-400 shrink-0"
+                                    />
+                                    <span>
+                                      {new Date(
+                                        sub.created_at,
+                                      ).toLocaleDateString("pt-BR")}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-semibold font-mono">
+                                      {new Date(
+                                        sub.created_at,
+                                      ).toLocaleTimeString("pt-BR", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-5 py-4 whitespace-nowrap">
+                                  <span
+                                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${
+                                      sub.type === "start"
+                                        ? "bg-indigo-50 border-indigo-100/50 text-indigo-750"
+                                        : sub.type === "end"
+                                          ? "bg-purple-50 border-purple-100/50 text-purple-750"
+                                          : sub.type === "fuel"
+                                            ? "bg-fuchsia-50 border-fuchsia-100/50 text-fuchsia-750"
+                                            : "bg-slate-55 border-slate-150 text-slate-650"
+                                    }`}
+                                  >
+                                    {sub.type === "start"
+                                      ? "Início de Viagem"
+                                      : sub.type === "end"
+                                        ? "Fim de Viagem"
+                                        : sub.type === "fuel"
+                                          ? "Abastecimento"
+                                          : sub.type === "yard"
+                                            ? "Pátio"
+                                            : sub.type}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                    <MapPin
+                                      size={11}
+                                      className="text-slate-400 shrink-0"
+                                    />
+                                    <span className="truncate max-w-[200px]">
+                                      {sub.routes
+                                        ? `${sub.routes.origin} → ${sub.routes.destination}`
+                                        : "Espontânea / Sem Rota"}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-5 py-4 whitespace-nowrap">
+                                  <div className="flex items-center gap-1 text-xs text-slate-600 font-bold">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-1" />
+                                    {sub.profiles?.full_name || "Membro"}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-10 border border-dashed border-slate-200 rounded-3xl bg-slate-50/30">
+                      <Layers size={28} className="text-slate-300 mb-2.5" />
+                      <p className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                        Sem Inspeções
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1">
+                        Nenhum checklist de viagem foi lançado neste período.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </>
           )}
@@ -465,4 +555,6 @@ export default function VehicleDetailsModal({
       </motion.div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

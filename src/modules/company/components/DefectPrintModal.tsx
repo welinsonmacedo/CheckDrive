@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Printer,
@@ -22,13 +23,22 @@ export default function DefectPrintModal({
   defect,
   onClose,
 }: DefectPrintModalProps) {
+  useEffect(() => {
+    if (defect) {
+      document.body.classList.add("modal-open-for-print");
+    }
+    return () => {
+      document.body.classList.remove("modal-open-for-print");
+    };
+  }, [defect]);
+
   if (!defect) return null;
 
   const handlePrint = () => {
     window.print();
   };
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm print:p-0 print:bg-white print:backdrop-blur-none">
         <motion.div
@@ -218,4 +228,6 @@ export default function DefectPrintModal({
       </div>
     </AnimatePresence>
   );
+
+  return createPortal(modalContent, document.body);
 }

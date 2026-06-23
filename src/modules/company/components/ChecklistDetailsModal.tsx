@@ -1,4 +1,5 @@
 // components/admin/ChecklistDetailsModal.tsx
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -30,10 +31,10 @@ export default function ChecklistDetailsModal({
 }: ChecklistDetailsModalProps) {
   useEffect(() => {
     if (selectedSub) {
-      document.body.classList.add('modal-open-for-print');
+      document.body.classList.add("modal-open-for-print");
     }
     return () => {
-      document.body.classList.remove('modal-open-for-print');
+      document.body.classList.remove("modal-open-for-print");
     };
   }, [selectedSub]);
 
@@ -104,7 +105,9 @@ export default function ChecklistDetailsModal({
         const trailerIds = [
           ...new Set(issuesData.map((i: any) => i.trailer_id).filter(Boolean)),
         ];
-        const driverIds = [...new Set(issuesData.map((i: any) => i.driver_id).filter(Boolean))];
+        const driverIds = [
+          ...new Set(issuesData.map((i: any) => i.driver_id).filter(Boolean)),
+        ];
 
         const { data: vehicles } = await supabase
           .from("vehicles")
@@ -345,7 +348,7 @@ export default function ChecklistDetailsModal({
     }
   }
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -374,7 +377,9 @@ export default function ChecklistDetailsModal({
               </h3>
               <p className="text-[10px] font-bold text-gray-400 uppercase">
                 Nº {selectedSub.id?.split("-")[0]} •{" "}
-                {new Date(selectedSub.details?.adjusted_date || selectedSub.created_at).toLocaleString()}
+                {new Date(
+                  selectedSub.details?.adjusted_date || selectedSub.created_at,
+                ).toLocaleString()}
                 {selectedSub.details?.is_edited &&
                   ` • Editado em ${new Date(selectedSub.details.edited_at).toLocaleString()}`}
               </p>
@@ -451,7 +456,9 @@ export default function ChecklistDetailsModal({
                 Detalhes do Checklist {selectedSub.id?.split("-")[0]}
               </h1>
               <p className="text-sm font-bold text-zinc-500 tracking-widest uppercase">
-                {new Date(selectedSub.details?.adjusted_date || selectedSub.created_at).toLocaleString()}
+                {new Date(
+                  selectedSub.details?.adjusted_date || selectedSub.created_at,
+                ).toLocaleString()}
               </p>
             </div>
             {/* Informações básicas */}
@@ -538,10 +545,17 @@ export default function ChecklistDetailsModal({
                         const displayValue = value === "defect" ? "N/A" : value;
                         let oldDisplayValue = null;
 
-                        if (selectedSub?.details?.is_edited && selectedSub.details.edit_history && selectedSub.details.edit_history.length > 0) {
-                          const oldVal = selectedSub.details.edit_history[0].previous_items?.[itemId];
+                        if (
+                          selectedSub?.details?.is_edited &&
+                          selectedSub.details.edit_history &&
+                          selectedSub.details.edit_history.length > 0
+                        ) {
+                          const oldVal =
+                            selectedSub.details.edit_history[0]
+                              .previous_items?.[itemId];
                           if (oldVal && oldVal !== value) {
-                            oldDisplayValue = oldVal === "defect" ? "N/A" : oldVal;
+                            oldDisplayValue =
+                              oldVal === "defect" ? "N/A" : oldVal;
                           }
                         }
 
@@ -554,19 +568,19 @@ export default function ChecklistDetailsModal({
                               {title}
                             </span>
                             {oldDisplayValue ? (
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-sm font-bold text-gray-400 line-through">
-                                      {oldDisplayValue}
-                                    </span>
-                                    <span className="text-xs text-gray-400">➔</span>
-                                    <span className="text-lg font-bold text-primary">
-                                      {displayValue}
-                                    </span>
-                                </div>
-                            ) : (
-                                <span className="text-lg font-bold text-primary mt-1">
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-sm font-bold text-gray-400 line-through">
+                                  {oldDisplayValue}
+                                </span>
+                                <span className="text-xs text-gray-400">➔</span>
+                                <span className="text-lg font-bold text-primary">
                                   {displayValue}
                                 </span>
+                              </div>
+                            ) : (
+                              <span className="text-lg font-bold text-primary mt-1">
+                                {displayValue}
+                              </span>
                             )}
                           </div>
                         );
@@ -626,7 +640,10 @@ export default function ChecklistDetailsModal({
                         : null;
 
                       let originalDescription = null;
-                      const baseTitle = item.item_title.replace(/\s\(\d+\)$/, "").toLowerCase().trim();
+                      const baseTitle = item.item_title
+                        .replace(/\s\(\d+\)$/, "")
+                        .toLowerCase()
+                        .trim();
                       const itemId = titleToId[baseTitle];
 
                       if (
@@ -650,21 +667,21 @@ export default function ChecklistDetailsModal({
                             firstEdit.previous_defects[itemId];
                           let prevDefectsArray: any[] = [];
                           if (typeof prevDefectsRaw === "string") {
-                            prevDefectsArray = [{ description: prevDefectsRaw }];
+                            prevDefectsArray = [
+                              { description: prevDefectsRaw },
+                            ];
                           } else if (Array.isArray(prevDefectsRaw)) {
                             prevDefectsArray = prevDefectsRaw;
                           } else if (prevDefectsRaw) {
                             prevDefectsArray = [prevDefectsRaw];
                           }
 
-                          if (
-                            prevDefectsArray &&
-                            prevDefectsArray[defIndex]
-                          ) {
+                          if (prevDefectsArray && prevDefectsArray[defIndex]) {
                             const defObj = prevDefectsArray[defIndex];
-                            originalDescription = typeof defObj === "string"
-                              ? defObj
-                              : defObj?.description || null;
+                            originalDescription =
+                              typeof defObj === "string"
+                                ? defObj
+                                : defObj?.description || null;
                           }
                         }
                       }
@@ -715,14 +732,17 @@ export default function ChecklistDetailsModal({
                                   </span>
                                   <div className="p-3 rounded-lg bg-gray-100 border border-gray-200">
                                     <p className="text-xs font-medium text-gray-500 line-through">
-                                      {originalDescription || "Nenhuma descrição fornecida"}
+                                      {originalDescription ||
+                                        "Nenhuma descrição fornecida"}
                                     </p>
                                   </div>
                                 </div>
                               )}
                               <div className="space-y-2">
                                 <span className="text-[10px] font-bold text-red-600 uppercase">
-                                  {originalDescription !== null ? "Nova Descrição Reportada:" : "Descrição Reportada:"}
+                                  {originalDescription !== null
+                                    ? "Nova Descrição Reportada:"
+                                    : "Descrição Reportada:"}
                                 </span>
                                 <div
                                   className={`p-3 rounded-lg ${item.description ? "bg-white border border-red-100 shadow-sm" : "bg-gray-50 border border-gray-100"}`}
@@ -1092,4 +1112,6 @@ export default function ChecklistDetailsModal({
       )}
     </AnimatePresence>
   );
+
+  return createPortal(modalContent, document.body);
 }
