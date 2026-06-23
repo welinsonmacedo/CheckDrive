@@ -1064,19 +1064,23 @@ export default function MaintenanceTab() {
                   
                   statsContent = (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-3 gap-2 bg-zinc-50 p-3 rounded-2xl border border-zinc-100">
+                      <div className="grid grid-cols-4 gap-1 bg-zinc-50 p-3 rounded-2xl border border-zinc-100">
                         <div className="text-center">
-                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">KM Atual</span>
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">Revisão</span>
+                          <span className="text-xs font-bold text-zinc-700 font-sans">{lastKm.toLocaleString("pt-BR")} KM</span>
+                        </div>
+                        <div className="text-center border-l border-zinc-200 pl-1">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">Atual</span>
                           <span className="text-xs font-bold text-zinc-700 font-sans">{currentKm.toLocaleString("pt-BR")} KM</span>
                         </div>
-                        <div className="text-center border-x border-zinc-200">
+                        <div className="text-center border-l border-zinc-200 pl-1">
                           <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">Falta</span>
                           <span className={`text-xs font-black font-sans ${isOverdue ? "text-red-650" : "text-zinc-700"}`}>
                             {isOverdue ? `${Math.abs(remainingKm).toLocaleString("pt-BR")} KM d+` : `${remainingKm.toLocaleString("pt-BR")} KM`}
                           </span>
                         </div>
-                        <div className="text-center">
-                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">KM Alvo</span>
+                        <div className="text-center border-l border-zinc-200 pl-1">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">Alvo</span>
                           <span className="text-xs font-bold text-primary font-mono">{targetKm.toLocaleString("pt-BR")} KM</span>
                         </div>
                       </div>
