@@ -581,7 +581,6 @@ export default function AdminDashboard() {
               onNavigate={(tab) => {
                 if (activeTab !== tab) {
                   setActiveTab(tab);
-                  if (window.innerWidth < 1024) setSidebarOpen(false);
                 }
               }}
             />

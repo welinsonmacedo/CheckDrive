@@ -238,18 +238,22 @@ export default function ChecklistFlow() {
   };
 
   const renderItemInput = (item: any) => {
-    if (item.input_type === 'text' || item.input_type === 'number' || item.mask) {
+    if (
+      item.input_type === "text" ||
+      item.input_type === "number" ||
+      item.mask
+    ) {
       return (
         <div className="w-40 shrink-0">
           <input
-            type={item.input_type === 'number' || item.mask ? 'tel' : 'text'}
+            type={item.input_type === "number" || item.mask ? "tel" : "text"}
             className="w-full h-10 px-3 rounded-lg border border-app-border bg-app-bg text-sm font-medium text-text-main text-right focus:border-primary transition-colors outline-none"
-            placeholder={item.mask ? item.mask.replace(/#/g, '0') : "Digite..."}
+            placeholder={item.mask ? item.mask.replace(/#/g, "0") : "Digite..."}
             value={
-              formData.itemValues[item.id] === undefined || 
-              formData.itemValues[item.id] === 'normal' || 
-              formData.itemValues[item.id] === 'defect' 
-                ? '' 
+              formData.itemValues[item.id] === undefined ||
+              formData.itemValues[item.id] === "normal" ||
+              formData.itemValues[item.id] === "defect"
+                ? ""
                 : formData.itemValues[item.id]
             }
             onChange={(e) => {
@@ -257,9 +261,9 @@ export default function ChecklistFlow() {
               if (item.mask) {
                 val = applyNumberMask(val, item.mask);
               }
-              setFormData(prev => ({
+              setFormData((prev) => ({
                 ...prev,
-                itemValues: { ...prev.itemValues, [item.id]: val }
+                itemValues: { ...prev.itemValues, [item.id]: val },
               }));
             }}
           />
@@ -437,8 +441,13 @@ export default function ChecklistFlow() {
       if (settingsRes.data && settingsRes.data.require_location !== undefined) {
         setRequireLocation(settingsRes.data.require_location === true);
       }
-      if (settingsRes.data && settingsRes.data.manual_checklist_activate !== undefined) {
-        setManualChecklistActivate(settingsRes.data.manual_checklist_activate !== false);
+      if (
+        settingsRes.data &&
+        settingsRes.data.manual_checklist_activate !== undefined
+      ) {
+        setManualChecklistActivate(
+          settingsRes.data.manual_checklist_activate !== false,
+        );
       }
       if (settingsRes.data) {
         setKmLimitSettings({
@@ -764,7 +773,11 @@ export default function ChecklistFlow() {
     compressedReader.readAsDataURL(finalFile);
   };
 
-  const handleDefectPhotoUpload = async (itemId: string, defectIdx: number, file: File) => {
+  const handleDefectPhotoUpload = async (
+    itemId: string,
+    defectIdx: number,
+    file: File,
+  ) => {
     // 1. Immediately read original file for instant preview
     const originalReader = new FileReader();
     originalReader.onloadend = () => {
@@ -795,7 +808,7 @@ export default function ChecklistFlow() {
         },
       };
     });
-    
+
     // 3. Update preview with compressed file to match storage size
     const compressedReader = new FileReader();
     compressedReader.onloadend = () => {
@@ -826,9 +839,13 @@ export default function ChecklistFlow() {
       const previews = formData.photoPreviews || {};
 
       if (type === "fuel") {
-        const hasReceipt = photos.receipt || (previews.receipt && previews.receipt.startsWith("data:image/"));
-        const hasOdometer = photos.odometer || (previews.odometer && previews.odometer.startsWith("data:image/"));
-        
+        const hasReceipt =
+          photos.receipt ||
+          (previews.receipt && previews.receipt.startsWith("data:image/"));
+        const hasOdometer =
+          photos.odometer ||
+          (previews.odometer && previews.odometer.startsWith("data:image/"));
+
         if (requireFuelReceiptPhoto && !hasReceipt) return false;
         if (!hasOdometer) return false;
         return true;
@@ -1039,38 +1056,33 @@ export default function ChecklistFlow() {
       }
 
       if (scheduleId) {
-        const schedIdNum = parseInt(scheduleId);
-        if (!isNaN(schedIdNum)) {
-          if (type === "start") {
-            await supabase
-              .from("schedules")
-              .update({ start_checklist_id: submission.id })
-              .eq("id", schedIdNum);
-          } else if (type === "end") {
-            await supabase
-              .from("schedules")
-              .update({ end_checklist_id: submission.id })
-              .eq("id", schedIdNum);
-          } else if (type === "fuel") {
-            await supabase
-              .from("schedules")
-              .update({ fuel_checklist_id: submission.id })
-              .eq("id", schedIdNum);
-          }
+        if (type === "start") {
+          await supabase
+            .from("schedules")
+            .update({ start_checklist_id: submission.id })
+            .eq("id", scheduleId);
+        } else if (type === "end") {
+          await supabase
+            .from("schedules")
+            .update({ end_checklist_id: submission.id })
+            .eq("id", scheduleId);
+        } else if (type === "fuel") {
+          await supabase
+            .from("schedules")
+            .update({ fuel_checklist_id: submission.id })
+            .eq("id", scheduleId);
         }
       }
 
       if (type === "fuel") {
         try {
           const litersItem = options.items.find(
-            (i: any) => i.input_type === "fuel_liters"
+            (i: any) => i.input_type === "fuel_liters",
           );
           let liters = 0;
           if (litersItem && formData.itemValues[litersItem.id]) {
             liters = parseFloat(
-              formData.itemValues[litersItem.id]
-                .toString()
-                .replace(",", ".")
+              formData.itemValues[litersItem.id].toString().replace(",", "."),
             );
           } else {
             // Fallback to title detection
@@ -1083,13 +1095,11 @@ export default function ChecklistFlow() {
                   t.includes("valor") ||
                   t.includes("lts")
                 );
-              }
+              },
             );
             if (titleEntry && formData.itemValues[titleEntry[0]]) {
               liters = parseFloat(
-                formData.itemValues[titleEntry[0]]
-                  .toString()
-                  .replace(",", ".")
+                formData.itemValues[titleEntry[0]].toString().replace(",", "."),
               );
             }
           }
@@ -1104,13 +1114,12 @@ export default function ChecklistFlow() {
             let startDate = submission.created_at;
             let shouldInsert = false;
 
-            const schedIdNum = scheduleId ? parseInt(scheduleId) : null;
             let schedule_start_date: string | null = null;
-            if (schedIdNum && !isNaN(schedIdNum)) {
+            if (scheduleId) {
               const { data: sData } = await supabase
                 .from("schedules")
                 .select("id, start_checklist_id, start_at, created_at")
-                .eq("id", schedIdNum)
+                .eq("id", scheduleId)
                 .single();
               if (sData) {
                 schedule_start_date = sData.start_at || sData.created_at;
@@ -1169,22 +1178,25 @@ export default function ChecklistFlow() {
               const average = liters > 0 ? distance / liters : 0;
 
               // Insert automatically into vehicle_averages
-              await supabase.from("vehicle_averages").insert([{
-                company_id: companyId,
-                vehicle_id: vehicleId,
-                driver_id: user.id,
-                schedule_id: isNaN(schedIdNum as any) ? null : schedIdNum,
-                fuel_submission_id: submission.id,
-                start_date: startDate,
-                end_date: submission.created_at,
-                start_odometer: startOdo,
-                end_odometer: currentOdo,
-                distance: distance,
-                liters: liters,
-                average: average,
-                status: "pending", // Initially 'pending' so managers need to review
-                notes: "Calculado automaticamente na submissão (2º abastecimento posterior à escala)"
-              }]);
+              await supabase.from("vehicle_averages").insert([
+                {
+                  company_id: companyId,
+                  vehicle_id: vehicleId,
+                  driver_id: user.id,
+                  schedule_id: scheduleId || null,
+                  fuel_submission_id: submission.id,
+                  start_date: startDate,
+                  end_date: submission.created_at,
+                  start_odometer: startOdo,
+                  end_odometer: currentOdo,
+                  distance: distance,
+                  liters: liters,
+                  average: average,
+                  status: "pending", // Initially 'pending' so managers need to review
+                  notes:
+                    "Calculado automaticamente na submissão (2º abastecimento posterior à escala)",
+                },
+              ]);
             }
           }
         } catch (avgErr) {
@@ -1200,7 +1212,9 @@ export default function ChecklistFlow() {
       navigate("/");
     } catch (error) {
       console.error("Submission failed", error);
-      alert(`Erro ao enviar checklist (${error instanceof Error ? error.message : JSON.stringify(error)}). Por favor tente novamente.`);
+      alert(
+        `Erro ao enviar checklist (${error instanceof Error ? error.message : JSON.stringify(error)}). Por favor tente novamente.`,
+      );
     } finally {
       setLoading(false);
       setIsSubmitting(false);
@@ -1213,9 +1227,13 @@ export default function ChecklistFlow() {
         <div className="w-16 h-16 bg-red-50 text-red-650 rounded-full flex items-center justify-center mb-6">
           <AlertCircle size={32} />
         </div>
-        <h2 className="text-lg font-black text-text-main mb-2">Checklist Manual Desativado</h2>
+        <h2 className="text-lg font-black text-text-main mb-2">
+          Checklist Manual Desativado
+        </h2>
         <p className="text-sm text-text-muted mb-8 leading-relaxed">
-          A empresa configurou a obrigatoriedade de iniciar o checklist a partir de uma escala programada. Por favor, utilize uma das escalas disponíveis na tela inicial do aplicativo.
+          A empresa configurou a obrigatoriedade de iniciar o checklist a partir
+          de uma escala programada. Por favor, utilize uma das escalas
+          disponíveis na tela inicial do aplicativo.
         </p>
         <button
           onClick={() => navigate("/")}
@@ -1296,26 +1314,29 @@ export default function ChecklistFlow() {
                     options.vehicles.find(
                       (v: any) => v.id === formData.vehicleId,
                     )?.requires_trailer) && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-text-main">
-                      Reboque / Carreta
-                    </label>
-                    <select
-                      className="w-full h-12 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-medium text-text-main outline-none focus:border-primary"
-                      value={formData.trailerId}
-                      onChange={(e) =>
-                        setFormData({ ...formData, trailerId: e.target.value })
-                      }
-                    >
-                      <option value="">Selecione um reboque</option>
-                      {options.trailers.map((t: any) => (
-                        <option key={t.id} value={t.id}>
-                          {t.plate} - {t.model}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-text-main">
+                        Reboque / Carreta
+                      </label>
+                      <select
+                        className="w-full h-12 px-4 rounded-xl border border-app-border bg-app-bg text-xs font-medium text-text-main outline-none focus:border-primary"
+                        value={formData.trailerId}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            trailerId: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="">Selecione um reboque</option>
+                        {options.trailers.map((t: any) => (
+                          <option key={t.id} value={t.id}>
+                            {t.plate} - {t.model}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                 {/* Route Selection */}
                 {type !== "yard" && options.routes.length > 0 && (
@@ -1332,11 +1353,17 @@ export default function ChecklistFlow() {
                     >
                       <option value="">Selecione a rota</option>
                       {options.routes.map((r: any) => {
-                        const validStops = (r.stops || []).filter((s: string) => !s.startsWith("__MODALITY:"));
-                        const stopsStr = validStops.length > 0 ? ` (Paradas: ${validStops.join(", ")})` : "";
+                        const validStops = (r.stops || []).filter(
+                          (s: string) => !s.startsWith("__MODALITY:"),
+                        );
+                        const stopsStr =
+                          validStops.length > 0
+                            ? ` (Paradas: ${validStops.join(", ")})`
+                            : "";
                         return (
                           <option key={r.id} value={r.id}>
-                            {r.origin} ➔ {r.destination}{stopsStr}
+                            {r.origin} ➔ {r.destination}
+                            {stopsStr}
                           </option>
                         );
                       })}
@@ -1379,27 +1406,34 @@ export default function ChecklistFlow() {
             >
               <div className="bento-card p-5 bg-white border border-app-border rounded-2xl space-y-4 shadow-sm">
                 <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-2">
-                  {type === "fuel" ? "Fotos de Abastecimento" : "Fotos Externas do Veículo"}
+                  {type === "fuel"
+                    ? "Fotos de Abastecimento"
+                    : "Fotos Externas do Veículo"}
                 </h3>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {(type === "fuel" ? [
-                    { key: "odometer", label: "Odômetro/Tacógrafo" },
-                    ...(requireFuelReceiptPhoto ? [{ key: "receipt", label: "Cupom" }] : [])
-                  ] : [
-                    { key: "front", label: "Frente" },
-                    { key: "back", label: "Traseira" },
-                    { key: "left", label: "Lateral Esquerda" },
-                    { key: "right", label: "Lateral Direita" },
-                  ]).map(({ key, label }) => {
+                  {(type === "fuel"
+                    ? [
+                        { key: "odometer", label: "Odômetro/Tacógrafo" },
+                        ...(requireFuelReceiptPhoto
+                          ? [{ key: "receipt", label: "Cupom" }]
+                          : []),
+                      ]
+                    : [
+                        { key: "front", label: "Frente" },
+                        { key: "back", label: "Traseira" },
+                        { key: "left", label: "Lateral Esquerda" },
+                        { key: "right", label: "Lateral Direita" },
+                      ]
+                  ).map(({ key, label }) => {
                     const currentPhoto = (formData.photos as any)[key];
                     const currentPreview =
                       (formData.photoPreviews || ({} as any))[key] ||
-                      (
-                        currentPhoto && (currentPhoto instanceof Blob || currentPhoto instanceof File)
-                          ? URL.createObjectURL(currentPhoto)
-                          : ""
-                      );
+                      (currentPhoto &&
+                      (currentPhoto instanceof Blob ||
+                        currentPhoto instanceof File)
+                        ? URL.createObjectURL(currentPhoto)
+                        : "");
                     return (
                       <div
                         key={key}
@@ -1561,15 +1595,26 @@ export default function ChecklistFlow() {
                                                 capture="environment"
                                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                 onChange={(e) => {
-                                                  const file = e.target.files?.[0];
+                                                  const file =
+                                                    e.target.files?.[0];
                                                   if (file) {
-                                                    handleDefectPhotoUpload(item.id, defectIdx, file);
+                                                    handleDefectPhotoUpload(
+                                                      item.id,
+                                                      defectIdx,
+                                                      file,
+                                                    );
                                                   }
                                                 }}
                                               />
-                                              {formData.photoPreviews?.[`defect_${item.id}_${defectIdx}`] ? (
+                                              {formData.photoPreviews?.[
+                                                `defect_${item.id}_${defectIdx}`
+                                              ] ? (
                                                 <img
-                                                  src={formData.photoPreviews[`defect_${item.id}_${defectIdx}`]}
+                                                  src={
+                                                    formData.photoPreviews[
+                                                      `defect_${item.id}_${defectIdx}`
+                                                    ]
+                                                  }
                                                   className="w-full h-full object-cover"
                                                   alt="Evidência"
                                                 />
@@ -1710,15 +1755,26 @@ export default function ChecklistFlow() {
                                                 capture="environment"
                                                 className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                 onChange={(e) => {
-                                                  const file = e.target.files?.[0];
+                                                  const file =
+                                                    e.target.files?.[0];
                                                   if (file) {
-                                                    handleDefectPhotoUpload(item.id, customDefectIdx, file);
+                                                    handleDefectPhotoUpload(
+                                                      item.id,
+                                                      customDefectIdx,
+                                                      file,
+                                                    );
                                                   }
                                                 }}
                                               />
-                                              {formData.photoPreviews?.[`defect_${item.id}_${customDefectIdx}`] ? (
+                                              {formData.photoPreviews?.[
+                                                `defect_${item.id}_${customDefectIdx}`
+                                              ] ? (
                                                 <img
-                                                  src={formData.photoPreviews[`defect_${item.id}_${customDefectIdx}`]}
+                                                  src={
+                                                    formData.photoPreviews[
+                                                      `defect_${item.id}_${customDefectIdx}`
+                                                    ]
+                                                  }
                                                   className="w-full h-full object-cover"
                                                   alt="Defeito"
                                                 />
@@ -1900,15 +1956,26 @@ export default function ChecklistFlow() {
                                                   capture="environment"
                                                   className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                   onChange={(e) => {
-                                                    const file = e.target.files?.[0];
+                                                    const file =
+                                                      e.target.files?.[0];
                                                     if (file) {
-                                                      handleDefectPhotoUpload(item.id, defectIdx, file);
+                                                      handleDefectPhotoUpload(
+                                                        item.id,
+                                                        defectIdx,
+                                                        file,
+                                                      );
                                                     }
                                                   }}
                                                 />
-                                                {formData.photoPreviews?.[`defect_${item.id}_${defectIdx}`] ? (
+                                                {formData.photoPreviews?.[
+                                                  `defect_${item.id}_${defectIdx}`
+                                                ] ? (
                                                   <img
-                                                    src={formData.photoPreviews[`defect_${item.id}_${defectIdx}`]}
+                                                    src={
+                                                      formData.photoPreviews[
+                                                        `defect_${item.id}_${defectIdx}`
+                                                      ]
+                                                    }
                                                     className="w-full h-full object-cover"
                                                     alt="Evidência"
                                                   />
@@ -2056,15 +2123,26 @@ export default function ChecklistFlow() {
                                                   capture="environment"
                                                   className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                                   onChange={(e) => {
-                                                    const file = e.target.files?.[0];
+                                                    const file =
+                                                      e.target.files?.[0];
                                                     if (file) {
-                                                      handleDefectPhotoUpload(item.id, customDefectIdx, file);
+                                                      handleDefectPhotoUpload(
+                                                        item.id,
+                                                        customDefectIdx,
+                                                        file,
+                                                      );
                                                     }
                                                   }}
                                                 />
-                                                {formData.photoPreviews?.[`defect_${item.id}_${customDefectIdx}`] ? (
+                                                {formData.photoPreviews?.[
+                                                  `defect_${item.id}_${customDefectIdx}`
+                                                ] ? (
                                                   <img
-                                                    src={formData.photoPreviews[`defect_${item.id}_${customDefectIdx}`]}
+                                                    src={
+                                                      formData.photoPreviews[
+                                                        `defect_${item.id}_${customDefectIdx}`
+                                                      ]
+                                                    }
                                                     className="w-full h-full object-cover"
                                                     alt="Defeito"
                                                   />

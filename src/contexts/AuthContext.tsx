@@ -49,10 +49,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             .eq("id", profile.company_id)
             .single();
           if (companyData?.plan_name) {
-            hideAverages = companyData.plan_name.split("||").includes("hide_averages");
+            hideAverages = companyData.plan_name
+              .split("||")
+              .includes("hide_averages");
           }
         } catch (cErr) {
-          console.error("Erro ao carregar configurações de média da empresa:", cErr);
+          console.error(
+            "Erro ao carregar configurações de média da empresa:",
+            cErr,
+          );
         }
       }
 
@@ -100,8 +105,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (!mounted) return;
 
         if (error) {
-          console.error("Erro sessão:", error);
+          if (
+            error.message?.includes("Invalid Refresh Token") ||
+            error.message?.includes("Refresh Token Not Found")
+          ) {
+            console.warn("Sessão expirada. Redirecionando para login.");
+          } else {
+            console.error("Erro sessão:", error.message);
+          }
           await supabase.auth.signOut().catch(() => {});
+          localStorage.removeItem("supabase.auth.token");
           setUser(null);
           setLoading(false);
           return;
@@ -114,9 +127,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setUserSafe(session);
 
           // 🔥 carrega profile em background
-          fetchProfile(session.user.id, session.user.email || "").then((profile) => {
-            if (profile && mounted) setUserSafe(session, profile);
-          });
+          fetchProfile(session.user.id, session.user.email || "").then(
+            (profile) => {
+              if (profile && mounted) setUserSafe(session, profile);
+            },
+          );
 
           // 🔥 Roda rotina automática de fechamento em background
           supabase.rpc("run_auto_score_closing").then(({ error }) => {
@@ -128,9 +143,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         if (mounted) setLoading(false);
-      } catch (err) {
-        console.error("Erro crítico auth:", err);
+      } catch (err: any) {
+        if (err?.message?.includes("Refresh Token")) {
+          console.warn("Sessão expirada (critico).");
+        } else {
+          console.error("Erro crítico auth:", err);
+        }
         await supabase.auth.signOut().catch(() => {});
+        localStorage.removeItem("supabase.auth.token");
 
         if (mounted) {
           setUser(null);
@@ -149,9 +169,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (session) {
         setUserSafe(session);
 
-        fetchProfile(session.user.id, session.user.email || "").then((profile) => {
-          if (profile && mounted) setUserSafe(session, profile);
-        });
+        fetchProfile(session.user.id, session.user.email || "").then(
+          (profile) => {
+            if (profile && mounted) setUserSafe(session, profile);
+          },
+        );
       } else {
         if (mounted) setUser(null);
       }
@@ -213,9 +235,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const refreshProfile = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session) {
-        const profileInfo = await fetchProfile(session.user.id, session.user.email || "");
+        const profileInfo = await fetchProfile(
+          session.user.id,
+          session.user.email || "",
+        );
         if (profileInfo) {
           setUser({
             id: session.user.id,
@@ -228,8 +255,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           });
         }
       }
-    } catch (err) {
-      console.error("Erro ao atualizar profile:", err);
+    } catch (err: any) {
+      if (err?.message?.includes("Refresh Token")) {
+        console.warn("Refresh profile: Sessão expirada");
+      } else {
+        console.error("Erro ao atualizar profile:", err);
+      }
     }
   };
 
