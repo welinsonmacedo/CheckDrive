@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Wrench,
   Package,
+  Printer,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -34,6 +35,7 @@ export default function MaintenanceTab() {
   const [odometers, setOdometers] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = usePersistentState("maintenance_searchTerm", "");
   const [alertFilter, setAlertFilter] = usePersistentState<"all" | "driver" | "alert_km" | "alert_date" | "expired">("maintenance_alertFilter", "all");
+  const [trackingFilter, setTrackingFilter] = usePersistentState<"all" | "overdue" | "near" | "ok">("maintenance_trackingFilter", "all");
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = usePersistentState<"pending" | "waiting" | "resolved" | "tracking">("maintenance_activeTab", "pending");
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -769,8 +771,128 @@ export default function MaintenanceTab() {
     const titleMatch = (alert.title || "").toLowerCase().includes(searchTerm.toLowerCase());
     const vehicleMatch = (alert.vehicles?.plate || "").toLowerCase().includes(searchTerm.toLowerCase()) || (alert.vehicles?.model || "").toLowerCase().includes(searchTerm.toLowerCase());
     const driverMatch = (alert.profiles?.full_name || "").toLowerCase().includes(searchTerm.toLowerCase());
-    return titleMatch || vehicleMatch || driverMatch;
+    const matchesSearch = titleMatch || vehicleMatch || driverMatch;
+
+    if (!matchesSearch) return false;
+
+    if (trackingFilter === "all") return true;
+
+    const isKm = alert.trigger_type === "km";
+    let isOverdue = false;
+    let isNear = false;
+
+    if (isKm) {
+      const currentKm = odometers[alert.target_vehicle_id] || 0;
+      const targetKm = Number(alert.last_km || 0) + Number(alert.interval_km || 0);
+      const remainingKm = targetKm - currentKm;
+      isOverdue = remainingKm <= 0;
+      isNear = remainingKm > 0 && remainingKm <= (Number(alert.warning_km) || 1000);
+    } else if (alert.trigger_date) {
+      const targetDate = new Date(alert.trigger_date + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffTime = targetDate.getTime() - today.getTime();
+      const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      isOverdue = daysRemaining < 0;
+      isNear = daysRemaining >= 0 && daysRemaining <= (Number(alert.warning_days) || 7);
+    }
+
+    if (trackingFilter === "overdue") return isOverdue;
+    if (trackingFilter === "near") return isNear;
+    if (trackingFilter === "ok") return !isOverdue && !isNear;
+
+    return true;
   });
+
+  const handlePrintTracking = () => {
+    let printContent = `
+      <html>
+        <head>
+          <title>Acompanhamento de Manutenções</title>
+          <style>
+            body { font-family: sans-serif; padding: 20px; }
+            h1 { font-size: 18px; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+            th { background-color: #f5f5f5; }
+            .overdue { color: red; font-weight: bold; }
+            .near { color: darkorange; font-weight: bold; }
+            .ok { color: green; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h1>Acompanhamento de Manutenções - ${new Date().toLocaleDateString("pt-BR")}</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Alerta</th>
+                <th>Veículo</th>
+                <th>Tipo</th>
+                <th>Detalhes</th>
+              </tr>
+            </thead>
+            <tbody>
+    `;
+
+    filteredAlertsForTracking.forEach((alert) => {
+      const isKm = alert.trigger_type === "km";
+      let statusText = "Em dia";
+      let statusClass = "ok";
+      let details = "";
+
+      if (isKm) {
+        const currentKm = odometers[alert.target_vehicle_id] || 0;
+        const targetKm = Number(alert.last_km || 0) + Number(alert.interval_km || 0);
+        const remainingKm = targetKm - currentKm;
+        const isOverdue = remainingKm <= 0;
+        const isNear = remainingKm > 0 && remainingKm <= (Number(alert.warning_km) || 1000);
+
+        if (isOverdue) { statusText = "Atrasada"; statusClass = "overdue"; }
+        else if (isNear) { statusText = "Próxima"; statusClass = "near"; }
+
+        details = `Atual: ${currentKm} | Alvo: ${targetKm} | Faltam: ${remainingKm > 0 ? remainingKm : 0}`;
+      } else if (alert.trigger_date) {
+        const targetDate = new Date(alert.trigger_date + "T00:00:00");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const diffTime = targetDate.getTime() - today.getTime();
+        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const isOverdue = daysRemaining < 0;
+        const isNear = daysRemaining >= 0 && daysRemaining <= (Number(alert.warning_days) || 7);
+
+        if (isOverdue) { statusText = "Atrasada"; statusClass = "overdue"; }
+        else if (isNear) { statusText = "Próxima"; statusClass = "near"; }
+
+        details = `Alvo: ${targetDate.toLocaleDateString("pt-BR")} | Faltam: ${daysRemaining > 0 ? daysRemaining : 0} dias`;
+      }
+
+      printContent += `
+        <tr>
+          <td class="${statusClass}">${statusText}</td>
+          <td>${alert.title || "N/A"}</td>
+          <td>${alert.vehicles?.plate || "N/A"}</td>
+          <td>${isKm ? "Odomêtro" : "Data"}</td>
+          <td>${details}</td>
+        </tr>
+      `;
+    });
+
+    printContent += `
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -859,18 +981,39 @@ export default function MaintenanceTab() {
               </p>
             </div>
             
-            <div className="relative w-full md:w-80">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-              />
-              <input
-                type="text"
-                placeholder="Filtrar veículo, motorista ou item..."
-                className="h-9 w-full pl-9 pr-4 bg-app-bg rounded-xl text-xs border border-app-border focus:ring-1 focus:ring-primary focus:outline-none"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+            <div className="flex flex-col md:flex-row gap-3">
+              <select
+                value={trackingFilter}
+                onChange={(e) => setTrackingFilter(e.target.value as any)}
+                className="h-9 px-3 bg-app-bg rounded-xl text-xs font-bold text-text-main border border-app-border focus:ring-1 focus:ring-primary focus:outline-none"
+              >
+                <option value="all">Todos os Status</option>
+                <option value="overdue">Atrasadas / Vencidas</option>
+                <option value="near">Próximas do Vencimento</option>
+                <option value="ok">Em dia</option>
+              </select>
+
+              <button
+                onClick={handlePrintTracking}
+                className="h-9 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-2"
+              >
+                <Printer size={14} />
+                Imprimir
+              </button>
+
+              <div className="relative w-full md:w-64">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+                />
+                <input
+                  type="text"
+                  placeholder="Filtrar veículo, motorista ou item..."
+                  className="h-9 w-full pl-9 pr-4 bg-app-bg rounded-xl text-xs border border-app-border focus:ring-1 focus:ring-primary focus:outline-none"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 
