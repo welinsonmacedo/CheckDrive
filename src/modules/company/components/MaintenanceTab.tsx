@@ -406,25 +406,29 @@ export default function MaintenanceTab() {
       setResolveWarningDays(issue.auto_alerts.warning_days?.toString() || "");
       setResolveNextDate(issue.auto_alerts.trigger_date || "");
 
-      // Initial estimate of KM
-      const estimatedKm =
-        Number(issue.auto_alerts.last_km || 0) +
-        Number(issue.auto_alerts.interval_km || 0);
-      setResolveCurrentKm(estimatedKm.toString());
-
-      // Fetch real-time current odometer of the vehicle if available
-      if (issue.vehicle_id) {
-        supabase
-          .from("checklist_submissions")
-          .select("odometer")
-          .eq("vehicle_id", issue.vehicle_id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .then(({ data }) => {
-            if (data && data.length > 0 && data[0].odometer) {
-              setResolveCurrentKm(data[0].odometer.toString());
-            }
-          });
+      if (issue.status === "resolved") {
+        setResolveCurrentKm(issue.auto_alerts.last_km?.toString() || "");
+      } else {
+        // Initial estimate of KM
+        const estimatedKm =
+          Number(issue.auto_alerts.last_km || 0) +
+          Number(issue.auto_alerts.interval_km || 0);
+        setResolveCurrentKm(estimatedKm.toString());
+        
+        // Fetch real-time current odometer of the vehicle if available
+        if (issue.vehicle_id) {
+          supabase
+            .from("checklist_submissions")
+            .select("odometer")
+            .eq("vehicle_id", issue.vehicle_id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .then(({ data }) => {
+              if (data && data.length > 0 && data[0].odometer) {
+                setResolveCurrentKm(data[0].odometer.toString());
+              }
+            });
+        }
       }
     }
   }
@@ -515,8 +519,19 @@ export default function MaintenanceTab() {
       const calculatedValueSumStock = resolveStockItems.reduce((acc, item) => {
         return acc + Number(item.quantity || 1) * Number(item.unit_price || 0);
       }, 0);
+
+      let previousStockValue = 0;
+      if (resolvingIssueData?.status === "resolved") {
+        const oldNfs = resolvingIssueData.resolution_nfs || [];
+        const oldNfsValue = oldNfs.reduce((acc: number, nf: any) => {
+          const nfItems = Array.isArray(nf.items) ? nf.items : [];
+          return acc + nfItems.reduce((itemAcc: number, item: any) => itemAcc + Number(item.quantity || 1) * Number(item.unit_price || 0), 0);
+        }, 0);
+        previousStockValue = Math.max(0, Number(resolvingIssueData.resolution_value || 0) - oldNfsValue);
+      }
+
       const calculatedValueSum =
-        calculatedValueSumNfs + calculatedValueSumStock;
+        calculatedValueSumNfs + previousStockValue + calculatedValueSumStock;
 
       const validResolveNfs = resolveNfs.filter(
         (nf) =>
