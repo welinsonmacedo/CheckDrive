@@ -414,7 +414,7 @@ export default function MaintenanceTab() {
           Number(issue.auto_alerts.last_km || 0) +
           Number(issue.auto_alerts.interval_km || 0);
         setResolveCurrentKm(estimatedKm.toString());
-        
+
         // Fetch real-time current odometer of the vehicle if available
         if (issue.vehicle_id) {
           supabase
@@ -525,9 +525,20 @@ export default function MaintenanceTab() {
         const oldNfs = resolvingIssueData.resolution_nfs || [];
         const oldNfsValue = oldNfs.reduce((acc: number, nf: any) => {
           const nfItems = Array.isArray(nf.items) ? nf.items : [];
-          return acc + nfItems.reduce((itemAcc: number, item: any) => itemAcc + Number(item.quantity || 1) * Number(item.unit_price || 0), 0);
+          return (
+            acc +
+            nfItems.reduce(
+              (itemAcc: number, item: any) =>
+                itemAcc +
+                Number(item.quantity || 1) * Number(item.unit_price || 0),
+              0,
+            )
+          );
         }, 0);
-        previousStockValue = Math.max(0, Number(resolvingIssueData.resolution_value || 0) - oldNfsValue);
+        previousStockValue = Math.max(
+          0,
+          Number(resolvingIssueData.resolution_value || 0) - oldNfsValue,
+        );
       }
 
       const calculatedValueSum =
