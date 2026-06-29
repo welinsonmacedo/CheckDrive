@@ -109,25 +109,27 @@ export const runSilentAudit = async () => {
         const reason = `Penalidade automática: Falta de checklist ${missingItems.join(", ").replace(/, ([^,]*)$/, " e $1")}. Detalhes da Escala: Início ${formatDate(schedule.start_at)}, Fim ${formatDate(schedule.end_at)}. ${routeStr}. Veículo: ${vehicleStr}.`;
 
         // Check if this specific penalty was already applied
-        const { data: existingLog } = await supabase
+        const { data: existingLogs } = await supabase
           .from("audit_logs")
           .select("id")
           .eq("driver_id", schedule.driver_id)
           .eq("type", "penalty")
           .eq("reason", reason)
-          .maybeSingle();
+          .limit(1);
 
-        if (existingLog) {
+        if (existingLogs && existingLogs.length > 0) {
           // Already applied, skip
           continue;
         }
 
         // Apply penalty to performance
-        const { data: perf } = await supabase
+        const { data: perfList } = await supabase
           .from("driver_performance")
           .select("score")
           .eq("driver_id", schedule.driver_id)
-          .maybeSingle();
+          .limit(1);
+        
+        const perf = perfList && perfList.length > 0 ? perfList[0] : null;
 
         let baseScore = Number(appSettings.initial_value || 1000);
         if (profileInfo && profileInfo.calculation_type) {
