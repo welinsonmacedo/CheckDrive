@@ -106,7 +106,7 @@ export const runSilentAudit = async () => {
           ? schedule.vehicles.plate
           : "Sem veículo";
 
-        const reason = `Penalidade automática: Falta de checklist ${missingItems.join(", ").replace(/, ([^,]*)$/, " e $1")}. Detalhes da Escala: Início ${formatDate(schedule.start_at)}, Fim ${formatDate(schedule.end_at)}. ${routeStr}. Veículo: ${vehicleStr}.`;
+        const reason = `Penalidade automática: Falta de checklist ${missingItems.join(", ").replace(/, ([^,]*)$/, " e $1")}. Detalhes da Escala: Início ${formatDate(schedule.start_at)}, Fim ${formatDate(schedule.end_at)}. ${routeStr}. Veículo: ${vehicleStr}. [ID: ${schedule.id}]`;
 
         // Check if this specific penalty was already applied
         const { data: existingLogs } = await supabase
@@ -114,7 +114,7 @@ export const runSilentAudit = async () => {
           .select("id")
           .eq("driver_id", schedule.driver_id)
           .eq("type", "penalty")
-          .eq("reason", reason)
+          .ilike("reason", `%[ID: ${schedule.id}]%`)
           .limit(1);
 
         if (existingLogs && existingLogs.length > 0) {
@@ -128,7 +128,7 @@ export const runSilentAudit = async () => {
           .select("score")
           .eq("driver_id", schedule.driver_id)
           .limit(1);
-        
+
         const perf = perfList && perfList.length > 0 ? perfList[0] : null;
 
         let baseScore = Number(appSettings.initial_value || 1000);
