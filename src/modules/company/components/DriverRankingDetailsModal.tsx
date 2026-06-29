@@ -467,7 +467,7 @@ export default function DriverRankingDetailsModal({
                                       ? "Início Viagem"
                                       : sub.type === "end"
                                         ? "Fim Viagem"
-                                        : sub.type === "fuel"
+                                        : sub.type === "fuel" || sub.type === "Abastecimento"
                                           ? "Abastecimento"
                                           : sub.type === "yard"
                                             ? "Pátio"

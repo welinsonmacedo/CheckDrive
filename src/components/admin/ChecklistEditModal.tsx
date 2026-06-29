@@ -25,6 +25,13 @@ export default function ChecklistEditModal({
     const tzOffset = d.getTimezoneOffset() * 60000;
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
   });
+  const [manualLiters, setManualLiters] = useState(
+    submission.details?.manual_liters?.toString() || "",
+  );
+  const [pricePerLiter, setPricePerLiter] = useState(
+    submission.details?.price_per_liter?.toString() || "",
+  );
+  const [location, setLocation] = useState(submission.details?.location || "");
   const [itemValues, setItemValues] = useState<Record<string, string>>(
     submission.details?.itemValues || {},
   );
@@ -103,7 +110,10 @@ export default function ChecklistEditModal({
           const grouped: Record<string, any[]> = {};
           data.forEach((issue) => {
             // Remove suffix like " (1)" to find the base title
-            const baseTitle = issue.item_title.replace(/\s\(\d+\)$/, "").toLowerCase().trim();
+            const baseTitle = issue.item_title
+              .replace(/\s\(\d+\)$/, "")
+              .toLowerCase()
+              .trim();
             const itemId = titleToId[baseTitle];
 
             if (itemId) {
@@ -251,7 +261,9 @@ export default function ChecklistEditModal({
       }
 
       const oldDetails = submission.details || {};
-      const newCreatedAtISO = createdAt ? new Date(createdAt).toISOString() : submission.created_at;
+      const newCreatedAtISO = createdAt
+        ? new Date(createdAt).toISOString()
+        : submission.created_at;
       const editHistoryEntry = {
         edited_at: new Date().toISOString(),
         previous_odometer: submission.odometer,
@@ -273,6 +285,26 @@ export default function ChecklistEditModal({
         adjusted_date: newCreatedAtISO,
         edit_history: [...(oldDetails.edit_history || []), editHistoryEntry],
       };
+
+      if (submission.type === "fuel" || submission.type === "Abastecimento") {
+        if (manualLiters) {
+          updatedDetails.manual_liters = parseFloat(
+            manualLiters.replace(",", "."),
+          );
+        } else {
+          updatedDetails.manual_liters = null;
+        }
+
+        if (pricePerLiter) {
+          updatedDetails.price_per_liter = parseFloat(
+            pricePerLiter.replace(",", "."),
+          );
+        } else {
+          updatedDetails.price_per_liter = null;
+        }
+
+        updatedDetails.location = location;
+      }
 
       // Determine final status
       const hasDefects = Object.values(itemValues).includes("defect");
@@ -420,6 +452,50 @@ export default function ChecklistEditModal({
                 />
               </div>
             </div>
+
+            {(submission.type === "fuel" ||
+              submission.type === "Abastecimento") && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-app-border">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                    Litragem
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={manualLiters}
+                    onChange={(e) => setManualLiters(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-sm font-bold outline-none focus:border-primary transition-all"
+                    placeholder="Litragem..."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                    Preço por Litro
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={pricePerLiter}
+                    onChange={(e) => setPricePerLiter(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-sm font-bold outline-none focus:border-primary transition-all"
+                    placeholder="Preço..."
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                    Local/Posto
+                  </label>
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl border border-app-border bg-white text-sm font-bold outline-none focus:border-primary transition-all"
+                    placeholder="Local..."
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {Object.keys(titles).length > 0 && (
@@ -575,25 +651,35 @@ export default function ChecklistEditModal({
                                       onChange={(e) => {
                                         const file = e.target.files?.[0];
                                         if (file) {
-                                          imageCompression(file, { maxSizeMB: 0.5 }).catch(err => { console.warn("Compression failed, using original file", err); return file; }).then((compressed) => {
-                                            const newDefects = [
-                                              ...(defectData[itemId] || []),
-                                            ];
-                                            if (!newDefects[index])
+                                          imageCompression(file, {
+                                            maxSizeMB: 0.5,
+                                          })
+                                            .catch((err) => {
+                                              console.warn(
+                                                "Compression failed, using original file",
+                                                err,
+                                              );
+                                              return file;
+                                            })
+                                            .then((compressed) => {
+                                              const newDefects = [
+                                                ...(defectData[itemId] || []),
+                                              ];
+                                              if (!newDefects[index])
+                                                newDefects[index] = {
+                                                  description: "",
+                                                  photoUrl: null,
+                                                  photoFile: null,
+                                                };
                                               newDefects[index] = {
-                                                description: "",
-                                                photoUrl: null,
-                                                photoFile: null,
+                                                ...newDefects[index],
+                                                photoFile: compressed,
                                               };
-                                            newDefects[index] = {
-                                              ...newDefects[index],
-                                              photoFile: compressed,
-                                            };
-                                            setDefectData((prev) => ({
-                                              ...prev,
-                                              [itemId]: newDefects,
-                                            }));
-                                          });
+                                              setDefectData((prev) => ({
+                                                ...prev,
+                                                [itemId]: newDefects,
+                                              }));
+                                            });
                                         }
                                       }}
                                     />

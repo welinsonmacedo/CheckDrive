@@ -11,7 +11,7 @@ export default function Documentation() {
           </div>
           <h1 className="text-4xl font-extrabold text-zinc-900 tracking-tight">Documentação do Sistema</h1>
           <p className="text-zinc-500 max-w-2xl text-lg">
-            Guia de uso e funcionalidades do CheckDrive PWA. Aprenda como gerenciar a frota, escalas e motoristas.
+            Guia de uso e funcionalidades do CheckDrive. Aprenda como gerenciar a frota, escalas e motoristas.
           </p>
         </header>
 

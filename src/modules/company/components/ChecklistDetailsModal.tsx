@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useState, useEffect } from "react";
+import AddressFromCoordinates from "@/src/components/common/AddressFromCoordinates";
 
 interface ChecklistDetailsModalProps {
   selectedSub: any | null;
@@ -524,7 +525,8 @@ export default function ChecklistDetailsModal({
             </div>
 
             {/* Defeitos Encontrados ou Abastecimento */}
-            {selectedSub.type === "fuel" ? (
+            {selectedSub.type === "fuel" ||
+            selectedSub.type === "Abastecimento" ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-gray-100">
                   <div className="flex items-center gap-2">
@@ -535,12 +537,13 @@ export default function ChecklistDetailsModal({
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-4">
-                  {selectedSub.details?.itemTitles &&
-                  Object.keys(selectedSub.details.itemTitles).length > 0 ? (
-                    Object.keys(selectedSub.details.itemTitles).map(
+                  {selectedSub.details?.itemValues &&
+                  Object.keys(selectedSub.details.itemValues).length > 0 ? (
+                    Object.keys(selectedSub.details.itemValues).map(
                       (itemId) => {
-                        const title = selectedSub.details.itemTitles[itemId];
-                        const value = selectedSub.details.itemValues?.[itemId];
+                        const title =
+                          selectedSub.details.itemTitles?.[itemId] || "Item";
+                        const value = selectedSub.details.itemValues[itemId];
                         if (!value) return null;
                         const displayValue = value === "defect" ? "N/A" : value;
                         let oldDisplayValue = null;
@@ -587,9 +590,40 @@ export default function ChecklistDetailsModal({
                       },
                     )
                   ) : (
-                    <span className="text-[10px] text-text-muted italic p-4">
-                      Sem detalhes adicionais
-                    </span>
+                    <>
+                      {selectedSub.details?.manual_liters !== undefined && (
+                        <div className="flex flex-col bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 min-w-[120px]">
+                          <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">
+                            Litragem
+                          </span>
+                          <span className="text-lg font-bold text-primary mt-1">
+                            {selectedSub.details.manual_liters} L
+                          </span>
+                        </div>
+                      )}
+                      {(selectedSub.latitude && selectedSub.longitude) ||
+                      selectedSub.details?.location ? (
+                        <div className="flex flex-col bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 min-w-[120px] max-w-[300px]">
+                          <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">
+                            Posto/Local
+                          </span>
+                          <span className="text-lg font-bold text-primary mt-1 truncate">
+                            <AddressFromCoordinates
+                              latitude={selectedSub.latitude}
+                              longitude={selectedSub.longitude}
+                              fallback={selectedSub.details?.location}
+                            />
+                          </span>
+                        </div>
+                      ) : null}
+                      {!selectedSub.details?.manual_liters &&
+                        !selectedSub.details?.location &&
+                        !selectedSub.latitude && (
+                          <span className="text-[10px] text-text-muted italic p-4">
+                            Sem detalhes adicionais
+                          </span>
+                        )}
+                    </>
                   )}
                 </div>
               </div>
@@ -951,7 +985,8 @@ export default function ChecklistDetailsModal({
                     return (
                       <div key={pos} className="space-y-2">
                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center block">
-                          {selectedSub.type === "fuel"
+                          {selectedSub.type === "fuel" ||
+                          selectedSub.type === "Abastecimento"
                             ? pos === "front"
                               ? "Tacógrafo"
                               : pos === "receipt"

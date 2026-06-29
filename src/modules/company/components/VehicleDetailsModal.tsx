@@ -495,7 +495,7 @@ export default function VehicleDetailsModal({
                                         ? "bg-indigo-50 border-indigo-100/50 text-indigo-750"
                                         : sub.type === "end"
                                           ? "bg-purple-50 border-purple-100/50 text-purple-750"
-                                          : sub.type === "fuel"
+                                          : sub.type === "fuel" || sub.type === "Abastecimento"
                                             ? "bg-fuchsia-50 border-fuchsia-100/50 text-fuchsia-750"
                                             : "bg-slate-55 border-slate-150 text-slate-650"
                                     }`}
@@ -504,7 +504,7 @@ export default function VehicleDetailsModal({
                                       ? "Início de Viagem"
                                       : sub.type === "end"
                                         ? "Fim de Viagem"
-                                        : sub.type === "fuel"
+                                        : sub.type === "fuel" || sub.type === "Abastecimento"
                                           ? "Abastecimento"
                                           : sub.type === "yard"
                                             ? "Pátio"

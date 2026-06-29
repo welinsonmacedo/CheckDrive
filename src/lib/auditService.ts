@@ -30,12 +30,22 @@ export const runSilentAudit = async () => {
     const appSettings = settings || {};
 
     for (const schedule of expired) {
-      // If driver doesn't participate in ranking, just mark as audited and skip penalties
+      // Optimistic lock: try to claim this schedule for auditing
+      const { data: lockedSchedule, error: lockError } = await supabase
+        .from("schedules")
+        .update({ penalty_applied: true })
+        .eq("id", schedule.id)
+        .eq("penalty_applied", false)
+        .select("id")
+        .maybeSingle();
+
+      // If no row is returned, it was already processed by another client/process
+      if (lockError || !lockedSchedule) {
+        continue;
+      }
+
+      // If driver doesn't participate in ranking, we just skip penalties (already marked as audited)
       if (schedule.profiles?.participates_in_ranking === false) {
-        await supabase
-          .from("schedules")
-          .update({ penalty_applied: true })
-          .eq("id", schedule.id);
         continue;
       }
 
@@ -67,12 +77,48 @@ export const runSilentAudit = async () => {
         if (missingEnd && applyEnd) totalPenalty += pEnd;
         if (missingFuel && applyFuel) totalPenalty += pFuel;
 
-        // If total penalty is 0, we can just mark as audited and continue
+        // If total penalty is 0, we can just continue (already marked as audited)
         if (totalPenalty === 0) {
-          await supabase
-            .from("schedules")
-            .update({ penalty_applied: true })
-            .eq("id", schedule.id);
+          continue;
+        }
+
+        // Build detailed reason
+        const missingItems = [];
+        if (missingStart && applyStart) missingItems.push("inicial");
+        if (missingEnd && applyEnd) missingItems.push("final");
+        if (missingFuel && applyFuel) missingItems.push("abastecimento");
+
+        const formatDate = (dateString: string) => {
+          return (
+            new Date(dateString).toLocaleDateString() +
+            " " +
+            new Date(dateString).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          );
+        };
+
+        const routeStr = schedule.routes
+          ? `${schedule.routes.origin} ➔ ${schedule.routes.destination}`
+          : "Rota não definida";
+        const vehicleStr = schedule.vehicles
+          ? schedule.vehicles.plate
+          : "Sem veículo";
+
+        const reason = `Penalidade automática: Falta de checklist ${missingItems.join(", ").replace(/, ([^,]*)$/, " e $1")}. Detalhes da Escala: Início ${formatDate(schedule.start_at)}, Fim ${formatDate(schedule.end_at)}. ${routeStr}. Veículo: ${vehicleStr}.`;
+
+        // Check if this specific penalty was already applied
+        const { data: existingLog } = await supabase
+          .from("audit_logs")
+          .select("id")
+          .eq("driver_id", schedule.driver_id)
+          .eq("type", "penalty")
+          .eq("reason", reason)
+          .maybeSingle();
+
+        if (existingLog) {
+          // Already applied, skip
           continue;
         }
 
@@ -105,38 +151,6 @@ export const runSilentAudit = async () => {
           updated_at: new Date().toISOString(),
         });
 
-        // Mark schedule as penalized
-        await supabase
-          .from("schedules")
-          .update({ penalty_applied: true })
-          .eq("id", schedule.id);
-
-        // Build detailed reason
-        const missingItems = [];
-        if (missingStart && applyStart) missingItems.push("inicial");
-        if (missingEnd && applyEnd) missingItems.push("final");
-        if (missingFuel && applyFuel) missingItems.push("abastecimento");
-
-        const formatDate = (dateString: string) => {
-          return (
-            new Date(dateString).toLocaleDateString() +
-            " " +
-            new Date(dateString).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          );
-        };
-
-        const routeStr = schedule.routes
-          ? `${schedule.routes.origin} ➔ ${schedule.routes.destination}`
-          : "Rota não definida";
-        const vehicleStr = schedule.vehicles
-          ? schedule.vehicles.plate
-          : "Sem veículo";
-
-        const reason = `Penalidade automática: Falta de checklist ${missingItems.join(", ").replace(/, ([^,]*)$/, " e $1")}. Detalhes da Escala: Início ${formatDate(schedule.start_at)}, Fim ${formatDate(schedule.end_at)}. ${routeStr}. Veículo: ${vehicleStr}.`;
-
         // Log Audit
         await supabase.from("audit_logs").insert({
           driver_id: schedule.driver_id,
@@ -144,12 +158,6 @@ export const runSilentAudit = async () => {
           amount: totalPenalty,
           reason,
         });
-      } else {
-        // All checklists done, just mark as audited
-        await supabase
-          .from("schedules")
-          .update({ penalty_applied: true })
-          .eq("id", schedule.id);
       }
     }
   } catch (err) {

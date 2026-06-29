@@ -3,12 +3,6 @@ import {createRoot} from 'react-dom/client';
 import App from '@/src/App.tsx';
 import '@/src/index.css';
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  });
-}
-
 // Suppress specific Supabase GoTrue errors that can happen in the background and are generally benign
 window.addEventListener('unhandledrejection', (event) => {
   if (event.reason && typeof event.reason.message === 'string' && event.reason.message.includes('Refresh Token Not Found')) {

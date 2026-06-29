@@ -159,18 +159,18 @@ export default function AveragesTab() {
     let litersId = null;
     let hasAdjustment = false;
 
-    if (details?.itemTitles && details?.itemValues) {
+    if (details?.itemValues) {
       let entry = null;
 
       if (fuelLiterItems && fuelLiterItems.length > 0) {
         const literItemIds = fuelLiterItems.map(item => item.id);
-        const match = Object.entries(details.itemTitles).find(([id, _]: any) => literItemIds.includes(id));
-        if (match) {
-          entry = match;
+        const matchId = Object.keys(details.itemValues).find((id: string) => literItemIds.includes(id));
+        if (matchId) {
+          entry = [matchId, details.itemTitles?.[matchId] || 'Liters'];
         }
       }
 
-      if (!entry) {
+      if (!entry && details?.itemTitles) {
         entry = Object.entries(details.itemTitles).find(([_, title]: any) => {
           const t = title.toLowerCase();
           return t.includes('litro') || t.includes('quantidade') || t.includes('valor') || t.includes('lts') || 
@@ -182,6 +182,8 @@ export default function AveragesTab() {
         litersId = entry[0];
         liters = parseFloat(details.itemValues[entry[0]]?.toString().replace(',','.') || '0');
       }
+    } else if (details?.manual_liters !== undefined && details?.manual_liters !== null) {
+      liters = parseFloat(details.manual_liters.toString().replace(',','.'));
     }
 
     if (details?.adjusted_liters !== undefined && details?.adjusted_liters !== null && details.adjusted_liters !== '') {
@@ -216,7 +218,7 @@ export default function AveragesTab() {
 
       const subsequentFuels = submissions
         .filter(sub => {
-          const isFuel = sub.type === 'fuel';
+          const isFuel = sub.type === 'fuel' || sub.type === 'Abastecimento';
           const isVehicleMatch = sub.vehicles?.id === vId;
           if (!isFuel || !isVehicleMatch) return false;
           
@@ -596,7 +598,7 @@ export default function AveragesTab() {
 
   const sortedFuelSubs = useMemo(() => {
     return [...submissions]
-      .filter(sub => sub.type === 'fuel')
+      .filter(sub => sub.type === 'fuel' || sub.type === 'Abastecimento')
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [submissions]);
 

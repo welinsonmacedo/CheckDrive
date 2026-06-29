@@ -809,7 +809,7 @@ export default function ChecklistFlow() {
             .from("schedules")
             .update({ end_checklist_id: submission.id })
             .eq("id", scheduleId);
-        } else if (type === "fuel") {
+        } else if (type === "fuel" || type === "Abastecimento") {
           await supabase
             .from("schedules")
             .update({ fuel_checklist_id: submission.id })
@@ -817,7 +817,7 @@ export default function ChecklistFlow() {
         }
       }
 
-      if (type === "fuel") {
+      if (type === "fuel" || type === "Abastecimento") {
         try {
           const litersItem = options.items.find(
             (i: any) => i.input_type === "fuel_liters",
@@ -884,7 +884,7 @@ export default function ChecklistFlow() {
                 .from("checklist_submissions")
                 .select("id, odometer, created_at")
                 .eq("vehicle_id", vehicleId)
-                .eq("type", "fuel")
+                .in("type", ["fuel", "Abastecimento"])
                 .gte("created_at", schedule_start_date)
                 .lt("created_at", submission.created_at)
                 .order("created_at", { ascending: true });
@@ -902,7 +902,7 @@ export default function ChecklistFlow() {
                 .from("checklist_submissions")
                 .select("id, odometer, created_at")
                 .eq("vehicle_id", vehicleId)
-                .eq("type", "fuel")
+                .in("type", ["fuel", "Abastecimento"])
                 .lt("created_at", submission.created_at)
                 .order("created_at", { ascending: false })
                 .limit(1);
@@ -1218,7 +1218,7 @@ export default function ChecklistFlow() {
                   })}
                 </div>
 
-                {requireFuelReceiptPhoto && type === "fuel" && (
+                {requireFuelReceiptPhoto && (type === "fuel" || type === "Abastecimento") && (
                   <div className="space-y-1.5 pt-3 border-t border-app-border">
                     <label className="text-xs font-bold text-text-main">
                       Cupom de Abastecimento

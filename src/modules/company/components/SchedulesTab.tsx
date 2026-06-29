@@ -223,7 +223,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
               updateData.start_checklist_id = c.id;
             if (c.type === "end" && !updateData.end_checklist_id)
               updateData.end_checklist_id = c.id;
-            if (c.type === "fuel" && !updateData.fuel_checklist_id)
+            if ((c.type === "fuel" || c.type === "Abastecimento") && !updateData.fuel_checklist_id)
               updateData.fuel_checklist_id = c.id;
           }
 
@@ -327,7 +327,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
             )
               scheduleUpdateData.end_checklist_id = c.id;
             if (
-              c.type === "fuel" &&
+              (c.type === "fuel" || c.type === "Abastecimento") &&
               !schedule.fuel_checklist_id &&
               !scheduleUpdateData.fuel_checklist_id
             )

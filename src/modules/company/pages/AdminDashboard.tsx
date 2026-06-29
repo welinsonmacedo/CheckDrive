@@ -99,8 +99,8 @@ export default function AdminDashboard() {
         runSilentAudit();
         fetchNotificationCount();
       },
-      5 * 60 * 1000,
-    ); // 5 minutes
+      60 * 60 * 1000,
+    ); // 60 minutes
 
     return () => clearInterval(intervalId);
   }, [user?.company_id]);

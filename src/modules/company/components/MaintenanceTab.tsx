@@ -236,7 +236,7 @@ export default function MaintenanceTab() {
 
       const fuelSubmissionIds =
         submissionsData
-          ?.filter((s: any) => s.type === "fuel")
+          ?.filter((s: any) => s.type === "fuel" || s.type === "Abastecimento")
           .map((s: any) => s.id) || [];
 
       const filteredIssues = issuesData.filter(

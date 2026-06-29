@@ -838,7 +838,7 @@ export default function ChecklistFlow() {
       const photos = formData.photos;
       const previews = formData.photoPreviews || {};
 
-      if (type === "fuel") {
+      if (type === "fuel" || type === "Abastecimento") {
         const hasReceipt =
           photos.receipt ||
           (previews.receipt && previews.receipt.startsWith("data:image/"));
@@ -975,6 +975,10 @@ export default function ChecklistFlow() {
       for (const [itemId, subDefectsRaw] of Object.entries(
         formData.defects,
       ) as any) {
+        if (formData.itemValues[itemId] !== "defect") {
+          continue;
+        }
+
         const itemObj = options.items.find((i: any) => i.id === itemId);
         const isTrailerItem = itemObj?.is_trailer_item;
         const itemTitle = itemObj?.title || itemId;
@@ -1066,7 +1070,7 @@ export default function ChecklistFlow() {
             .from("schedules")
             .update({ end_checklist_id: submission.id })
             .eq("id", scheduleId);
-        } else if (type === "fuel") {
+        } else if (type === "fuel" || type === "Abastecimento") {
           await supabase
             .from("schedules")
             .update({ fuel_checklist_id: submission.id })
@@ -1074,7 +1078,7 @@ export default function ChecklistFlow() {
         }
       }
 
-      if (type === "fuel") {
+      if (type === "fuel" || type === "Abastecimento") {
         try {
           const litersItem = options.items.find(
             (i: any) => i.input_type === "fuel_liters",
@@ -1141,7 +1145,7 @@ export default function ChecklistFlow() {
                 .from("checklist_submissions")
                 .select("id, odometer, created_at")
                 .eq("vehicle_id", vehicleId)
-                .eq("type", "fuel")
+                .in("type", ["fuel", "Abastecimento"])
                 .gte("created_at", schedule_start_date)
                 .lt("created_at", submission.created_at)
                 .order("created_at", { ascending: true });
@@ -1159,7 +1163,7 @@ export default function ChecklistFlow() {
                 .from("checklist_submissions")
                 .select("id, odometer, created_at")
                 .eq("vehicle_id", vehicleId)
-                .eq("type", "fuel")
+                .in("type", ["fuel", "Abastecimento"])
                 .lt("created_at", submission.created_at)
                 .order("created_at", { ascending: false })
                 .limit(1);
@@ -1261,7 +1265,7 @@ export default function ChecklistFlow() {
             ? "Pátio"
             : type === "end"
               ? "Fim de Rota"
-              : type === "fuel"
+              : type === "fuel" || type === "Abastecimento"
                 ? "Abastecimento"
                 : "Início de Rota"}
         </h1>
@@ -1406,13 +1410,13 @@ export default function ChecklistFlow() {
             >
               <div className="bento-card p-5 bg-white border border-app-border rounded-2xl space-y-4 shadow-sm">
                 <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-2">
-                  {type === "fuel"
+                  {type === "fuel" || type === "Abastecimento"
                     ? "Fotos de Abastecimento"
                     : "Fotos Externas do Veículo"}
                 </h3>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {(type === "fuel"
+                  {(type === "fuel" || type === "Abastecimento"
                     ? [
                         { key: "odometer", label: "Odômetro/Tacógrafo" },
                         ...(requireFuelReceiptPhoto

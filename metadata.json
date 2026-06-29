@@ -1,6 +1,6 @@
 {
-  "name": "CheckDrive PWA",
-  "description": "Aplicativo PWA para gestão de checklist de veículos, com foco em motoristas e controle administrativo.",
+  "name": "CheckDrive",
+  "description": "Aplicativo para gestão de checklist de veículos, com foco em motoristas e controle administrativo.",
   "requestFramePermissions": ["camera", "geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

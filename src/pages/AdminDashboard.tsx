@@ -85,8 +85,8 @@ export default function AdminDashboard() {
       () => {
         runSilentAudit();
       },
-      5 * 60 * 1000,
-    ); // 5 minutes
+      60 * 60 * 1000,
+    ); // 60 minutes
 
     return () => clearInterval(intervalId);
   }, []);
@@ -104,17 +104,17 @@ export default function AdminDashboard() {
     if (!user) return;
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from("profiles")
         .update({ company_id: null })
-        .eq('id', user.id);
-        
+        .eq("id", user.id);
+
       if (error) throw error;
-      
+
       await refreshProfile();
-      navigate('/sa/dashboard');
+      navigate("/sa/dashboard");
     } catch (err) {
-      console.error('Erro ao sair do painel da empresa:', err);
-      alert('Erro ao sair do painel da empresa.');
+      console.error("Erro ao sair do painel da empresa:", err);
+      alert("Erro ao sair do painel da empresa.");
     }
   };
 
@@ -201,7 +201,13 @@ export default function AdminDashboard() {
     );
   };
 
-  const navItems: Array<{ id: string; icon: any; label: string; color: string; disabled?: boolean }> = [
+  const navItems: Array<{
+    id: string;
+    icon: any;
+    label: string;
+    color: string;
+    disabled?: boolean;
+  }> = [
     {
       id: "overview",
       icon: LayoutDashboard,
@@ -506,7 +512,9 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Main Content */}
-      <div className={`dashboard-scroll-area flex-1 flex flex-col h-full print:h-auto print:overflow-visible ${activeTab === 'notifications' ? 'overflow-hidden' : 'overflow-y-auto'} ${selectedSub ? 'print:hidden' : ''}`}>
+      <div
+        className={`dashboard-scroll-area flex-1 flex flex-col h-full print:h-auto print:overflow-visible ${activeTab === "notifications" ? "overflow-hidden" : "overflow-y-auto"} ${selectedSub ? "print:hidden" : ""}`}
+      >
         {/* Top Bar */}
         <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-8 py-4 flex items-center justify-between print:hidden">
           <div>
@@ -526,7 +534,9 @@ export default function AdminDashboard() {
         </div>
 
         {/* Content Area */}
-        <div className={`flex-1 p-8 ${activeTab === 'notifications' ? 'flex flex-col overflow-hidden h-full' : 'space-y-6'}`}>
+        <div
+          className={`flex-1 p-8 ${activeTab === "notifications" ? "flex flex-col overflow-hidden h-full" : "space-y-6"}`}
+        >
           {/* Vehicles with Pending Section */}
 
           {/* Tab Content */}
@@ -537,7 +547,7 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className={`print:h-auto print:overflow-visible ${activeTab === 'notifications' ? 'flex-1 flex flex-col overflow-hidden h-full' : ''}`}
+              className={`print:h-auto print:overflow-visible ${activeTab === "notifications" ? "flex-1 flex flex-col overflow-hidden h-full" : ""}`}
             >
               {activeTab === "overview" && (
                 <OverviewTab
@@ -582,7 +592,9 @@ export default function AdminDashboard() {
               {activeTab === "audit" && user?.role === "admin" && (
                 <AuditTab appSettings={appSettings} />
               )}
-              {activeTab === "feedback" && user?.role === "admin" && <FeedbackTab />}
+              {activeTab === "feedback" && user?.role === "admin" && (
+                <FeedbackTab />
+              )}
               {activeTab === "database" && user?.role === "admin" && (
                 <DatabaseTab />
               )}
