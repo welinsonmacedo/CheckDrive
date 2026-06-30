@@ -97,14 +97,42 @@ export default function InfractionsTab() {
 
       if (driversData) setDrivers(driversData);
 
-      // Fetch vehicles
-      const { data: vehiclesData } = await supabase
-        .from("vehicles")
-        .select("id, plate, model")
-        .eq("active", true)
-        .order("plate");
+      // Fetch vehicles and trailers
+      const [vehiclesRes, trailersRes] = await Promise.all([
+        supabase
+          .from("vehicles")
+          .select("id, plate, model")
+          .eq("active", true)
+          .order("plate"),
+        supabase
+          .from("trailers")
+          .select("id, plate")
+          .eq("active", true)
+          .order("plate"),
+      ]);
 
-      if (vehiclesData) setVehicles(vehiclesData);
+      let allVehicles = [];
+      if (vehiclesRes.data) {
+        allVehicles = [
+          ...allVehicles,
+          ...vehiclesRes.data.map((v) => ({ ...v, type: "vehicle" })),
+        ];
+      }
+      if (trailersRes.data) {
+        allVehicles = [
+          ...allVehicles,
+          ...trailersRes.data.map((t) => ({
+            ...t,
+            model: "Reboque",
+            type: "trailer",
+          })),
+        ];
+      }
+
+      // Sort alphabetically by plate
+      allVehicles.sort((a, b) => a.plate.localeCompare(b.plate));
+
+      setVehicles(allVehicles);
     } catch (err) {
       console.error(err);
     } finally {
@@ -165,25 +193,35 @@ export default function InfractionsTab() {
     setSaving(true);
 
     try {
-      const { profiles, id, ...rest } = formData;
       const payload = {
-        ...rest,
         company_id: user?.company_id,
+        driver_id: formData.driver_id,
         amount: Number(formData.amount),
         discounted_amount: formData.discounted_amount
           ? Number(formData.discounted_amount)
           : null,
         infraction_date: new Date(formData.infraction_date).toISOString(),
+        infraction_code: formData.infraction_code,
+        description: formData.description,
+        notice_number: formData.notice_number || null,
+        license_plate: formData.license_plate || null,
+        address: formData.address || null,
+        installments: formData.installments || [],
+        attachment_url: formData.attachment_url || null,
         created_by: user?.id,
       };
 
       if (formData.id) {
-        await supabase
+        const { error } = await supabase
           .from("traffic_infractions")
           .update(payload)
           .eq("id", formData.id);
+        if (error) throw error;
       } else {
-        await supabase.from("traffic_infractions").insert(payload);
+        const { error } = await supabase
+          .from("traffic_infractions")
+          .insert(payload);
+        if (error) throw error;
       }
 
       fetchData();
@@ -235,8 +273,10 @@ export default function InfractionsTab() {
             Atualização de Banco de Dados Necessária
           </h3>
           <p className="text-sm text-zinc-500 mb-6">
-            Para utilizar os novos recursos (Placa do Veículo e Desconto), é necessário atualizar as tabelas de infrações no banco de dados.
-            Por favor, contate o administrador do sistema ou atualize o banco (no Supabase) e tente novamente.
+            Para utilizar os novos recursos (Placa do Veículo e Desconto), é
+            necessário atualizar as tabelas de infrações no banco de dados. Por
+            favor, contate o administrador do sistema ou atualize o banco (no
+            Supabase) e tente novamente.
           </p>
           <button
             onClick={() => window.location.reload()}
