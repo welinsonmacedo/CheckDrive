@@ -19,6 +19,7 @@ import {
   BarChart3,
   PieChart,
   TrendingUp,
+  Printer,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -33,6 +34,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import InfractionPrintModal from "./InfractionPrintModal";
 
 const INFRACTION_CODES: Record<string, string> = {
   "7455": "Transitar em velocidade superior à máxima permitida em até 20%",
@@ -242,6 +244,7 @@ export default function InfractionsTab() {
   const [setupRequired, setSetupRequired] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"list" | "dashboard">("list");
+  const [printInfraction, setPrintInfraction] = useState<any>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<any>(null);
@@ -689,6 +692,13 @@ export default function InfractionsTab() {
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
+                              onClick={() => setPrintInfraction(inf)}
+                              className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                              title="Imprimir Termo"
+                            >
+                              <Printer size={18} />
+                            </button>
+                            <button
                               onClick={() => handleOpenModal(inf)}
                               className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               title="Editar"
@@ -1061,6 +1071,11 @@ export default function InfractionsTab() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <InfractionPrintModal
+        infraction={printInfraction}
+        onClose={() => setPrintInfraction(null)}
+      />
     </div>
   );
 }
