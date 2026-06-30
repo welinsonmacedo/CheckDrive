@@ -48,12 +48,12 @@ export default function InfractionPrintModal({
 
   const modalContent = (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm print:p-0 print:bg-white print:backdrop-blur-none">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm print:p-0 print:bg-white print:backdrop-blur-none print:static print:block print:inset-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="bg-white rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] print:max-h-none print:shadow-none print:w-full print:max-w-none print:rounded-none print:overflow-visible"
+          className="bg-white rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] print:max-h-none print:shadow-none print:w-full print:max-w-none print:rounded-none print:overflow-visible print:block"
         >
           {/* Header - Screen Only */}
           <div className="p-6 border-b border-zinc-200 flex justify-between items-center bg-zinc-50/50 print:hidden">
@@ -180,7 +180,7 @@ export default function InfractionPrintModal({
 
               <div className="border-b border-black"></div>
 
-              <div className="space-y-4 pt-4">
+              <div className="space-y-4 pt-4 print:break-inside-avoid">
                 <h3 className="font-bold text-base uppercase">
                   3. AUTORIZAÇÃO DE DESCONTO EM FOLHA
                 </h3>
@@ -198,7 +198,7 @@ export default function InfractionPrintModal({
 
               <div className="border-b border-black"></div>
 
-              <div className="space-y-4 pt-4">
+              <div className="space-y-4 pt-4 print:break-inside-avoid">
                 <h3 className="font-bold text-base uppercase">
                   4. ASSINATURA (EMPRESA)
                 </h3>
@@ -220,7 +220,7 @@ export default function InfractionPrintModal({
 
               <div className="border-b-2 border-black border-dashed my-8"></div>
 
-              <div className="space-y-6 pt-2 pb-12 bg-zinc-50 print:bg-white p-6 rounded-lg border-2 border-black">
+              <div className="space-y-6 pt-2 pb-12 bg-zinc-50 print:bg-white p-6 rounded-lg border-2 border-black print:break-inside-avoid">
                 <h3 className="font-bold text-lg text-center uppercase tracking-widest border-b border-black pb-4">
                   TERMO FINANCEIRO RH
                 </h3>

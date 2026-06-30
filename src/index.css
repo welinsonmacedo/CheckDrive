@@ -37,11 +37,6 @@
     background: white;
   }
   body.modal-open-for-print #root {
-    overflow: visible !important;
-    height: auto !important;
-  }
-  /* When a modal is open for print, hide the main dashboard content to prevent blank pages */
-  body.modal-open-for-print .dashboard-scroll-area {
     display: none !important;
   }
 }
