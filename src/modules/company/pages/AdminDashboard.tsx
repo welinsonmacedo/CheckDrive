@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   BookOpen,
   AlertTriangle,
+  ShieldAlert,
   ClipboardCheck,
   X,
   Fuel,
@@ -53,6 +54,7 @@ import DatabaseTab from "@/src/modules/company/components/DatabaseTab";
 import ReportsTab from "@/src/modules/company/components/ReportsTab";
 import AveragesTab from "@/src/modules/company/components/AveragesTab";
 import AlertsTab from "@/src/modules/company/components/AlertsTab";
+import InfractionsTab from "@/src/modules/company/components/InfractionsTab";
 import FeedbackTab from "@/src/modules/company/components/FeedbackTab";
 import NotificationsTab from "@/src/modules/company/components/NotificationsTab";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -323,6 +325,12 @@ export default function AdminDashboard() {
       icon: AlertTriangle,
       label: "Pendências",
       color: "from-red-500 to-orange-500",
+    },
+    {
+      id: "infractions",
+      icon: ShieldAlert,
+      label: "Infrações",
+      color: "from-red-600 to-rose-600",
     },
     {
       id: "inventory",
@@ -699,6 +707,7 @@ export default function AdminDashboard() {
                 />
               )}
               {activeTab === "maintenance" && <MaintenanceTab />}
+              {activeTab === "infractions" && <InfractionsTab />}
               {activeTab === "inventory" && <InventoryTab />}
               {activeTab === "abastecimentos" && <FuelTab />}
               {activeTab === "averages" && <AveragesTab />}
