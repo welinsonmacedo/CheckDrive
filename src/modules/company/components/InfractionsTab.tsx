@@ -224,11 +224,14 @@ export default function InfractionsTab() {
 
 ALTER TABLE public.traffic_infractions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Allow read for company users" ON public.traffic_infractions;
 CREATE POLICY "Allow read for company users" ON public.traffic_infractions
   FOR SELECT USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid()));
 
+DROP POLICY IF EXISTS "Allow all for company admins" ON public.traffic_infractions;
 CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
-  FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+  FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
+  WITH CHECK (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
 -- Se a tabela já existir e faltar a coluna installments:
 -- ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS installments JSONB DEFAULT '[]'::jsonb;
@@ -425,7 +428,7 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
             >
               <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-zinc-100 p-6 flex justify-between items-center z-10">
                 <h3 className="text-xl font-bold text-zinc-800 flex items-center gap-2">
