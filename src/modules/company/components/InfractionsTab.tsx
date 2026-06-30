@@ -14,8 +14,25 @@ import {
   UploadCloud,
   X,
   Save,
+  LayoutDashboard,
+  List,
+  BarChart3,
+  PieChart,
+  TrendingUp,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
 const INFRACTION_CODES: Record<string, string> = {
   "7455": "Transitar em velocidade superior à máxima permitida em até 20%",
@@ -32,6 +49,190 @@ const INFRACTION_CODES: Record<string, string> = {
   "5967": "Ultrapassar pela contramão linha de divisão de fluxos opostos",
 };
 
+const DashboardView = ({ infractions }: { infractions: any[] }) => {
+  const totalAmount = infractions.reduce(
+    (acc, curr) => acc + (Number(curr.amount) || 0),
+    0,
+  );
+  const totalDiscounted = infractions.reduce(
+    (acc, curr) => acc + (Number(curr.discounted_amount) || 0),
+    0,
+  );
+
+  const driversMap = new Map();
+  infractions.forEach((inf) => {
+    const driverName = inf.profiles?.full_name || "Desconhecido";
+    const current = driversMap.get(driverName) || { count: 0, amount: 0 };
+    driversMap.set(driverName, {
+      count: current.count + 1,
+      amount: current.amount + (Number(inf.amount) || 0),
+    });
+  });
+
+  const driversData = Array.from(driversMap.entries())
+    .map(([name, data]) => ({ name, ...data }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  const codeMap = new Map();
+  infractions.forEach((inf) => {
+    const code = inf.infraction_code;
+    const current = codeMap.get(code) || 0;
+    codeMap.set(code, current + 1);
+  });
+
+  const codeData = Array.from(codeMap.entries())
+    .map(([code, count]) => ({ name: code, value: count }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
+
+  const COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6"];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
+          <div className="flex items-center gap-3 text-zinc-500 mb-2">
+            <Receipt size={20} />
+            <h3 className="font-medium text-sm">Total em Multas</h3>
+          </div>
+          <div className="text-2xl font-bold text-zinc-800">
+            {new Intl.NumberFormat("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }).format(totalAmount)}
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
+          <div className="flex items-center gap-3 text-zinc-500 mb-2">
+            <TrendingUp size={20} />
+            <h3 className="font-medium text-sm">Total Descontado</h3>
+          </div>
+          <div className="text-2xl font-bold text-emerald-600">
+            {new Intl.NumberFormat("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }).format(totalDiscounted)}
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
+          <div className="flex items-center gap-3 text-zinc-500 mb-2">
+            <ShieldAlert size={20} />
+            <h3 className="font-medium text-sm">Total de Infrações</h3>
+          </div>
+          <div className="text-2xl font-bold text-red-600">
+            {infractions.length}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
+          <h3 className="font-bold text-zinc-800 mb-6">
+            Top Motoristas com Mais Infrações
+          </h3>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={driversData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="#e4e4e7"
+                />
+                <XAxis
+                  dataKey="name"
+                  stroke="#a1a1aa"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  stroke="#a1a1aa"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: "#f4f4f5" }}
+                  contentStyle={{
+                    borderRadius: "12px",
+                    border: "none",
+                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                  }}
+                />
+                <Bar
+                  dataKey="count"
+                  fill="#ef4444"
+                  radius={[4, 4, 0, 0]}
+                  barSize={40}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
+          <h3 className="font-bold text-zinc-800 mb-6">
+            Tipos de Infrações Mais Comuns
+          </h3>
+          <div className="h-72 flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <RechartsPieChart>
+                <Pie
+                  data={codeData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {codeData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "12px",
+                    border: "none",
+                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                  }}
+                />
+              </RechartsPieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-2">
+            {codeData.map((entry, index) => (
+              <div
+                key={entry.name}
+                className="flex items-center gap-2 text-xs text-zinc-600"
+              >
+                <div
+                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                ></div>
+                <span className="font-bold flex-shrink-0">{entry.name}:</span>
+                <span
+                  className="truncate"
+                  title={INFRACTION_CODES[entry.name] || "Outra infração"}
+                >
+                  {INFRACTION_CODES[entry.name] || "Outra infração"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function InfractionsTab() {
   const { user } = useAuth();
   const [infractions, setInfractions] = useState<any[]>([]);
@@ -40,6 +241,7 @@ export default function InfractionsTab() {
   const [loading, setLoading] = useState(true);
   const [setupRequired, setSetupRequired] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState<"list" | "dashboard">("list");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<any>(null);
@@ -311,172 +513,206 @@ export default function InfractionsTab() {
         </button>
       </div>
 
-      {/* Search & Filters */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-zinc-200">
-        <div className="relative max-w-md">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-            size={20}
-          />
-          <input
-            type="text"
-            placeholder="Buscar por motorista, código ou auto..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-          />
-        </div>
+      <div className="flex border-b border-zinc-200">
+        <button
+          onClick={() => setActiveTab("list")}
+          className={`px-4 py-3 font-medium text-sm flex items-center gap-2 border-b-2 transition-colors ${
+            activeTab === "list"
+              ? "border-red-500 text-red-600"
+              : "border-transparent text-zinc-500 hover:text-zinc-700"
+          }`}
+        >
+          <List size={18} />
+          Lista de Infrações
+        </button>
+        <button
+          onClick={() => setActiveTab("dashboard")}
+          className={`px-4 py-3 font-medium text-sm flex items-center gap-2 border-b-2 transition-colors ${
+            activeTab === "dashboard"
+              ? "border-red-500 text-red-600"
+              : "border-transparent text-zinc-500 hover:text-zinc-700"
+          }`}
+        >
+          <LayoutDashboard size={18} />
+          Dashboard
+        </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 text-xs uppercase tracking-wider">
-                <th className="px-6 py-4 font-medium">Motorista</th>
-                <th className="px-6 py-4 font-medium">Data / Local</th>
-                <th className="px-6 py-4 font-medium">Infração</th>
-                <th className="px-6 py-4 font-medium">Valores</th>
-                <th className="px-6 py-4 font-medium text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200">
-              {filteredInfractions.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-8 text-center text-zinc-500"
-                  >
-                    Nenhuma infração encontrada.
-                  </td>
-                </tr>
-              ) : (
-                filteredInfractions.map((inf) => (
-                  <tr
-                    key={inf.id}
-                    className="hover:bg-zinc-50 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold">
-                          {inf.profiles?.full_name?.charAt(0)}
-                        </div>
-                        <div className="font-medium text-zinc-900">
-                          {inf.profiles?.full_name}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-zinc-900">
-                        {new Date(inf.infraction_date).toLocaleDateString(
-                          "pt-BR",
-                        )}{" "}
-                        às{" "}
-                        {new Date(inf.infraction_date).toLocaleTimeString(
-                          "pt-BR",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          },
-                        )}
-                      </div>
-                      <div className="text-xs text-zinc-500 flex items-center gap-1 mt-1">
-                        <MapPin size={12} />
-                        {inf.address || "Não informado"}
-                      </div>
-                      {inf.license_plate && (
-                        <div className="text-xs font-mono font-medium text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded inline-block mt-1">
-                          Placa: {inf.license_plate}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-zinc-900">
-                        Cód: {inf.infraction_code}
-                      </div>
-                      <div
-                        className="text-xs text-zinc-500 line-clamp-2 max-w-xs mt-1"
-                        title={inf.description}
-                      >
-                        {inf.description}
-                      </div>
-                      {inf.notice_number && (
-                        <div className="text-xs font-mono bg-zinc-100 text-zinc-600 px-2 py-1 rounded inline-block mt-2 border border-zinc-200">
-                          Auto: {inf.notice_number}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-zinc-900">
-                        {new Intl.NumberFormat("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        }).format(inf.amount)}
-                      </div>
-                      {inf.discounted_amount != null && (
-                        <div className="text-xs font-semibold text-emerald-600 mt-1">
-                          Desconto:{" "}
-                          {new Intl.NumberFormat("pt-BR", {
-                            style: "currency",
-                            currency: "BRL",
-                          }).format(inf.discounted_amount)}
-                        </div>
-                      )}
-                      {inf.installments && inf.installments.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
-                            Parcelas / Descontos:
-                          </div>
-                          {inf.installments.map((inst: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className="text-xs text-zinc-500 flex justify-between bg-zinc-50 px-2 py-1 rounded"
-                            >
-                              <span>
-                                {inst.date
-                                  ? new Date(inst.date).toLocaleDateString(
-                                      "pt-BR",
-                                      { timeZone: "UTC" },
-                                    )
-                                  : "Sem data"}
-                              </span>
-                              <span className="font-medium text-zinc-700">
-                                {new Intl.NumberFormat("pt-BR", {
-                                  style: "currency",
-                                  currency: "BRL",
-                                }).format(Number(inst.amount) || 0)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenModal(inf)}
-                          className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Editar"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(inf.id)}
-                          className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
+      {activeTab === "dashboard" ? (
+        <DashboardView infractions={infractions} />
+      ) : (
+        <>
+          {/* Search & Filters */}
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-zinc-200">
+            <div className="relative max-w-md">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                size={20}
+              />
+              <input
+                type="text"
+                placeholder="Buscar por motorista, código ou auto..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 text-xs uppercase tracking-wider">
+                    <th className="px-6 py-4 font-medium">Motorista</th>
+                    <th className="px-6 py-4 font-medium">Data / Local</th>
+                    <th className="px-6 py-4 font-medium">Infração</th>
+                    <th className="px-6 py-4 font-medium">Valores</th>
+                    <th className="px-6 py-4 font-medium text-right">Ações</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {filteredInfractions.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-6 py-8 text-center text-zinc-500"
+                      >
+                        Nenhuma infração encontrada.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredInfractions.map((inf) => (
+                      <tr
+                        key={inf.id}
+                        className="hover:bg-zinc-50 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold">
+                              {inf.profiles?.full_name?.charAt(0)}
+                            </div>
+                            <div className="font-medium text-zinc-900">
+                              {inf.profiles?.full_name}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-zinc-900">
+                            {new Date(inf.infraction_date).toLocaleDateString(
+                              "pt-BR",
+                            )}{" "}
+                            às{" "}
+                            {new Date(inf.infraction_date).toLocaleTimeString(
+                              "pt-BR",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </div>
+                          <div className="text-xs text-zinc-500 flex items-center gap-1 mt-1">
+                            <MapPin size={12} />
+                            {inf.address || "Não informado"}
+                          </div>
+                          {inf.license_plate && (
+                            <div className="text-xs font-mono font-medium text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded inline-block mt-1">
+                              Placa: {inf.license_plate}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-bold text-zinc-900">
+                            Cód: {inf.infraction_code}
+                          </div>
+                          <div
+                            className="text-xs text-zinc-500 line-clamp-2 max-w-xs mt-1"
+                            title={inf.description}
+                          >
+                            {inf.description}
+                          </div>
+                          {inf.notice_number && (
+                            <div className="text-xs font-mono bg-zinc-100 text-zinc-600 px-2 py-1 rounded inline-block mt-2 border border-zinc-200">
+                              Auto: {inf.notice_number}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-bold text-zinc-900">
+                            {new Intl.NumberFormat("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            }).format(inf.amount)}
+                          </div>
+                          {inf.discounted_amount != null && (
+                            <div className="text-xs font-semibold text-emerald-600 mt-1">
+                              Desconto:{" "}
+                              {new Intl.NumberFormat("pt-BR", {
+                                style: "currency",
+                                currency: "BRL",
+                              }).format(inf.discounted_amount)}
+                            </div>
+                          )}
+                          {inf.installments && inf.installments.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
+                                Parcelas / Descontos:
+                              </div>
+                              {inf.installments.map(
+                                (inst: any, idx: number) => (
+                                  <div
+                                    key={idx}
+                                    className="text-xs text-zinc-500 flex justify-between bg-zinc-50 px-2 py-1 rounded"
+                                  >
+                                    <span>
+                                      {inst.date
+                                        ? new Date(
+                                            inst.date,
+                                          ).toLocaleDateString("pt-BR", {
+                                            timeZone: "UTC",
+                                          })
+                                        : "Sem data"}
+                                    </span>
+                                    <span className="font-medium text-zinc-700">
+                                      {new Intl.NumberFormat("pt-BR", {
+                                        style: "currency",
+                                        currency: "BRL",
+                                      }).format(Number(inst.amount) || 0)}
+                                    </span>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleOpenModal(inf)}
+                              className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(inf.id)}
+                              className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Excluir"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Modal Lançar Infração */}
       <AnimatePresence>
