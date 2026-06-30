@@ -109,6 +109,7 @@ export default function InfractionsTab() {
         notice_number: "",
         address: "",
         installments: [{ date: "", amount: "" }],
+        discounted_amount: "",
         attachment_url: "",
       });
     }
@@ -140,6 +141,9 @@ export default function InfractionsTab() {
         ...formData,
         company_id: user?.company_id,
         amount: Number(formData.amount),
+        discounted_amount: formData.discounted_amount
+          ? Number(formData.discounted_amount)
+          : null,
         created_by: user?.id,
       };
 
@@ -211,6 +215,7 @@ export default function InfractionsTab() {
   driver_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   infraction_date TIMESTAMP WITH TIME ZONE NOT NULL,
   amount NUMERIC NOT NULL,
+  discounted_amount NUMERIC,
   infraction_code TEXT NOT NULL,
   description TEXT NOT NULL,
   notice_number TEXT,
@@ -233,8 +238,9 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
   FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
   WITH CHECK (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
--- Se a tabela já existir e faltar a coluna installments:
+-- Se a tabela já existir e faltar a coluna installments ou discounted_amount:
 -- ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS installments JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS discounted_amount NUMERIC;
 `}</pre>
           </div>
           <button
@@ -354,12 +360,21 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-red-600">
+                      <div className="text-sm font-bold text-zinc-900">
                         {new Intl.NumberFormat("pt-BR", {
                           style: "currency",
                           currency: "BRL",
                         }).format(inf.amount)}
                       </div>
+                      {inf.discounted_amount != null && (
+                        <div className="text-xs font-semibold text-emerald-600 mt-1">
+                          Desconto:{" "}
+                          {new Intl.NumberFormat("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                          }).format(inf.discounted_amount)}
+                        </div>
+                      )}
                       {inf.installments && inf.installments.length > 0 && (
                         <div className="mt-2 space-y-1">
                           <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">
@@ -467,7 +482,7 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
                     </select>
                   </div>
 
-                  {/* Código e Descrição */}
+                  {/* Código e Auto */}
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 mb-1">
                       Código da Infração <span className="text-red-500">*</span>
@@ -481,27 +496,6 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
                       className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
                   </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 mb-1">
-                      Descrição da Infração{" "}
-                      <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      required
-                      rows={2}
-                      value={formData.description}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          description: e.target.value,
-                        })
-                      }
-                      placeholder="Descrição preenchida automaticamente pelo código..."
-                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    />
-                  </div>
-
-                  {/* Número do Auto e Valor */}
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 mb-1">
                       Nº do Auto de Infração
@@ -524,24 +518,29 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
                       />
                     </div>
                   </div>
-                  <div>
+
+                  {/* Descrição */}
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-zinc-700 mb-1">
-                      Valor da Multa (R$){" "}
+                      Descrição da Infração{" "}
                       <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="number"
-                      step="0.01"
+                    <textarea
                       required
-                      value={formData.amount}
+                      rows={2}
+                      value={formData.description}
                       onChange={(e) =>
-                        setFormData({ ...formData, amount: e.target.value })
+                        setFormData({
+                          ...formData,
+                          description: e.target.value,
+                        })
                       }
+                      placeholder="Descrição preenchida automaticamente pelo código..."
                       className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
                   </div>
 
-                  {/* Datas */}
+                  {/* Data da infração e Valores */}
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 mb-1">
                       Data e Hora da Infração{" "}
@@ -568,6 +567,44 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
                       className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
                   </div>
+                  <div>
+                    {/* Placeholder para balancear o grid, se quisermos manter data e valores próximos, ou colocar valor aqui */}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">
+                      Valor Original da Multa (R$){" "}
+                      <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={formData.amount}
+                      onChange={(e) =>
+                        setFormData({ ...formData, amount: e.target.value })
+                      }
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">
+                      Valor com Desconto (R$)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.discounted_amount || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          discounted_amount: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    />
+                  </div>
+
                   <div className="md:col-span-2">
                     <div className="flex items-center justify-between mb-2">
                       <label className="block text-sm font-medium text-zinc-700">
