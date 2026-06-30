@@ -222,54 +222,17 @@ export default function InfractionsTab() {
             <ShieldAlert size={32} />
           </div>
           <h3 className="text-xl font-bold text-zinc-800 mb-2">
-            Módulo de Infrações Não Instalado
+            Atualização de Banco de Dados Necessária
           </h3>
           <p className="text-sm text-zinc-500 mb-6">
-            Execute o script SQL abaixo no seu painel do Supabase para criar a
-            tabela de infrações de trânsito.
+            Para utilizar os novos recursos (Placa do Veículo e Desconto), é necessário atualizar as tabelas de infrações no banco de dados.
+            Por favor, contate o administrador do sistema ou atualize o banco (no Supabase) e tente novamente.
           </p>
-          <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-left font-mono text-xs text-zinc-300 overflow-x-auto">
-            <pre>{`CREATE TABLE IF NOT EXISTS public.traffic_infractions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE,
-  driver_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  infraction_date TIMESTAMP WITH TIME ZONE NOT NULL,
-  amount NUMERIC NOT NULL,
-  discounted_amount NUMERIC,
-  infraction_code TEXT NOT NULL,
-  description TEXT NOT NULL,
-  notice_number TEXT,
-  license_plate TEXT,
-  address TEXT,
-  installments JSONB DEFAULT '[]'::jsonb,
-  attachment_url TEXT,
-  created_by UUID REFERENCES auth.users(id),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-ALTER TABLE public.traffic_infractions ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Allow read for company users" ON public.traffic_infractions;
-CREATE POLICY "Allow read for company users" ON public.traffic_infractions
-  FOR SELECT USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid()));
-
-DROP POLICY IF EXISTS "Allow all for company admins" ON public.traffic_infractions;
-CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
-  FOR ALL USING (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid() AND role = 'admin'))
-  WITH CHECK (company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-
--- Se a tabela já existir e faltar a coluna installments ou discounted_amount:
--- ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS installments JSONB DEFAULT '[]'::jsonb;
--- ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS discounted_amount NUMERIC;
--- ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS license_plate TEXT;
-`}</pre>
-          </div>
           <button
             onClick={() => window.location.reload()}
             className="mt-6 px-6 py-2 bg-zinc-900 text-white rounded-lg font-medium hover:bg-zinc-800 transition-colors"
           >
-            Já executei o script
+            Tentar Novamente
           </button>
         </div>
       </div>
