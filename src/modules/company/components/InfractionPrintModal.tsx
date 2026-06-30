@@ -91,44 +91,57 @@ export default function InfractionPrintModal({
           </div>
 
           {/* Printable Content */}
-          <div className="p-8 overflow-y-auto print:overflow-visible print:block print:p-8 text-black bg-white">
+          <div className="p-8 overflow-y-auto print:overflow-visible print:block print:p-8 text-black bg-white print:text-black">
             <div className="max-w-3xl mx-auto space-y-6">
-              <div className="text-center font-bold text-lg mb-6 border-b border-black pb-4 uppercase">
+              <div className="text-center font-bold text-xl mb-8 border-b-2 border-black pb-4 uppercase tracking-wider">
                 Termo de Responsabilidade e Desconto de Multa
               </div>
 
-              <div className="space-y-2 text-sm font-medium border-b border-black pb-4">
-                <div className="flex gap-2">
-                  <span className="w-48">Condutor:</span>{" "}
-                  <span className="font-bold">
+              {/* Info Box */}
+              <div className="grid grid-cols-2 gap-y-4 gap-x-8 border-2 border-black p-5 rounded-lg mb-6">
+                <div className="flex flex-col">
+                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                    Condutor
+                  </span>
+                  <span className="font-bold text-base">
                     {infraction.profiles?.full_name || ""}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <span className="w-48">Veículo / Placa:</span>{" "}
-                  <span className="font-bold">
+                <div className="flex flex-col">
+                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                    Veículo / Placa
+                  </span>
+                  <span className="font-bold text-base">
                     {infraction.license_plate || ""}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <span className="w-48">Data da Autuação:</span>{" "}
-                  <span className="font-bold">{formattedDate}</span>
+                <div className="flex flex-col">
+                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                    Data da Autuação
+                  </span>
+                  <span className="font-bold text-base">{formattedDate}</span>
                 </div>
-                <div className="flex gap-2">
-                  <span className="w-48">Número da Multa / Auto:</span>{" "}
-                  <span className="font-bold">
+                <div className="flex flex-col">
+                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                    Número da Multa / Auto
+                  </span>
+                  <span className="font-bold text-base">
                     {infraction.notice_number || ""}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <span className="w-48">Infração:</span>{" "}
-                  <span className="font-bold">
+                <div className="flex flex-col col-span-2">
+                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                    Infração
+                  </span>
+                  <span className="font-bold text-base">
                     {infraction.infraction_code} -- {infractionDesc}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <span className="w-48">Valor da Multa:</span>{" "}
-                  <span className="font-bold">{formattedAmount}</span>
+                <div className="flex flex-col">
+                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                    Valor da Multa
+                  </span>
+                  <span className="font-bold text-base">{formattedAmount}</span>
                 </div>
               </div>
 
@@ -141,14 +154,14 @@ export default function InfractionPrintModal({
                 <h3 className="font-bold text-base uppercase">
                   1. DECLARAÇÃO / INDICAÇÃO DO REAL INFRATOR
                 </h3>
-                <p className="text-sm text-justify">
+                <p className="text-sm text-justify leading-relaxed">
                   Por meio deste termo, declaro que{" "}
                   <strong>
                     EU ERA O CONDUTOR DO VEÍCULO NO MOMENTO DA INFRAÇÃO
                   </strong>{" "}
                   e que não realizarei a indicação de outro real infrator.
                 </p>
-                <p className="text-sm text-justify">
+                <p className="text-sm text-justify leading-relaxed">
                   Declaro, ainda, que estou ciente de que a não indicação do
                   condutor implicará na cobrança da multa em valor duplicado,
                   conforme as regras de responsabilidade previstas no art. 257
@@ -156,9 +169,9 @@ export default function InfractionPrintModal({
                 </p>
               </div>
 
-              <div className="space-y-4 pt-2">
+              <div className="space-y-4 pt-4">
                 <h3 className="font-bold text-base uppercase">2. VALORES</h3>
-                <div className="text-sm space-y-1">
+                <div className="text-sm space-y-2">
                   <p>
                     • Valor Multa: <strong>{formattedAmount}</strong>
                   </p>
@@ -167,100 +180,120 @@ export default function InfractionPrintModal({
                     _________________
                   </p>
                 </div>
-                <p className="text-sm">
+                <p className="text-sm italic">
                   Declaro estar ciente dos valores acima descritos.
                 </p>
-                <div className="pt-6 pb-2">
-                  <p className="text-sm">
-                    Assinatura do Condutor:
-                    ___________________________________________________________
-                  </p>
+
+                <div className="pt-8 pb-4">
+                  <div className="border-t border-black w-3/4 mx-auto pt-2 text-center text-sm font-medium">
+                    Assinatura do Condutor
+                  </div>
                 </div>
               </div>
+
               <div className="border-b border-black"></div>
 
-              <div className="space-y-4 pt-2">
+              <div className="space-y-4 pt-4">
                 <h3 className="font-bold text-base uppercase">
                   3. AUTORIZAÇÃO DE DESCONTO EM FOLHA
                 </h3>
-                <p className="text-sm">
+                <p className="text-sm leading-relaxed">
                   ( &nbsp; &nbsp; ) Autorizo o desconto do valor referente à
                   multa, conforme opção assinalada acima, diretamente em minha
                   folha de pagamento.
                 </p>
-                <div className="pt-6 pb-2">
-                  <p className="text-sm">
-                    Assinatura do Condutor:
-                    ___________________________________________________________
-                  </p>
+                <div className="pt-10 pb-4">
+                  <div className="border-t border-black w-3/4 mx-auto pt-2 text-center text-sm font-medium">
+                    Assinatura do Condutor
+                  </div>
                 </div>
               </div>
+
               <div className="border-b border-black"></div>
 
-              <div className="space-y-4 pt-2">
+              <div className="space-y-4 pt-4">
                 <h3 className="font-bold text-base uppercase">
                   4. ASSINATURA (EMPRESA)
                 </h3>
-                <div className="pt-4 pb-2 space-y-6">
-                  <p className="text-sm">
-                    Responsável:
-                    ____________________________________________________________________
-                  </p>
-                  <p className="text-sm">
-                    Assinatura:
-                    ______________________________________________________________________
-                  </p>
-                </div>
-                <div className="pt-6 pb-2">
-                  <p className="text-sm">Data: _____ / _____ / _________</p>
+
+                <div className="grid grid-cols-2 gap-8 pt-6 pb-2">
+                  <div className="space-y-8">
+                    <p className="text-sm">
+                      Responsável: _____________________________________
+                    </p>
+                    <p className="text-sm">Data: _____ / _____ / _________</p>
+                  </div>
+                  <div className="pt-2">
+                    <div className="border-t border-black w-full pt-2 text-center text-sm font-medium mt-10">
+                      Assinatura (Empresa)
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="border-b border-black border-dashed mt-8 mb-8"></div>
 
-              <div className="space-y-6 pt-4 pb-12">
-                <h3 className="font-bold text-lg text-center uppercase">
+              <div className="border-b-2 border-black border-dashed my-8"></div>
+
+              <div className="space-y-6 pt-2 pb-12 bg-zinc-50 print:bg-white p-6 rounded-lg border-2 border-black">
+                <h3 className="font-bold text-lg text-center uppercase tracking-widest border-b border-black pb-4">
                   TERMO FINANCEIRO RH
                 </h3>
-                <div className="space-y-2 text-sm font-medium">
-                  <div className="flex gap-2">
-                    <span className="w-32">Multa:</span>{" "}
+
+                <div className="grid grid-cols-3 gap-4 text-sm font-medium pt-2">
+                  <div className="flex flex-col">
+                    <span className="text-xs text-zinc-500 uppercase">
+                      Multa
+                    </span>{" "}
                     <span className="font-bold">
-                      {infraction.notice_number || ""}
+                      {infraction.notice_number || "-"}
                     </span>
                   </div>
-                  <div className="flex gap-2">
-                    <span className="w-32">Motorista:</span>{" "}
+                  <div className="flex flex-col col-span-2">
+                    <span className="text-xs text-zinc-500 uppercase">
+                      Motorista
+                    </span>{" "}
                     <span className="font-bold">
                       {infraction.profiles?.full_name || ""}
                     </span>
                   </div>
-                  <div className="flex gap-2">
-                    <span className="w-32">Valor:</span>{" "}
+                  <div className="flex flex-col">
+                    <span className="text-xs text-zinc-500 uppercase">
+                      Valor
+                    </span>{" "}
                     <span className="font-bold">{formattedAmount}</span>
                   </div>
                 </div>
 
-                <div className="pt-4 space-y-8">
-                  <h4 className="font-bold text-base underline">RH</h4>
-                  <p className="text-sm">
-                    Desconto em: _____X &nbsp; {formattedAmount} &nbsp;
-                    ____/____
+                <div className="pt-4 space-y-4">
+                  <h4 className="font-bold text-base underline uppercase tracking-wider">
+                    RH
+                  </h4>
+                  <p className="text-sm font-medium">
+                    Desconto em:{" "}
+                    <span className="inline-block w-8 border-b border-black"></span>{" "}
+                    X &nbsp; {formattedAmount} &nbsp; ____/____
                   </p>
-                  <div className="flex justify-between text-sm pt-4">
-                    <span>Data: _____ / _____ / _________</span>
-                    <span>
-                      Assinatura: _______________________________________
-                    </span>
+
+                  <div className="grid grid-cols-2 gap-8 pt-8">
+                    <p className="text-sm font-medium">
+                      Data: _____ / _____ / _________
+                    </p>
+                    <div className="border-t border-black w-full pt-2 text-center text-sm font-medium">
+                      Assinatura RH
+                    </div>
                   </div>
                 </div>
 
-                <div className="pt-8 space-y-8">
-                  <h4 className="font-bold text-base underline">Financeiro</h4>
-                  <div className="flex justify-between text-sm pt-4">
-                    <span>Data: _____ / _____ / _________</span>
-                    <span>
-                      Assinatura: _______________________________________
-                    </span>
+                <div className="pt-6 space-y-4">
+                  <h4 className="font-bold text-base underline uppercase tracking-wider">
+                    Financeiro
+                  </h4>
+                  <div className="grid grid-cols-2 gap-8 pt-8">
+                    <p className="text-sm font-medium">
+                      Data: _____ / _____ / _________
+                    </p>
+                    <div className="border-t border-black w-full pt-2 text-center text-sm font-medium">
+                      Assinatura Financeiro
+                    </div>
                   </div>
                 </div>
               </div>

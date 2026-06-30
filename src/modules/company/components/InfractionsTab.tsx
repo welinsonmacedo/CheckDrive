@@ -20,6 +20,7 @@ import {
   PieChart,
   TrendingUp,
   Printer,
+  FileText,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -398,6 +399,28 @@ export default function InfractionsTab() {
     setSaving(true);
 
     try {
+      let attachmentUrl = formData.attachment_url || null;
+
+      if (formData.attachment_file) {
+        const fileExt =
+          formData.attachment_file.name &&
+          formData.attachment_file.name.includes(".")
+            ? formData.attachment_file.name.split(".").pop()
+            : "pdf";
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${user?.id || "company"}/${Date.now()}_${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("checklist-photos")
+          .upload(filePath, formData.attachment_file);
+
+        if (uploadError) throw uploadError;
+
+        attachmentUrl = supabase.storage
+          .from("checklist-photos")
+          .getPublicUrl(filePath).data.publicUrl;
+      }
+
       const payload = {
         company_id: user?.company_id,
         driver_id: formData.driver_id,
@@ -412,7 +435,7 @@ export default function InfractionsTab() {
         license_plate: formData.license_plate || null,
         address: formData.address || null,
         installments: formData.installments || [],
-        attachment_url: formData.attachment_url || null,
+        attachment_url: attachmentUrl,
         created_by: user?.id,
       };
 
@@ -1026,7 +1049,7 @@ export default function InfractionsTab() {
                   {/* Anexo - simplificado para URL para não complexificar com bucket caso não haja setup */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-zinc-700 mb-1">
-                      Link p/ Anexo de Documentação
+                      Termo Assinado (Anexo PDF ou Imagem)
                     </label>
                     <div className="relative">
                       <UploadCloud
@@ -1034,18 +1057,32 @@ export default function InfractionsTab() {
                         size={18}
                       />
                       <input
-                        type="url"
-                        placeholder="https://..."
-                        value={formData.attachment_url || ""}
+                        type="file"
+                        accept=".pdf,image/*"
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            attachment_url: e.target.value,
+                            attachment_file: e.target.files
+                              ? e.target.files[0]
+                              : null,
                           })
                         }
                         className="w-full pl-10 pr-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
                       />
                     </div>
+                    {formData.attachment_url && (
+                      <div className="mt-2 text-sm text-zinc-500 flex items-center gap-2">
+                        <FileText size={16} />
+                        <a
+                          href={formData.attachment_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Visualizar anexo atual
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
 
