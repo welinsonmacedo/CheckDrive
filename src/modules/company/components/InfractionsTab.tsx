@@ -70,7 +70,7 @@ export default function InfractionsTab() {
         .select(
           `
           *,
-          profiles:driver_id(full_name, avatar_url)
+          profiles:driver_id(full_name)
         `,
         )
         .order("infraction_date", { ascending: false });
@@ -428,7 +428,7 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto"
             >
               <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-zinc-100 p-6 flex justify-between items-center z-10">
                 <h3 className="text-xl font-bold text-zinc-800 flex items-center gap-2">
