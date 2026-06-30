@@ -8,15 +8,8 @@ const supabaseKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VI
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
-  const { data, error } = await supabase
-        .from("traffic_infractions")
-        .select(`
-          *,
-          profiles:driver_id(full_name)
-        `);
-  
-  console.log("Data:", data);
-  console.log("Error:", error);
+  const sql = `ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS license_plate TEXT;`;
+  const { error } = await supabase.rpc("exec_sql", { sql });
+  console.log("Error from exec_sql:", error);
 }
-
 run();

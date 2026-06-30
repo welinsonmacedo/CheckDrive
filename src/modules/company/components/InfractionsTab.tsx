@@ -65,15 +65,24 @@ export default function InfractionsTab() {
       }
 
       // Fetch infractions
-      const { data: infractionsData } = await supabase
+      const { data: infractionsData, error: fetchErr } = await supabase
         .from("traffic_infractions")
         .select(
           `
           *,
+          discounted_amount,
+          installments,
+          license_plate,
           profiles:driver_id(full_name)
         `,
         )
         .order("infraction_date", { ascending: false });
+
+      if (fetchErr && fetchErr.code === "42703") {
+        setSetupRequired(true);
+        setLoading(false);
+        return;
+      }
 
       if (infractionsData) setInfractions(infractionsData);
 
@@ -97,6 +106,14 @@ export default function InfractionsTab() {
     if (infraction) {
       setFormData({
         ...infraction,
+        infraction_date: infraction.infraction_date
+          ? new Date(
+              new Date(infraction.infraction_date).getTime() -
+                new Date().getTimezoneOffset() * 60000,
+            )
+              .toISOString()
+              .slice(0, 16)
+          : "",
         installments: infraction.installments || [],
       });
     } else {
@@ -107,7 +124,9 @@ export default function InfractionsTab() {
         infraction_code: "",
         description: "",
         notice_number: "",
+        license_plate: "",
         address: "",
+        infraction_date: "",
         installments: [{ date: "", amount: "" }],
         discounted_amount: "",
         attachment_url: "",
@@ -144,6 +163,7 @@ export default function InfractionsTab() {
         discounted_amount: formData.discounted_amount
           ? Number(formData.discounted_amount)
           : null,
+        infraction_date: new Date(formData.infraction_date).toISOString(),
         created_by: user?.id,
       };
 
@@ -219,6 +239,7 @@ export default function InfractionsTab() {
   infraction_code TEXT NOT NULL,
   description TEXT NOT NULL,
   notice_number TEXT,
+  license_plate TEXT,
   address TEXT,
   installments JSONB DEFAULT '[]'::jsonb,
   attachment_url TEXT,
@@ -241,6 +262,7 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
 -- Se a tabela já existir e faltar a coluna installments ou discounted_amount:
 -- ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS installments JSONB DEFAULT '[]'::jsonb;
 -- ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS discounted_amount NUMERIC;
+-- ALTER TABLE public.traffic_infractions ADD COLUMN IF NOT EXISTS license_plate TEXT;
 `}</pre>
           </div>
           <button
@@ -336,12 +358,25 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
                       <div className="text-sm font-medium text-zinc-900">
                         {new Date(inf.infraction_date).toLocaleDateString(
                           "pt-BR",
+                        )}{" "}
+                        às{" "}
+                        {new Date(inf.infraction_date).toLocaleTimeString(
+                          "pt-BR",
+                          {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
                         )}
                       </div>
                       <div className="text-xs text-zinc-500 flex items-center gap-1 mt-1">
                         <MapPin size={12} />
                         {inf.address || "Não informado"}
                       </div>
+                      {inf.license_plate && (
+                        <div className="text-xs font-mono font-medium text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded inline-block mt-1">
+                          Placa: {inf.license_plate}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-bold text-zinc-900">
@@ -549,26 +584,32 @@ CREATE POLICY "Allow all for company admins" ON public.traffic_infractions
                     <input
                       type="datetime-local"
                       required
-                      value={
-                        formData.infraction_date
-                          ? new Date(formData.infraction_date)
-                              .toISOString()
-                              .slice(0, 16)
-                          : ""
-                      }
+                      value={formData.infraction_date || ""}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          infraction_date: new Date(
-                            e.target.value,
-                          ).toISOString(),
+                          infraction_date: e.target.value,
                         })
                       }
                       className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
                   </div>
                   <div>
-                    {/* Placeholder para balancear o grid, se quisermos manter data e valores próximos, ou colocar valor aqui */}
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">
+                      Placa do Veículo
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: ABC1D23"
+                      value={formData.license_plate || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          license_plate: e.target.value.toUpperCase(),
+                        })
+                      }
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 uppercase"
+                    />
                   </div>
 
                   <div>

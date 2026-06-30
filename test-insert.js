@@ -10,10 +10,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 async function run() {
   const { data, error } = await supabase
         .from("traffic_infractions")
-        .select(`
-          *,
-          profiles:driver_id(full_name)
-        `);
+        .select("id, license_plate")
+        .limit(1);
   
   console.log("Data:", data);
   console.log("Error:", error);
