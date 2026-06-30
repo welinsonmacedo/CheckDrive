@@ -4,20 +4,7 @@ import { X, Printer, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
-const INFRACTION_CODES: Record<string, string> = {
-  "7455": "Transitar em velocidade superior à máxima permitida em até 20%",
-  "7463":
-    "Transitar em velocidade superior à máxima permitida em mais de 20% até 50%",
-  "7471": "Transitar em velocidade superior à máxima permitida em mais de 50%",
-  "6050": "Avançar o sinal vermelho do semáforo ou de parada obrigatória",
-  "5673": "Parar sobre faixa de pedestres na mudança de sinal",
-  "5185": "Deixar de usar o cinto de segurança",
-  "7366": "Dirigir utilizando telefone celular",
-  "6599": "Conduzir veículo que não esteja registrado e devidamente licenciado",
-  "5819": "Transitar com o veículo em calçadas, passeios, passarelas",
-  "5967": "Ultrapassar pela contramão linha de divisão de fluxos opostos",
-};
+import { getInfractionDescription } from "@/src/utils/infractions";
 
 interface InfractionPrintModalProps {
   infraction: any;
@@ -50,7 +37,7 @@ export default function InfractionPrintModal({
   }).format(amount);
 
   const infractionDesc =
-    INFRACTION_CODES[infraction.infraction_code] ||
+    getInfractionDescription(infraction.infraction_code) ||
     infraction.description ||
     "Outra infração";
   const formattedDate = infraction.infraction_date

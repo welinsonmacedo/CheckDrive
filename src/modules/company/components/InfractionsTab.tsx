@@ -36,21 +36,7 @@ import {
   Cell,
 } from "recharts";
 import InfractionPrintModal from "./InfractionPrintModal";
-
-const INFRACTION_CODES: Record<string, string> = {
-  "7455": "Transitar em velocidade superior à máxima permitida em até 20%",
-  "7463":
-    "Transitar em velocidade superior à máxima permitida em mais de 20% até 50%",
-  "7471": "Transitar em velocidade superior à máxima permitida em mais de 50%",
-  "6050": "Avançar o sinal vermelho do semáforo ou o de parada obrigatória",
-  "5185": "Deixar o condutor ou passageiro de usar o cinto de segurança",
-  "7366": "Dirigir veículo segurando ou manuseando telefone celular",
-  "5010": "Dirigir veículo sem possuir CNH",
-  "5541": "Estacionar em desacordo com a regulamentação",
-  "6599": "Conduzir veículo que não esteja registrado e devidamente licenciado",
-  "5819": "Transitar com o veículo em calçadas, passeios, passarelas",
-  "5967": "Ultrapassar pela contramão linha de divisão de fluxos opostos",
-};
+import { getInfractionDescription } from "@/src/utils/infractions";
 
 const DashboardView = ({ infractions }: { infractions: any[] }) => {
   const totalAmount = infractions.reduce(
@@ -223,9 +209,9 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
                 <span className="font-bold flex-shrink-0">{entry.name}:</span>
                 <span
                   className="truncate"
-                  title={INFRACTION_CODES[entry.name] || "Outra infração"}
+                  title={getInfractionDescription(entry.name)}
                 >
-                  {INFRACTION_CODES[entry.name] || "Outra infração"}
+                  {getInfractionDescription(entry.name)}
                 </span>
               </div>
             ))}
@@ -387,8 +373,9 @@ export default function InfractionsTab() {
     const code = e.target.value;
     setFormData((prev: any) => {
       const newData = { ...prev, infraction_code: code };
-      if (INFRACTION_CODES[code]) {
-        newData.description = INFRACTION_CODES[code];
+      const desc = getInfractionDescription(code);
+      if (desc !== "Outra infração") {
+        newData.description = desc;
       }
       return newData;
     });
