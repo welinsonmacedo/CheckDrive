@@ -36,6 +36,7 @@ export default function InfractionsTab() {
   const { user } = useAuth();
   const [infractions, setInfractions] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [setupRequired, setSetupRequired] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -95,6 +96,15 @@ export default function InfractionsTab() {
         .order("full_name");
 
       if (driversData) setDrivers(driversData);
+
+      // Fetch vehicles
+      const { data: vehiclesData } = await supabase
+        .from("vehicles")
+        .select("id, plate, model")
+        .eq("active", true)
+        .order("plate");
+
+      if (vehiclesData) setVehicles(vehiclesData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -126,7 +136,6 @@ export default function InfractionsTab() {
         notice_number: "",
         license_plate: "",
         address: "",
-        infraction_date: "",
         installments: [{ date: "", amount: "" }],
         discounted_amount: "",
         attachment_url: "",
@@ -156,8 +165,9 @@ export default function InfractionsTab() {
     setSaving(true);
 
     try {
+      const { profiles, id, ...rest } = formData;
       const payload = {
-        ...formData,
+        ...rest,
         company_id: user?.company_id,
         amount: Number(formData.amount),
         discounted_amount: formData.discounted_amount
@@ -559,20 +569,25 @@ export default function InfractionsTab() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 mb-1">
-                      Placa do Veículo
+                      Veículo (Placa)
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: ABC1D23"
+                    <select
                       value={formData.license_plate || ""}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          license_plate: e.target.value.toUpperCase(),
+                          license_plate: e.target.value,
                         })
                       }
-                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 uppercase"
-                    />
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    >
+                      <option value="">Selecione o veículo...</option>
+                      {vehicles.map((v) => (
+                        <option key={v.id} value={v.plate}>
+                          {v.plate} - {v.model}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
