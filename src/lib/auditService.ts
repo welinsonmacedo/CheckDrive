@@ -30,6 +30,29 @@ export const runSilentAudit = async () => {
     const appSettings = settings || {};
 
     for (const schedule of expired) {
+      // Check if this specific penalty was already applied FIRST
+      const { data: existingLogs, error: checkError } = await supabase
+        .from("audit_logs")
+        .select("id")
+        .eq("driver_id", schedule.driver_id)
+        .eq("type", "penalty")
+        .ilike("reason", `%[ID: ${schedule.id}]%`)
+        .limit(1);
+
+      if (checkError) {
+        console.error("Error checking existing audit logs:", checkError);
+        continue;
+      }
+
+      // If it's already applied, just heal the schedule state and skip
+      if (existingLogs && existingLogs.length > 0) {
+        await supabase
+          .from("schedules")
+          .update({ penalty_applied: true })
+          .eq("id", schedule.id);
+        continue;
+      }
+
       // Optimistic lock: try to claim this schedule for auditing
       const { data: lockedSchedule, error: lockError } = await supabase
         .from("schedules")
@@ -50,7 +73,6 @@ export const runSilentAudit = async () => {
       }
 
       const profileInfo = schedule.profiles?.score_profiles || {};
-
       const missingStart = !schedule.start_checklist_id;
       const missingEnd = !schedule.end_checklist_id;
       const missingFuel =
@@ -107,25 +129,6 @@ export const runSilentAudit = async () => {
           : "Sem veículo";
 
         const reason = `Penalidade automática: Falta de checklist ${missingItems.join(", ").replace(/, ([^,]*)$/, " e $1")}. Detalhes da Escala: Início ${formatDate(schedule.start_at)}, Fim ${formatDate(schedule.end_at)}. ${routeStr}. Veículo: ${vehicleStr}. [ID: ${schedule.id}]`;
-
-        // Check if this specific penalty was already applied
-        const { data: existingLogs, error: checkError } = await supabase
-          .from("audit_logs")
-          .select("id")
-          .eq("driver_id", schedule.driver_id)
-          .eq("type", "penalty")
-          .ilike("reason", `%[ID: ${schedule.id}]%`)
-          .limit(1);
-
-        if (checkError) {
-          console.error("Error checking existing audit logs:", checkError);
-          continue;
-        }
-
-        if (existingLogs && existingLogs.length > 0) {
-          // Already applied, skip
-          continue;
-        }
 
         // Apply penalty to performance
         const { data: perfList } = await supabase
