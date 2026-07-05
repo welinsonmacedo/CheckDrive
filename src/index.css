@@ -33,6 +33,14 @@
 }
 
 @media print {
+  @page {
+    size: auto;
+    margin: 15mm;
+  }
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+  }
   body.modal-open-for-print {
     background: white;
   }

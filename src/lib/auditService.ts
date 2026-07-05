@@ -109,13 +109,18 @@ export const runSilentAudit = async () => {
         const reason = `Penalidade automática: Falta de checklist ${missingItems.join(", ").replace(/, ([^,]*)$/, " e $1")}. Detalhes da Escala: Início ${formatDate(schedule.start_at)}, Fim ${formatDate(schedule.end_at)}. ${routeStr}. Veículo: ${vehicleStr}. [ID: ${schedule.id}]`;
 
         // Check if this specific penalty was already applied
-        const { data: existingLogs } = await supabase
+        const { data: existingLogs, error: checkError } = await supabase
           .from("audit_logs")
           .select("id")
           .eq("driver_id", schedule.driver_id)
           .eq("type", "penalty")
           .ilike("reason", `%[ID: ${schedule.id}]%`)
           .limit(1);
+
+        if (checkError) {
+          console.error("Error checking existing audit logs:", checkError);
+          continue;
+        }
 
         if (existingLogs && existingLogs.length > 0) {
           // Already applied, skip
@@ -147,19 +152,28 @@ export const runSilentAudit = async () => {
         const currentScore = perf ? perf.score : baseScore;
         const newScore = currentScore - totalPenalty;
 
-        await supabase.from("driver_performance").upsert({
+        const { error: upsertError } = await supabase.from("driver_performance").upsert({
           driver_id: schedule.driver_id,
           score: newScore,
           updated_at: new Date().toISOString(),
         });
+        
+        if (upsertError) {
+            console.error("Error updating performance:", upsertError);
+            continue;
+        }
 
         // Log Audit
-        await supabase.from("audit_logs").insert({
+        const { error: insertError } = await supabase.from("audit_logs").insert({
           driver_id: schedule.driver_id,
           type: "penalty",
           amount: totalPenalty,
           reason,
         });
+        
+        if (insertError) {
+            console.error("Error inserting audit log:", insertError);
+        }
       }
     }
   } catch (err) {

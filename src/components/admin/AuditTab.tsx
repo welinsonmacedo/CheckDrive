@@ -47,12 +47,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
   const [showRunConfirm, setShowRunConfirm] = useState(false);
 
   useEffect(() => {
-    const runInitialAudit = async () => {
-      await fetchAuditLogs();
-      // Silently run audit for very old schedules
-      await handleRunAudit(true);
-    };
-    runInitialAudit();
+    fetchAuditLogs();
   }, []);
 
   // Handle toast timeout
