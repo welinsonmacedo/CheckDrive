@@ -29,14 +29,28 @@ export const runSilentAudit = async () => {
       .single();
     const appSettings = settings || {};
 
+    const formatDate = (dateString: string) => {
+      return (
+        new Date(dateString).toLocaleDateString() +
+        " " +
+        new Date(dateString).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      );
+    };
+
     for (const schedule of expired) {
       // Check if this specific penalty was already applied FIRST
+      // Using a substring match for the schedule dates so it catches old logs that didn't have the [ID: ...] suffix
+      const dateMatchStr = `Detalhes da Escala: Início ${formatDate(schedule.start_at)}, Fim ${formatDate(schedule.end_at)}.`;
+      
       const { data: existingLogs, error: checkError } = await supabase
         .from("audit_logs")
         .select("id")
         .eq("driver_id", schedule.driver_id)
         .eq("type", "penalty")
-        .ilike("reason", `%[ID: ${schedule.id}]%`)
+        .ilike("reason", `%${dateMatchStr}%`)
         .limit(1);
 
       if (checkError) {
@@ -109,17 +123,6 @@ export const runSilentAudit = async () => {
         if (missingStart && applyStart) missingItems.push("inicial");
         if (missingEnd && applyEnd) missingItems.push("final");
         if (missingFuel && applyFuel) missingItems.push("abastecimento");
-
-        const formatDate = (dateString: string) => {
-          return (
-            new Date(dateString).toLocaleDateString() +
-            " " +
-            new Date(dateString).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          );
-        };
 
         const routeStr = schedule.routes
           ? `${schedule.routes.origin} ➔ ${schedule.routes.destination}`
