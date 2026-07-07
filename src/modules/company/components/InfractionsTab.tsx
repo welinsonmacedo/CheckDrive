@@ -37,6 +37,7 @@ import {
   Cell,
 } from "recharts";
 import InfractionPrintModal from "./InfractionPrintModal";
+import DriverSummaryPrintModal from "./DriverSummaryPrintModal";
 import { getInfractionDescription } from "@/src/utils/infractions";
 
 const DashboardView = ({ infractions }: { infractions: any[] }) => {
@@ -232,6 +233,7 @@ const DriversDashboardView = ({
 }) => {
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [driverSearch, setDriverSearch] = useState("");
+  const [printSummaryDriver, setPrintSummaryDriver] = useState<any | null>(null);
 
   const driverStats = drivers
     .map((driver) => {
@@ -360,7 +362,7 @@ const DriversDashboardView = ({
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200 min-h-[600px] flex flex-col">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-100 pb-4 mb-6 gap-4">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-xl">
+                <div className="w-14 h-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-xl flex-shrink-0">
                   {selectedDriverInfo.name.charAt(0)}
                 </div>
                 <div>
@@ -370,6 +372,12 @@ const DriversDashboardView = ({
                   <p className="text-sm text-zinc-500 mt-1">
                     Histórico detalhado de infrações de trânsito
                   </p>
+                  <button
+                    onClick={() => setPrintSummaryDriver(selectedDriverInfo)}
+                    className="mt-2 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm hover:shadow active:scale-[0.98]"
+                  >
+                    <Printer size={13} /> Imprimir Resumo
+                  </button>
                 </div>
               </div>
 
@@ -533,6 +541,13 @@ const DriversDashboardView = ({
           </div>
         )}
       </div>
+
+      {printSummaryDriver && (
+        <DriverSummaryPrintModal
+          driver={printSummaryDriver}
+          onClose={() => setPrintSummaryDriver(null)}
+        />
+      )}
     </div>
   );
 };
