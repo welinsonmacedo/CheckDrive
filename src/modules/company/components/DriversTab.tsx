@@ -25,6 +25,7 @@ export default function DriversTab() {
     participatesInRanking: true,
     modalityIds: [] as string[],
     scoreProfileId: "",
+    isAuthUser: true,
   });
   const openCreateForm = () => {
     setUserForm({
@@ -38,6 +39,7 @@ export default function DriversTab() {
       participatesInRanking: true,
       modalityIds: [],
       scoreProfileId: "",
+      isAuthUser: true,
     });
     setShowForm(true);
   };
@@ -111,48 +113,75 @@ export default function DriversTab() {
           return;
         }
 
-        const { data, error } = await supabase.auth.signUp({
-          email: userForm.email,
-          password: userForm.password,
-          options: {
-            data: {
-              full_name: parsedName,
+        if (userForm.isAuthUser) {
+          const { data, error } = await supabase.auth.signUp({
+            email: userForm.email,
+            password: userForm.password,
+            options: {
+              data: {
+                full_name: parsedName,
+              },
             },
-          },
-        });
+          });
 
-        if (error) throw error;
+          if (error) throw error;
 
-        if (data.user) {
+          if (data.user) {
+            const { error: profileError } = await supabase
+              .from("profiles")
+              .upsert(
+                {
+                  id: data.user.id,
+                  email: userForm.email,
+                  active: true,
+                  company_id: user?.company_id || null,
+                  ...updatePayload,
+                },
+                { onConflict: "id" },
+              );
+
+            if (profileError) {
+              console.warn(
+                "Could not upsert profile directly (possibly RLS)",
+                profileError,
+              );
+
+              await supabase
+                .from("profiles")
+                .update(updatePayload)
+                .eq("id", data.user.id);
+            }
+
+            if (userForm.role === "driver" && userForm.participatesInRanking) {
+              await supabase
+                .from("driver_performance")
+                .upsert(
+                  { driver_id: data.user.id, score: 1000 },
+                  { onConflict: "driver_id" },
+                );
+            }
+          }
+        } else {
+          // Register driver without authentication user (insert profile directly)
+          const newId = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
+          
           const { error: profileError } = await supabase
             .from("profiles")
-            .upsert(
-              {
-                id: data.user.id,
-                email: userForm.email,
-                active: true,
-                ...updatePayload,
-              },
-              { onConflict: "id" },
-            );
+            .insert({
+              id: newId,
+              email: userForm.email || null,
+              active: true,
+              company_id: user?.company_id || null,
+              ...updatePayload,
+            });
 
-          if (profileError) {
-            console.warn(
-              "Could not upsert profile directly (possibly RLS)",
-              profileError,
-            );
-
-            await supabase
-              .from("profiles")
-              .update(updatePayload)
-              .eq("id", data.user.id);
-          }
+          if (profileError) throw profileError;
 
           if (userForm.role === "driver" && userForm.participatesInRanking) {
             await supabase
               .from("driver_performance")
               .upsert(
-                { driver_id: data.user.id, score: 1000 },
+                { driver_id: newId, score: 1000 },
                 { onConflict: "driver_id" },
               );
           }
@@ -170,6 +199,7 @@ export default function DriversTab() {
         participatesInRanking: true,
         modalityIds: [],
         scoreProfileId: "",
+        isAuthUser: true,
       });
 
       setShowForm(false);
@@ -420,6 +450,7 @@ export default function DriversTab() {
                                 user.participates_in_ranking !== false,
                               modalityIds: user.modality_ids || [],
                               scoreProfileId: user.score_profile_id || "",
+                              isAuthUser: !!user.email,
                             });
 
                             setShowForm(true);
@@ -500,17 +531,39 @@ export default function DriversTab() {
                 required
               />
 
-              <input
-                type="email"
-                placeholder="Email"
-                value={userForm.email}
-                onChange={(e) =>
-                  setUserForm({ ...userForm, email: e.target.value })
-                }
-                className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
-                required={!userForm.id}
-                disabled={!!userForm.id}
-              />
+              {!userForm.id && (
+                <label className="flex items-center gap-3 text-sm text-text-muted select-none border border-app-border bg-app-bg/20 p-3 rounded-lg">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary"
+                    checked={userForm.isAuthUser}
+                    onChange={(e) =>
+                      setUserForm({
+                        ...userForm,
+                        isAuthUser: e.target.checked,
+                      })
+                    }
+                  />
+                  <div>
+                    <span className="font-bold text-text-main block text-xs">Vincular Usuário de Login (E-mail e Senha)</span>
+                    <span className="text-[11px] text-text-muted">Deixe marcado se o motorista precisar acessar o aplicativo. Desmarque para apenas cadastrar.</span>
+                  </div>
+                </label>
+              )}
+
+              {userForm.isAuthUser && (
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={userForm.email}
+                  onChange={(e) =>
+                    setUserForm({ ...userForm, email: e.target.value })
+                  }
+                  className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
+                  required={userForm.isAuthUser && !userForm.id}
+                  disabled={!!userForm.id}
+                />
+              )}
 
               <input
                 type="text"
@@ -522,7 +575,7 @@ export default function DriversTab() {
                 className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
               />
 
-              {!userForm.id && (
+              {!userForm.id && userForm.isAuthUser && (
                 <input
                   type="password"
                   placeholder="Senha"
