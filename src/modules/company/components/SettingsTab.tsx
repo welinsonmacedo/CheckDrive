@@ -12,11 +12,13 @@ import {
   CheckCircle2,
   Plug,
   Gauge,
+  Building2,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import FleetSettingsSection from "@/src/modules/company/components/FleetSettingsSection";
 import ManualPenaltiesSettingsSection from "@/src/modules/company/components/ManualPenaltiesSettingsSection";
 import ScoreProfilesSettingsSection from "@/src/modules/company/components/ScoreProfilesSettingsSection";
+import CompanySettingsSection from "@/src/modules/company/components/CompanySettingsSection";
 
 import IntegrationsTab from "@/src/modules/company/components/IntegrationsTab";
 import ScoreCloseModal from "@/src/modules/company/components/ScoreCloseModal";
@@ -36,7 +38,7 @@ export default function SettingsTab({
 }: SettingsTabProps) {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = usePersistentState<
-    "global" | "profiles" | "vehicles" | "manual_penalties" | "integrations"
+    "global" | "profiles" | "vehicles" | "manual_penalties" | "integrations" | "company"
   >("settings_activeTab", "global");
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
 
@@ -81,6 +83,12 @@ export default function SettingsTab({
   };
 
   const menuItems = [
+    {
+      id: "company",
+      label: "Empresa",
+      icon: Building2,
+      desc: "Dados cadastrais",
+    },
     {
       id: "global",
       label: "Sistema & Global",
@@ -175,7 +183,20 @@ export default function SettingsTab({
 
       {/* Content Area */}
       <div className="flex-1 min-w-0">
-        {activeTab === "global" ? (
+        {activeTab === "company" ? (
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-black text-zinc-800 tracking-tight flex items-center gap-2">
+                <Building2 className="text-primary" size={24} />
+                Empresa
+              </h2>
+              <p className="text-sm font-bold text-zinc-500 tracking-wider uppercase mt-1">
+                Informações cadastrais e de identidade da empresa
+              </p>
+            </div>
+            <CompanySettingsSection />
+          </div>
+        ) : activeTab === "global" ? (
           <div className="space-y-6">
             <div className="mb-6">
               <h2 className="text-2xl font-black text-zinc-800 tracking-tight flex items-center gap-2">
