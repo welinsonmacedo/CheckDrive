@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Printer,
   FileText,
+  User,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -222,6 +223,320 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
   );
 };
 
+const DriversDashboardView = ({
+  infractions,
+  drivers,
+}: {
+  infractions: any[];
+  drivers: any[];
+}) => {
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const [driverSearch, setDriverSearch] = useState("");
+
+  const driverStats = drivers
+    .map((driver) => {
+      const driverInfractions = infractions.filter(
+        (inf) => inf.driver_id === driver.id,
+      );
+      const totalAmount = driverInfractions.reduce(
+        (acc, curr) => acc + (Number(curr.amount) || 0),
+        0,
+      );
+      const totalDiscounted = driverInfractions.reduce(
+        (acc, curr) => acc + (Number(curr.discounted_amount) || 0),
+        0,
+      );
+      return {
+        id: driver.id,
+        name: driver.full_name,
+        infractions: driverInfractions,
+        count: driverInfractions.length,
+        totalAmount,
+        totalDiscounted,
+      };
+    })
+    .filter((stat) => stat.count > 0 || driverSearch === "");
+
+  const sortedDrivers = [...driverStats]
+    .filter((d) => d.name.toLowerCase().includes(driverSearch.toLowerCase()))
+    .sort((a, b) => b.count - a.count);
+
+  const selectedDriverInfo =
+    sortedDrivers.find((d) => d.id === selectedDriverId) ||
+    (sortedDrivers.length > 0 ? sortedDrivers[0] : null);
+
+  useEffect(() => {
+    if (sortedDrivers.length > 0 && !selectedDriverId) {
+      setSelectedDriverId(sortedDrivers[0].id);
+    }
+  }, [sortedDrivers, selectedDriverId]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Drivers List */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200 lg:col-span-1 flex flex-col h-[600px]">
+        <h3 className="font-bold text-zinc-800 mb-4 flex items-center gap-2">
+          <User size={20} className="text-zinc-500" />
+          Motoristas Autuados
+        </h3>
+
+        {/* Search */}
+        <div className="relative mb-4">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+            size={16}
+          />
+          <input
+            type="text"
+            placeholder="Buscar motorista..."
+            value={driverSearch}
+            onChange={(e) => setDriverSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-1.5 text-sm border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+          {sortedDrivers.length === 0 ? (
+            <div className="text-center py-8 text-zinc-400 text-sm">
+              Nenhum motorista com infrações.
+            </div>
+          ) : (
+            sortedDrivers.map((driver) => (
+              <button
+                key={driver.id}
+                onClick={() => setSelectedDriverId(driver.id)}
+                className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-center justify-between ${
+                  selectedDriverInfo?.id === driver.id
+                    ? "bg-red-50 border-red-200 shadow-sm"
+                    : "bg-white border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300"
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold flex-shrink-0 text-sm ${
+                      selectedDriverInfo?.id === driver.id
+                        ? "bg-red-600 text-white"
+                        : "bg-zinc-100 text-zinc-600"
+                    }`}
+                  >
+                    {driver.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm text-zinc-850 truncate">
+                      {driver.name}
+                    </div>
+                    <div className="text-xs text-zinc-500 mt-0.5">
+                      {driver.count}{" "}
+                      {driver.count === 1 ? "infração" : "infrações"}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <div className="text-sm font-bold text-zinc-800">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(driver.totalAmount)}
+                  </div>
+                  {driver.totalDiscounted > 0 && (
+                    <div className="text-[10px] font-bold text-emerald-600">
+                      -
+                      {new Intl.NumberFormat("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      }).format(driver.totalDiscounted)}
+                    </div>
+                  )}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Driver Infractions Detail Panel */}
+      <div className="lg:col-span-2 space-y-6">
+        {selectedDriverInfo ? (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200 min-h-[600px] flex flex-col">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-100 pb-4 mb-6 gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-xl">
+                  {selectedDriverInfo.name.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-lg text-zinc-900 leading-tight">
+                    {selectedDriverInfo.name}
+                  </h3>
+                  <p className="text-sm text-zinc-500 mt-1">
+                    Histórico detalhado de infrações de trânsito
+                  </p>
+                </div>
+              </div>
+
+              {/* Individual Driver Stats summary */}
+              <div className="flex items-center gap-4 bg-zinc-50 p-3 rounded-2xl border border-zinc-100">
+                <div className="text-center px-3 border-r border-zinc-200">
+                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Quantidade
+                  </div>
+                  <div className="text-base font-extrabold text-zinc-800">
+                    {selectedDriverInfo.count}
+                  </div>
+                </div>
+                <div className="text-center px-3 border-r border-zinc-200">
+                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Valor Total
+                  </div>
+                  <div className="text-base font-extrabold text-red-600">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(selectedDriverInfo.totalAmount)}
+                  </div>
+                </div>
+                <div className="text-center px-3">
+                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Descontado
+                  </div>
+                  <div className="text-base font-extrabold text-emerald-600">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(selectedDriverInfo.totalDiscounted)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* List of Infractions for Selected Driver */}
+            <div className="flex-1 overflow-y-auto space-y-4 max-h-[420px] pr-1">
+              {selectedDriverInfo.infractions.length === 0 ? (
+                <div className="text-center py-12 text-zinc-400 text-sm">
+                  Nenhuma infração registrada para este motorista.
+                </div>
+              ) : (
+                selectedDriverInfo.infractions.map((inf: any) => (
+                  <div
+                    key={inf.id}
+                    className="p-4 rounded-xl border border-zinc-200 hover:border-zinc-300 bg-zinc-50/50 transition-colors"
+                  >
+                    <div className="flex flex-col sm:flex-row justify-between gap-4 items-start">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-bold font-mono text-zinc-750 bg-zinc-200/60 px-2 py-0.5 rounded">
+                            Cód: {inf.infraction_code}
+                          </span>
+                          {inf.notice_number && (
+                            <span className="text-xs font-mono bg-zinc-200/60 text-zinc-750 px-2 py-0.5 rounded border border-zinc-300/30">
+                              Auto: {inf.notice_number}
+                            </span>
+                          )}
+                          {inf.license_plate && (
+                            <span className="text-xs font-mono font-medium text-red-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded">
+                              Placa: {inf.license_plate}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-sm font-semibold text-zinc-800">
+                          {inf.description ||
+                            getInfractionDescription(inf.infraction_code)}
+                        </div>
+
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                          <div className="flex items-center gap-1">
+                            <Calendar size={14} />
+                            {new Date(inf.infraction_date).toLocaleDateString(
+                              "pt-BR",
+                            )}{" "}
+                            às{" "}
+                            {new Date(inf.infraction_date).toLocaleTimeString(
+                              "pt-BR",
+                              { hour: "2-digit", minute: "2-digit" },
+                            )}
+                          </div>
+                          {inf.address && (
+                            <div className="flex items-center gap-1">
+                              <MapPin size={14} />
+                              <span className="truncate max-w-xs">
+                                {inf.address}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex sm:flex-col items-end justify-between sm:justify-start w-full sm:w-auto border-t sm:border-t-0 pt-2 sm:pt-0 border-zinc-100">
+                        <div className="text-right">
+                          <div className="text-sm font-black text-zinc-900">
+                            {new Intl.NumberFormat("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            }).format(inf.amount)}
+                          </div>
+                          {inf.discounted_amount != null && (
+                            <div className="text-xs font-bold text-emerald-600 mt-0.5">
+                              Desc:{" "}
+                              {new Intl.NumberFormat("pt-BR", {
+                                style: "currency",
+                                currency: "BRL",
+                              }).format(inf.discounted_amount)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Display Installments inside driver history card */}
+                        {inf.installments && inf.installments.length > 0 && (
+                          <div className="mt-2 text-right">
+                            <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">
+                              Parcelas
+                            </div>
+                            <div className="flex gap-1 flex-wrap justify-end mt-1">
+                              {inf.installments.map(
+                                (inst: any, idx: number) => (
+                                  <span
+                                    key={idx}
+                                    className="text-[10px] bg-white border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded font-medium"
+                                  >
+                                    {inst.date
+                                      ? new Date(inst.date)
+                                          .toLocaleDateString("pt-BR", {
+                                            timeZone: "UTC",
+                                          })
+                                          .substring(0, 5)
+                                      : "?"}
+                                    :{" "}
+                                    {new Intl.NumberFormat("pt-BR", {
+                                      style: "currency",
+                                      currency: "BRL",
+                                      maximumFractionDigits: 0,
+                                    }).format(Number(inst.amount) || 0)}
+                                  </span>
+                                ),
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200 h-[600px] flex flex-col items-center justify-center text-center">
+            <User size={48} className="text-zinc-300 mb-2" />
+            <p className="text-zinc-500 font-medium">
+              Nenhum motorista selecionado ou cadastrado.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function InfractionsTab() {
   const { user } = useAuth();
   const [infractions, setInfractions] = useState<any[]>([]);
@@ -230,7 +545,7 @@ export default function InfractionsTab() {
   const [loading, setLoading] = useState(true);
   const [setupRequired, setSetupRequired] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState<"list" | "dashboard">("list");
+  const [activeTab, setActiveTab] = useState<"list" | "dashboard" | "drivers">("list");
   const [printInfraction, setPrintInfraction] = useState<any>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -547,12 +862,25 @@ export default function InfractionsTab() {
           }`}
         >
           <LayoutDashboard size={18} />
-          Dashboard
+          Dashboard Geral
+        </button>
+        <button
+          onClick={() => setActiveTab("drivers")}
+          className={`px-4 py-3 font-medium text-sm flex items-center gap-2 border-b-2 transition-colors ${
+            activeTab === "drivers"
+              ? "border-red-500 text-red-600"
+              : "border-transparent text-zinc-500 hover:text-zinc-700"
+          }`}
+        >
+          <User size={18} />
+          Por Motorista
         </button>
       </div>
 
       {activeTab === "dashboard" ? (
         <DashboardView infractions={infractions} />
+      ) : activeTab === "drivers" ? (
+        <DriversDashboardView infractions={infractions} drivers={drivers} />
       ) : (
         <>
           {/* Search & Filters */}
