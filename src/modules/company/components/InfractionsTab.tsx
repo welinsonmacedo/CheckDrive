@@ -38,6 +38,7 @@ import {
 } from "recharts";
 import InfractionPrintModal from "./InfractionPrintModal";
 import DriverSummaryPrintModal from "./DriverSummaryPrintModal";
+import InfractionCodeSelector from "./InfractionCodeSelector";
 import { getInfractionDescription } from "@/src/utils/infractions";
 
 const DashboardView = ({ infractions }: { infractions: any[] }) => {
@@ -566,6 +567,7 @@ export default function InfractionsTab() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [isCodeSelectorOpen, setIsCodeSelectorOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -1134,14 +1136,24 @@ export default function InfractionsTab() {
                     <label className="block text-sm font-medium text-zinc-700 mb-1">
                       Código da Infração <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ex: 7455"
-                      value={formData.infraction_code}
-                      onChange={handleCodeChange}
-                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: 7455"
+                        value={formData.infraction_code}
+                        onChange={handleCodeChange}
+                        className="w-full pr-12 pl-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsCodeSelectorOpen(true)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200 rounded-lg transition-colors"
+                        title="Buscar código"
+                      >
+                        <Search size={18} />
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 mb-1">
@@ -1438,6 +1450,20 @@ export default function InfractionsTab() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isCodeSelectorOpen && (
+        <InfractionCodeSelector
+          onClose={() => setIsCodeSelectorOpen(false)}
+          onSelect={(code, desc) => {
+            setFormData((prev: any) => ({
+              ...prev,
+              infraction_code: code,
+              description: desc,
+            }));
+            setIsCodeSelectorOpen(false);
+          }}
+        />
+      )}
 
       <InfractionPrintModal
         infraction={printInfraction}
