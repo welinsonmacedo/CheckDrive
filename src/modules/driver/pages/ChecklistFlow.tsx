@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Camera,
@@ -29,6 +29,7 @@ const STEPS = ["info", "external_photos", "items", "summary"];
 export default function ChecklistFlow() {
   const { type } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [isStepLoading, setIsStepLoading] = useState(false);
@@ -96,7 +97,7 @@ export default function ChecklistFlow() {
           `checklist_state_${type || "start"}`,
         );
         const currentUrlScheduleId = new URLSearchParams(
-          window.location.search,
+          location.search,
         ).get("schedule");
 
         if (savedData && savedData.formData) {
@@ -125,7 +126,7 @@ export default function ChecklistFlow() {
 
   useEffect(() => {
     if (dataRestored && !isSubmitting && !hasSubmittedRef.current) {
-      const scheduleId = new URLSearchParams(window.location.search).get(
+      const scheduleId = new URLSearchParams(location.search).get(
         "schedule",
       );
       localforage
@@ -462,7 +463,7 @@ export default function ChecklistFlow() {
       let prefill = { vehicleId: "", trailerId: "", routeId: "" };
       if (user) {
         // Find if url has ?schedule=ID
-        const urlParams = new URLSearchParams(window.location.search);
+        const urlParams = new URLSearchParams(location.search);
         const scheduleId = urlParams.get("schedule");
         const cacheKey = scheduleId
           ? `cache_schedule_${scheduleId}`
@@ -935,7 +936,7 @@ export default function ChecklistFlow() {
         return acc;
       }, {});
 
-      const scheduleId = new URLSearchParams(window.location.search).get(
+      const scheduleId = new URLSearchParams(location.search).get(
         "schedule",
       );
       const { data: submission, error: subError } = await supabase

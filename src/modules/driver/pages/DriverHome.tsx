@@ -316,7 +316,7 @@ export default function DriverHome() {
                                  disabled={done}
                                  onClick={(e) => {
                                    e.stopPropagation();
-                                   navigate(`/checklist/${type.id}?schedule=${schedule.id}&vehicle_id=${schedule.vehicles?.id}`);
+                                   navigate(`/driver/checklist/${type.id}?schedule=${schedule.id}&vehicle_id=${schedule.vehicles?.id}`);
                                  }}
                                  className={`w-full flex items-center p-3 rounded-xl border ${done ? 'border-green-200 bg-green-50/50 opacity-60' : 'border-zinc-200 bg-white hover:border-primary/30 shadow-sm'} transition-all`}
                                >
@@ -368,7 +368,7 @@ export default function DriverHome() {
                   key={type.id}
                   whileTap={locked ? {} : { scale: 0.98 }}
                   disabled={locked}
-                  onClick={() => navigate(`/checklist/${type.id}`)}
+                  onClick={() => navigate(`/driver/checklist/${type.id}`)}
                   className={`w-full bento-card !p-4 flex-row items-center gap-5 group transition-all ${
                     locked 
                       ? 'opacity-60 grayscale cursor-not-allowed border-dashed bg-gray-50/50' 

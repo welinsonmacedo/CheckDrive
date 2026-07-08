@@ -50,16 +50,28 @@ export const runSilentAudit = async () => {
         .select("id")
         .eq("driver_id", schedule.driver_id)
         .eq("type", "penalty")
-        .ilike("reason", `%${dateMatchStr}%`)
+        .eq("schedule_id", schedule.id)
         .limit(1);
 
       if (checkError) {
         console.error("Error checking existing audit logs:", checkError);
-        continue;
-      }
-
-      // If it's already applied, just heal the schedule state and skip
-      if (existingLogs && existingLogs.length > 0) {
+        // Fallback for when column is not yet created
+        const { data: fallbackLogs, error: fallbackError } = await supabase
+          .from("audit_logs")
+          .select("id")
+          .eq("driver_id", schedule.driver_id)
+          .eq("type", "penalty")
+          .ilike("reason", `%${dateMatchStr}%`)
+          .limit(1);
+          
+        if (fallbackError || (fallbackLogs && fallbackLogs.length > 0)) {
+           await supabase
+             .from("schedules")
+             .update({ penalty_applied: true })
+             .eq("id", schedule.id);
+           continue;
+        }
+      } else if (existingLogs && existingLogs.length > 0) {
         await supabase
           .from("schedules")
           .update({ penalty_applied: true })
@@ -172,6 +184,7 @@ export const runSilentAudit = async () => {
         // Log Audit
         const { error: insertError } = await supabase.from("audit_logs").insert({
           driver_id: schedule.driver_id,
+          schedule_id: schedule.id,
           type: "penalty",
           amount: totalPenalty,
           reason,
@@ -179,6 +192,16 @@ export const runSilentAudit = async () => {
         
         if (insertError) {
             console.error("Error inserting audit log:", insertError);
+            // Fallback for when column is not yet created
+            const { error: fallbackInsertError } = await supabase.from("audit_logs").insert({
+              driver_id: schedule.driver_id,
+              type: "penalty",
+              amount: totalPenalty,
+              reason,
+            });
+            if (fallbackInsertError) {
+               console.error("Error inserting audit log (fallback):", fallbackInsertError);
+            }
         }
       }
     }
