@@ -674,15 +674,23 @@ export default function ChecklistFlow() {
               clearTimeout(timer);
               URL.revokeObjectURL(objectUrl);
               if (blob) {
-                const compressedFile = new File(
-                  [blob],
-                  file.name || "photo.jpg",
-                  {
-                    type: "image/jpeg",
-                    lastModified: Date.now(),
-                  },
-                );
-                resolve(compressedFile);
+                try {
+                  const compressedFile = new File(
+                    [blob],
+                    file.name || "photo.jpg",
+                    {
+                      type: "image/jpeg",
+                      lastModified: Date.now(),
+                    },
+                  );
+                  resolve(compressedFile);
+                } catch (err) {
+                  // Fallback for older browsers that don't support new File()
+                  const fallbackFile = blob as any;
+                  fallbackFile.name = file.name || "photo.jpg";
+                  fallbackFile.lastModified = Date.now();
+                  resolve(fallbackFile as File);
+                }
               } else {
                 resolve(file);
               }
@@ -708,30 +716,40 @@ export default function ChecklistFlow() {
     });
   };
 
-  const safeGetFile = (
+  const safeGetFile = async (
     file: any,
     key: string,
     fallbackBase64?: string,
-  ): File | null => {
+  ): Promise<File | null> => {
     if (file && (file instanceof Blob || file instanceof File)) {
       return file as File;
     }
-    if (fallbackBase64 && fallbackBase64.startsWith("data:image/")) {
-      try {
-        const arr = fallbackBase64.split(",");
-        const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
-        const bstr = atob(arr[1]);
-        let n = bstr.length;
-        const u8arr = new Uint8Array(n);
-        while (n--) {
-          u8arr[n] = bstr.charCodeAt(n);
+    if (fallbackBase64) {
+      if (fallbackBase64.startsWith("data:image/")) {
+        try {
+          const arr = fallbackBase64.split(",");
+          const mime = arr[0].match(/:(.*?);/)?.[1] || "image/jpeg";
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          return new File([u8arr], `photo_${key}.jpg`, { type: mime });
+        } catch (err) {
+          console.error(
+            "Error converting base64 fallback to file for key: " + key,
+            err,
+          );
         }
-        return new File([u8arr], `photo_${key}.jpg`, { type: mime });
-      } catch (err) {
-        console.error(
-          "Error converting base64 fallback to file for key: " + key,
-          err,
-        );
+      } else if (fallbackBase64.startsWith("blob:")) {
+        try {
+          const response = await fetch(fallbackBase64);
+          const blob = await response.blob();
+          return new File([blob], `photo_${key}.jpg`, { type: blob.type || "image/jpeg" });
+        } catch (err) {
+          console.error("Error fetching blob URL for key: " + key, err);
+        }
       }
     }
     return null;
@@ -836,10 +854,10 @@ export default function ChecklistFlow() {
       if (type === "fuel" || type === "Abastecimento") {
         const hasReceipt =
           photos.receipt ||
-          (previews.receipt && previews.receipt.startsWith("data:image/"));
+          (previews.receipt && (previews.receipt.startsWith("data:image/") || previews.receipt.startsWith("blob:")));
         const hasOdometer =
           photos.odometer ||
-          (previews.odometer && previews.odometer.startsWith("data:image/"));
+          (previews.odometer && (previews.odometer.startsWith("data:image/") || previews.odometer.startsWith("blob:")));
 
         if (requireFuelReceiptPhoto && !hasReceipt) return false;
         if (!hasOdometer) return false;
@@ -850,16 +868,16 @@ export default function ChecklistFlow() {
 
       const hasFront =
         photos.front ||
-        (previews.front && previews.front.startsWith("data:image/"));
+        (previews.front && (previews.front.startsWith("data:image/") || previews.front.startsWith("blob:")));
       const hasBack =
         photos.back ||
-        (previews.back && previews.back.startsWith("data:image/"));
+        (previews.back && (previews.back.startsWith("data:image/") || previews.back.startsWith("blob:")));
       const hasLeft =
         photos.left ||
-        (previews.left && previews.left.startsWith("data:image/"));
+        (previews.left && (previews.left.startsWith("data:image/") || previews.left.startsWith("blob:")));
       const hasRight =
         photos.right ||
-        (previews.right && previews.right.startsWith("data:image/"));
+        (previews.right && (previews.right.startsWith("data:image/") || previews.right.startsWith("blob:")));
 
       return !!(hasFront && hasBack && hasLeft && hasRight);
     }
@@ -889,42 +907,29 @@ export default function ChecklistFlow() {
       const companyId = profileData?.company_id || null;
 
       const photoUrls: Record<string, string> = {};
+      let receipt_photo_url: string | null = null;
       const photos = formData.photos;
       const previews = formData.photoPreviews || {};
 
-      for (const key of ["front", "back", "left", "right", "odometer"]) {
+      for (const key of ["front", "back", "left", "right", "odometer", "receipt"]) {
         const fileObj = (photos as any)[key];
         const previewStr = (previews as any)[key];
-        const finalFile = safeGetFile(fileObj, key, previewStr);
+        const finalFile = await safeGetFile(fileObj, key, previewStr);
 
         if (finalFile) {
-          const path = `${user.id}/photos/${Date.now()}_${key}.jpg`;
+          const path = `${user.id}/${key === 'receipt' ? 'receipts' : 'photos'}/${Date.now()}_${key}.jpg`;
           const { error } = await supabase.storage
             .from("checklist-photos")
             .upload(path, finalFile);
           if (error) {
             console.error(`Error uploading photo ${key}:`, error);
           } else {
-            photoUrls[key] = path;
+            if (key === 'receipt') {
+              receipt_photo_url = path;
+            } else {
+              photoUrls[key] = path;
+            }
           }
-        }
-      }
-
-      let receipt_photo_url = null;
-      const receiptFile = safeGetFile(
-        photos.receipt,
-        "receipt",
-        previews.receipt,
-      );
-      if (receiptFile) {
-        const path = `${user.id}/receipts/${Date.now()}_receipt.jpg`;
-        const { error } = await supabase.storage
-          .from("checklist-photos")
-          .upload(path, receiptFile);
-        if (error) {
-          console.error("Error uploading receipt photo:", error);
-        } else {
-          receipt_photo_url = path;
         }
       }
 
@@ -1000,11 +1005,14 @@ export default function ChecklistFlow() {
           const d = subDefects[i];
           let dPhotoUrl = d.existing_photo_url || null;
 
-          if (d.photo) {
+          const defectPreviewKey = `defect_${itemId}_${i}`;
+          const dFinalFile = await safeGetFile(d.photo, defectPreviewKey, previews[defectPreviewKey]);
+
+          if (dFinalFile) {
             const path = `${user.id}/defects/${Date.now()}_${itemId}_${i}.jpg`;
             const { error: uploadError } = await supabase.storage
               .from("checklist-photos")
-              .upload(path, d.photo);
+              .upload(path, dFinalFile);
             if (!uploadError) {
               dPhotoUrl = path;
             } else {
