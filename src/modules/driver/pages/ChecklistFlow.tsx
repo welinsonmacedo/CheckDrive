@@ -808,6 +808,29 @@ export default function ChecklistFlow() {
     setLoading(true);
     setIsSubmitting(true);
     try {
+      let lat: number | null = null;
+      let lng: number | null = null;
+
+      if (requireLocation) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 0,
+            });
+          });
+          lat = pos.coords.latitude;
+          lng = pos.coords.longitude;
+        } catch (err) {
+          console.error("Location error", err);
+          alert("Não foi possível obter a localização. Certifique-se de que o GPS está ativado e a permissão de localização foi concedida ao navegador.");
+          setLoading(false);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -868,8 +891,8 @@ export default function ChecklistFlow() {
           route_id: formData.routeId || null,
           type: type || "start",
           odometer: parseInt(formData.km) || 0,
-          latitude: null,
-          longitude: null,
+          latitude: lat,
+          longitude: lng,
           photos: photoUrls,
           receipt_photo_url,
           status,
