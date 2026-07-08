@@ -334,6 +334,7 @@ const DriversDashboardView = ({
         infractions: driverInfractions,
         count: driverInfractions.length,
         totalAmount,
+        totalNicAmount,
         totalDiscounted,
         totalFineDiscount,
       };
