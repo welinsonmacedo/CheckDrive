@@ -688,14 +688,19 @@ export default function ChecklistFlow() {
         ...(prev.photoPreviews || {}),
         [key]: objectUrl,
       },
+      photos: { ...prev.photos, [key]: file },
     }));
 
     // 2. Perform safe image compression in background
-    const finalFile = await compressImageSafe(file);
-    setFormData((prev) => ({
-      ...prev,
-      photos: { ...prev.photos, [key]: finalFile },
-    }));
+    try {
+      const finalFile = await compressImageSafe(file);
+      setFormData((prev) => ({
+        ...prev,
+        photos: { ...prev.photos, [key]: finalFile },
+      }));
+    } catch (e) {
+      console.warn("Compression failed in background, keeping original", e);
+    }
   };
 
   const handleDefectPhotoUpload = async (
@@ -705,30 +710,45 @@ export default function ChecklistFlow() {
   ) => {
     // 1. Instant preview using object URL (zero memory overhead)
     const objectUrl = URL.createObjectURL(file);
-    setFormData((prev) => ({
-      ...prev,
-      photoPreviews: {
-        ...(prev.photoPreviews || {}),
-        [`defect_${itemId}_${defectIdx}`]: objectUrl,
-      },
-    }));
-
-    // 2. Perform safe image compression
-    const finalFile = await compressImageSafe(file);
     setFormData((prev) => {
       const newDefects = [...(prev.defects[itemId] || [])];
       newDefects[defectIdx] = {
         ...newDefects[defectIdx],
-        photo: finalFile,
+        photo: file,
       };
       return {
         ...prev,
+        photoPreviews: {
+          ...(prev.photoPreviews || {}),
+          [`defect_${itemId}_${defectIdx}`]: objectUrl,
+        },
         defects: {
           ...prev.defects,
           [itemId]: newDefects,
         },
       };
     });
+
+    // 2. Perform safe image compression
+    try {
+      const finalFile = await compressImageSafe(file);
+      setFormData((prev) => {
+        const newDefects = [...(prev.defects[itemId] || [])];
+        newDefects[defectIdx] = {
+          ...newDefects[defectIdx],
+          photo: finalFile,
+        };
+        return {
+          ...prev,
+          defects: {
+            ...prev.defects,
+            [itemId]: newDefects,
+          },
+        };
+      });
+    } catch (e) {
+      console.warn("Compression failed in background, keeping original", e);
+    }
   };
 
   const isStepValid = () => {

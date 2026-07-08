@@ -65,6 +65,7 @@ export default function DriverLayout() {
             </span>
           </Link>
 
+          {/* Hiding remaining items as requested
           {!user?.isInternal && !user?.hideAverages && (
             <Link
               to="/driver/history"
@@ -78,8 +79,6 @@ export default function DriverLayout() {
               </span>
             </Link>
           )}
-
-          {/* Hiding remaining items as requested
           {!user?.isInternal && (
             <Link
               to="/driver/ranking"
