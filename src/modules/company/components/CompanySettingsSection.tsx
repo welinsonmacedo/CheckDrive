@@ -89,6 +89,7 @@ export default function CompanySettingsSection() {
       }
 
       setUploading(true);
+      setSqlError(null);
       const fileExt = file.name && file.name.includes(".") ? file.name.split(".").pop() : "jpg";
       // Upload under user.id/ prefix to respect 'avatars' RLS policy: (storage.foldername(name))[1] = auth.uid()::text
       const filePath = `${user.id}/company-logo-${Date.now()}.${fileExt}`;
@@ -105,7 +106,18 @@ export default function CompanySettingsSection() {
 
       setCompany((prev) => ({ ...prev, logo_url: publicUrl }));
     } catch (error: any) {
-      alert("Erro ao fazer upload da logo: " + error.message);
+      console.error("Erro no upload da logo:", error);
+      if (
+        error.message &&
+        (error.message.includes("row-level security") ||
+          error.message.includes("violates row-level security policy") ||
+          error.message.includes("policy") ||
+          error.message.includes("RLS"))
+      ) {
+        setSqlError("storage_rls_needed");
+      } else {
+        alert("Erro ao fazer upload da logo: " + error.message);
+      }
     } finally {
       setUploading(false);
     }
@@ -217,6 +229,54 @@ ADD COLUMN IF NOT EXISTS phone TEXT;`}
                 className="mt-4 px-4 py-2 bg-white hover:bg-zinc-50 border border-amber-200 text-amber-900 rounded-lg text-xs font-bold transition-colors"
               >
                 Entendi, tentar novamente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sqlError === "storage_rls_needed" && (
+        <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200 mb-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+            <div>
+              <h4 className="text-sm font-bold text-amber-900">
+                Permissão de Storage (RLS) Necessária
+              </h4>
+              <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                As políticas de segurança de armazenamento (Row-Level Security) do Supabase estão bloqueando o upload no bucket <strong>'avatars'</strong>.
+                Copie e execute o comando SQL abaixo no painel de <strong>SQL Editor</strong> do seu Supabase para criar as políticas de permissão necessárias:
+              </p>
+              <div className="mt-4 p-4 bg-zinc-900 border border-zinc-800 rounded-xl overflow-x-auto text-xs font-mono text-zinc-300">
+                <pre>
+{`-- 1. Garante que o bucket 'avatars' existe e é público para as imagens renderizarem
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('avatars', 'avatars', true) 
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 2. Permite que usuários autenticados façam upload de avatares/logos
+DROP POLICY IF EXISTS "Allow authenticated users to upload avatars" ON storage.objects;
+CREATE POLICY "Allow authenticated users to upload avatars" 
+ON storage.objects FOR INSERT TO authenticated 
+WITH CHECK (
+  bucket_id = 'avatars'
+);
+
+-- 3. Permite leitura pública dos arquivos no bucket 'avatars'
+DROP POLICY IF EXISTS "Public Read on Avatars" ON storage.objects;
+CREATE POLICY "Public Read on Avatars" 
+ON storage.objects FOR SELECT TO authenticated 
+USING (
+  bucket_id = 'avatars'
+);`}
+                </pre>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSqlError(null)}
+                className="mt-4 px-4 py-2 bg-white hover:bg-zinc-50 border border-amber-200 text-amber-900 rounded-lg text-xs font-bold transition-colors"
+              >
+                Entendi, tentar novamente o upload
               </button>
             </div>
           </div>
