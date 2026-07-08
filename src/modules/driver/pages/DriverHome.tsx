@@ -219,35 +219,10 @@ export default function DriverHome() {
           <h2 className="text-3xl font-extrabold text-text-main tracking-tight">{driverInfo.name}</h2>
           <p className="text-text-muted text-sm font-medium">Bom dia! Sua operação hoje começa agora.</p>
         </div>
-        <button
-          onClick={() => navigate('/driver/notifications')}
-          className="relative p-3 bg-white border border-app-border rounded-2xl shadow-sm text-text-muted hover:text-indigo-600 hover:border-indigo-100 transition-all active:scale-95 flex items-center justify-center shrink-0"
-        >
-          <Bell size={22} />
-          {notifCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 bg-[#e12a2a] text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-sm border border-white">
-              {notifCount}
-            </span>
-          )}
-        </button>
       </div>
 
       {!user?.isInternal ? (
-      <div className={`grid ${driverInfo.participates_in_ranking ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
-        {driverInfo.participates_in_ranking && (
-          <button 
-            onClick={() => navigate('/ranking')}
-            className="bento-card items-center justify-center text-center hover:border-primary/30 active:bg-app-bg transition-all"
-          >
-            <Trophy className="text-warning mb-2" size={24} />
-            <span className="text-3xl font-black text-text-main tabular-nums tracking-tighter">
-              {systemType === 'cash' ? `R$ ${driverInfo.score}` : driverInfo.score}
-            </span>
-            <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-              {systemType === 'cash' ? 'Meu Saldo' : 'Sua Pontuação'}
-            </span>
-          </button>
-        )}
+      <div className={`grid grid-cols-1 gap-4`}>
         <div className="bento-card items-center justify-center text-center">
           <ClipboardCheck className="text-primary mb-2" size={24} />
           <span className="text-3xl font-black text-text-main tabular-nums tracking-tighter">{driverInfo.checklists}</span>
@@ -342,57 +317,7 @@ export default function DriverHome() {
 
       {/* Checklist Grid */}
       <div className="space-y-4">
-        <div className="flex justify-between items-center px-1">
-          <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">{user?.isInternal ? 'Gestão de Frota' : 'Operação Diária'}</h3>
-          <div className="h-px flex-1 mx-4 bg-app-border" />
-        </div>
-        
-        {!manualChecklistActivate && !user?.isInternal ? (
-          <div className="bg-red-50 border border-red-100 rounded-2xl p-5 flex gap-4 items-center">
-            <div className="w-10 h-10 bg-red-100 flex items-center justify-center rounded-xl text-red-600 shrink-0">
-              <AlertTriangle size={20} />
-            </div>
-            <div className="flex-1">
-              <span className="block font-black text-red-700 text-xs uppercase tracking-wider">Checklist Avulso Desativado</span>
-              <span className="block text-[#a82525] text-[11px] leading-tight font-semibold mt-0.5">A empresa desativou o envio de checklist manual. Utilize suas escalas disponíveis acima para realizar checklists obrigatórios.</span>
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {displayedTypes.map((type) => {
-              const done = isTypeDone(null, type.id);
-              const locked = isTypeLocked(type.id);
-              
-              return (
-                <motion.button
-                  key={type.id}
-                  whileTap={locked ? {} : { scale: 0.98 }}
-                  disabled={locked}
-                  onClick={() => navigate(`/driver/checklist/${type.id}`)}
-                  className={`w-full bento-card !p-4 flex-row items-center gap-5 group transition-all ${
-                    locked 
-                      ? 'opacity-60 grayscale cursor-not-allowed border-dashed bg-gray-50/50' 
-                      : 'hover:border-primary/30 active:bg-app-bg'
-                  }`}
-                >
-                  <div className={`${done ? 'bg-green-400 text-white' : type.bg + ' ' + type.color} p-4 rounded-xl group-hover:scale-105 transition-transform`}>
-                    <type.icon size={24} />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="flex items-center gap-2">
-                      <span className={`block font-bold text-base ${done ? 'text-green-600' : 'text-text-main'}`}>{type.label}</span>
-                      {done && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 text-[8px] font-black uppercase tracking-widest">FEITO</span>
-                      )}
-                    </div>
-                    <span className="block text-xs text-text-muted font-medium italic">{type.desc}</span>
-                  </div>
-                  {!locked && <ChevronRight size={20} className="text-app-border group-hover:text-primary transition-colors" />}
-                </motion.button>
-              );
-            })}
-          </div>
-        )}
+        {/* Manual Checklists Hidden by Request */}
       </div>
 
       {/* Status Alert - Bento style */}

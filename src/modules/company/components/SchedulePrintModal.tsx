@@ -86,7 +86,7 @@ export default function SchedulePrintModal({
 
           {/* Printable Content */}
           <div className="p-8 print:p-0">
-            <PrintHeader title="FICHA DA ESCALA DE OPERAÇÃO" />
+            <PrintHeader />
 
             <div className="mt-8 space-y-8">
               {/* Info Grid */}

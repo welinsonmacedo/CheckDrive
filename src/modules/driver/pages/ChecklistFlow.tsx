@@ -625,95 +625,19 @@ export default function ChecklistFlow() {
     });
   };
 
-  const compressImageSafe = (file: File): Promise<File> => {
-    return new Promise((resolve) => {
-      // 15-second timeout to guarantee it never hangs, returning the original file
-      const timer = setTimeout(() => {
-        console.warn("Compression timed out, returning original file.");
-        resolve(file);
-      }, 15000);
-
-      const objectUrl = URL.createObjectURL(file);
-      const img = new Image();
-
-      img.onload = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
-          const maxDim = 1200;
-
-          // Scale proportion
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            clearTimeout(timer);
-            URL.revokeObjectURL(objectUrl);
-            resolve(file);
-            return;
-          }
-
-          // Draw image
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Get blob as JPEG with 0.75 quality
-          canvas.toBlob(
-            (blob) => {
-              clearTimeout(timer);
-              URL.revokeObjectURL(objectUrl);
-              if (blob) {
-                try {
-                  const compressedFile = new File(
-                    [blob],
-                    file.name || "photo.jpg",
-                    {
-                      type: "image/jpeg",
-                      lastModified: Date.now(),
-                    },
-                  );
-                  resolve(compressedFile);
-                } catch (err) {
-                  // Fallback for older browsers that don't support new File()
-                  const fallbackFile = blob as any;
-                  fallbackFile.name = file.name || "photo.jpg";
-                  fallbackFile.lastModified = Date.now();
-                  resolve(fallbackFile as File);
-                }
-              } else {
-                resolve(file);
-              }
-            },
-            "image/jpeg",
-            0.75,
-          );
-        } catch (e) {
-          console.warn("Canvas compress error, returning original file", e);
-          clearTimeout(timer);
-          URL.revokeObjectURL(objectUrl);
-          resolve(file);
-        }
+  const compressImageSafe = async (file: File): Promise<File> => {
+    try {
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+        fileType: "image/jpeg",
       };
-
-      img.onerror = () => {
-        clearTimeout(timer);
-        URL.revokeObjectURL(objectUrl);
-        resolve(file);
-      };
-
-      img.src = objectUrl;
-    });
+      return await imageCompression(file, options);
+    } catch (error) {
+      console.warn("Compression failed, returning original file", error);
+      return file;
+    }
   };
 
   const safeGetFile = async (
@@ -772,21 +696,6 @@ export default function ChecklistFlow() {
       ...prev,
       photos: { ...prev.photos, [key]: finalFile },
     }));
-
-    // 3. Regenerate preview from compressed file to keep quality/size aligned in persistent storage
-    const compressedReader = new FileReader();
-    compressedReader.onloadend = () => {
-      const base64String = compressedReader.result as string;
-      setFormData((prev) => ({
-        ...prev,
-        photoPreviews: {
-          ...(prev.photoPreviews || {}),
-          [key]: base64String,
-        },
-      }));
-      URL.revokeObjectURL(objectUrl);
-    };
-    compressedReader.readAsDataURL(finalFile);
   };
 
   const handleDefectPhotoUpload = async (
@@ -820,21 +729,6 @@ export default function ChecklistFlow() {
         },
       };
     });
-
-    // 3. Update preview with compressed file to match storage size
-    const compressedReader = new FileReader();
-    compressedReader.onloadend = () => {
-      const base64String = compressedReader.result as string;
-      setFormData((prev) => ({
-        ...prev,
-        photoPreviews: {
-          ...(prev.photoPreviews || {}),
-          [`defect_${itemId}_${defectIdx}`]: base64String,
-        },
-      }));
-      URL.revokeObjectURL(objectUrl);
-    };
-    compressedReader.readAsDataURL(finalFile);
   };
 
   const isStepValid = () => {

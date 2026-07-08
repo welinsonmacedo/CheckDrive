@@ -1,0 +1,17 @@
+--- src/modules/driver/layouts/DriverLayout.tsx
++++ src/modules/driver/layouts/DriverLayout.tsx
+@@ -58,6 +58,7 @@
+               Início
+             </span>
+           </Link>
++          {/*
+           {!user?.isInternal && !user?.hideAverages && (
+             <Link
+@@ -107,6 +108,7 @@
+               Perfil
+             </span>
+           </Link>
++          */}
+         </nav>
+       )}
+     </div>

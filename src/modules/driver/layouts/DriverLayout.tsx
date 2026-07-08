@@ -79,64 +79,14 @@ export default function DriverLayout() {
             </Link>
           )}
 
+          {/* Hiding remaining items as requested
           {!user?.isInternal && (
             <Link
               to="/driver/ranking"
-              className={`flex flex-col items-center gap-1 transition-colors ${
-                location.pathname.includes('/driver/ranking') ? 'text-primary' : 'text-zinc-400'
-              }`}
-            >
-              <Trophy size={20} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">
-                Ranking
-              </span>
-            </Link>
+              ...
+            />
           )}
-
-          {!user?.isInternal && (
-            <Link
-              to="/driver/penalties"
-              className={`flex flex-col items-center gap-1 transition-colors ${
-                location.pathname.includes('/driver/penalties') ? 'text-primary' : 'text-zinc-400'
-              }`}
-            >
-              <AlertTriangle size={20} />
-              <span className="text-[10px] font-bold uppercase tracking-wider">
-                Descontos
-              </span>
-            </Link>
-          )}
-
-          <Link
-            to="/driver/notifications"
-            className={`flex flex-col items-center gap-1 transition-colors ${
-              location.pathname.includes('/driver/notifications') ? 'text-primary' : 'text-zinc-400'
-            }`}
-          >
-            <div className="relative">
-              <Bell size={20} />
-              {unviewedCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full text-[8px] w-3.5 h-3.5 font-bold flex items-center justify-center shadow-sm">
-                  {unviewedCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] font-bold uppercase tracking-wider">
-              Alertas
-            </span>
-          </Link>
-
-          <Link
-            to="/driver/profile"
-            className={`flex flex-col items-center gap-1 transition-colors ${
-              location.pathname.includes('/driver/profile') ? 'text-primary' : 'text-zinc-400'
-            }`}
-          >
-            <UserIcon size={20} />
-            <span className="text-[10px] font-bold uppercase tracking-wider">
-              Perfil
-            </span>
-          </Link>
+          */}
 
         </nav>
       )}
