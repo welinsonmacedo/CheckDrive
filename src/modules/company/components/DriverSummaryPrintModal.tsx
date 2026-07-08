@@ -91,7 +91,7 @@ export default function DriverSummaryPrintModal({
 
           {/* Printable Content */}
           <div className="p-8 overflow-y-auto print:overflow-visible print:block print:p-0 text-zinc-900 bg-white print:text-black">
-            <div className="max-w-3xl mx-auto space-y-8 my-4 print:my-0">
+            <div className="max-w-3xl mx-auto space-y-4 my-4 print:my-0">
               
               {/* Formal Corporate Top Bar */}
               <div className="flex justify-between items-start border-b border-zinc-300 pb-4">

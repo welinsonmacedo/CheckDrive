@@ -9,6 +9,7 @@ import Privacy from '@/src/modules/shared/pages/Privacy';
 import Login from '@/src/modules/shared/pages/Login';
 import ResetPassword from '@/src/modules/shared/pages/ResetPassword';
 import Documentation from '@/src/modules/shared/pages/Documentation';
+import QuickLogin from '@/src/pages/QuickLogin';
 
 // Module Routes
 import DriverRoutes from '@/src/modules/driver/routes/DriverRoutes';
@@ -38,6 +39,7 @@ export default function AppRoutes() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/quick-login" element={<QuickLogin />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       
       {/* Module independent root routes */}

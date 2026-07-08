@@ -123,11 +123,11 @@ export default function InfractionPrintModal({
 
           {/* Printable Content */}
           <div className="p-8 overflow-y-auto print:overflow-visible print:block print:p-0 text-zinc-900 bg-white print:text-black">
-            <div className="max-w-3xl mx-auto space-y-12 my-4 print:my-0">
+            <div className="max-w-3xl mx-auto space-y-4 my-4 print:my-0">
               
               {/* SECTION 1: Termo de Responsabilidade e Desconto de Multa */}
               {(selectedTerm === 'both' || selectedTerm === 'responsibility') && (
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {/* Decorative corporate top bar */}
                   <div className="flex justify-between items-center border-b border-zinc-300 pb-4">
                     <div>
@@ -264,7 +264,7 @@ export default function InfractionPrintModal({
                   </div>
 
                   {/* Assinatura do Condutor */}
-                  <div className="pt-8 pb-4 print:pt-4">
+                  <div className="pt-4 pb-2 print:pt-2">
                     <div className="grid grid-cols-2 gap-12 max-w-2xl mx-auto">
                       <div className="text-center">
                         <div className="border-t border-zinc-400 pt-1.5 text-[10px] text-zinc-500 uppercase tracking-wider">
@@ -286,7 +286,7 @@ export default function InfractionPrintModal({
                   </div>
 
                   {/* Assinatura Empresa */}
-                  <div className="border-t border-zinc-200 pt-6 mt-4 print:break-inside-avoid">
+                  <div className="border-t border-zinc-200 pt-4 mt-2 print:break-inside-avoid">
                     <h3 className="font-bold text-zinc-900 uppercase text-xs mb-3">
                       3. Autenticação e Recebimento Corporativo
                     </h3>
@@ -314,14 +314,13 @@ export default function InfractionPrintModal({
               {/* Page Break / Separator for both terms */}
               {selectedTerm === 'both' && (
                 <>
-                  <div className="border-b border-zinc-300 my-8 print:hidden"></div>
-                  <div className="hidden print:block" style={{ pageBreakBefore: 'always', breakBefore: 'page' }}></div>
+                  <div className="border-b-2 border-dashed border-zinc-300 my-4 print:my-4"></div>
                 </>
               )}
 
               {/* SECTION 2: Termo Financeiro RH */}
               {(selectedTerm === 'both' || selectedTerm === 'finance') && (
-                <div className="space-y-6 pt-4 pb-8 bg-zinc-50/40 print:bg-white p-6 rounded-2xl border border-zinc-300 print:break-inside-avoid shadow-sm">
+                <div className="space-y-4 pt-2 pb-4 bg-zinc-50/40 print:bg-transparent p-4 print:p-0 rounded-2xl border border-zinc-300 print:border-none print:break-inside-avoid shadow-sm print:shadow-none">
                   
                   {/* Ledger Header */}
                   <div className="border-b border-zinc-300 pb-4 text-center">
@@ -370,7 +369,7 @@ export default function InfractionPrintModal({
                         Área de Processamento de Departamento Pessoal (RH)
                       </span>
                     </div>
-                    <div className="p-4 space-y-4">
+                    <div className="p-3 space-y-3">
                       <div className="grid grid-cols-2 gap-4 text-xs">
                         <div className="space-y-2">
                           <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">
@@ -392,7 +391,7 @@ export default function InfractionPrintModal({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-8 pt-6">
+                      <div className="grid grid-cols-2 gap-8 pt-4">
                         <div className="flex flex-col text-xs text-zinc-600">
                           <span>Data de Lançamento no Sistema:</span>
                           <span className="font-semibold border-b border-zinc-200 py-1 mt-1">_____ / _____ / _________</span>
@@ -414,7 +413,7 @@ export default function InfractionPrintModal({
                         Área de Processamento Financeiro / Contabilidade
                       </span>
                     </div>
-                    <div className="p-4 space-y-4">
+                    <div className="p-3 space-y-3">
                       <p className="text-xs text-zinc-600 leading-relaxed text-justify">
                         Fica autorizado o provisionamento contábil e respectivo desconto financeiro da guia de recolhimento sob a titularidade da empresa, em estrito cumprimento com o Termo de Responsabilidade firmado pelo condutor.
                       </p>

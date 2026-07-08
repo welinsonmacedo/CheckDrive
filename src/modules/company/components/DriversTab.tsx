@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import { CheckCircle2, Search, X, Plus, Key } from "lucide-react";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
@@ -113,75 +114,70 @@ export default function DriversTab() {
           return;
         }
 
-        if (userForm.isAuthUser) {
-          const { data, error } = await supabase.auth.signUp({
-            email: userForm.email,
-            password: userForm.password,
-            options: {
-              data: {
-                full_name: parsedName,
-              },
+        // Use a temporary client to avoid logging out the current user
+        const tempClient = createClient(
+          import.meta.env.VITE_SUPABASE_URL,
+          import.meta.env.VITE_SUPABASE_ANON_KEY,
+          {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false,
+              detectSessionInUrl: false,
             },
-          });
-
-          if (error) throw error;
-
-          if (data.user) {
-            const { error: profileError } = await supabase
-              .from("profiles")
-              .upsert(
-                {
-                  id: data.user.id,
-                  email: userForm.email,
-                  active: true,
-                  company_id: user?.company_id || null,
-                  ...updatePayload,
-                },
-                { onConflict: "id" },
-              );
-
-            if (profileError) {
-              console.warn(
-                "Could not upsert profile directly (possibly RLS)",
-                profileError,
-              );
-
-              await supabase
-                .from("profiles")
-                .update(updatePayload)
-                .eq("id", data.user.id);
-            }
-
-            if (userForm.role === "driver" && userForm.participatesInRanking) {
-              await supabase
-                .from("driver_performance")
-                .upsert(
-                  { driver_id: data.user.id, score: 1000 },
-                  { onConflict: "driver_id" },
-                );
-            }
           }
-        } else {
-          // Register driver without authentication user (insert profile directly)
-          const newId = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
-          
+        );
+
+        let emailToUse = userForm.email;
+        let passwordToUse = userForm.password;
+
+        if (!userForm.isAuthUser) {
+          emailToUse = `driver_${Date.now()}_${Math.random().toString(36).substring(2, 6)}@noemail.local`;
+          passwordToUse = "Pw@" + btoa(emailToUse).replace(/[^a-zA-Z0-9]/g, "").substring(0, 10) + "Xy9";
+        }
+
+        const { data, error } = await tempClient.auth.signUp({
+          email: emailToUse,
+          password: passwordToUse,
+          options: {
+            data: {
+              full_name: parsedName,
+            },
+          },
+        });
+
+        if (error) throw error;
+
+        if (data.user) {
           const { error: profileError } = await supabase
             .from("profiles")
-            .insert({
-              id: newId,
-              email: userForm.email || null,
-              active: true,
-              company_id: user?.company_id || null,
-              ...updatePayload,
-            });
+            .upsert(
+              {
+                id: data.user.id,
+                email: emailToUse,
+                active: true,
+                company_id: user?.company_id || null,
+                ...updatePayload,
+              },
+              { onConflict: "id" },
+            );
 
-          if (profileError) throw profileError;
+          if (profileError) {
+            console.warn(
+              "Could not upsert profile directly (possibly RLS)",
+              profileError,
+            );
+
+            await supabase
+              .from("profiles")
+              .update(updatePayload)
+              .eq("id", data.user.id);
+          }
 
           if (userForm.role === "driver" && userForm.participatesInRanking) {
             await supabase
               .from("driver_performance")
               .upsert(
-                { driver_id: newId, score: 1000 },
+                { driver_id: data.user.id, score: 1000 },
                 { onConflict: "driver_id" },
               );
           }

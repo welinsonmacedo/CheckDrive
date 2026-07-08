@@ -639,6 +639,21 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                             Editar
                           </button>
                         )}
+                        {sch.profiles?.email?.endsWith('@noemail.local') && (
+                          <button
+                            onClick={() => {
+                              const email = sch.profiles.email;
+                              const pwd = "Pw@" + btoa(email).replace(/[^a-zA-Z0-9]/g, "").substring(0, 10) + "Xy9";
+                              const link = `${window.location.origin}/quick-login?e=${encodeURIComponent(email)}&p=${encodeURIComponent(pwd)}&s=${sch.id}`;
+                              navigator.clipboard.writeText(link);
+                              alert("Link de acesso temporário copiado para a área de transferência!");
+                            }}
+                            className="text-orange-500 hover:underline text-[10px] font-bold"
+                            title="Gerar link de acesso sem login"
+                          >
+                            Copiar Link
+                          </button>
+                        )}
                         {canDelete && (
                           <button
                             onClick={() => deleteItem(sch.id, hasChecklist)}
