@@ -54,6 +54,18 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
     0,
   );
   const totalDiscounted = infractions.reduce(
+    (acc, curr) => {
+      let sum = acc;
+      if (curr.installments) {
+        curr.installments.forEach((inst: any) => {
+          sum += Number(inst.amount) || 0;
+        });
+      }
+      return sum;
+    },
+    0,
+  );
+  const totalFineDiscount = infractions.reduce(
     (acc, curr) => acc + (Number(curr.discounted_amount) || 0),
     0,
   );
@@ -94,7 +106,7 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
           <div className="flex items-center gap-3 text-zinc-500 mb-2">
             <Receipt size={20} />
@@ -110,7 +122,19 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
           <div className="flex items-center gap-3 text-zinc-500 mb-2">
             <TrendingUp size={20} />
-            <h3 className="font-medium text-sm">Total Descontado</h3>
+            <h3 className="font-medium text-sm">Multas (c/ Desconto)</h3>
+          </div>
+          <div className="text-2xl font-bold text-emerald-600">
+            {new Intl.NumberFormat("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }).format(totalFineDiscount)}
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
+          <div className="flex items-center gap-3 text-zinc-500 mb-2">
+            <TrendingUp size={20} />
+            <h3 className="font-medium text-sm">Descontado do Motorista</h3>
           </div>
           <div className="text-2xl font-bold text-emerald-600">
             {new Intl.NumberFormat("pt-BR", {
@@ -265,6 +289,18 @@ const DriversDashboardView = ({
         0,
       );
       const totalDiscounted = driverInfractions.reduce(
+        (acc, curr) => {
+          let sum = acc;
+          if (curr.installments) {
+            curr.installments.forEach((inst: any) => {
+              sum += Number(inst.amount) || 0;
+            });
+          }
+          return sum;
+        },
+        0,
+      );
+      const totalFineDiscount = driverInfractions.reduce(
         (acc, curr) => acc + (Number(curr.discounted_amount) || 0),
         0,
       );
@@ -275,6 +311,7 @@ const DriversDashboardView = ({
         count: driverInfractions.length,
         totalAmount,
         totalDiscounted,
+        totalFineDiscount,
       };
     })
     .filter((stat) => stat.count > 0 || driverSearch === "");
@@ -422,9 +459,20 @@ const DriversDashboardView = ({
                     }).format(selectedDriverInfo.totalAmount)}
                   </div>
                 </div>
+                <div className="text-center px-3 border-r border-zinc-200">
+                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Multas (c/ Desc.)
+                  </div>
+                  <div className="text-base font-extrabold text-emerald-600">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(selectedDriverInfo.totalFineDiscount)}
+                  </div>
+                </div>
                 <div className="text-center px-3">
                   <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                    Descontado
+                    Descontado do Motorista
                   </div>
                   <div className="text-base font-extrabold text-emerald-600">
                     {new Intl.NumberFormat("pt-BR", {

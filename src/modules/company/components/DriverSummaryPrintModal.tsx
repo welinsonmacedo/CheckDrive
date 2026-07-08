@@ -13,6 +13,7 @@ interface DriverSummaryPrintModalProps {
     count: number;
     totalAmount: number;
     totalDiscounted: number;
+    totalFineDiscount?: number;
   } | null;
   onClose: () => void;
 }
@@ -48,10 +49,35 @@ export default function DriverSummaryPrintModal({
     currency: "BRL",
   }).format(driver.totalDiscounted);
 
+  const formattedTotalFineDiscount = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(driver.totalFineDiscount || 0);
+
+  let effectiveTotal = 0;
+  if (driver?.infractions) {
+    driver.infractions.forEach((inf: any) => {
+      let baseAmount = 0;
+      if (inf.discounted_amount != null) {
+        baseAmount = Number(inf.discounted_amount);
+      } else {
+        baseAmount = Number(inf.amount) || 0;
+      }
+      
+      if (inf.installments) {
+        const nicInst = inf.installments.find((i: any) => i.isNIC);
+        if (nicInst) {
+          baseAmount += Number(nicInst.amount) || 0;
+        }
+      }
+      effectiveTotal += baseAmount;
+    });
+  }
+
   const formattedNetAmount = new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-  }).format(Math.max(0, driver.totalAmount - driver.totalDiscounted));
+  }).format(Math.max(0, effectiveTotal - (driver?.totalDiscounted || 0)));
 
   const currentDate = new Date().toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -152,7 +178,15 @@ export default function DriverSummaryPrintModal({
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">
-                      Total Descontado / Processado
+                      Multas (c/ Desconto)
+                    </span>
+                    <span className="font-extrabold text-emerald-600 text-base mt-0.5">
+                      {formattedTotalFineDiscount}
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">
+                      Total Descontado em Folha
                     </span>
                     <span className="font-extrabold text-emerald-600 text-base mt-0.5">
                       {formattedTotalDiscounted}
@@ -185,7 +219,8 @@ export default function DriverSummaryPrintModal({
                         <th className="px-3 py-2.5">Placa</th>
                         <th className="px-3 py-2.5">Descrição da Infração</th>
                         <th className="px-3 py-2.5 text-right">Vl. Nominal</th>
-                        <th className="px-3 py-2.5 text-right">Vl. Descontado</th>
+                        <th className="px-3 py-2.5 text-right">Desc. Multa</th>
+                        <th className="px-3 py-2.5 text-right">Desc. Folha</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-200 text-xs">
@@ -194,6 +229,14 @@ export default function DriverSummaryPrintModal({
                         const formattedInfDate = infDate 
                           ? `${infDate.toLocaleDateString("pt-BR")} ${infDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
                           : "---";
+                          
+                        let driverDeducted = 0;
+                        if (inf.installments) {
+                           inf.installments.forEach((inst: any) => {
+                              driverDeducted += Number(inst.amount) || 0;
+                           });
+                        }
+                        
                         return (
                           <tr key={inf.id} className="hover:bg-zinc-50/50 print:hover:bg-transparent">
                             <td className="px-3 py-3 font-mono font-medium text-zinc-800">
@@ -236,6 +279,16 @@ export default function DriverSummaryPrintModal({
                                   style: "currency",
                                   currency: "BRL",
                                 }).format(inf.discounted_amount)
+                              ) : (
+                                "---"
+                              )}
+                            </td>
+                            <td className="px-3 py-3 text-right font-bold text-emerald-600 whitespace-nowrap">
+                              {driverDeducted > 0 ? (
+                                new Intl.NumberFormat("pt-BR", {
+                                  style: "currency",
+                                  currency: "BRL",
+                                }).format(driverDeducted)
                               ) : (
                                 "---"
                               )}
