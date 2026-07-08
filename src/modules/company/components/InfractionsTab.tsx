@@ -505,15 +505,18 @@ const DriversDashboardView = ({
                                 (inst: any, idx: number) => (
                                   <span
                                     key={idx}
-                                    className="text-[10px] bg-white border border-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded font-medium"
+                                    className={`text-[10px] bg-white border px-1.5 py-0.5 rounded font-medium ${inst.isNIC ? "border-orange-200 text-orange-700 bg-orange-50" : "border-zinc-200 text-zinc-600"}`}
                                   >
+                                    {inst.isNIC ? "NIC" : ""}
+                                    {inst.isNIC && inst.date ? " (" : ""}
                                     {inst.date
                                       ? new Date(inst.date)
                                           .toLocaleDateString("pt-BR", {
                                             timeZone: "UTC",
                                           })
                                           .substring(0, 5)
-                                      : "?"}
+                                      : !inst.isNIC ? "?" : ""}
+                                    {inst.isNIC && inst.date ? ")" : ""}
                                     :{" "}
                                     {new Intl.NumberFormat("pt-BR", {
                                       style: "currency",
@@ -675,7 +678,9 @@ export default function InfractionsTab() {
               .toISOString()
               .slice(0, 16)
           : "",
-        installments: infraction.installments || [],
+        installments: (infraction.installments || []).filter((i: any) => !i.isNIC),
+        nic_amount: (infraction.installments || []).find((i: any) => i.isNIC)?.amount || "",
+        nic_date: (infraction.installments || []).find((i: any) => i.isNIC)?.date || "",
       });
     } else {
       setFormData({
@@ -690,6 +695,8 @@ export default function InfractionsTab() {
         installments: [{ date: "", amount: "" }],
         discounted_amount: "",
         attachment_url: "",
+        nic_amount: "",
+        nic_date: "",
       });
     }
     setIsModalOpen(true);
@@ -739,6 +746,15 @@ export default function InfractionsTab() {
           .getPublicUrl(filePath).data.publicUrl;
       }
 
+      const finalInstallments = [...(formData.installments || [])];
+      if (formData.nic_amount) {
+        finalInstallments.push({
+          isNIC: true,
+          amount: formData.nic_amount,
+          date: formData.nic_date || "",
+        });
+      }
+
       const payload = {
         company_id: user?.company_id,
         driver_id: formData.driver_id,
@@ -752,7 +768,7 @@ export default function InfractionsTab() {
         notice_number: formData.notice_number || null,
         license_plate: formData.license_plate || null,
         address: formData.address || null,
-        installments: formData.installments || [],
+        installments: finalInstallments,
         attachment_url: attachmentUrl,
         created_by: user?.id,
       };
@@ -1020,18 +1036,21 @@ export default function InfractionsTab() {
                                 (inst: any, idx: number) => (
                                   <div
                                     key={idx}
-                                    className="text-xs text-zinc-500 flex justify-between bg-zinc-50 px-2 py-1 rounded"
+                                    className={`text-xs flex justify-between px-2 py-1 rounded ${inst.isNIC ? "bg-orange-50 text-orange-700" : "bg-zinc-50 text-zinc-500"}`}
                                   >
                                     <span>
+                                      {inst.isNIC ? "NIC" : ""}
+                                      {inst.isNIC && inst.date ? " (" : ""}
                                       {inst.date
                                         ? new Date(
                                             inst.date,
                                           ).toLocaleDateString("pt-BR", {
                                             timeZone: "UTC",
                                           })
-                                        : "Sem data"}
+                                        : !inst.isNIC ? "Sem data" : ""}
+                                      {inst.isNIC && inst.date ? ")" : ""}
                                     </span>
-                                    <span className="font-medium text-zinc-700">
+                                    <span className={`font-medium ${inst.isNIC ? "text-orange-800" : "text-zinc-700"}`}>
                                       {new Intl.NumberFormat("pt-BR", {
                                         style: "currency",
                                         currency: "BRL",
@@ -1272,6 +1291,44 @@ export default function InfractionsTab() {
                       }
                       className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
                     />
+                  </div>
+
+                  {/* NIC (Não Indicação do Condutor) */}
+                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-orange-50/50 border border-orange-100 rounded-xl">
+                    <div>
+                      <label className="block text-sm font-medium text-orange-800 mb-1">
+                        Valor NIC (R$)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.nic_amount || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            nic_amount: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-2 bg-white border border-orange-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 placeholder:text-orange-300"
+                        placeholder="Ex: 130.16"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-orange-800 mb-1">
+                        Data Vencimento NIC
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.nic_date || ""}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            nic_date: e.target.value,
+                          })
+                        }
+                        className="w-full px-4 py-2 bg-white border border-orange-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-orange-800"
+                      />
+                    </div>
                   </div>
 
                   <div className="md:col-span-2">
