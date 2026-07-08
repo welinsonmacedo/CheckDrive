@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X, Printer, FileText, Landmark, ShieldCheck, CreditCard, Scale, Calendar, MapPin, BadgeAlert } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getInfractionDescription } from "@/src/utils/infractions";
+import PrintHeader from "./PrintHeader";
 
 interface DriverSummaryPrintModalProps {
   driver: {
@@ -91,6 +92,7 @@ export default function DriverSummaryPrintModal({
 
           {/* Printable Content */}
           <div className="p-8 overflow-y-auto print:overflow-visible print:block print:p-0 text-zinc-900 bg-white print:text-black">
+            <PrintHeader />
             <div className="max-w-3xl mx-auto space-y-4 my-4 print:my-0">
               
               {/* Formal Corporate Top Bar */}

@@ -13,6 +13,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import PrintHeader from "./PrintHeader";
 
 interface DefectPrintModalProps {
   defect: any;
@@ -71,6 +72,7 @@ export default function DefectPrintModal({
 
           {/* Printable Content */}
           <div className="p-8 overflow-y-auto print:overflow-visible print:block print:p-0">
+            <PrintHeader />
             {/* Report Header */}
             <div className="mb-8 border-b-2 border-zinc-200 pb-6 flex items-center justify-between">
               <div>

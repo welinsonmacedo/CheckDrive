@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/src/lib/supabase";
+import PrintHeader from "./PrintHeader";
 
 interface DriverRankingDetailsModalProps {
   driver: any;
@@ -287,6 +288,7 @@ export default function DriverRankingDetailsModal({
             </div>
           ) : (
             <>
+              <PrintHeader />
               {/* Score indicators Ribbon */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* 1. Score Meter Circle */}

@@ -26,6 +26,7 @@ import { format, subDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DefectPrintModal from "@/src/modules/company/components/DefectPrintModal";
 import { usePersistentState } from "@/src/hooks/usePersistentState";
+import PrintHeader from "./PrintHeader";
 
 export default function ReportsTab() {
   const [activeReport, setActiveReport] = usePersistentState<
@@ -541,6 +542,7 @@ export default function ReportsTab() {
           </div>
         </div>
 
+        <PrintHeader />
         {/* Embedded Print Page Header */}
         <div className="hidden print:block mb-8 border-b border-gray-200 pb-5">
           <div className="flex justify-between items-start">

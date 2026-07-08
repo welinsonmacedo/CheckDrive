@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/src/lib/supabase";
+import PrintHeader from "./PrintHeader";
 
 interface VehicleDetailsModalProps {
   vehicle: any;
@@ -243,6 +244,7 @@ export default function VehicleDetailsModal({
             </div>
           ) : (
             <>
+              <PrintHeader />
               {/* Premium Stat Ribbons */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* 1. Submissions count */}

@@ -20,6 +20,7 @@ import {
 import { supabase } from "@/src/lib/supabase";
 import { useState, useEffect } from "react";
 import AddressFromCoordinates from "@/src/components/common/AddressFromCoordinates";
+import PrintHeader from "./PrintHeader";
 
 interface ChecklistDetailsModalProps {
   selectedSub: any | null;
@@ -450,6 +451,7 @@ export default function ChecklistDetailsModal({
           </div>
 
           <div className="flex-1 overflow-y-auto p-8 space-y-10 print:overflow-visible print:p-0 print:block">
+            <PrintHeader />
             {/* Header Impressão */}
             <div className="hidden print:block mb-8 border-b-2 border-zinc-200 pb-6 mt-4">
               <h1 className="text-2xl font-black text-zinc-900 tracking-tight flex items-center gap-2 mb-2">

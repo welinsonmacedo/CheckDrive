@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getInfractionDescription } from "@/src/utils/infractions";
+import PrintHeader from "./PrintHeader";
 
 interface InfractionPrintModalProps {
   infraction: any;
@@ -123,6 +124,7 @@ export default function InfractionPrintModal({
 
           {/* Printable Content */}
           <div className="p-8 overflow-y-auto print:overflow-visible print:block print:p-0 text-zinc-900 bg-white print:text-black">
+            <PrintHeader />
             <div className="max-w-3xl mx-auto space-y-4 my-4 print:my-0">
               
               {/* SECTION 1: Termo de Responsabilidade e Desconto de Multa */}

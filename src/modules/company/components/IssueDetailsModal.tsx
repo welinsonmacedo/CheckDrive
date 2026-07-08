@@ -13,6 +13,7 @@ import {
   Clock,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
+import PrintHeader from "./PrintHeader";
 
 interface IssueDetailsModalProps {
   issue: any;
@@ -86,6 +87,7 @@ export default function IssueDetailsModal({
 
         {/* Content */}
         <div className="p-6 md:p-8 space-y-8 print:p-8 print:text-black">
+          <PrintHeader />
           {/* Print Header */}
           <div className="hidden print:flex justify-between items-end border-b-2 border-black pb-4 mb-4">
             <div>

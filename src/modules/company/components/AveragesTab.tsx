@@ -3,6 +3,7 @@ import { supabase } from '@/src/lib/supabase';
 import { motion } from 'motion/react';
 import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer, Plus, PlusCircle, Trash2, Droplet, Camera } from 'lucide-react';
 import { usePersistentState } from '@/src/hooks/usePersistentState';
+import PrintHeader from './PrintHeader';
 
 export default function AveragesTab() {
   const [activeTab, setActiveTab] = usePersistentState<'vehicles' | 'drivers' | 'schedules'>('averages_activeTab', 'vehicles');
@@ -719,6 +720,7 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
 
   return (
     <div className="space-y-6">
+      <PrintHeader />
       <div className="bg-white p-4 rounded-3xl border border-app-border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex gap-2 mb-2 md:mb-0">
           {tabs.map(tab => (
