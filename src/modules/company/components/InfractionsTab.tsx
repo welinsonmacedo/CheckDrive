@@ -615,7 +615,6 @@ export default function InfractionsTab() {
       const { data: driversData } = await supabase
         .from("profiles")
         .select("id, full_name")
-        .eq("company_id", user.company_id)
         .eq("role", "driver")
         .order("full_name");
 
