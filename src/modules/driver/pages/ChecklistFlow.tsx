@@ -626,11 +626,11 @@ export default function ChecklistFlow() {
 
   const compressImageSafe = (file: File): Promise<File> => {
     return new Promise((resolve) => {
-      // 2-second timeout to guarantee it never hangs, returning the original file
+      // 15-second timeout to guarantee it never hangs, returning the original file
       const timer = setTimeout(() => {
         console.warn("Compression timed out, returning original file.");
         resolve(file);
-      }, 2000);
+      }, 15000);
 
       const objectUrl = URL.createObjectURL(file);
       const img = new Image();
@@ -737,19 +737,15 @@ export default function ChecklistFlow() {
   };
 
   const handlePhotoUpload = async (key: string, file: File) => {
-    // 1. Immediately read original file for instant, highly responsive preview (no loading lag)
-    const originalReader = new FileReader();
-    originalReader.onloadend = () => {
-      const base64String = originalReader.result as string;
-      setFormData((prev) => ({
-        ...prev,
-        photoPreviews: {
-          ...(prev.photoPreviews || {}),
-          [key]: base64String,
-        },
-      }));
-    };
-    originalReader.readAsDataURL(file);
+    // 1. Instant preview using object URL (zero memory overhead)
+    const objectUrl = URL.createObjectURL(file);
+    setFormData((prev) => ({
+      ...prev,
+      photoPreviews: {
+        ...(prev.photoPreviews || {}),
+        [key]: objectUrl,
+      },
+    }));
 
     // 2. Perform safe image compression in background
     const finalFile = await compressImageSafe(file);
@@ -769,6 +765,7 @@ export default function ChecklistFlow() {
           [key]: base64String,
         },
       }));
+      URL.revokeObjectURL(objectUrl);
     };
     compressedReader.readAsDataURL(finalFile);
   };
@@ -778,19 +775,15 @@ export default function ChecklistFlow() {
     defectIdx: number,
     file: File,
   ) => {
-    // 1. Immediately read original file for instant preview
-    const originalReader = new FileReader();
-    originalReader.onloadend = () => {
-      const base64String = originalReader.result as string;
-      setFormData((prev) => ({
-        ...prev,
-        photoPreviews: {
-          ...(prev.photoPreviews || {}),
-          [`defect_${itemId}_${defectIdx}`]: base64String,
-        },
-      }));
-    };
-    originalReader.readAsDataURL(file);
+    // 1. Instant preview using object URL (zero memory overhead)
+    const objectUrl = URL.createObjectURL(file);
+    setFormData((prev) => ({
+      ...prev,
+      photoPreviews: {
+        ...(prev.photoPreviews || {}),
+        [`defect_${itemId}_${defectIdx}`]: objectUrl,
+      },
+    }));
 
     // 2. Perform safe image compression
     const finalFile = await compressImageSafe(file);
@@ -820,6 +813,7 @@ export default function ChecklistFlow() {
           [`defect_${itemId}_${defectIdx}`]: base64String,
         },
       }));
+      URL.revokeObjectURL(objectUrl);
     };
     compressedReader.readAsDataURL(finalFile);
   };
@@ -1213,7 +1207,7 @@ export default function ChecklistFlow() {
       await localforage.removeItem(sessionKey);
       hasSubmittedRef.current = true;
 
-      navigate("/");
+      navigate("/driver/home");
     } catch (error) {
       console.error("Submission failed", error);
       alert(
