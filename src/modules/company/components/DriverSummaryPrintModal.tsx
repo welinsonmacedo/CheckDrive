@@ -12,6 +12,7 @@ interface DriverSummaryPrintModalProps {
     infractions: any[];
     count: number;
     totalAmount: number;
+    totalNicAmount?: number;
     totalDiscounted: number;
     totalFineDiscount?: number;
   } | null;
@@ -43,6 +44,11 @@ export default function DriverSummaryPrintModal({
     style: "currency",
     currency: "BRL",
   }).format(driver.totalAmount);
+
+  const formattedTotalNicAmount = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(driver.totalNicAmount || 0);
 
   const formattedTotalDiscounted = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -151,7 +157,7 @@ export default function DriverSummaryPrintModal({
                     DADOS CONSOLIDADOS
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 p-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 p-4 text-sm">
                   <div className="flex flex-col">
                     <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">
                       Nome Completo do Condutor
@@ -178,6 +184,14 @@ export default function DriverSummaryPrintModal({
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">
+                      Total NIC
+                    </span>
+                    <span className="font-extrabold text-orange-600 text-base mt-0.5">
+                      {formattedTotalNicAmount}
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-zinc-500 font-extrabold uppercase tracking-wider">
                       Multas (c/ Desconto)
                     </span>
                     <span className="font-extrabold text-emerald-600 text-base mt-0.5">
@@ -192,7 +206,7 @@ export default function DriverSummaryPrintModal({
                       {formattedTotalDiscounted}
                     </span>
                   </div>
-                  <div className="flex flex-col col-span-1 sm:col-span-2 bg-zinc-50 p-3 rounded-lg border border-zinc-200/60 mt-2">
+                  <div className="flex flex-col col-span-full bg-zinc-50 p-3 rounded-lg border border-zinc-200/60 mt-2">
                     <span className="text-[9px] text-zinc-400 font-extrabold uppercase tracking-wider">
                       Saldo Restante a Descontar
                     </span>

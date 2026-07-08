@@ -43,8 +43,12 @@ import { getInfractionDescription } from "@/src/utils/infractions";
 
 const DashboardView = ({ infractions }: { infractions: any[] }) => {
   const totalAmount = infractions.reduce(
+    (acc, curr) => acc + (Number(curr.amount) || 0),
+    0,
+  );
+  const totalNicAmount = infractions.reduce(
     (acc, curr) => {
-      let sum = acc + (Number(curr.amount) || 0);
+      let sum = acc;
       if (curr.installments) {
         const nicInst = curr.installments.find((i: any) => i.isNIC);
         if (nicInst) sum += (Number(nicInst.amount) || 0);
@@ -58,7 +62,9 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
       let sum = acc;
       if (curr.installments) {
         curr.installments.forEach((inst: any) => {
-          sum += Number(inst.amount) || 0;
+          if (!inst.isNIC) {
+            sum += Number(inst.amount) || 0;
+          }
         });
       }
       return sum;
@@ -106,7 +112,7 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
           <div className="flex items-center gap-3 text-zinc-500 mb-2">
             <Receipt size={20} />
@@ -117,6 +123,18 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
               style: "currency",
               currency: "BRL",
             }).format(totalAmount)}
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
+          <div className="flex items-center gap-3 text-zinc-500 mb-2">
+            <Receipt size={20} />
+            <h3 className="font-medium text-sm">Total de NICs</h3>
+          </div>
+          <div className="text-2xl font-bold text-orange-600">
+            {new Intl.NumberFormat("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }).format(totalNicAmount)}
           </div>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
@@ -278,8 +296,12 @@ const DriversDashboardView = ({
         (inf) => inf.driver_id === driver.id,
       );
       const totalAmount = driverInfractions.reduce(
+        (acc, curr) => acc + (Number(curr.amount) || 0),
+        0,
+      );
+      const totalNicAmount = driverInfractions.reduce(
         (acc, curr) => {
-          let sum = acc + (Number(curr.amount) || 0);
+          let sum = acc;
           if (curr.installments) {
             const nicInst = curr.installments.find((i: any) => i.isNIC);
             if (nicInst) sum += (Number(nicInst.amount) || 0);
@@ -293,7 +315,9 @@ const DriversDashboardView = ({
           let sum = acc;
           if (curr.installments) {
             curr.installments.forEach((inst: any) => {
-              sum += Number(inst.amount) || 0;
+              if (!inst.isNIC) {
+                sum += Number(inst.amount) || 0;
+              }
             });
           }
           return sum;
@@ -439,7 +463,7 @@ const DriversDashboardView = ({
               </div>
 
               {/* Individual Driver Stats summary */}
-              <div className="flex items-center gap-4 bg-zinc-50 p-3 rounded-2xl border border-zinc-100">
+              <div className="flex items-center gap-4 bg-zinc-50 p-3 rounded-2xl border border-zinc-100 flex-wrap lg:flex-nowrap">
                 <div className="text-center px-3 border-r border-zinc-200">
                   <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                     Quantidade
@@ -457,6 +481,17 @@ const DriversDashboardView = ({
                       style: "currency",
                       currency: "BRL",
                     }).format(selectedDriverInfo.totalAmount)}
+                  </div>
+                </div>
+                <div className="text-center px-3 border-r border-zinc-200">
+                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Total NIC
+                  </div>
+                  <div className="text-base font-extrabold text-orange-600">
+                    {new Intl.NumberFormat("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    }).format(selectedDriverInfo.totalNicAmount)}
                   </div>
                 </div>
                 <div className="text-center px-3 border-r border-zinc-200">
