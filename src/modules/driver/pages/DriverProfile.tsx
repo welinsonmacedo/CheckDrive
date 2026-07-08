@@ -87,7 +87,7 @@ export default function DriverProfile() {
 
       const fileExt = file.name && file.name.includes(".") ? file.name.split(".").pop() : "jpg";
       const fileName = `${user.id}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const filePath = `${user.id}/${fileName}`;
 
       let { error: uploadError } = await supabase.storage
         .from("avatars")

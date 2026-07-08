@@ -903,7 +903,7 @@ export default function ChecklistFlow() {
         const finalFile = safeGetFile(fileObj, key, previewStr);
 
         if (finalFile) {
-          const path = `photos/${user.id}/${Date.now()}_${key}.jpg`;
+          const path = `${user.id}/photos/${Date.now()}_${key}.jpg`;
           const { error } = await supabase.storage
             .from("checklist-photos")
             .upload(path, finalFile);
@@ -922,7 +922,7 @@ export default function ChecklistFlow() {
         previews.receipt,
       );
       if (receiptFile) {
-        const path = `receipts/${user.id}/${Date.now()}_receipt.jpg`;
+        const path = `${user.id}/receipts/${Date.now()}_receipt.jpg`;
         const { error } = await supabase.storage
           .from("checklist-photos")
           .upload(path, receiptFile);
@@ -1006,7 +1006,7 @@ export default function ChecklistFlow() {
           let dPhotoUrl = d.existing_photo_url || null;
 
           if (d.photo) {
-            const path = `defects/${user.id}/${Date.now()}_${itemId}_${i}.jpg`;
+            const path = `${user.id}/defects/${Date.now()}_${itemId}_${i}.jpg`;
             const { error: uploadError } = await supabase.storage
               .from("checklist-photos")
               .upload(path, d.photo);
