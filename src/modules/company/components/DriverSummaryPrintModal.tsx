@@ -220,7 +220,15 @@ export default function DriverSummaryPrintModal({
                               {new Intl.NumberFormat("pt-BR", {
                                 style: "currency",
                                 currency: "BRL",
-                              }).format(inf.amount)}
+                              }).format((Number(inf.amount) || 0) + (inf.installments?.find((i: any) => i.isNIC)?.amount ? Number(inf.installments.find((i: any) => i.isNIC).amount) : 0))}
+                              {inf.installments?.find((i: any) => i.isNIC) && (
+                                <div className="text-[9px] text-orange-600 font-medium mt-0.5">
+                                  + NIC: {new Intl.NumberFormat("pt-BR", {
+                                    style: "currency",
+                                    currency: "BRL",
+                                  }).format(Number(inf.installments.find((i: any) => i.isNIC).amount))}
+                                </div>
+                              )}
                             </td>
                             <td className="px-3 py-3 text-right font-bold text-emerald-600 whitespace-nowrap">
                               {inf.discounted_amount != null ? (

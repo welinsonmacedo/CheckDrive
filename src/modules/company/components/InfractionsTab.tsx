@@ -43,7 +43,14 @@ import { getInfractionDescription } from "@/src/utils/infractions";
 
 const DashboardView = ({ infractions }: { infractions: any[] }) => {
   const totalAmount = infractions.reduce(
-    (acc, curr) => acc + (Number(curr.amount) || 0),
+    (acc, curr) => {
+      let sum = acc + (Number(curr.amount) || 0);
+      if (curr.installments) {
+        const nicInst = curr.installments.find((i: any) => i.isNIC);
+        if (nicInst) sum += (Number(nicInst.amount) || 0);
+      }
+      return sum;
+    },
     0,
   );
   const totalDiscounted = infractions.reduce(
@@ -55,9 +62,14 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
   infractions.forEach((inf) => {
     const driverName = inf.profiles?.full_name || "Desconhecido";
     const current = driversMap.get(driverName) || { count: 0, amount: 0 };
+    let infAmount = Number(inf.amount) || 0;
+    if (inf.installments) {
+      const nicInst = inf.installments.find((i: any) => i.isNIC);
+      if (nicInst) infAmount += (Number(nicInst.amount) || 0);
+    }
     driversMap.set(driverName, {
       count: current.count + 1,
-      amount: current.amount + (Number(inf.amount) || 0),
+      amount: current.amount + infAmount,
     });
   });
 
@@ -242,7 +254,14 @@ const DriversDashboardView = ({
         (inf) => inf.driver_id === driver.id,
       );
       const totalAmount = driverInfractions.reduce(
-        (acc, curr) => acc + (Number(curr.amount) || 0),
+        (acc, curr) => {
+          let sum = acc + (Number(curr.amount) || 0);
+          if (curr.installments) {
+            const nicInst = curr.installments.find((i: any) => i.isNIC);
+            if (nicInst) sum += (Number(nicInst.amount) || 0);
+          }
+          return sum;
+        },
         0,
       );
       const totalDiscounted = driverInfractions.reduce(
@@ -481,8 +500,13 @@ const DriversDashboardView = ({
                             {new Intl.NumberFormat("pt-BR", {
                               style: "currency",
                               currency: "BRL",
-                            }).format(inf.amount)}
+                            }).format((Number(inf.amount) || 0) + (inf.installments?.find((i: any) => i.isNIC)?.amount ? Number(inf.installments.find((i: any) => i.isNIC).amount) : 0))}
                           </div>
+                          {inf.installments?.find((i: any) => i.isNIC) && (
+                            <div className="text-[9px] text-orange-600 font-medium mt-0.5">
+                              NIC incl.
+                            </div>
+                          )}
                           {inf.discounted_amount != null && (
                             <div className="text-xs font-bold text-emerald-600 mt-0.5">
                               Desc:{" "}
@@ -1016,8 +1040,13 @@ export default function InfractionsTab() {
                             {new Intl.NumberFormat("pt-BR", {
                               style: "currency",
                               currency: "BRL",
-                            }).format(inf.amount)}
+                            }).format((Number(inf.amount) || 0) + (inf.installments?.find((i: any) => i.isNIC)?.amount ? Number(inf.installments.find((i: any) => i.isNIC).amount) : 0))}
                           </div>
+                          {inf.installments?.find((i: any) => i.isNIC) && (
+                            <div className="text-[10px] text-orange-600 font-medium mt-0.5">
+                              (+ NIC)
+                            </div>
+                          )}
                           {inf.discounted_amount != null && (
                             <div className="text-xs font-semibold text-emerald-600 mt-1">
                               Desconto:{" "}
