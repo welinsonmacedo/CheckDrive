@@ -316,7 +316,7 @@ export default function DriverHome() {
                                  disabled={done}
                                  onClick={(e) => {
                                    e.stopPropagation();
-                                   navigate(`/checklist/${type.id}?schedule_id=${schedule.id}&vehicle_id=${schedule.vehicles?.id}`);
+                                   navigate(`/checklist/${type.id}?schedule=${schedule.id}&vehicle_id=${schedule.vehicles?.id}`);
                                  }}
                                  className={`w-full flex items-center p-3 rounded-xl border ${done ? 'border-green-200 bg-green-50/50 opacity-60' : 'border-zinc-200 bg-white hover:border-primary/30 shadow-sm'} transition-all`}
                                >
