@@ -5,6 +5,7 @@ import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import { useConfirm } from "@/src/modules/shared/contexts/ConfirmContext";
 import { Search, MessageCircle, RefreshCw } from "lucide-react";
 import Select from "react-select";
+import SchedulePrintModal from "./SchedulePrintModal";
 
 interface SchedulesTabProps {
   onViewChecklist: (checklistId: string) => void;
@@ -19,6 +20,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
   const [trailers, setTrailers] = useState<any[]>([]);
   const [routes, setRoutes] = useState<any[]>([]);
   const [baits, setBaits] = useState<any[]>([]);
+  const [selectedPrintSchedule, setSelectedPrintSchedule] = useState<any | null>(null);
 
   const todayLocal = new Date();
   todayLocal.setMinutes(
@@ -654,6 +656,15 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                             Copiar Link
                           </button>
                         )}
+                        {sch.profiles?.email?.endsWith('@noemail.local') && (
+                          <button
+                            onClick={() => setSelectedPrintSchedule(sch)}
+                            className="text-blue-500 hover:underline text-[10px] font-bold ml-3"
+                            title="Gerar ficha de operação com QR Code"
+                          >
+                            Gerar Ficha
+                          </button>
+                        )}
                         {canDelete && (
                           <button
                             onClick={() => deleteItem(sch.id, hasChecklist)}
@@ -1061,6 +1072,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
           </div>
         </form>
       </div>
+
+      {selectedPrintSchedule && (
+        <SchedulePrintModal schedule={selectedPrintSchedule} onClose={() => setSelectedPrintSchedule(null)} />
+      )}
     </div>
   );
 }
