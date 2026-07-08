@@ -131,26 +131,13 @@ export default function SchedulePrintModal({
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2 flex items-center gap-2">
-                      <MapPin size={14} /> Rota e Iscas
+                      <MapPin size={14} /> Rota
                     </h3>
                     <div className="bg-app-bg p-4 rounded-xl border border-app-border print:border-gray-300 print:bg-transparent h-full">
                       <p className="text-sm text-text-muted">Rota</p>
                       <p className="font-bold text-text-main mb-3">
                         {schedule.routes?.origin} ➔ {schedule.routes?.destination}
                       </p>
-
-                      <p className="text-sm text-text-muted">Iscas</p>
-                      <div className="space-y-1 mt-1">
-                        <p className="text-sm font-medium text-text-main">
-                          1: {schedule.bait1?.name || "Não definida"}
-                        </p>
-                        <p className="text-sm font-medium text-text-main">
-                          2: {schedule.bait2?.name || "Não definida"}
-                        </p>
-                        <p className="text-sm font-medium text-text-main">
-                          3: {schedule.bait3?.name || "Não definida"}
-                        </p>
-                      </div>
                     </div>
                   </div>
                 </div>
