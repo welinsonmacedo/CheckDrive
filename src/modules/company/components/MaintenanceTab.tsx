@@ -2783,28 +2783,72 @@ export default function MaintenanceTab() {
                                 <label className="block text-[10px] font-black text-zinc-500 mb-1 uppercase tracking-wide">
                                   Chave da NF (44 dígitos)
                                 </label>
-                                <input
-                                  className="w-full bg-white px-3 py-2 border border-zinc-200 rounded-xl text-xs font-mono text-zinc-700 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all hover:border-zinc-300"
-                                  type="text"
-                                  maxLength={44}
-                                  placeholder="Insira a chave de 44 dígitos numéricos"
-                                  value={nf.nf_key}
-                                  onChange={(e) => {
-                                    const val = e.target.value.replace(
-                                      /\D/g,
-                                      "",
-                                    );
-                                    const updated = [...resolveNfs];
-                                    updated[nfIdx].nf_key = val;
-                                    setResolveNfs(updated);
-                                  }}
-                                />
-                                {nf.nf_key && nf.nf_key.length !== 44 && (
-                                  <span className="text-[10px] text-orange-655 block mt-1 font-semibold animate-pulse">
-                                    Aviso: Deve conter exatamente 44 dígitos (
-                                    {nf.nf_key.length}/44).
-                                  </span>
-                                )}
+                                <div className="flex gap-2 items-start">
+                                  <div className="flex-1">
+                                    <input
+                                      className="w-full bg-white px-3 py-2 border border-zinc-200 rounded-xl text-xs font-mono text-zinc-700 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all hover:border-zinc-300"
+                                      type="text"
+                                      maxLength={44}
+                                      placeholder="Insira a chave de 44 dígitos numéricos"
+                                      value={nf.nf_key}
+                                      onChange={(e) => {
+                                        const val = e.target.value.replace(
+                                          /\D/g,
+                                          "",
+                                        );
+                                        const updated = [...resolveNfs];
+                                        updated[nfIdx].nf_key = val;
+                                        setResolveNfs(updated);
+                                      }}
+                                    />
+                                    {nf.nf_key && nf.nf_key.length !== 44 && (
+                                      <span className="text-[10px] text-orange-655 block mt-1 font-semibold animate-pulse">
+                                        Aviso: Deve conter exatamente 44 dígitos (
+                                        {nf.nf_key.length}/44).
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={!nf.nf_key || nf.nf_key.length !== 44}
+                                    onClick={async () => {
+                                      // Simulated API fetch
+                                      if (nf.nf_key.length === 44) {
+                                        const btn = document.getElementById(`btn-fetch-nfe-${nfIdx}`);
+                                        if (btn) btn.innerHTML = '<span class="animate-pulse">Buscando...</span>';
+                                        
+                                        setTimeout(() => {
+                                          const updated = [...resolveNfs];
+                                          // Simulate parsed NFe data
+                                          updated[nfIdx].nf_number = nf.nf_key.substring(25, 34).replace(/^0+/, '') || "12345";
+                                          updated[nfIdx].items = [
+                                            {
+                                              id: `item-${Date.now()}-1`,
+                                              item_id: "",
+                                              name: "Filtro de Óleo",
+                                              quantity: 1,
+                                              unit_price: 120.50,
+                                            },
+                                            {
+                                              id: `item-${Date.now()}-2`,
+                                              item_id: "",
+                                              name: "Óleo Motor 15W40",
+                                              quantity: 4,
+                                              unit_price: 45.90,
+                                            }
+                                          ];
+                                          setResolveNfs(updated);
+                                          alert("Simulação: Itens importados com sucesso a partir da chave NFe informada. Em produção, conecte uma API como Arquivei ou Focus NFe na Edge Function.");
+                                          if (btn) btn.innerHTML = 'Buscar Dados';
+                                        }, 1500);
+                                      }
+                                    }}
+                                    id={`btn-fetch-nfe-${nfIdx}`}
+                                    className="bg-primary hover:bg-primary-dark text-white px-3 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                  >
+                                    Buscar Dados
+                                  </button>
+                                </div>
                               </div>
 
                               {/* Catalog Piece selector */}
