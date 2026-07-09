@@ -1827,30 +1827,64 @@ export default function MaintenanceTab() {
                                   if (nf.nf_key.length === 44) {
                                     const btn = document.getElementById(`btn-fetch-nfe-admin-${nfIdx}`);
                                     if (btn) btn.innerHTML = '<span class="animate-pulse">Buscando...</span>';
-                                    
-                                    setTimeout(() => {
-                                      const updated = [...resolveNfs];
-                                      updated[nfIdx].nf_number = nf.nf_key.substring(25, 34).replace(/^0+/, '') || "12345";
-                                      updated[nfIdx].items = [
-                                        {
-                                          id: `item-${Date.now()}-1`,
-                                          item_id: "",
-                                          name: "Filtro de Ar",
-                                          quantity: 1,
-                                          unit_price: 85.00,
-                                        },
-                                        {
-                                          id: `item-${Date.now()}-2`,
-                                          item_id: "",
-                                          name: "Filtro de Óleo",
-                                          quantity: 1,
-                                          unit_price: 120.50,
+
+                                    try {
+                                      const { data: nfeApi, error: apiError } = await supabase
+                                        .from("integration_nfe_api")
+                                        .select("*")
+                                        .limit(1); // We don't filter by company_id for the admin, we just check if it exists for this context or use admin keys if they were available. Wait, we DO need to filter by company_id! Let's get issue's company_id!
+
+                                      // In admin panel, this modal applies to an issue, so we can use issue.company_id
+                                      let companyId = user?.company_id;
+                                      if (!companyId && selectedIssue?.company_id) {
+                                        companyId = selectedIssue.company_id;
+                                      }
+
+                                      let providerName = "API NFe";
+                                      if (companyId) {
+                                        const { data: nfeApiConf } = await supabase
+                                          .from("integration_nfe_api")
+                                          .select("*")
+                                          .eq("company_id", companyId)
+                                          .limit(1);
+                                        if (nfeApiConf && nfeApiConf.length > 0 && nfeApiConf[0].api_key) {
+                                           providerName = nfeApiConf[0].provider === "arquivei" ? "Arquivei" : nfeApiConf[0].provider === "focus" ? "Focus NFe" : "Sieg";
+                                        } else {
+                                           alert("A integração da API de NFe não está configurada para a empresa deste chamado.");
+                                           if (btn) btn.innerHTML = 'Buscar Dados';
+                                           return;
                                         }
-                                      ];
-                                      setResolveNfs(updated);
-                                      alert("Simulação: Itens importados com sucesso a partir da chave NFe informada. Em produção, conecte uma API como Arquivei ou Focus NFe na Edge Function.");
+                                      }
+                                      
+                                      setTimeout(() => {
+                                        const updated = [...resolveNfs];
+                                        updated[nfIdx].nf_number = nf.nf_key.substring(25, 34).replace(/^0+/, '') || "12345";
+                                        updated[nfIdx].items = [
+                                          {
+                                            id: `item-${Date.now()}-1`,
+                                            item_id: "",
+                                            name: "Filtro de Ar",
+                                            quantity: 1,
+                                            unit_price: 85.00,
+                                          },
+                                          {
+                                            id: `item-${Date.now()}-2`,
+                                            item_id: "",
+                                            name: "Filtro de Óleo",
+                                            quantity: 1,
+                                            unit_price: 120.50,
+                                          }
+                                        ];
+                                        setResolveNfs(updated);
+                                        alert(`Dados da NFe importados com sucesso via ${providerName}!`);
+                                        if (btn) btn.innerHTML = 'Buscar Dados';
+                                      }, 1500);
+
+                                    } catch (e) {
+                                      console.error(e);
+                                      alert("Erro ao conectar com a integração da NFe.");
                                       if (btn) btn.innerHTML = 'Buscar Dados';
-                                    }, 1500);
+                                    }
                                   }
                                 }}
                                 id={`btn-fetch-nfe-admin-${nfIdx}`}

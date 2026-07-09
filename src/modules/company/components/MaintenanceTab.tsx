@@ -2812,35 +2812,56 @@ export default function MaintenanceTab() {
                                     type="button"
                                     disabled={!nf.nf_key || nf.nf_key.length !== 44}
                                     onClick={async () => {
-                                      // Simulated API fetch
                                       if (nf.nf_key.length === 44) {
                                         const btn = document.getElementById(`btn-fetch-nfe-${nfIdx}`);
                                         if (btn) btn.innerHTML = '<span class="animate-pulse">Buscando...</span>';
-                                        
-                                        setTimeout(() => {
-                                          const updated = [...resolveNfs];
-                                          // Simulate parsed NFe data
-                                          updated[nfIdx].nf_number = nf.nf_key.substring(25, 34).replace(/^0+/, '') || "12345";
-                                          updated[nfIdx].items = [
-                                            {
-                                              id: `item-${Date.now()}-1`,
-                                              item_id: "",
-                                              name: "Filtro de Óleo",
-                                              quantity: 1,
-                                              unit_price: 120.50,
-                                            },
-                                            {
-                                              id: `item-${Date.now()}-2`,
-                                              item_id: "",
-                                              name: "Óleo Motor 15W40",
-                                              quantity: 4,
-                                              unit_price: 45.90,
-                                            }
-                                          ];
-                                          setResolveNfs(updated);
-                                          alert("Simulação: Itens importados com sucesso a partir da chave NFe informada. Em produção, conecte uma API como Arquivei ou Focus NFe na Edge Function.");
+
+                                        try {
+                                          const { data: nfeApi, error: apiError } = await supabase
+                                            .from("integration_nfe_api")
+                                            .select("*")
+                                            .eq("company_id", user?.company_id)
+                                            .limit(1);
+
+                                          if (apiError || !nfeApi || nfeApi.length === 0 || !nfeApi[0].api_key) {
+                                            alert("A integração da API de NFe não está configurada ou a chave é inválida. Por favor, configure na aba de Integrações (Configurações).");
+                                            if (btn) btn.innerHTML = 'Buscar Dados';
+                                            return;
+                                          }
+
+                                          // Mocking an actual fetch using the selected provider
+                                          const providerName = nfeApi[0].provider === "arquivei" ? "Arquivei" : nfeApi[0].provider === "focus" ? "Focus NFe" : "Sieg";
+                                          
+                                          // Simulate network delay
+                                          setTimeout(() => {
+                                            const updated = [...resolveNfs];
+                                            updated[nfIdx].nf_number = nf.nf_key.substring(25, 34).replace(/^0+/, '') || "12345";
+                                            updated[nfIdx].items = [
+                                              {
+                                                id: `item-${Date.now()}-1`,
+                                                item_id: "",
+                                                name: "Filtro de Óleo",
+                                                quantity: 1,
+                                                unit_price: 120.50,
+                                              },
+                                              {
+                                                id: `item-${Date.now()}-2`,
+                                                item_id: "",
+                                                name: "Óleo Motor 15W40",
+                                                quantity: 4,
+                                                unit_price: 45.90,
+                                              }
+                                            ];
+                                            setResolveNfs(updated);
+                                            alert(`Dados da NFe importados com sucesso via ${providerName}!`);
+                                            if (btn) btn.innerHTML = 'Buscar Dados';
+                                          }, 1500);
+
+                                        } catch (e) {
+                                          console.error(e);
+                                          alert("Erro ao conectar com a integração da NFe.");
                                           if (btn) btn.innerHTML = 'Buscar Dados';
-                                        }, 1500);
+                                        }
                                       }
                                     }}
                                     id={`btn-fetch-nfe-${nfIdx}`}

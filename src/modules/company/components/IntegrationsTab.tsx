@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   Check,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
@@ -25,6 +26,14 @@ export default function IntegrationsTab() {
     url: "",
     api_key: "",
     instance_name: "",
+  });
+
+  // NFe API Settings
+  const [nfeForm, setNfeForm] = useState({
+    id: "",
+    provider: "arquivei",
+    api_id: "",
+    api_key: "",
   });
 
   // Rules
@@ -115,6 +124,21 @@ export default function IntegrationsTab() {
           url: evData[0].url || "",
           api_key: evData[0].api_key || "",
           instance_name: evData[0].instance_name || "",
+        });
+      }
+
+      const { data: nfeData, error: nfeError } = await supabase
+        .from("integration_nfe_api")
+        .select("*")
+        .eq("company_id", user.company_id)
+        .limit(1);
+
+      if (!nfeError && nfeData && nfeData.length > 0) {
+        setNfeForm({
+          id: nfeData[0].id,
+          provider: nfeData[0].provider || "arquivei",
+          api_id: nfeData[0].api_id || "",
+          api_key: nfeData[0].api_key || "",
         });
       }
 
@@ -264,6 +288,38 @@ export default function IntegrationsTab() {
       fetchData();
     } catch (error: any) {
       alert("Erro ao salvar configuração: " + error.message);
+    }
+  };
+
+  const saveNfeConfig = async () => {
+    try {
+      const payload = {
+        company_id: user?.company_id,
+        provider: nfeForm.provider,
+        api_id: nfeForm.api_id,
+        api_key: nfeForm.api_key,
+      };
+
+      let error;
+      if (nfeForm.id) {
+        const res = await supabase
+          .from("integration_nfe_api")
+          .update(payload)
+          .eq("id", nfeForm.id);
+        error = res.error;
+      } else {
+        const res = await supabase
+          .from("integration_nfe_api")
+          .insert([payload]);
+        error = res.error;
+      }
+
+      if (error) throw error;
+
+      alert("Configuração da NFe API salva com sucesso!");
+      fetchData();
+    } catch (error: any) {
+      alert("Erro ao salvar configuração da NFe: " + error.message);
     }
   };
 
@@ -454,6 +510,23 @@ CREATE POLICY "Users can manage integration_whatsapp_rules"
 ON public.integration_whatsapp_rules FOR ALL TO authenticated
 USING (company_id = get_default_company_id())
 WITH CHECK (company_id = get_default_company_id());
+
+-- 3. Criar tabela de configuração de NFe
+CREATE TABLE IF NOT EXISTS integration_nfe_api (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID REFERENCES public.companies(id),
+    provider TEXT NOT NULL,
+    api_id TEXT,
+    api_key TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE integration_nfe_api ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage integration_nfe_api"
+ON public.integration_nfe_api FOR ALL TO authenticated
+USING (company_id = get_default_company_id())
+WITH CHECK (company_id = get_default_company_id());
 `}
           </pre>
         </div>
@@ -463,6 +536,78 @@ WITH CHECK (company_id = get_default_company_id());
 
   return (
     <div className="space-y-6">
+      {/* NFe Configuration */}
+      <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm">
+        <div className="mb-4">
+          <h3 className="text-sm font-black text-zinc-800 uppercase tracking-widest flex items-center gap-2">
+            <FileText className="text-primary" size={16} />
+            Integração NFe (Consulta de Chave)
+          </h3>
+          <p className="text-xs text-zinc-500 mt-1 leading-relaxed max-w-xl">
+            Configure as credenciais de um serviço parceiro (ex: Arquivei, Focus NFe) para poder importar itens e valores diretamente pela chave de acesso da NFe de manutenção.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
+                Provedor da API
+              </label>
+              <select
+                className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary appearance-none"
+                value={nfeForm.provider}
+                onChange={(e) =>
+                  setNfeForm({ ...nfeForm, provider: e.target.value })
+                }
+              >
+                <option value="arquivei">Arquivei</option>
+                <option value="focus">Focus NFe</option>
+                <option value="sieg">Sieg</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
+                API ID / Conta (Opcional)
+              </label>
+              <input
+                type="text"
+                placeholder="ID ou Conta do Serviço"
+                className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                value={nfeForm.api_id}
+                onChange={(e) =>
+                  setNfeForm({ ...nfeForm, api_id: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
+                Token / API Key
+              </label>
+              <input
+                type="password"
+                placeholder="Chave secreta da API"
+                className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                value={nfeForm.api_key}
+                onChange={(e) =>
+                  setNfeForm({ ...nfeForm, api_key: e.target.value })
+                }
+              />
+            </div>
+          </div>
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={saveNfeConfig}
+              className="px-6 py-3 bg-zinc-800 text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-zinc-700 transition-colors flex items-center gap-2"
+            >
+              <Save size={14} />
+              Salvar Configuração NFe
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Evolution Configuration */}
       <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm relative">
         <div className="absolute top-6 right-6">
