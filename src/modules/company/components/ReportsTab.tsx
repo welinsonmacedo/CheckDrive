@@ -119,19 +119,19 @@ export default function ReportsTab() {
 
       if (error) throw error;
 
-      const filteredData = (data || []).filter((d: any) => {
-        // Exclude issues that were resolved automatically (not manually by an admin/user)
-        if (d.status === "resolved" && !d.resolved_by) return false;
-
-        // Also exclude if there's any text in description or notes indicating it was auto-resolved by checklist
+      const filteredData = (data || []).map((d: any) => {
+        let status = d.status;
         const notesStr = String(d.resolution_notes || "").toLowerCase();
+        
+        // Re-classify issues that were resolved automatically as pending
         if (
-          d.status === "resolved" &&
-          notesStr.includes("automaticamente pelo check list")
-        )
-          return false;
+          status === "resolved" &&
+          (!d.resolved_by || notesStr.includes("automaticamente pelo check list"))
+        ) {
+          status = "pending";
+        }
 
-        return true;
+        return { ...d, status };
       });
 
       setHistoryData(filteredData);
@@ -400,15 +400,27 @@ export default function ReportsTab() {
 
       if (error) throw error;
 
+      const mappedData = data.map((d) => {
+        let status = d.status;
+        const notesStr = String(d.resolution_notes || "").toLowerCase();
+        if (
+          status === "resolved" &&
+          (!d.resolved_by || notesStr.includes("automaticamente pelo check list"))
+        ) {
+          status = "pending";
+        }
+        return { ...d, status };
+      });
+
       const stats = {
-        total: data.length,
-        pending: data.filter((d) => d.status === "pending").length,
-        resolved: data.filter((d) => d.status === "resolved").length,
+        total: mappedData.length,
+        pending: mappedData.filter((d) => d.status === "pending").length,
+        resolved: mappedData.filter((d) => d.status === "resolved").length,
         mostCommon: [] as any[],
       };
 
       const defectCounts: Record<string, number> = {};
-      data.forEach((d) => {
+      mappedData.forEach((d) => {
         defectCounts[d.item_title] = (defectCounts[d.item_title] || 0) + 1;
       });
 
@@ -418,7 +430,7 @@ export default function ReportsTab() {
         .slice(0, 5);
 
       setDefectsStats(stats);
-      setDefectsData(data);
+      setDefectsData(mappedData);
     } catch (err) {
       console.error(err);
     } finally {

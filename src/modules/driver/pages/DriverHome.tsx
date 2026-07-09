@@ -117,11 +117,13 @@ export default function DriverHome() {
       try {
         const { data: issuesData } = await supabase
           .from("checklist_issues")
-          .select("id, vehicle_id, trailer_id, item_title")
-          .eq("status", "pending");
+          .select("id, vehicle_id, trailer_id, item_title, status, resolved_by")
+          .or("status.eq.pending,and(status.eq.resolved,resolved_by.is.null)");
+
+        const pendingIssuesData = issuesData || [];
 
         const uniqueIssuesSet = new Set<string>();
-        (issuesData || []).forEach((issue) => {
+        pendingIssuesData.forEach((issue) => {
           const vehicleKey = issue.vehicle_id || issue.trailer_id || "no-vehicle";
           const titleKey = (issue.item_title || "").trim().toLowerCase();
           uniqueIssuesSet.add(`${vehicleKey}_${titleKey}`);

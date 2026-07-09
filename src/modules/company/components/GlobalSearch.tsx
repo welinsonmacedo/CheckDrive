@@ -153,18 +153,22 @@ export function GlobalSearch({
       // Search Maintenance
       const { data: maintenance } = await supabase
         .from("checklist_issues")
-        .select("id, item_title, status")
+        .select("id, item_title, status, resolved_by")
         .eq("company_id", companyId)
         .ilike("item_title", term)
         .limit(3);
 
       if (maintenance) {
         maintenance.forEach((m) => {
+          let status = m.status;
+          if (status === "resolved" && !m.resolved_by) {
+            status = "pending";
+          }
           searchResults.push({
             type: "Pendência",
             id: m.id,
             title: m.item_title,
-            subtitle: m.status === "resolved" ? "Resolvido" : "Pendente",
+            subtitle: status === "resolved" ? "Resolvido" : "Pendente",
             icon: <Wrench size={16} />,
             tab: "maintenance",
           });

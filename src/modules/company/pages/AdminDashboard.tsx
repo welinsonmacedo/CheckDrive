@@ -112,12 +112,14 @@ export default function AdminDashboard() {
     try {
       const { data: issuesData } = await supabase
         .from("checklist_issues")
-        .select("id, vehicle_id, trailer_id, item_title")
+        .select("id, vehicle_id, trailer_id, item_title, status, resolved_by")
         .eq("company_id", user.company_id)
-        .eq("status", "pending");
+        .or("status.eq.pending,and(status.eq.resolved,resolved_by.is.null)");
+
+      const pendingIssues = issuesData || [];
 
       const uniqueIssuesSet = new Set<string>();
-      (issuesData || []).forEach((issue) => {
+      pendingIssues.forEach((issue) => {
         const vehicleKey = issue.vehicle_id || issue.trailer_id || "no-vehicle";
         const titleKey = (issue.item_title || "").trim().toLowerCase();
         uniqueIssuesSet.add(`${vehicleKey}_${titleKey}`);

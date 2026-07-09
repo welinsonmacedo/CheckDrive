@@ -47,15 +47,17 @@ export default function NotificationsTab() {
           trailer:trailers(id, plate)
         `)
         .eq("company_id", user?.company_id)
-        .eq("status", "pending")
+        .or("status.eq.pending,and(status.eq.resolved,resolved_by.is.null)")
         .order("created_at", { ascending: false });
 
       if (issuesError) {
         console.error("Error fetching checklist issues:", issuesError);
       }
 
-      const issuesData = (allIssuesData || []).filter(i => !i.auto_alert_id);
-      const alertIssuesData = (allIssuesData || []).filter(i => i.auto_alert_id);
+      const pendingAllIssuesData = allIssuesData || [];
+
+      const issuesData = pendingAllIssuesData.filter((i: any) => !i.auto_alert_id);
+      const alertIssuesData = pendingAllIssuesData.filter((i: any) => i.auto_alert_id);
 
       // Group and Deduplicate Checklist Issues
       const groupedIssuesMap = new Map<string, any[]>();

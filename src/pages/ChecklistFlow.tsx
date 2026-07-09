@@ -184,7 +184,7 @@ export default function ChecklistFlow() {
       let query = supabase
         .from("checklist_issues")
         .select("*")
-        .eq("status", "pending");
+        .or("status.eq.pending,and(status.eq.resolved,resolved_by.is.null)");
 
       if (vehicleId && trailerId) {
         query = query.or(

@@ -119,7 +119,15 @@ export default function VehicleDetailsModal({
         .lte("created_at", endOfMonth)
         .order("created_at", { ascending: false });
 
-      setIssues(defs || []);
+      const mappedDefs = (defs || []).map((issue: any) => {
+        let status = issue.status;
+        if (status === "resolved" && !issue.resolved_by) {
+          status = "pending";
+        }
+        return { ...issue, status };
+      });
+
+      setIssues(mappedDefs);
     } catch (error) {
       console.error("Erro ao buscar detalhes do veículo", error);
     } finally {

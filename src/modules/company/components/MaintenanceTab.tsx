@@ -284,12 +284,19 @@ export default function MaintenanceTab() {
         driversData = data || [];
       }
 
-      const issuesWithRelations = filteredIssues.map((issue: any) => ({
-        ...issue,
-        vehicles: vehiclesData.find((v) => v.id === issue.vehicle_id),
-        trailers: trailersData.find((t) => t.id === issue.trailer_id),
-        profiles: driversData.find((d) => d.id === issue.driver_id),
-      }));
+      const issuesWithRelations = filteredIssues.map((issue: any) => {
+        let status = issue.status;
+        if (status === "resolved" && !issue.resolved_by) {
+          status = "pending";
+        }
+        return {
+          ...issue,
+          status,
+          vehicles: vehiclesData.find((v) => v.id === issue.vehicle_id),
+          trailers: trailersData.find((t) => t.id === issue.trailer_id),
+          profiles: driversData.find((d) => d.id === issue.driver_id),
+        };
+      });
 
       // Group identical pending issues
       const groupedIssues: any[] = [];
