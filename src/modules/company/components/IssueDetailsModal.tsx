@@ -47,7 +47,9 @@ export default function IssueDetailsModal({
 
   let parsedNfs: any[] = [];
   try {
-    if (issue.resolution_nf && issue.resolution_nf.startsWith("[")) {
+    if (issue.resolution_nfs) {
+      parsedNfs = typeof issue.resolution_nfs === 'string' ? JSON.parse(issue.resolution_nfs) : issue.resolution_nfs;
+    } else if (issue.resolution_nf && issue.resolution_nf.startsWith("[")) {
       parsedNfs = JSON.parse(issue.resolution_nf);
     }
   } catch (e) {
@@ -266,7 +268,7 @@ export default function IssueDetailsModal({
                       )}
 
                       {/* NFs */}
-                      {issue.resolution_nf && (
+                      {(issue.resolution_nfs || issue.resolution_nf) && (
                         <div className="mt-4">
                           <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-2">
                             Comprovantes / Notas Fiscais
@@ -374,7 +376,7 @@ export default function IssueDetailsModal({
                         </div>
                       )}
 
-                      {!issue.resolution_nf && issue.resolution_value > 0 && (
+                      {!(issue.resolution_nfs || issue.resolution_nf) && issue.resolution_value > 0 && (
                         <div className="mt-4">
                           <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-1">
                             Custo Total de Reparo

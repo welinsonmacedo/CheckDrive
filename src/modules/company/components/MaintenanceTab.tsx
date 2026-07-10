@@ -380,53 +380,19 @@ export default function MaintenanceTab() {
     setResolveIntervalKm("");
     setResolveWarningKm("");
 
-    if (
-      issue.resolution_nfs &&
-      Array.isArray(issue.resolution_nfs) &&
-      issue.resolution_nfs.length > 0
-    ) {
-      setResolveNfs(issue.resolution_nfs);
-    } else if (issue.resolution_nf) {
-      try {
-        const parsed = JSON.parse(issue.resolution_nf);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setResolveNfs(parsed);
-        } else {
-          setResolveNfs([
-            {
-              id: Date.now().toString(),
-              nf_number: "",
-              nf_key: "",
-              items: [
-                {
-                  id: `item-${Date.now()}`,
-                  item_id: "",
-                  name: "",
-                  quantity: 1,
-                  unit_price: 0,
-                },
-              ],
-            },
-          ]);
-        }
-      } catch (e) {
-        setResolveNfs([
-          {
-            id: Date.now().toString(),
-            nf_number: "",
-            nf_key: "",
-            items: [
-              {
-                id: `item-${Date.now()}`,
-                item_id: "",
-                name: "",
-                quantity: 1,
-                unit_price: 0,
-              },
-            ],
-          },
-        ]);
+    let loadedNfs = null;
+    try {
+      if (issue.resolution_nfs) {
+        loadedNfs = typeof issue.resolution_nfs === 'string' ? JSON.parse(issue.resolution_nfs) : issue.resolution_nfs;
+      } else if (issue.resolution_nf) {
+        loadedNfs = typeof issue.resolution_nf === 'string' ? JSON.parse(issue.resolution_nf) : issue.resolution_nf;
       }
+    } catch (e) {
+      console.error("Error parsing NFs", e);
+    }
+
+    if (Array.isArray(loadedNfs) && loadedNfs.length > 0) {
+      setResolveNfs(loadedNfs);
     } else {
       setResolveNfs([
         {
@@ -570,38 +536,7 @@ export default function MaintenanceTab() {
         return acc + Number(item.quantity || 1) * Number(item.unit_price || 0);
       }, 0);
 
-      let previousStockValue = 0;
-      if (resolvingIssueData?.status === "resolved") {
-        let oldNfs = resolvingIssueData.resolution_nfs;
-        if (!oldNfs && typeof resolvingIssueData.resolution_nf === 'string') {
-          try {
-            oldNfs = JSON.parse(resolvingIssueData.resolution_nf);
-          } catch (e) {
-            oldNfs = [];
-          }
-        }
-        if (!Array.isArray(oldNfs)) oldNfs = [];
-        
-        const oldNfsValue = oldNfs.reduce((acc: number, nf: any) => {
-          const nfItems = Array.isArray(nf.items) ? nf.items : [];
-          return (
-            acc +
-            nfItems.reduce(
-              (itemAcc: number, item: any) =>
-                itemAcc +
-                Number(item.quantity || 1) * Number(item.unit_price || 0),
-              0,
-            )
-          );
-        }, 0);
-        previousStockValue = Math.max(
-          0,
-          Number(resolvingIssueData.resolution_value || 0) - oldNfsValue,
-        );
-      }
-
-      const calculatedValueSum =
-        calculatedValueSumNfs + previousStockValue + calculatedValueSumStock;
+      const calculatedValueSum = calculatedValueSumNfs + calculatedValueSumStock;
 
       const validResolveNfs = resolveNfs.filter(
         (nf) =>
@@ -2018,6 +1953,9 @@ export default function MaintenanceTab() {
                                       let nfs = issue.resolution_nfs;
                                       if (!nfs && typeof issue.resolution_nf === 'string') {
                                         nfs = JSON.parse(issue.resolution_nf);
+                                      }
+                                      if (typeof nfs === 'string') {
+                                        nfs = JSON.parse(nfs);
                                       }
                                       if (Array.isArray(nfs)) {
                                         nfs = nfs.filter(
