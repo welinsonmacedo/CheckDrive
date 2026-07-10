@@ -386,6 +386,47 @@ export default function MaintenanceTab() {
       issue.resolution_nfs.length > 0
     ) {
       setResolveNfs(issue.resolution_nfs);
+    } else if (issue.resolution_nf) {
+      try {
+        const parsed = JSON.parse(issue.resolution_nf);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setResolveNfs(parsed);
+        } else {
+          setResolveNfs([
+            {
+              id: Date.now().toString(),
+              nf_number: "",
+              nf_key: "",
+              items: [
+                {
+                  id: `item-${Date.now()}`,
+                  item_id: "",
+                  name: "",
+                  quantity: 1,
+                  unit_price: 0,
+                },
+              ],
+            },
+          ]);
+        }
+      } catch (e) {
+        setResolveNfs([
+          {
+            id: Date.now().toString(),
+            nf_number: "",
+            nf_key: "",
+            items: [
+              {
+                id: `item-${Date.now()}`,
+                item_id: "",
+                name: "",
+                quantity: 1,
+                unit_price: 0,
+              },
+            ],
+          },
+        ]);
+      }
     } else {
       setResolveNfs([
         {
@@ -1961,10 +2002,13 @@ export default function MaintenanceTab() {
                                   </div>
                                 )}
 
-                                {issue.resolution_nf &&
+                                {(issue.resolution_nfs || issue.resolution_nf) &&
                                   (() => {
                                     try {
-                                      let nfs = JSON.parse(issue.resolution_nf);
+                                      let nfs = issue.resolution_nfs;
+                                      if (!nfs && typeof issue.resolution_nf === 'string') {
+                                        nfs = JSON.parse(issue.resolution_nf);
+                                      }
                                       if (Array.isArray(nfs)) {
                                         nfs = nfs.filter(
                                           (nf) =>
