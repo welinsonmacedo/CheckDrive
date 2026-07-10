@@ -783,7 +783,7 @@ export default function ReportsTab() {
                                 <ul className="space-y-2 list-disc pl-4 text-xs text-gray-600">
                                   {group.issues.map((issue: any) => (
                                     <li key={issue.id}>
-                                      <strong className="text-gray-900">{issue.item_title}</strong>: {issue.notes || "Sem observações"}
+                                      <strong className="text-gray-900">{issue.item_title}</strong>: {issue.description || "Sem observações"}
                                       <span className="block text-[10px] text-gray-400 mt-0.5">
                                         Reportado em: {new Date(issue.created_at).toLocaleDateString("pt-BR")}
                                       </span>
