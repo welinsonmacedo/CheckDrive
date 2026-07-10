@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import {
@@ -1184,7 +1185,7 @@ export default function InfractionsTab() {
                           <div className="flex items-center justify-end gap-2">
                                                         {inf.attachment_url && (
                               <button
-                                onClick={() => setSelectedAttachment(inf.attachment_url)}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedAttachment(inf.attachment_url); }}
                                 className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                                 title="Ver Anexos"
                               >
@@ -1653,13 +1654,14 @@ export default function InfractionsTab() {
         onClose={() => setPrintInfraction(null)}
       />
       {/* Modal Ver Anexo */}
-      <AnimatePresence>
-        {selectedAttachment && (
+      {selectedAttachment && createPortal(
+        <AnimatePresence>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+            key="attachment-modal"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: 99999 }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -1706,8 +1708,9 @@ export default function InfractionsTab() {
               </div>
             </motion.div>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }
