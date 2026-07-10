@@ -249,7 +249,7 @@ export default function ReportsTab() {
           routes(origin, destination),
           start_check:checklist_submissions!schedules_start_checklist_id_fkey(odometer),
           end_check:checklist_submissions!schedules_end_checklist_id_fkey(odometer),
-          fuel_check:checklist_submissions!schedules_fuel_checklist_id_fkey(type)
+          fuel_check:checklist_submissions!schedules_fuel_checklist_id_fkey(type, details)
         `,
         )
         .gte("start_at", `${startDate}T00:00:00Z`)
@@ -1663,10 +1663,34 @@ export default function ReportsTab() {
                               <td className="px-5 py-4">
                                 {sch.requires_fueling ? (
                                   sch.fuel_check ? (
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest">
-                                      <CheckCircle2 size={12} />
-                                      Realizado
-                                    </span>
+                                    <div className="flex flex-col gap-1">
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest w-fit">
+                                        <CheckCircle2 size={12} />
+                                        Realizado
+                                      </span>
+                                      {sch.fuel_check.details && (
+                                        <span className="text-[10px] text-gray-500 font-medium">
+                                          Qtd: {(() => {
+                                            const details = sch.fuel_check.details;
+                                            let liters = 0;
+                                            if (details?.itemValues && details?.itemTitles) {
+                                              const entry = Object.entries(details.itemTitles).find(([_, title]) => {
+                                                const t = String(title).toLowerCase();
+                                                return t.includes('litro') || t.includes('quantidade') || t.includes('lts');
+                                              });
+                                              if (entry) {
+                                                liters = parseFloat(String(details.itemValues[entry[0]]).replace(',','.'));
+                                              }
+                                            } else if (details?.manual_liters !== undefined && details?.manual_liters !== null) {
+                                              liters = parseFloat(String(details.manual_liters).replace(',', '.'));
+                                            } else if (details?.adjusted_liters !== undefined && details?.adjusted_liters !== null && details.adjusted_liters !== '') {
+                                              liters = parseFloat(String(details.adjusted_liters).replace(',', '.'));
+                                            }
+                                            return liters && !isNaN(liters) ? `${liters.toLocaleString('pt-BR')} L` : "-";
+                                          })()}
+                                        </span>
+                                      )}
+                                    </div>
                                   ) : (
                                     <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-rose-50 text-rose-700 text-[10px] font-black uppercase tracking-widest">
                                       <AlertTriangle size={12} />
