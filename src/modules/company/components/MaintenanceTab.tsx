@@ -557,21 +557,31 @@ export default function MaintenanceTab() {
         if (!uploadError) uploadedPhotos.push(path);
       }
 
-      const calculatedValueSumNfs = resolveNfs.reduce((acc, nf) => {
-        const nfSum = nf.items.reduce(
+      const calculatedValueSumNfs = (Array.isArray(resolveNfs) ? resolveNfs : []).reduce((acc, nf) => {
+        const nfItems = Array.isArray(nf.items) ? nf.items : [];
+        const nfSum = nfItems.reduce(
           (itemAcc: number, item: any) =>
             itemAcc + Number(item.quantity || 1) * Number(item.unit_price || 0),
           0,
         );
         return acc + nfSum;
       }, 0);
-      const calculatedValueSumStock = resolveStockItems.reduce((acc, item) => {
+      const calculatedValueSumStock = (Array.isArray(resolveStockItems) ? resolveStockItems : []).reduce((acc, item) => {
         return acc + Number(item.quantity || 1) * Number(item.unit_price || 0);
       }, 0);
 
       let previousStockValue = 0;
       if (resolvingIssueData?.status === "resolved") {
-        const oldNfs = resolvingIssueData.resolution_nfs || [];
+        let oldNfs = resolvingIssueData.resolution_nfs;
+        if (!oldNfs && typeof resolvingIssueData.resolution_nf === 'string') {
+          try {
+            oldNfs = JSON.parse(resolvingIssueData.resolution_nf);
+          } catch (e) {
+            oldNfs = [];
+          }
+        }
+        if (!Array.isArray(oldNfs)) oldNfs = [];
+        
         const oldNfsValue = oldNfs.reduce((acc: number, nf: any) => {
           const nfItems = Array.isArray(nf.items) ? nf.items : [];
           return (
@@ -2843,7 +2853,7 @@ export default function MaintenanceTab() {
                       {/* Scrollable invoice stack */}
                       <div className="flex-1 overflow-y-auto space-y-4 pr-2 mt-4 min-h-0">
                         {resolveNfs.map((nf, nfIdx) => {
-                          const nfTotal = nf.items.reduce(
+                          const nfTotal = (Array.isArray(nf.items) ? nf.items : []).reduce(
                             (acc: number, item: any) =>
                               acc +
                               Number(item.quantity || 1) *
@@ -3405,10 +3415,10 @@ export default function MaintenanceTab() {
                         <div className="text-2xl font-black text-emerald-700">
                           R${" "}
                           {(
-                            resolveNfs.reduce(
+                            (Array.isArray(resolveNfs) ? resolveNfs : []).reduce(
                               (acc, nf) =>
                                 acc +
-                                nf.items.reduce(
+                                (Array.isArray(nf.items) ? nf.items : []).reduce(
                                   (itemAcc: number, item: any) =>
                                     itemAcc +
                                     Number(item.quantity || 1) *
@@ -3417,7 +3427,7 @@ export default function MaintenanceTab() {
                                 ),
                               0,
                             ) +
-                            resolveStockItems.reduce(
+                            (Array.isArray(resolveStockItems) ? resolveStockItems : []).reduce(
                               (acc, item) =>
                                 acc +
                                 Number(item.quantity || 1) *

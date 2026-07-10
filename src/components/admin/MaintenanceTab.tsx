@@ -458,11 +458,11 @@ export default function MaintenanceTab() {
         if (!uploadError) uploadedPhotos.push(path);
       }
 
-      const calculatedValueSumNfs = resolveNfs.reduce((acc, nf) => {
-        const nfSum = nf.items.reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0);
+      const calculatedValueSumNfs = (Array.isArray(resolveNfs) ? resolveNfs : []).reduce((acc, nf) => {
+        const nfSum = (Array.isArray(nf.items) ? nf.items : []).reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0);
         return acc + nfSum;
       }, 0);
-      const calculatedValueSumStock = resolveStockItems.reduce((acc, item) => {
+      const calculatedValueSumStock = (Array.isArray(resolveStockItems) ? resolveStockItems : []).reduce((acc, item) => {
         return acc + (Number(item.quantity || 1) * Number(item.unit_price || 0));
       }, 0);
       const calculatedValueSum = calculatedValueSumNfs + calculatedValueSumStock;
@@ -1879,7 +1879,7 @@ export default function MaintenanceTab() {
                     </div>
 
                     {resolveNfs.map((nf, nfIdx) => {
-                      const nfTotal = nf.items.reduce((acc: number, item: any) => acc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0);
+                      const nfTotal = (Array.isArray(nf.items) ? nf.items : []).reduce((acc: number, item: any) => acc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0);
                       return (
                         <div key={nf.id} className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3 relative">
                           {resolveNfs.length > 1 && (
@@ -2317,7 +2317,7 @@ export default function MaintenanceTab() {
                       <span className="text-xs text-zinc-500">Soma de Notas Fiscais + Estoque Utilizado</span>
                     </div>
                     <div className="text-xl font-black text-primary">
-                      R$ {(resolveNfs.reduce((acc, nf) => acc + nf.items.reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0), 0) + resolveStockItems.reduce((acc, item) => acc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {((Array.isArray(resolveNfs) ? resolveNfs : []).reduce((acc, nf) => acc + (Array.isArray(nf.items) ? nf.items : []).reduce((itemAcc: number, item: any) => itemAcc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0), 0) + (Array.isArray(resolveStockItems) ? resolveStockItems : []).reduce((acc, item) => acc + (Number(item.quantity || 1) * Number(item.unit_price || 0)), 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </div>
                   </div>
 
