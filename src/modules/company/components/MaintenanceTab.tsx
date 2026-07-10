@@ -998,48 +998,113 @@ export default function MaintenanceTab() {
     return true;
   });
 
-  const handleXmlUpload = (e: React.ChangeEvent<HTMLInputElement>, nfIdx: number) => {
+  const handleXmlUpload = async (e: React.ChangeEvent<HTMLInputElement>, nfIdx: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const xmlText = event.target?.result as string;
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+    reader.onload = async (event) => {
+      try {
+        const xmlText = event.target?.result as string;
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
 
-      const chNFe = xmlDoc.getElementsByTagName("chNFe")[0]?.textContent || "";
-      const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
+        const chNFe = xmlDoc.getElementsByTagName("chNFe")[0]?.textContent || "";
+        const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
 
-      const detElements = xmlDoc.getElementsByTagName("det");
-      const parsedItems: any[] = [];
+        const emit = xmlDoc.getElementsByTagName("emit")[0];
+        const cnpj = emit?.getElementsByTagName("CNPJ")[0]?.textContent || "";
+        const xNome = emit?.getElementsByTagName("xNome")[0]?.textContent || "Fornecedor da NF";
 
-      for (let i = 0; i < detElements.length; i++) {
-        const prod = detElements[i].getElementsByTagName("prod")[0];
-        if (prod) {
-          const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "Produto sem nome";
-          const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
-          const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
-          
-          parsedItems.push({
-             id: `item-${Date.now()}-${i}`,
-             item_id: "",
-             name: xProd,
-             quantity: qCom,
-             unit_price: vUnCom,
-          });
+        let supplierId = "";
+        if (user?.company_id && cnpj) {
+          const { data: existingSuppliers } = await supabase
+            .from("inventory_suppliers")
+            .select("id")
+            .eq("company_id", user.company_id)
+            .eq("cnpj_cpf", cnpj)
+            .limit(1);
+
+          if (existingSuppliers && existingSuppliers.length > 0) {
+            supplierId = existingSuppliers[0].id;
+          } else {
+            const { data: newSupplier } = await supabase
+              .from("inventory_suppliers")
+              .insert({
+                company_id: user.company_id,
+                cnpj_cpf: cnpj,
+                name: xNome,
+              })
+              .select("id")
+              .single();
+            if (newSupplier) supplierId = newSupplier.id;
+          }
         }
-      }
 
-      if (parsedItems.length > 0 || chNFe) {
-         const updated = [...resolveNfs];
-         if (chNFe) updated[nfIdx].nf_key = chNFe;
-         if (nNF) updated[nfIdx].nf_number = nNF;
-         if (parsedItems.length > 0) updated[nfIdx].items = parsedItems;
-         setResolveNfs(updated);
-         alert("XML importado com sucesso!");
-      } else {
-         alert("Não foi possível encontrar dados válidos de NF-e neste arquivo XML.");
+        const detElements = xmlDoc.getElementsByTagName("det");
+        const parsedItems: any[] = [];
+
+        for (let i = 0; i < detElements.length; i++) {
+          const prod = detElements[i].getElementsByTagName("prod")[0];
+          if (prod) {
+            const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "Produto sem nome";
+            const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
+            const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
+            const cProd = prod.getElementsByTagName("cProd")[0]?.textContent || "";
+            
+            let itemId = "";
+            if (user?.company_id && xProd) {
+              const { data: existingItems } = await supabase
+                .from("inventory_items")
+                .select("id")
+                .eq("company_id", user.company_id)
+                .ilike("name", xProd)
+                .limit(1);
+
+              if (existingItems && existingItems.length > 0) {
+                itemId = existingItems[0].id;
+              } else {
+                const { data: newItem } = await supabase
+                  .from("inventory_items")
+                  .insert({
+                    company_id: user.company_id,
+                    name: xProd,
+                    sku: cProd,
+                    category: "Peças",
+                    current_quantity: 0,
+                    min_quantity: 0,
+                  })
+                  .select("id")
+                  .single();
+                if (newItem) itemId = newItem.id;
+              }
+            }
+
+            parsedItems.push({
+               id: `item-${Date.now()}-${i}`,
+               item_id: itemId,
+               name: xProd,
+               quantity: qCom,
+               unit_price: vUnCom,
+            });
+          }
+        }
+
+        if (parsedItems.length > 0 || chNFe) {
+           const updated = [...resolveNfs];
+           if (chNFe) updated[nfIdx].nf_key = chNFe;
+           if (nNF) updated[nfIdx].nf_number = nNF;
+           if (supplierId) updated[nfIdx].supplier_id = supplierId;
+           if (parsedItems.length > 0) updated[nfIdx].items = parsedItems;
+           setResolveNfs(updated);
+           alert("XML importado com sucesso! Fornecedor e itens foram validados/cadastrados.");
+           fetchCatalog(); // Refresh catalog if new items were added
+        } else {
+           alert("Não foi possível encontrar dados válidos de NF-e neste arquivo XML.");
+        }
+      } catch (e) {
+        console.error("Erro ao importar XML:", e);
+        alert("Erro ao processar o arquivo XML.");
       }
     };
     reader.readAsText(file);
