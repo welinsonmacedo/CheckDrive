@@ -21,6 +21,7 @@ import {
   Package,
   Printer,
   Edit,
+  Upload,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -996,6 +997,54 @@ export default function MaintenanceTab() {
 
     return true;
   });
+
+  const handleXmlUpload = (e: React.ChangeEvent<HTMLInputElement>, nfIdx: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const xmlText = event.target?.result as string;
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+
+      const chNFe = xmlDoc.getElementsByTagName("chNFe")[0]?.textContent || "";
+      const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
+
+      const detElements = xmlDoc.getElementsByTagName("det");
+      const parsedItems: any[] = [];
+
+      for (let i = 0; i < detElements.length; i++) {
+        const prod = detElements[i].getElementsByTagName("prod")[0];
+        if (prod) {
+          const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "Produto sem nome";
+          const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
+          const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
+          
+          parsedItems.push({
+             id: `item-${Date.now()}-${i}`,
+             item_id: "",
+             name: xProd,
+             quantity: qCom,
+             unit_price: vUnCom,
+          });
+        }
+      }
+
+      if (parsedItems.length > 0 || chNFe) {
+         const updated = [...resolveNfs];
+         if (chNFe) updated[nfIdx].nf_key = chNFe;
+         if (nNF) updated[nfIdx].nf_number = nNF;
+         if (parsedItems.length > 0) updated[nfIdx].items = parsedItems;
+         setResolveNfs(updated);
+         alert("XML importado com sucesso!");
+      } else {
+         alert("Não foi possível encontrar dados válidos de NF-e neste arquivo XML.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
 
   const handlePrintTracking = () => {
     let printContent = `
@@ -2869,6 +2918,16 @@ export default function MaintenanceTab() {
                                   >
                                     Buscar Dados
                                   </button>
+                                  <label className="cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5">
+                                    <Upload size={14} />
+                                    Importar XML
+                                    <input
+                                      type="file"
+                                      accept=".xml"
+                                      className="hidden"
+                                      onChange={(e) => handleXmlUpload(e, nfIdx)}
+                                    />
+                                  </label>
                                 </div>
                               </div>
 
