@@ -80,6 +80,7 @@ export default function ReportsTab() {
 
   // Schedules Data
   const [schedulesData, setSchedulesData] = useState<any[]>([]);
+  const [schedulesSearchTerm, setSchedulesSearchTerm] = useState("");
 
   const fetchHistoryEntities = async () => {
     try {
@@ -1538,10 +1539,28 @@ export default function ReportsTab() {
               </div>
             )}
 
+            
             {/* 6. REPORT TYPE: SCHEDULES */}
             {activeReport === "schedules" && (
               <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 print:hidden flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                  <div className="flex-1 w-full max-w-sm relative">
+                    <Search
+                      size={18}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Buscar por motorista ou placa..."
+                      value={schedulesSearchTerm}
+                      onChange={(e) => setSchedulesSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+
                 <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col">
+
                   <div className="p-4 border-b border-gray-200/80 bg-gray-50/50 flex justify-between items-center">
                     <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-2">
                       <Calendar size={15} className="text-indigo-600" />
@@ -1574,17 +1593,31 @@ export default function ReportsTab() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {schedulesData.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={6}
-                              className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black"
-                            >
-                              Nenhuma escala encontrada neste período
-                            </td>
-                          </tr>
-                        ) : (
-                          schedulesData.map((sch: any) => (
+                        
+                        {schedulesData.filter((sch: any) => {
+                            const term = schedulesSearchTerm.toLowerCase();
+                            const driver = (sch.profiles?.full_name || "").toLowerCase();
+                            const plate = (sch.vehicles?.plate || "").toLowerCase();
+                            return driver.includes(term) || plate.includes(term);
+                          }).length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={6}
+                                className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black"
+                              >
+                                Nenhuma escala encontrada
+                              </td>
+                            </tr>
+                          ) : (
+                            schedulesData
+                              .filter((sch: any) => {
+                                const term = schedulesSearchTerm.toLowerCase();
+                                const driver = (sch.profiles?.full_name || "").toLowerCase();
+                                const plate = (sch.vehicles?.plate || "").toLowerCase();
+                                return driver.includes(term) || plate.includes(term);
+                              })
+                              .map((sch: any) => (
+
                             <tr
                               key={sch.id}
                               className="hover:bg-gray-50/30 transition-colors"
