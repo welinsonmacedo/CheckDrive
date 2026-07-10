@@ -40,6 +40,7 @@ import {
 } from "recharts";
 import InfractionPrintModal from "./InfractionPrintModal";
 import DriverSummaryPrintModal from "./DriverSummaryPrintModal";
+import AttachmentViewModal from "./AttachmentViewModal";
 import InfractionCodeSelector from "./InfractionCodeSelector";
 import { getInfractionDescription } from "@/src/utils/infractions";
 
@@ -287,9 +288,11 @@ const DashboardView = ({ infractions }: { infractions: any[] }) => {
 const DriversDashboardView = ({
   infractions,
   drivers,
+  onViewAttachment,
 }: {
   infractions: any[];
   drivers: any[];
+  onViewAttachment: (url: string) => void;
 }) => {
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [driverSearch, setDriverSearch] = useState("");
@@ -606,7 +609,15 @@ const DriversDashboardView = ({
                             </div>
                           )}
                         </div>
-
+                        {inf.attachment_url && (
+                          <button
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onViewAttachment(inf.attachment_url); }}
+                            className="mt-2 p-1.5 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center justify-end w-fit self-end self-end sm:self-end"
+                            title="Ver Anexos"
+                          >
+                            <Eye size={16} />
+                          </button>
+                        )}
                         {/* Display Installments inside driver history card */}
                         {inf.installments && inf.installments.length > 0 && (
                           <div className="mt-2 text-right">
@@ -1026,7 +1037,7 @@ export default function InfractionsTab() {
       {activeTab === "dashboard" ? (
         <DashboardView infractions={infractions} />
       ) : activeTab === "drivers" ? (
-        <DriversDashboardView infractions={infractions} drivers={drivers} />
+        <DriversDashboardView infractions={infractions} drivers={drivers} onViewAttachment={setSelectedAttachment} />
       ) : (
         <>
           {/* Search & Filters */}
@@ -1232,7 +1243,7 @@ export default function InfractionsTab() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: 999999 }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -1654,62 +1665,11 @@ export default function InfractionsTab() {
         onClose={() => setPrintInfraction(null)}
       />
       {/* Modal Ver Anexo */}
-      {selectedAttachment && createPortal(
-        <AnimatePresence>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            key="attachment-modal"
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: 99999 }}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
-            >
-              <div className="bg-white border-b border-zinc-100 p-4 flex justify-between items-center z-10">
-                <h3 className="text-lg font-bold text-zinc-800 flex items-center gap-2">
-                  <Eye className="text-indigo-500" />
-                  Visualizar Anexo
-                </h3>
-                <button
-                  onClick={() => setSelectedAttachment(null)}
-                  className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-auto bg-zinc-100/50 p-4 flex items-center justify-center min-h-[500px]">
-                {selectedAttachment.toLowerCase().includes(".pdf") ? (
-                  <iframe
-                    src={selectedAttachment}
-                    className="w-full h-[70vh] rounded-xl border border-zinc-200"
-                    title="Anexo PDF"
-                  />
-                ) : (
-                  <img
-                    src={selectedAttachment}
-                    alt="Anexo da Infração"
-                    className="max-w-full max-h-[70vh] rounded-xl border border-zinc-200 object-contain shadow-sm"
-                  />
-                )}
-              </div>
-              <div className="p-4 border-t border-zinc-100 bg-white flex justify-end">
-                <a
-                  href={selectedAttachment}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors"
-                >
-                  Abrir Original em Nova Guia
-                </a>
-              </div>
-            </motion.div>
-          </motion.div>
-        </AnimatePresence>,
-        document.body
+      {selectedAttachment && (
+        <AttachmentViewModal
+          attachmentUrl={selectedAttachment}
+          onClose={() => setSelectedAttachment(null)}
+        />
       )}
     </div>
   );
