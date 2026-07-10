@@ -1588,6 +1588,9 @@ export default function ReportsTab() {
                             KM Fim
                           </th>
                           <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                            KM Rodado
+                          </th>
+                          <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
                             Abastecimento
                           </th>
                         </tr>
@@ -1602,7 +1605,7 @@ export default function ReportsTab() {
                           }).length === 0 ? (
                             <tr>
                               <td
-                                colSpan={6}
+                                colSpan={7}
                                 className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black"
                               >
                                 Nenhuma escala encontrada
@@ -1650,6 +1653,11 @@ export default function ReportsTab() {
                               <td className="px-5 py-4 text-xs font-mono font-bold text-gray-600">
                                 {sch.end_check?.odometer
                                   ? `${sch.end_check.odometer.toLocaleString("pt-BR")} km`
+                                  : "-"}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-mono font-bold text-indigo-600">
+                                {sch.start_check?.odometer && sch.end_check?.odometer && sch.end_check.odometer >= sch.start_check.odometer
+                                  ? `${(sch.end_check.odometer - sch.start_check.odometer).toLocaleString("pt-BR")} km`
                                   : "-"}
                               </td>
                               <td className="px-5 py-4">

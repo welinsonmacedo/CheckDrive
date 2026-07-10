@@ -805,7 +805,7 @@ export default function ReportsTab() {
                         {mileageData.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={6}
+                              colSpan={7}
                               className="text-center py-10 text-xs text-gray-400 uppercase tracking-widest font-black"
                             >
                               Nenhum odômetro computado nesse período.
