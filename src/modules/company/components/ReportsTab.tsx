@@ -157,12 +157,12 @@ export default function ReportsTab() {
 
       if (errStock) throw errStock;
 
+      
       // 2. Fetch from checklist_issues
       const { data: issuesData, error: errIssues } = await supabase
         .from("checklist_issues")
         .select(`*, vehicles(plate), trailers(plate)`)
-        .eq("status", "resolved")
-        .not("resolution_nfs", "is", null)
+        .in("status", ["resolved", "waiting"])
         .gte("updated_at", `${startDate}T00:00:00Z`)
         .lte("updated_at", `${endDate}T23:59:59Z`);
 
@@ -189,12 +189,26 @@ export default function ReportsTab() {
       (issuesData || []).forEach((i: any) => {
         const vehicleInfo =
           i.vehicles?.plate || i.trailers?.plate || "Sem Placa";
-        const nfs = Array.isArray(i.resolution_nfs) ? i.resolution_nfs : [];
+          
+        let nfs = [];
+        try {
+          if (i.resolution_nfs) {
+            nfs = typeof i.resolution_nfs === 'string' ? JSON.parse(i.resolution_nfs) : i.resolution_nfs;
+          } else if (i.resolution_nf) {
+            nfs = typeof i.resolution_nf === 'string' ? JSON.parse(i.resolution_nf) : i.resolution_nf;
+          }
+        } catch (e) {
+          console.error("Error parsing NFs in report", e);
+        }
+        
+        if (!Array.isArray(nfs)) nfs = [];
+
         nfs.forEach((nf: any) => {
           const items = Array.isArray(nf.items) ? nf.items : [];
-          items.forEach((item: any) => {
+          items.forEach((item: any, idx: number) => {
             combinedPurchases.push({
-              id: `issue-${i.id}-${nf.nf_number}-${item.name}`,
+              id: `issue-${i.id}-${nf.nf_number || "sn"}-${item.name || idx}`,
+
               date: i.updated_at,
               nf_number: nf.nf_number || "S/N",
               origin: "maintenance",
