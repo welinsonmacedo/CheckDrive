@@ -30,7 +30,7 @@ import PrintHeader from "./PrintHeader";
 
 export default function ReportsTab() {
   const [activeReport, setActiveReport] = usePersistentState<
-    "defects" | "mileage" | "history" | "purchases" | "schedules"
+    "defects" | "pending_by_plate" | "mileage" | "history" | "purchases" | "schedules"
   >("reports_activeReport", "defects");
 
   // Date filters
@@ -54,6 +54,8 @@ export default function ReportsTab() {
 
   // Defects Data
   const [defectsData, setDefectsData] = useState<any[]>([]);
+  const [pendingByPlateData, setPendingByPlateData] = useState<any[]>([]);
+  const [pendingByPlateSearchTerm, setPendingByPlateSearchTerm] = useState("");
   const [defectsStats, setDefectsStats] = useState({
     total: 0,
     pending: 0,
@@ -251,6 +253,8 @@ export default function ReportsTab() {
   useEffect(() => {
     if (activeReport === "defects") {
       fetchDefectsReport();
+    } else if (activeReport === "pending_by_plate") {
+      fetchPendingByPlateReport();
     } else if (activeReport === "mileage") {
       fetchMileageReport();
     } else if (activeReport === "history") {
@@ -387,6 +391,56 @@ export default function ReportsTab() {
     }
   };
 
+  
+  const fetchPendingByPlateReport = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("checklist_issues")
+        .select(
+          "*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)"
+        )
+        // NOTE: we could filter by date or not, but let's filter by the date range selected
+        .gte("created_at", `${startDate}T00:00:00Z`)
+        .lte("created_at", `${endDate}T23:59:59Z`);
+
+      if (error) throw error;
+
+      // Only pending defects
+      const mappedData = data.map((d) => {
+        let status = d.status;
+        const notesStr = String(d.resolution_notes || "").toLowerCase();
+        if (
+          status === "resolved" &&
+          (!d.resolved_by || notesStr.includes("automaticamente pelo check list"))
+        ) {
+          status = "pending";
+        }
+        return { ...d, status };
+      }).filter(d => d.status === "pending" || d.status === "waiting");
+
+      // Group by plate
+      const grouped: Record<string, any[]> = {};
+      mappedData.forEach(d => {
+        const plate = d.vehicles?.plate || d.trailers?.plate || "Sem Placa";
+        if (!grouped[plate]) grouped[plate] = [];
+        grouped[plate].push(d);
+      });
+
+      const groupedArray = Object.keys(grouped).map(plate => ({
+        plate,
+        issues: grouped[plate],
+        count: grouped[plate].length
+      })).sort((a, b) => b.count - a.count);
+
+      setPendingByPlateData(groupedArray);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchDefectsReport = async () => {
     setLoading(true);
     try {
@@ -456,6 +510,18 @@ export default function ReportsTab() {
               <AlertTriangle size={14} className="stroke-[2.2]" />
               <span>Inspeção de Defeitos</span>
             </button>
+            <button
+              onClick={() => setActiveReport("pending_by_plate")}
+              className={`px-4.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeReport === "pending_by_plate"
+                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40"
+                  : "text-gray-550 hover:text-gray-800 hover:bg-gray-100/50"
+              }`}
+            >
+              <AlertTriangle size={14} className="stroke-[2.2]" />
+              <span>Pendentes por Placa</span>
+            </button>
+
 
             <button
               onClick={() => setActiveReport("mileage")}
@@ -540,6 +606,7 @@ export default function ReportsTab() {
             <button
               onClick={() => {
                 if (activeReport === "defects") fetchDefectsReport();
+                else if (activeReport === "pending_by_plate") fetchPendingByPlateReport();
                 else if (activeReport === "mileage") fetchMileageReport();
                 else if (activeReport === "history")
                   fetchHistoryReport(selectedHistoryEntityId);
@@ -563,9 +630,14 @@ export default function ReportsTab() {
                 Relatórios Operacionais
               </p>
               <h1 className="text-xl font-black text-gray-800 tracking-tight">
-                {activeReport === "defects"
-                  ? "Inspeção de Defeitos e Sinistros"
-                  : "Indicador de Distância e KM Rodado"}
+                
+                {activeReport === "defects" && "Inspeção de Defeitos e Sinistros"}
+                {activeReport === "pending_by_plate" && "Defeitos Pendentes por Placa"}
+                {activeReport === "mileage" && "Indicador de Distância e KM Rodado"}
+                {activeReport === "history" && "Histórico do Veículo"}
+                {activeReport === "purchases" && "Histórico de Manutenções"}
+                {activeReport === "schedules" && "Histórico de Agendamentos"}
+
               </h1>
             </div>
             <div className="text-right">
@@ -581,6 +653,18 @@ export default function ReportsTab() {
 
         {/* Printing Action Buttons on top of content */}
         <div className="flex flex-wrap justify-end gap-2.5 print:hidden mt-4">
+          
+          {activeReport === "pending_by_plate" && (
+            <button
+              onClick={() => {
+                setTimeout(() => window.print(), 100);
+              }}
+              className="flex items-center gap-2 h-9 px-4 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm shadow-indigo-100/50"
+            >
+              <Printer size={15} /> Imprimir Relatório
+            </button>
+          )}
+
           {activeReport === "defects" ? (
             <>
               <button
@@ -635,6 +719,83 @@ export default function ReportsTab() {
             animate={{ opacity: 1, y: 0 }}
             className="mt-6"
           >
+            
+            {/* 1.5 REPORT TYPE: PENDING BY PLATE */}
+            {activeReport === "pending_by_plate" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 print:hidden flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                  <div className="flex-1 w-full max-w-sm relative">
+                    <Search
+                      size={18}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Buscar por placa..."
+                      value={pendingByPlateSearchTerm}
+                      onChange={(e) => setPendingByPlateSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead className="bg-gray-50/50 text-gray-500 font-bold text-[10px] uppercase tracking-wider print:bg-white print:text-black">
+                        <tr>
+                          <th className="px-5 py-4 border-b border-gray-200">Placa</th>
+                          <th className="px-5 py-4 border-b border-gray-200">Quantidade de Defeitos</th>
+                          <th className="px-5 py-4 border-b border-gray-200">Defeitos / Observações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 print:divide-black">
+                        {pendingByPlateData
+                          .filter((group) =>
+                            group.plate.toLowerCase().includes(pendingByPlateSearchTerm.toLowerCase())
+                          )
+                          .map((group, idx) => (
+                            <tr
+                              key={group.plate}
+                              className="hover:bg-gray-50/50 transition-colors print:break-inside-avoid"
+                            >
+                              <td className="px-5 py-4 font-bold text-gray-900 align-top">
+                                {group.plate}
+                              </td>
+                              <td className="px-5 py-4 font-medium text-gray-600 align-top">
+                                {group.count}
+                              </td>
+                              <td className="px-5 py-4 align-top">
+                                <ul className="space-y-2 list-disc pl-4 text-xs text-gray-600">
+                                  {group.issues.map((issue: any) => (
+                                    <li key={issue.id}>
+                                      <strong className="text-gray-900">{issue.item_title}</strong>: {issue.notes || "Sem observações"}
+                                      <span className="block text-[10px] text-gray-400 mt-0.5">
+                                        Reportado em: {new Date(issue.created_at).toLocaleDateString("pt-BR")}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </td>
+                            </tr>
+                          ))}
+                        {pendingByPlateData.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={3}
+                              className="px-5 py-12 text-center text-gray-400 font-medium bg-gray-50/50"
+                            >
+                              Nenhum defeito pendente encontrado no período.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 1. REPORT TYPE: DEFECTS */}
             {activeReport === "defects" && (
               <div className="space-y-6">
