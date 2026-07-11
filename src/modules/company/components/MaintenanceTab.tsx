@@ -70,6 +70,7 @@ export default function MaintenanceTab() {
     string | string[] | null
   >(null);
   const [resolveNotes, setResolveNotes] = useState("");
+  const [resolveType, setResolveType] = useState<"preventiva" | "corretiva" | "">("");
   const [resolveNf, setResolveNf] = useState("");
   const [resolveValue, setResolveValue] = useState("");
   const [resolvePhotos, setResolvePhotos] = useState<File[]>([]);
@@ -367,6 +368,7 @@ export default function MaintenanceTab() {
     setResolvingIssueId(issue.grouped_ids || [issue.id]);
     setSelectedIdsToResolve(issue.grouped_ids || [issue.id]);
     setResolveNotes(issue.resolution_notes || "");
+    setResolveType(issue.resolution_type || "");
     setResolveSubStatus(issue.status === "waiting" ? "waiting" : "resolved");
     setResolveNf("");
     setResolveValue(issue.resolution_value?.toString() || "");
@@ -481,6 +483,10 @@ export default function MaintenanceTab() {
 
     if (modalActionType === "resolve") {
       if (resolveSubStatus === "resolved") {
+        if (!resolveType) {
+          alert("Por favor, selecione se a manutenção foi Preventiva ou Corretiva.");
+          return;
+        }
         if (
           resolvingIssueData?.auto_alerts?.trigger_type === "date" &&
           !resolveNextDate
@@ -567,6 +573,7 @@ export default function MaintenanceTab() {
             ? {
                 status: "waiting",
                 resolution_notes: resolveNotes,
+                resolution_type: resolveType || null,
                 resolution_comments: allComments,
                 resolution_nf: nfsJSONString,
                 resolution_nfs:
@@ -579,6 +586,7 @@ export default function MaintenanceTab() {
             : {
                 status: "resolved",
                 resolution_notes: resolveNotes,
+                resolution_type: resolveType || null,
                 resolution_comments: allComments,
                 resolution_nf: nfsJSONString,
                 resolution_nfs:
@@ -602,6 +610,7 @@ export default function MaintenanceTab() {
             ? {
                 status: "waiting",
                 resolution_notes: resolveNotes,
+                resolution_type: resolveType || null,
                 resolution_comments: allComments,
                 resolution_nfs:
                   validResolveNfs.length > 0 ? validResolveNfs : null,
@@ -613,6 +622,7 @@ export default function MaintenanceTab() {
             : {
                 status: "resolved",
                 resolution_notes: resolveNotes,
+                resolution_type: resolveType || null,
                 resolution_comments: allComments,
                 resolution_nfs:
                   validResolveNfs.length > 0 ? validResolveNfs : null,
@@ -764,6 +774,8 @@ export default function MaintenanceTab() {
       if (
         err.message &&
         (err.message.includes("Could not find the 'resolution_nf' column") ||
+          err.message.includes("Could not find the 'resolution_type' column") ||
+          err.message.includes('column "resolution_type" of relation "checklist_issues" does not exist') ||
           err.message.includes(
             'column "resolution_nf" of relation "checklist_issues" does not exist',
           ))
@@ -842,6 +854,7 @@ export default function MaintenanceTab() {
         .update({
           status: "pending",
           resolution_notes: null,
+          resolution_type: null,
           resolved_at: null,
           resolved_by: null,
         })
@@ -1936,9 +1949,16 @@ export default function MaintenanceTab() {
                           {issue.status === "resolved" && (
                             <div className="flex items-start justify-end gap-6 text-left">
                               <div className="flex-1 max-w-[200px]">
-                                <div className="text-sm text-green-600 font-semibold flex items-center gap-1">
-                                  <CheckCircle size={14} />
-                                  Resolvido
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="text-sm text-green-600 font-semibold flex items-center gap-1">
+                                    <CheckCircle size={14} />
+                                    Resolvido
+                                  </div>
+                                  {issue.resolution_type && (
+                                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700">
+                                      {issue.resolution_type}
+                                    </span>
+                                  )}
                                 </div>
 
                                 {issue.resolution_notes && (
@@ -2688,6 +2708,38 @@ export default function MaintenanceTab() {
 
                       {/* Operational Notes */}
                       <div className="text-left space-y-4">
+                        {resolveSubStatus === "resolved" && (
+                          <div>
+                            <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
+                              Tipo de Manutenção *
+                            </label>
+                            <div className="flex gap-4">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="resolveType"
+                                  value="corretiva"
+                                  checked={resolveType === "corretiva"}
+                                  onChange={(e) => setResolveType("corretiva")}
+                                  className="text-primary focus:ring-primary h-4 w-4"
+                                />
+                                <span className="text-sm font-semibold text-zinc-800">Corretiva</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="resolveType"
+                                  value="preventiva"
+                                  checked={resolveType === "preventiva"}
+                                  onChange={(e) => setResolveType("preventiva")}
+                                  className="text-primary focus:ring-primary h-4 w-4"
+                                />
+                                <span className="text-sm font-semibold text-zinc-800">Preventiva</span>
+                              </label>
+                            </div>
+                          </div>
+                        )}
+
                         <div>
                           <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
                             Observação Principal / Memorando
@@ -3476,7 +3528,8 @@ ALTER TABLE checklist_issues ADD CONSTRAINT checklist_issues_status_check CHECK 
 ADD COLUMN IF NOT EXISTS resolution_nf TEXT,
 ADD COLUMN IF NOT EXISTS resolution_value NUMERIC,
 ADD COLUMN IF NOT EXISTS resolution_photos JSONB,
-ADD COLUMN IF NOT EXISTS resolution_comments JSONB;`}
+ADD COLUMN IF NOT EXISTS resolution_comments JSONB,
+ADD COLUMN IF NOT EXISTS resolution_type TEXT CHECK (resolution_type IN ('corretiva', 'preventiva'));`}
                         </pre>
                       </div>
                     </>
