@@ -258,7 +258,7 @@ export default function IssueDetailsModal({
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">
-                              {isWaiting ? "Status Alterado Em" : "Resolvido Em"}
+                              {isWaiting ? "Status Alterado Em" : "Atualizado sistema"}
                             </span>
                             <span className="text-sm font-bold text-zinc-900">
                               {new Date(issue.resolved_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })} às {new Date(issue.resolved_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
@@ -302,7 +302,7 @@ export default function IssueDetailsModal({
                   {issue.resolution_notes && (
                     <div>
                       <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest block mb-2 flex items-center gap-1">
-                        <FileText size={12} /> Laudo Técnico
+                        <FileText size={12} /> Descrição OS
                       </span>
                       <p className="text-sm font-medium text-zinc-800 whitespace-pre-wrap bg-blue-50 p-5 rounded-xl border border-blue-100 leading-relaxed print:border-zinc-300 print:bg-white">
                         {issue.resolution_notes}

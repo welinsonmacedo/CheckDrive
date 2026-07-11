@@ -203,7 +203,7 @@ export default function DefectPrintModal({
                   {defect.resolved_at && (
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">
-                        Data de Resolução
+                        Atualizado sistema
                       </p>
                       <p className="text-base font-bold text-zinc-900">
                         {format(
@@ -239,7 +239,7 @@ export default function DefectPrintModal({
                 {defect.resolution_notes && (
                   <div className="pt-4 border-t border-zinc-100 print:border-zinc-300">
                     <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-1">
-                      <FileText size={12} /> Laudo Técnico / Resolução
+                      <FileText size={12} /> Descrição OS
                     </p>
                     <p className="text-base font-medium text-zinc-800 whitespace-pre-wrap leading-relaxed">
                       {defect.resolution_notes}
