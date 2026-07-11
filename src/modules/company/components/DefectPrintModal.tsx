@@ -199,11 +199,11 @@ export default function DefectPrintModal({
                       </div>
                     )}
                     {(defect.maintenance_start_date || defect.maintenance_end_date) && (
-                      <div className="flex gap-4">
+                      <div className="flex gap-8">
                         {defect.maintenance_start_date && (
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
-                              Início
+                              Início da Manutenção
                             </p>
                             <p className="text-sm font-bold text-zinc-900">
                               {new Date(defect.maintenance_start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
@@ -213,7 +213,7 @@ export default function DefectPrintModal({
                         {defect.maintenance_end_date && (
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
-                              Fim
+                              Fim da Manutenção
                             </p>
                             <p className="text-sm font-bold text-zinc-900">
                               {new Date(defect.maintenance_end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
@@ -224,38 +224,85 @@ export default function DefectPrintModal({
                     )}
                   </div>
                   
-                  {(defect.resolution_value > 0 || defect.resolution_nf || defect.resolution_nfs) && (
-                    <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-emerald-100">
-                      {(defect.resolution_nf || defect.resolution_nfs) && (
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
-                            Notas Fiscais
-                          </p>
-                          <p className="text-sm font-bold text-zinc-900">
-                            {(() => {
-                              try {
-                                if (defect.resolution_nfs) {
-                                  const parsed = typeof defect.resolution_nfs === 'string' ? JSON.parse(defect.resolution_nfs) : defect.resolution_nfs;
-                                  return parsed.map((n: any) => n.nf_number).filter(Boolean).join(', ') || defect.resolution_nf || '-';
-                                }
-                                return defect.resolution_nf || '-';
-                              } catch (e) {
-                                return defect.resolution_nf || '-';
-                              }
-                            })()}
-                          </p>
-                        </div>
-                      )}
-                      {defect.resolution_value > 0 && (
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
-                            Custo do Reparo
-                          </p>
-                          <p className="text-sm font-bold text-emerald-700">
-                            R$ {defect.resolution_value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                      )}
+                  {(defect.resolution_nf || defect.resolution_nfs) && (
+                    <div className="mt-4 pt-4 border-t border-emerald-100">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2">
+                        Comprovantes / Notas Fiscais
+                      </p>
+                      {(() => {
+                        let parsedNfs = [];
+                        try {
+                          if (defect.resolution_nfs) {
+                            parsedNfs = typeof defect.resolution_nfs === 'string' ? JSON.parse(defect.resolution_nfs) : defect.resolution_nfs;
+                          } else if (defect.resolution_nf && defect.resolution_nf.startsWith("[")) {
+                            parsedNfs = JSON.parse(defect.resolution_nf);
+                          }
+                        } catch (e) {}
+
+                        if (parsedNfs.length > 0) {
+                          return (
+                            <div className="space-y-4">
+                              {parsedNfs.map((nf: any, idx: number) => {
+                                const nfSum = nf.items?.reduce((acc: number, item: any) => acc + (Number(item.quantity) || 1) * (Number(item.unit_price) || 0), 0) || 0;
+                                return (
+                                  <div key={idx} className="bg-white border-2 border-zinc-100 rounded-xl p-4">
+                                    <div className="flex justify-between items-center font-black text-zinc-900 border-b-2 border-zinc-100 pb-3 mb-3">
+                                      <span>NF #{nf.nf_number || "S/N"}</span>
+                                      <span className="text-zinc-900">R$ {nfSum.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    {nf.nf_key && (
+                                      <div className="text-[9px] text-zinc-500 font-mono mb-4 break-all bg-zinc-50 p-2 rounded-lg">
+                                        <strong className="uppercase">Chave:</strong> {nf.nf_key}
+                                      </div>
+                                    )}
+                                    {nf.items && nf.items.length > 0 && (
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="text-left text-[9px] uppercase tracking-wider text-zinc-500">
+                                            <th className="pb-2 font-black">Peça/Serviço</th>
+                                            <th className="pb-2 font-black text-right">Qtd</th>
+                                            <th className="pb-2 font-black text-right">Valor UN</th>
+                                            <th className="pb-2 font-black text-right">Total</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="text-zinc-800 font-bold">
+                                          {nf.items.map((it: any, itIdx: number) => {
+                                            const itemTotal = (Number(it.quantity) || 1) * (Number(it.unit_price) || 0);
+                                            return (
+                                              <tr key={itIdx}>
+                                                <td className="py-1.5 border-t border-zinc-100">{it.name}</td>
+                                                <td className="py-1.5 border-t border-zinc-100 text-right">{it.quantity}</td>
+                                                <td className="py-1.5 border-t border-zinc-100 text-right">R$ {Number(it.unit_price).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                                                <td className="py-1.5 border-t border-zinc-100 text-right text-emerald-700">R$ {itemTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <p className="text-sm font-bold text-zinc-900">
+                              {defect.resolution_nf || '-'}
+                            </p>
+                          );
+                        }
+                      })()}
+                    </div>
+                  )}
+                  {defect.resolution_value > 0 && (
+                    <div className="mt-6 flex justify-between items-center p-4 bg-emerald-100 border-2 border-emerald-200 rounded-xl">
+                      <span className="text-[10px] text-emerald-800 uppercase font-black tracking-widest">
+                        Custo Total da Manutenção
+                      </span>
+                      <div className="text-xl font-black text-emerald-700">
+                        R$ {defect.resolution_value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </div>
                     </div>
                   )}
                   <div>

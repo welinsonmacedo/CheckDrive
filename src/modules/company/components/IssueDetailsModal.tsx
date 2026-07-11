@@ -266,23 +266,26 @@ export default function IssueDetailsModal({
                       )}
                       
                       {(issue.maintenance_start_date || issue.maintenance_end_date) && (
-                        <div className="flex gap-4 mt-2 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                        <div className="flex gap-6 mt-4 p-4 bg-white shadow-sm rounded-2xl border border-zinc-100 print:border-zinc-300 print:shadow-none">
                           {issue.maintenance_start_date && (
                             <div className="flex flex-col">
-                              <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
-                                Início do Serviço
+                              <span className="text-[10px] text-zinc-400 uppercase font-black tracking-widest mb-1 flex items-center gap-1">
+                                <Calendar size={12} className="text-primary" /> Início do Serviço
                               </span>
-                              <span className="text-sm font-bold text-zinc-800">
+                              <span className="text-base font-black text-zinc-800">
                                 {new Date(issue.maintenance_start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
                               </span>
                             </div>
                           )}
+                          {issue.maintenance_start_date && issue.maintenance_end_date && (
+                             <div className="w-px bg-zinc-100 print:bg-zinc-300"></div>
+                          )}
                           {issue.maintenance_end_date && (
                             <div className="flex flex-col">
-                              <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
-                                Fim do Serviço
+                              <span className="text-[10px] text-zinc-400 uppercase font-black tracking-widest mb-1 flex items-center gap-1">
+                                <CheckCircle2 size={12} className="text-primary" /> Fim do Serviço
                               </span>
-                              <span className="text-sm font-bold text-zinc-800">
+                              <span className="text-base font-black text-zinc-800">
                                 {new Date(issue.maintenance_end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
                               </span>
                             </div>
@@ -291,11 +294,11 @@ export default function IssueDetailsModal({
                       )}
 
                       {issue.resolution_notes && (
-                        <div className="flex flex-col mt-2 bg-zinc-50 p-3 rounded-xl border border-zinc-100 print:border-black print:bg-white text-left break-words">
-                          <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider mb-1">
-                            Notas do Serviço Técnico
+                        <div className="flex flex-col mt-4 bg-zinc-50/50 p-4 rounded-2xl border border-zinc-200 print:border-zinc-300 print:bg-white text-left break-words">
+                          <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-2 flex items-center gap-1">
+                            <FileText size={12} /> Notas do Serviço Técnico
                           </span>
-                          <p className="text-sm font-medium text-zinc-700 whitespace-pre-wrap">
+                          <p className="text-sm font-medium text-zinc-700 whitespace-pre-wrap leading-relaxed">
                             {issue.resolution_notes}
                           </p>
                         </div>
@@ -303,9 +306,9 @@ export default function IssueDetailsModal({
 
                       {/* NFs */}
                       {(issue.resolution_nfs || issue.resolution_nf) && (
-                        <div className="mt-4">
-                          <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-2">
-                            Comprovantes / Notas Fiscais
+                        <div className="mt-6">
+                          <span className="text-xs text-zinc-400 uppercase font-black tracking-widest block mb-3 border-b border-zinc-100 pb-2 print:border-zinc-300">
+                            Comprovantes e Custos
                           </span>
                           {parsedNfs.length > 0 ? (
                             <div className="space-y-3">
