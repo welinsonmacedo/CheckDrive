@@ -71,6 +71,8 @@ export default function MaintenanceTab() {
   >(null);
   const [resolveNotes, setResolveNotes] = useState("");
   const [resolveType, setResolveType] = useState<"preventiva" | "corretiva" | "">("");
+  const [resolveStartDate, setResolveStartDate] = useState("");
+  const [resolveEndDate, setResolveEndDate] = useState("");
   const [resolveNf, setResolveNf] = useState("");
   const [resolveValue, setResolveValue] = useState("");
   const [resolvePhotos, setResolvePhotos] = useState<File[]>([]);
@@ -369,6 +371,8 @@ export default function MaintenanceTab() {
     setSelectedIdsToResolve(issue.grouped_ids || [issue.id]);
     setResolveNotes(issue.resolution_notes || "");
     setResolveType(issue.resolution_type || "");
+    setResolveStartDate(issue.maintenance_start_date ? issue.maintenance_start_date.split("T")[0] : "");
+    setResolveEndDate(issue.maintenance_end_date ? issue.maintenance_end_date.split("T")[0] : "");
     setResolveSubStatus(issue.status === "waiting" ? "waiting" : "resolved");
     setResolveNf("");
     setResolveValue(issue.resolution_value?.toString() || "");
@@ -574,6 +578,8 @@ export default function MaintenanceTab() {
                 status: "waiting",
                 resolution_notes: resolveNotes,
                 resolution_type: resolveType || null,
+                maintenance_start_date: resolveStartDate || null,
+                maintenance_end_date: resolveEndDate || null,
                 resolution_comments: allComments,
                 resolution_nf: nfsJSONString,
                 resolution_nfs:
@@ -587,6 +593,8 @@ export default function MaintenanceTab() {
                 status: "resolved",
                 resolution_notes: resolveNotes,
                 resolution_type: resolveType || null,
+                maintenance_start_date: resolveStartDate || null,
+                maintenance_end_date: resolveEndDate || null,
                 resolution_comments: allComments,
                 resolution_nf: nfsJSONString,
                 resolution_nfs:
@@ -611,6 +619,8 @@ export default function MaintenanceTab() {
                 status: "waiting",
                 resolution_notes: resolveNotes,
                 resolution_type: resolveType || null,
+                maintenance_start_date: resolveStartDate || null,
+                maintenance_end_date: resolveEndDate || null,
                 resolution_comments: allComments,
                 resolution_nfs:
                   validResolveNfs.length > 0 ? validResolveNfs : null,
@@ -623,6 +633,8 @@ export default function MaintenanceTab() {
                 status: "resolved",
                 resolution_notes: resolveNotes,
                 resolution_type: resolveType || null,
+                maintenance_start_date: resolveStartDate || null,
+                maintenance_end_date: resolveEndDate || null,
                 resolution_comments: allComments,
                 resolution_nfs:
                   validResolveNfs.length > 0 ? validResolveNfs : null,
@@ -776,6 +788,8 @@ export default function MaintenanceTab() {
         (err.message.includes("Could not find the 'resolution_nf' column") ||
           err.message.includes("Could not find the 'resolution_type' column") ||
           err.message.includes('column "resolution_type" of relation "checklist_issues" does not exist') ||
+          err.message.includes("Could not find the 'maintenance_start_date' column") ||
+          err.message.includes('column "maintenance_start_date" of relation "checklist_issues" does not exist') ||
           err.message.includes(
             'column "resolution_nf" of relation "checklist_issues" does not exist',
           ))
@@ -855,6 +869,8 @@ export default function MaintenanceTab() {
           status: "pending",
           resolution_notes: null,
           resolution_type: null,
+          maintenance_start_date: null,
+          maintenance_end_date: null,
           resolved_at: null,
           resolved_by: null,
         })
@@ -1844,6 +1860,15 @@ export default function MaintenanceTab() {
                                 <div className="text-xs text-amber-900/80 italic break-words">
                                   {issue.resolution_notes}
                                 </div>
+                                {(issue.maintenance_start_date || issue.maintenance_end_date) && (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-200 bg-amber-100 text-amber-800">
+                                      {issue.maintenance_start_date ? new Date(issue.maintenance_start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '?'} 
+                                      {' a '} 
+                                      {issue.maintenance_end_date ? new Date(issue.maintenance_end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '?'}
+                                    </span>
+                                  </div>
+                                )}
                                 {issue.resolution_comments &&
                                   issue.resolution_comments.length > 0 && (
                                     <div className="mt-2 pt-2 border-t border-amber-200/50">
@@ -1957,6 +1982,13 @@ export default function MaintenanceTab() {
                                   {issue.resolution_type && (
                                     <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700">
                                       {issue.resolution_type}
+                                    </span>
+                                  )}
+                                  {(issue.maintenance_start_date || issue.maintenance_end_date) && (
+                                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700">
+                                      {issue.maintenance_start_date ? new Date(issue.maintenance_start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '?'} 
+                                      {' a '} 
+                                      {issue.maintenance_end_date ? new Date(issue.maintenance_end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '?'}
                                     </span>
                                   )}
                                 </div>
@@ -2736,6 +2768,33 @@ export default function MaintenanceTab() {
                                 />
                                 <span className="text-sm font-semibold text-zinc-800">Preventiva</span>
                               </label>
+                            </div>
+                          </div>
+                        )}
+
+                        {(resolveSubStatus === "resolved" || resolveSubStatus === "waiting") && (
+                          <div className="flex gap-4">
+                            <div className="flex-1">
+                              <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
+                                Data Início Manutenção
+                              </label>
+                              <input
+                                type="date"
+                                className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm"
+                                value={resolveStartDate}
+                                onChange={(e) => setResolveStartDate(e.target.value)}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
+                                Data Fim Manutenção
+                              </label>
+                              <input
+                                type="date"
+                                className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm"
+                                value={resolveEndDate}
+                                onChange={(e) => setResolveEndDate(e.target.value)}
+                              />
                             </div>
                           </div>
                         )}
@@ -3529,7 +3588,9 @@ ADD COLUMN IF NOT EXISTS resolution_nf TEXT,
 ADD COLUMN IF NOT EXISTS resolution_value NUMERIC,
 ADD COLUMN IF NOT EXISTS resolution_photos JSONB,
 ADD COLUMN IF NOT EXISTS resolution_comments JSONB,
-ADD COLUMN IF NOT EXISTS resolution_type TEXT CHECK (resolution_type IN ('corretiva', 'preventiva'));`}
+ADD COLUMN IF NOT EXISTS resolution_type TEXT CHECK (resolution_type IN ('corretiva', 'preventiva')),
+ADD COLUMN IF NOT EXISTS maintenance_start_date DATE,
+ADD COLUMN IF NOT EXISTS maintenance_end_date DATE;`}
                         </pre>
                       </div>
                     </>
