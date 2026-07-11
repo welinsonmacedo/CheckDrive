@@ -331,17 +331,11 @@ export default function DefectPrintModal({
           )}
 
           {/* Signatures */}
-          <div className="mt-16 pt-12 border-t-2 border-zinc-900 grid grid-cols-2 gap-16">
+          <div className="mt-16 pt-12 border-t-2 border-zinc-900 grid grid-cols-1 max-w-xs mx-auto">
             <div className="text-center">
               <div className="w-full border-b border-zinc-900 mb-3"></div>
               <p className="text-[10px] font-black text-zinc-900 uppercase tracking-widest">
-                Motorista / Solicitante
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-full border-b border-zinc-900 mb-3"></div>
-              <p className="text-[10px] font-black text-zinc-900 uppercase tracking-widest">
-                Mecânico / Responsável
+                Departamento Frota
               </p>
             </div>
           </div>

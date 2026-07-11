@@ -416,17 +416,11 @@ export default function IssueDetailsModal({
               </div>
 
               {/* Signatures for Print */}
-              <div className="hidden print:grid grid-cols-2 gap-16 mt-16 pt-12 border-t-2 border-zinc-900">
+              <div className="hidden print:grid grid-cols-1 mt-16 pt-12 border-t-2 border-zinc-900 max-w-xs mx-auto">
                 <div className="text-center">
                   <div className="w-full border-b border-zinc-900 mb-3"></div>
                   <p className="text-[10px] font-black text-zinc-900 uppercase tracking-widest">
-                    Motorista / Solicitante
-                  </p>
-                </div>
-                <div className="text-center">
-                  <div className="w-full border-b border-zinc-900 mb-3"></div>
-                  <p className="text-[10px] font-black text-zinc-900 uppercase tracking-widest">
-                    Mecânico / Responsável
+                    Departamento Frota
                   </p>
                 </div>
               </div>
