@@ -149,9 +149,18 @@ export default function DefectPrintModal({
               <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-2 flex items-center gap-1">
                 <FileText size={12} /> Título do Defeito Detectado
               </p>
-              <h3 className="text-xl font-bold text-zinc-900 mb-4">
+              <h3 className="text-xl font-bold text-zinc-900 mb-2">
                 {defect.item_title}
               </h3>
+              {defect.item_category && (
+                <div className="flex flex-wrap gap-1 mb-4">
+                  {defect.item_category.split(', ').filter(Boolean).map((cat: string) => (
+                    <span key={cat} className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700">
+                      {cat}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div className="pt-4 border-t border-red-50">
                 <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-2">
@@ -174,18 +183,79 @@ export default function DefectPrintModal({
                   <CheckCircle2 size={12} /> Dados da Resolução
                 </p>
                 <div className="space-y-4">
-                  {defect.resolved_at && (
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
-                        Data da Resolução
-                      </p>
-                      <p className="text-sm font-bold text-zinc-900">
-                        {format(
-                          parseISO(defect.resolved_at),
-                          "dd/MM/yyyy HH:mm",
-                          { locale: ptBR },
+                  <div className="grid grid-cols-2 gap-4">
+                    {defect.resolved_at && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                          Data da Resolução
+                        </p>
+                        <p className="text-sm font-bold text-zinc-900">
+                          {format(
+                            parseISO(defect.resolved_at),
+                            "dd/MM/yyyy HH:mm",
+                            { locale: ptBR },
+                          )}
+                        </p>
+                      </div>
+                    )}
+                    {(defect.maintenance_start_date || defect.maintenance_end_date) && (
+                      <div className="flex gap-4">
+                        {defect.maintenance_start_date && (
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                              Início
+                            </p>
+                            <p className="text-sm font-bold text-zinc-900">
+                              {new Date(defect.maintenance_start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                            </p>
+                          </div>
                         )}
-                      </p>
+                        {defect.maintenance_end_date && (
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                              Fim
+                            </p>
+                            <p className="text-sm font-bold text-zinc-900">
+                              {new Date(defect.maintenance_end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {(defect.resolution_value > 0 || defect.resolution_nf || defect.resolution_nfs) && (
+                    <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-emerald-100">
+                      {(defect.resolution_nf || defect.resolution_nfs) && (
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                            Notas Fiscais
+                          </p>
+                          <p className="text-sm font-bold text-zinc-900">
+                            {(() => {
+                              try {
+                                if (defect.resolution_nfs) {
+                                  const parsed = typeof defect.resolution_nfs === 'string' ? JSON.parse(defect.resolution_nfs) : defect.resolution_nfs;
+                                  return parsed.map((n: any) => n.nf_number).filter(Boolean).join(', ') || defect.resolution_nf || '-';
+                                }
+                                return defect.resolution_nf || '-';
+                              } catch (e) {
+                                return defect.resolution_nf || '-';
+                              }
+                            })()}
+                          </p>
+                        </div>
+                      )}
+                      {defect.resolution_value > 0 && (
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                            Custo do Reparo
+                          </p>
+                          <p className="text-sm font-bold text-emerald-700">
+                            R$ {defect.resolution_value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                   <div>

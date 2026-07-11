@@ -121,6 +121,15 @@ export default function IssueDetailsModal({
                     <span className="font-bold text-zinc-800 text-lg leading-tight">
                       {issue.item_title}
                     </span>
+                    {issue.item_category && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {issue.item_category.split(', ').filter(Boolean).map((cat: string) => (
+                          <span key={cat} className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700">
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col">
@@ -253,6 +262,31 @@ export default function IssueDetailsModal({
                               )}
                             </span>
                           </div>
+                        </div>
+                      )}
+                      
+                      {(issue.maintenance_start_date || issue.maintenance_end_date) && (
+                        <div className="flex gap-4 mt-2 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                          {issue.maintenance_start_date && (
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                                Início do Serviço
+                              </span>
+                              <span className="text-sm font-bold text-zinc-800">
+                                {new Date(issue.maintenance_start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                              </span>
+                            </div>
+                          )}
+                          {issue.maintenance_end_date && (
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                                Fim do Serviço
+                              </span>
+                              <span className="text-sm font-bold text-zinc-800">
+                                {new Date(issue.maintenance_end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
 
