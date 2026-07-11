@@ -490,23 +490,35 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 mb-1">Categoria</label>
-                  <select
-                    multiple
-                    size={4}
-                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white"
-                    value={itemForm.category ? itemForm.category.split(', ') : []}
-                    onChange={(e) => {
-                      const selected = Array.from(e.target.selectedOptions, option => option.value);
-                      setItemForm({...itemForm, category: selected.join(', ')});
-                    }}
-                  >
-                    {Array.from(new Set(checklistItems.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean))).sort().map((cat: any) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-zinc-500 mt-1">
-                    Segure Ctrl (Windows) ou Cmd (Mac) para selecionar mais de uma.
-                  </p>
+                  <div>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {itemForm.category && itemForm.category.split(', ').filter(Boolean).map(cat => (
+                        <span key={cat} className="text-xs font-bold px-2 py-1 bg-purple-100 text-purple-700 rounded-md flex items-center gap-1">
+                          {cat}
+                          <button type="button" onClick={() => {
+                            setItemForm({...itemForm, category: itemForm.category.split(', ').filter(c => c !== cat).join(', ')});
+                          }} className="text-purple-900 hover:text-red-600"><X size={12} /></button>
+                        </span>
+                      ))}
+                    </div>
+                    <select
+                      className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white"
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) return;
+                        const current = itemForm.category ? itemForm.category.split(', ').filter(Boolean) : [];
+                        if (!current.includes(val)) {
+                          setItemForm({...itemForm, category: [...current, val].join(', ')});
+                        }
+                      }}
+                    >
+                      <option value="">Selecione para adicionar...</option>
+                      {Array.from(new Set(checklistItems.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean))).sort().map((cat: any) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">

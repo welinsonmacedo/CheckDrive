@@ -2769,23 +2769,35 @@ export default function MaintenanceTab() {
                               <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
                                 Categoria do Item (Opcional)
                               </label>
-                              <select
-                                multiple
-                                size={5}
-                                className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm bg-white"
-                                value={resolveCategory ? resolveCategory.split(', ') : []}
-                                onChange={(e) => {
-                                  const selected = Array.from(e.target.selectedOptions, option => option.value);
-                                  setResolveCategory(selected.join(', '));
-                                }}
-                              >
-                                {Array.from(new Set(checklistItemsList.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean))).sort().map((cat: any) => (
-                                  <option key={cat} value={cat}>{cat}</option>
-                                ))}
-                              </select>
-                              <p className="text-[10px] text-zinc-500 mt-1">
-                                Segure Ctrl (Windows) ou Cmd (Mac) para selecionar múltiplas categorias.
-                              </p>
+                              <div>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                  {resolveCategory && resolveCategory.split(', ').filter(Boolean).map(cat => (
+                                    <span key={cat} className="text-xs font-bold px-2 py-1 bg-purple-100 text-purple-700 rounded-md flex items-center gap-1">
+                                      {cat}
+                                      <button type="button" onClick={() => {
+                                        setResolveCategory(resolveCategory.split(', ').filter(c => c !== cat).join(', '));
+                                      }} className="text-purple-900 hover:text-red-600"><X size={12} /></button>
+                                    </span>
+                                  ))}
+                                </div>
+                                <select
+                                  className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm bg-white"
+                                  value=""
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (!val) return;
+                                    const current = resolveCategory ? resolveCategory.split(', ').filter(Boolean) : [];
+                                    if (!current.includes(val)) {
+                                      setResolveCategory([...current, val].join(', '));
+                                    }
+                                  }}
+                                >
+                                  <option value="">Selecione para adicionar...</option>
+                                  {Array.from(new Set(checklistItemsList.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean))).sort().map((cat: any) => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
                             <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
                               Tipo de Manutenção *
@@ -3460,20 +3472,35 @@ export default function MaintenanceTab() {
                               value={newItemSku}
                               onChange={(e) => setNewItemSku(e.target.value)}
                             />
+                          <div className="w-full">
+                            <div className="flex flex-wrap gap-1 mb-1.5">
+                              {newItemCategory && newItemCategory.split(', ').filter(Boolean).map(cat => (
+                                <span key={cat} className="text-[10px] font-bold px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded flex items-center gap-1">
+                                  {cat}
+                                  <button type="button" onClick={() => {
+                                    setNewItemCategory(newItemCategory.split(', ').filter(c => c !== cat).join(', '));
+                                  }} className="text-purple-900 hover:text-red-600"><X size={10} /></button>
+                                </span>
+                              ))}
+                            </div>
                             <select
-                              multiple
-                              size={3}
-                              className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                              value={newItemCategory ? newItemCategory.split(', ') : []}
+                              className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none w-full"
+                              value=""
                               onChange={(e) => {
-                                const selected = Array.from(e.target.selectedOptions, option => option.value);
-                                setNewItemCategory(selected.join(', '));
+                                const val = e.target.value;
+                                if (!val) return;
+                                const current = newItemCategory ? newItemCategory.split(', ').filter(Boolean) : [];
+                                if (!current.includes(val)) {
+                                  setNewItemCategory([...current, val].join(', '));
+                                }
                               }}
                             >
+                              <option value="">Adicionar categoria...</option>
                               {Array.from(new Set(checklistItemsList.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean))).sort().map((cat: any) => (
                                 <option key={cat} value={cat}>{cat}</option>
                               ))}
                             </select>
+                          </div>
                           </div>
                           <div className="flex gap-2 justify-end mt-2">
                             <button
