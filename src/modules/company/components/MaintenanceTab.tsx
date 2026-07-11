@@ -71,6 +71,7 @@ export default function MaintenanceTab() {
   >(null);
   const [resolveNotes, setResolveNotes] = useState("");
   const [resolveType, setResolveType] = useState<"preventiva" | "corretiva" | "">("");
+  const [resolveCategory, setResolveCategory] = useState("");
   const [resolveStartDate, setResolveStartDate] = useState("");
   const [resolveEndDate, setResolveEndDate] = useState("");
   const [resolveNf, setResolveNf] = useState("");
@@ -371,6 +372,7 @@ export default function MaintenanceTab() {
     setSelectedIdsToResolve(issue.grouped_ids || [issue.id]);
     setResolveNotes(issue.resolution_notes || "");
     setResolveType(issue.resolution_type || "");
+    setResolveCategory(issue.item_category || "");
     setResolveStartDate(issue.maintenance_start_date ? issue.maintenance_start_date.split("T")[0] : "");
     setResolveEndDate(issue.maintenance_end_date ? issue.maintenance_end_date.split("T")[0] : "");
     setResolveSubStatus(issue.status === "waiting" ? "waiting" : "resolved");
@@ -578,6 +580,7 @@ export default function MaintenanceTab() {
                 status: "waiting",
                 resolution_notes: resolveNotes,
                 resolution_type: resolveType || null,
+                item_category: resolveCategory || null,
                 maintenance_start_date: resolveStartDate || null,
                 maintenance_end_date: resolveEndDate || null,
                 resolution_comments: allComments,
@@ -786,6 +789,8 @@ export default function MaintenanceTab() {
       if (
         err.message &&
         (err.message.includes("Could not find the 'resolution_nf' column") ||
+          err.message.includes("Could not find the 'item_category' column") ||
+          err.message.includes('column "item_category" of relation "checklist_issues" does not exist') ||
           err.message.includes("Could not find the 'resolution_type' column") ||
           err.message.includes('column "resolution_type" of relation "checklist_issues" does not exist') ||
           err.message.includes("Could not find the 'maintenance_start_date' column") ||
@@ -869,6 +874,7 @@ export default function MaintenanceTab() {
           status: "pending",
           resolution_notes: null,
           resolution_type: null,
+          item_category: null,
           maintenance_start_date: null,
           maintenance_end_date: null,
           resolved_at: null,
@@ -1860,13 +1866,20 @@ export default function MaintenanceTab() {
                                 <div className="text-xs text-amber-900/80 italic break-words">
                                   {issue.resolution_notes}
                                 </div>
-                                {(issue.maintenance_start_date || issue.maintenance_end_date) && (
+                                {(issue.maintenance_start_date || issue.maintenance_end_date || issue.item_category) && (
                                   <div className="mt-1 flex flex-wrap gap-1">
+                                    {issue.item_category && (
+                                      <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700">
+                                        {issue.item_category}
+                                      </span>
+                                    )}
+                                    {(issue.maintenance_start_date || issue.maintenance_end_date) && (
                                     <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-200 bg-amber-100 text-amber-800">
                                       {issue.maintenance_start_date ? new Date(issue.maintenance_start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '?'} 
                                       {' a '} 
                                       {issue.maintenance_end_date ? new Date(issue.maintenance_end_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '?'}
                                     </span>
+                                    )}
                                   </div>
                                 )}
                                 {issue.resolution_comments &&
@@ -1982,6 +1995,11 @@ export default function MaintenanceTab() {
                                   {issue.resolution_type && (
                                     <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700">
                                       {issue.resolution_type}
+                                    </span>
+                                  )}
+                                  {issue.item_category && (
+                                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700">
+                                      {issue.item_category}
                                     </span>
                                   )}
                                   {(issue.maintenance_start_date || issue.maintenance_end_date) && (
@@ -2742,6 +2760,24 @@ export default function MaintenanceTab() {
                       <div className="text-left space-y-4">
                         {resolveSubStatus === "resolved" && (
                           <div>
+                            <div className="mb-4">
+                              <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
+                                Categoria do Item (Opcional)
+                              </label>
+                              <input
+                                type="text"
+                                list="issue-categories"
+                                placeholder="Ex: Elétrica, Mecânica, Pneus..."
+                                className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm"
+                                value={resolveCategory}
+                                onChange={(e) => setResolveCategory(e.target.value)}
+                              />
+                              <datalist id="issue-categories">
+                                {Array.from(new Set(issues.map((i) => i.item_category).filter(Boolean))).map((cat: any) => (
+                                  <option key={cat} value={cat} />
+                                ))}
+                              </datalist>
+                            </div>
                             <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
                               Tipo de Manutenção *
                             </label>
@@ -3417,6 +3453,7 @@ export default function MaintenanceTab() {
                             />
                             <input
                               type="text"
+                              list="inventory-categories"
                               placeholder="Categoria"
                               className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
                               value={newItemCategory}
@@ -3424,6 +3461,11 @@ export default function MaintenanceTab() {
                                 setNewItemCategory(e.target.value)
                               }
                             />
+                            <datalist id="inventory-categories">
+                              {Array.from(new Set(inventoryItems.map((i) => i.category).filter(Boolean))).map((cat: any) => (
+                                <option key={cat} value={cat} />
+                              ))}
+                            </datalist>
                           </div>
                           <div className="flex gap-2 justify-end mt-2">
                             <button
@@ -3589,6 +3631,7 @@ ADD COLUMN IF NOT EXISTS resolution_value NUMERIC,
 ADD COLUMN IF NOT EXISTS resolution_photos JSONB,
 ADD COLUMN IF NOT EXISTS resolution_comments JSONB,
 ADD COLUMN IF NOT EXISTS resolution_type TEXT CHECK (resolution_type IN ('corretiva', 'preventiva')),
+ADD COLUMN IF NOT EXISTS item_category TEXT,
 ADD COLUMN IF NOT EXISTS maintenance_start_date DATE,
 ADD COLUMN IF NOT EXISTS maintenance_end_date DATE;`}
                         </pre>
