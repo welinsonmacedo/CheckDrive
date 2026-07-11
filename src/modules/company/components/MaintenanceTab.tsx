@@ -110,6 +110,7 @@ export default function MaintenanceTab() {
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newItemSku, setNewItemSku] = useState("");
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
+  const [checklistItemsList, setChecklistItemsList] = useState<any[]>([]);
 
   useEffect(() => {
     fetchIssues();
@@ -152,9 +153,10 @@ export default function MaintenanceTab() {
 
   async function fetchCatalog() {
     try {
-      const [itemsRes, suppliersRes] = await Promise.all([
+      const [itemsRes, suppliersRes, checklistItemsRes] = await Promise.all([
         supabase.from("inventory_items").select("*").order("name"),
         supabase.from("inventory_suppliers").select("*").order("name"),
+        supabase.from("checklist_items").select("title").order("order_index"),
       ]);
 
       if (!itemsRes.error && itemsRes.data) {
@@ -162,6 +164,9 @@ export default function MaintenanceTab() {
       }
       if (!suppliersRes.error && suppliersRes.data) {
         setInventorySuppliers(suppliersRes.data);
+      }
+      if (!checklistItemsRes.error && checklistItemsRes.data) {
+        setChecklistItemsList(checklistItemsRes.data);
       }
     } catch (err) {
       console.warn("Could not load catalog from DB", err);
@@ -2773,7 +2778,10 @@ export default function MaintenanceTab() {
                                 onChange={(e) => setResolveCategory(e.target.value)}
                               />
                               <datalist id="issue-categories">
-                                {Array.from(new Set(issues.map((i) => i.item_category).filter(Boolean))).map((cat: any) => (
+                                {Array.from(new Set([
+                                  ...issues.map((i) => i.item_category).filter(Boolean),
+                                  ...checklistItemsList.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean)
+                                ])).map((cat: any) => (
                                   <option key={cat} value={cat} />
                                 ))}
                               </datalist>
@@ -3462,7 +3470,10 @@ export default function MaintenanceTab() {
                               }
                             />
                             <datalist id="inventory-categories">
-                              {Array.from(new Set(inventoryItems.map((i) => i.category).filter(Boolean))).map((cat: any) => (
+                              {Array.from(new Set([
+                                ...inventoryItems.map((i) => i.category).filter(Boolean),
+                                ...checklistItemsList.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean)
+                              ])).map((cat: any) => (
                                 <option key={cat} value={cat} />
                               ))}
                             </datalist>
