@@ -1873,11 +1873,11 @@ export default function MaintenanceTab() {
                                 </div>
                                 {(issue.maintenance_start_date || issue.maintenance_end_date || issue.item_category) && (
                                   <div className="mt-1 flex flex-wrap gap-1">
-                                    {issue.item_category && (
-                                      <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700">
-                                        {issue.item_category}
+                                    {issue.item_category && issue.item_category.split(', ').map(cat => (
+                                      <span key={cat} className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700">
+                                        {cat}
                                       </span>
-                                    )}
+                                    ))}
                                     {(issue.maintenance_start_date || issue.maintenance_end_date) && (
                                     <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-200 bg-amber-100 text-amber-800">
                                       {issue.maintenance_start_date ? new Date(issue.maintenance_start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '?'} 
@@ -2002,11 +2002,11 @@ export default function MaintenanceTab() {
                                       {issue.resolution_type}
                                     </span>
                                   )}
-                                  {issue.item_category && (
-                                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700">
-                                      {issue.item_category}
+                                  {issue.item_category && issue.item_category.split(', ').map(cat => (
+                                    <span key={cat} className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700">
+                                      {cat}
                                     </span>
-                                  )}
+                                  ))}
                                   {(issue.maintenance_start_date || issue.maintenance_end_date) && (
                                     <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700">
                                       {issue.maintenance_start_date ? new Date(issue.maintenance_start_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : '?'} 
@@ -2769,22 +2769,23 @@ export default function MaintenanceTab() {
                               <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
                                 Categoria do Item (Opcional)
                               </label>
-                              <input
-                                type="text"
-                                list="issue-categories"
-                                placeholder="Ex: Elétrica, Mecânica, Pneus..."
-                                className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm"
-                                value={resolveCategory}
-                                onChange={(e) => setResolveCategory(e.target.value)}
-                              />
-                              <datalist id="issue-categories">
-                                {Array.from(new Set([
-                                  ...issues.map((i) => i.item_category).filter(Boolean),
-                                  ...checklistItemsList.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean)
-                                ])).map((cat: any) => (
-                                  <option key={cat} value={cat} />
+                              <select
+                                multiple
+                                size={5}
+                                className="w-full px-4 py-3 border border-zinc-200 rounded-2xl hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm font-medium text-zinc-800 transition-all shadow-sm bg-white"
+                                value={resolveCategory ? resolveCategory.split(', ') : []}
+                                onChange={(e) => {
+                                  const selected = Array.from(e.target.selectedOptions, option => option.value);
+                                  setResolveCategory(selected.join(', '));
+                                }}
+                              >
+                                {Array.from(new Set(checklistItemsList.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean))).sort().map((cat: any) => (
+                                  <option key={cat} value={cat}>{cat}</option>
                                 ))}
-                              </datalist>
+                              </select>
+                              <p className="text-[10px] text-zinc-500 mt-1">
+                                Segure Ctrl (Windows) ou Cmd (Mac) para selecionar múltiplas categorias.
+                              </p>
                             </div>
                             <label className="block text-xs font-extrabold text-zinc-700 mb-2 uppercase tracking-wide">
                               Tipo de Manutenção *
@@ -3459,24 +3460,20 @@ export default function MaintenanceTab() {
                               value={newItemSku}
                               onChange={(e) => setNewItemSku(e.target.value)}
                             />
-                            <input
-                              type="text"
-                              list="inventory-categories"
-                              placeholder="Categoria"
+                            <select
+                              multiple
+                              size={3}
                               className="bg-white border border-gray-300 rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                              value={newItemCategory}
-                              onChange={(e) =>
-                                setNewItemCategory(e.target.value)
-                              }
-                            />
-                            <datalist id="inventory-categories">
-                              {Array.from(new Set([
-                                ...inventoryItems.map((i) => i.category).filter(Boolean),
-                                ...checklistItemsList.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean)
-                              ])).map((cat: any) => (
-                                <option key={cat} value={cat} />
+                              value={newItemCategory ? newItemCategory.split(', ') : []}
+                              onChange={(e) => {
+                                const selected = Array.from(e.target.selectedOptions, option => option.value);
+                                setNewItemCategory(selected.join(', '));
+                              }}
+                            >
+                              {Array.from(new Set(checklistItemsList.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean))).sort().map((cat: any) => (
+                                <option key={cat} value={cat}>{cat}</option>
                               ))}
-                            </datalist>
+                            </select>
                           </div>
                           <div className="flex gap-2 justify-end mt-2">
                             <button

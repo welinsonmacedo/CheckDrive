@@ -490,21 +490,23 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 mb-1">Categoria</label>
-                  <input
-                    type="text"
-                    list="inventory-tab-categories"
-                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                    value={itemForm.category}
-                    onChange={(e) => setItemForm({...itemForm, category: e.target.value})}
-                  />
-                  <datalist id="inventory-tab-categories">
-                    {Array.from(new Set([
-                      ...items.map(i => i.category).filter(Boolean),
-                      ...checklistItems.map(i => i.title ? i.title.split('::')[0] : '').filter(Boolean)
-                    ])).map((cat: any) => (
-                      <option key={cat} value={cat} />
+                  <select
+                    multiple
+                    size={4}
+                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary bg-white"
+                    value={itemForm.category ? itemForm.category.split(', ') : []}
+                    onChange={(e) => {
+                      const selected = Array.from(e.target.selectedOptions, option => option.value);
+                      setItemForm({...itemForm, category: selected.join(', ')});
+                    }}
+                  >
+                    {Array.from(new Set(checklistItems.map((i) => i.title ? i.title.split('::')[0] : '').filter(Boolean))).sort().map((cat: any) => (
+                      <option key={cat} value={cat}>{cat}</option>
                     ))}
-                  </datalist>
+                  </select>
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    Segure Ctrl (Windows) ou Cmd (Mac) para selecionar mais de uma.
+                  </p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
