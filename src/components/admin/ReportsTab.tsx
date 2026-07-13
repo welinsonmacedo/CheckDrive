@@ -20,6 +20,40 @@ import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DefectPrintModal from "./DefectPrintModal";
 
+
+// Helper function to group resolved issues by OS (same resolution time and vehicle/trailer)
+const groupResolvedIssues = (data: any[]) => {
+  const groupedData: any[] = [];
+  const resolvedGroups: { [key: string]: any } = {};
+
+  data.forEach((item) => {
+    if (item.status === "resolved" && item.resolved_at) {
+      const vKey = item.vehicle_id || "none";
+      const tKey = item.trailer_id || "none";
+      const key = `${item.resolved_at}_${vKey}_${tKey}`;
+
+      if (resolvedGroups[key]) {
+        const exist = resolvedGroups[key];
+        if (!exist.item_title.includes(item.item_title)) {
+          exist.item_title = `${exist.item_title} + ${item.item_title}`;
+        }
+        if (item.description && !exist.description?.includes(item.description)) {
+          exist.description = exist.description ? `${exist.description} | ${item.description}` : item.description;
+        }
+        exist.resolution_value = (Number(exist.resolution_value) || 0) + (Number(item.resolution_value) || 0);
+      } else {
+        resolvedGroups[key] = { ...item };
+      }
+    } else {
+      groupedData.push(item);
+    }
+  });
+
+  const finalData = [...groupedData, ...Object.values(resolvedGroups)];
+  finalData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return finalData;
+};
+
 export default function ReportsTab() {
   const [activeReport, setActiveReport] = useState<
     "defects" | "mileage" | "history" | "purchases"
@@ -115,7 +149,7 @@ export default function ReportsTab() {
         return { ...d, status };
       });
 
-      setHistoryData(filteredData);
+      setHistoryData(groupResolvedIssues(filteredData));
     } catch (err) {
       console.error(err);
     } finally {
@@ -298,7 +332,7 @@ export default function ReportsTab() {
 
       if (error) throw error;
 
-      const mappedData = data.map((d) => {
+      let mappedData = data.map((d: any) => {
         let status = d.status;
         const notesStr = String(d.resolution_notes || "").toLowerCase();
         if (
@@ -310,6 +344,7 @@ export default function ReportsTab() {
         return { ...d, status };
       });
 
+      mappedData = groupResolvedIssues(mappedData);
       const stats = {
         total: mappedData.length,
         pending: mappedData.filter((d) => d.status === "pending").length,

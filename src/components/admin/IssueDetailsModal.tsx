@@ -16,7 +16,7 @@ import {
   UserCircle2
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
-import PrintHeader from "./PrintHeader";
+import PrintHeader from "../../modules/company/components/PrintHeader";
 
 interface IssueDetailsModalProps {
   issue: any;

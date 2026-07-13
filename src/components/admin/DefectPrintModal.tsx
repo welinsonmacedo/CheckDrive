@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import PrintHeader from "./PrintHeader";
+import PrintHeader from "../../modules/company/components/PrintHeader";
 
 interface DefectPrintModalProps {
   defect: any;

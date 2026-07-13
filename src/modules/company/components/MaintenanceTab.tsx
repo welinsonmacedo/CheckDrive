@@ -2089,62 +2089,7 @@ export default function MaintenanceTab() {
                                                           )}
                                                         </span>
                                                       </div>
-                                                      {nf.nf_key && (
-                                                        <div className="text-[9px] text-zinc-500 font-mono break-all leading-tight">
-                                                          <span className="text-[8px] uppercase text-zinc-400 font-semibold block">
-                                                            Chave:
-                                                          </span>
-                                                          {nf.nf_key}
-                                                        </div>
-                                                      )}
-                                                      {nf.items &&
-                                                        nf.items.length > 0 && (
-                                                          <div className="mt-1 bg-white border border-zinc-100 rounded p-1 space-y-0.5">
-                                                            {nf.items.map(
-                                                              (
-                                                                item: any,
-                                                                itemIdx: number,
-                                                              ) => (
-                                                                <div
-                                                                  key={
-                                                                    item.id ||
-                                                                    itemIdx
-                                                                  }
-                                                                  className="flex justify-between text-[9px] text-zinc-650"
-                                                                >
-                                                                  <span
-                                                                    className="truncate max-w-[110px]"
-                                                                    title={
-                                                                      item.name
-                                                                    }
-                                                                  >
-                                                                    {item.name}{" "}
-                                                                    <span className="text-zinc-400">
-                                                                      (
-                                                                      {
-                                                                        item.quantity
-                                                                      }
-                                                                      x)
-                                                                    </span>
-                                                                  </span>
-                                                                  <span className="font-semibold text-zinc-700 shrink-0">
-                                                                    R${" "}
-                                                                    {(
-                                                                      item.quantity *
-                                                                      item.unit_price
-                                                                    ).toLocaleString(
-                                                                      "pt-BR",
-                                                                      {
-                                                                        minimumFractionDigits: 2,
-                                                                      },
-                                                                    )}
-                                                                  </span>
-                                                                </div>
-                                                              ),
-                                                            )}
-                                                          </div>
-                                                        )}
-                                                    </div>
+                                                      </div>
                                                   );
                                                 },
                                               )}
