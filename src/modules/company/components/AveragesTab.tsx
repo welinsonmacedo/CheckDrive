@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { motion } from 'motion/react';
 import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer, Plus, PlusCircle, Trash2, Droplet, Camera, BarChart2 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, LabelList } from 'recharts';
 import { usePersistentState } from '@/src/hooks/usePersistentState';
 import PrintHeader from './PrintHeader';
 
@@ -925,7 +925,34 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
         )}
 
 
-        {activeTab === 'charts' && (
+        {activeTab === 'charts' && (() => {
+          const vData = Object.values(vehicleAverages)
+            .map((v: any) => ({
+              name: v.plate,
+              Média: v.liters > 0 ? Number((v.distance / v.liters).toFixed(2)) : 0,
+              distance: v.distance || 0,
+              liters: v.liters || 0
+            }))
+            .filter(d => d.Média > 0)
+            .sort((a, b) => b.Média - a.Média);
+
+          const dData = Object.values(driverAverages)
+            .map((d: any) => ({
+              name: d.name,
+              Média: d.liters > 0 ? Number((d.distance / d.liters).toFixed(2)) : 0,
+              distance: d.distance || 0,
+              liters: d.liters || 0
+            }))
+            .filter(d => d.Média > 0)
+            .sort((a, b) => b.Média - a.Média);
+
+          const totalDistance = vData.reduce((acc, curr) => acc + curr.distance, 0);
+          const totalLiters = vData.reduce((acc, curr) => acc + curr.liters, 0);
+          const mediaPonderada = totalLiters > 0 ? (totalDistance / totalLiters).toFixed(2) : '0.00';
+          const sumMedias = vData.reduce((acc, curr) => acc + curr.Média, 0);
+          const mediaDaMedia = vData.length > 0 ? (sumMedias / vData.length).toFixed(2) : '0.00';
+
+          return (
           <div className="p-6 space-y-6">
             <div className="flex items-center justify-between mb-2">
               <div className="flex flex-col gap-1 text-left">
@@ -938,6 +965,25 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
               </div>
             </div>
 
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+               <div className="bg-app-bg border border-app-border rounded-2xl p-4 flex flex-col gap-1">
+                 <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Km Total</span>
+                 <span className="text-xl font-bold text-text-main">{totalDistance.toLocaleString('pt-BR')} <span className="text-[10px] text-zinc-400">km</span></span>
+               </div>
+               <div className="bg-app-bg border border-app-border rounded-2xl p-4 flex flex-col gap-1">
+                 <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Total Abastecido</span>
+                 <span className="text-xl font-bold text-text-main">{totalLiters.toFixed(2)} <span className="text-[10px] text-zinc-400">L</span></span>
+               </div>
+               <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex flex-col gap-1">
+                 <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500">Média Ponderada</span>
+                 <span className="text-xl font-bold text-indigo-700">{mediaPonderada} <span className="text-[10px] text-indigo-400">km/L</span></span>
+               </div>
+               <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex flex-col gap-1">
+                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Média das Médias</span>
+                 <span className="text-xl font-bold text-emerald-700">{mediaDaMedia} <span className="text-[10px] text-emerald-500">km/L</span></span>
+               </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Vehicle Chart */}
               <div className="bg-app-bg border border-app-border rounded-3xl p-6 flex flex-col items-center">
@@ -945,11 +991,8 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
                 <div className="w-full h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={Object.values(vehicleAverages).map((v: any) => ({
-                        name: v.plate,
-                        'Média': v.liters > 0 ? Number((v.distance / v.liters).toFixed(2)) : 0
-                      })).filter(d => d['Média'] > 0).sort((a, b) => b['Média'] - a['Média'])}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 40 }}
+                      data={vData}
+                      margin={{ top: 30, right: 10, left: -20, bottom: 40 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} angle={-45} textAnchor="end" />
@@ -958,7 +1001,9 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
                         cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }} 
                         contentStyle={{ borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                       />
-                      <Bar dataKey="Média" fill="#4F46E5" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                      <Bar dataKey="Média" fill="#4F46E5" radius={[6, 6, 0, 0]} maxBarSize={50}>
+                        <LabelList dataKey="Média" position="top" fill="#4F46E5" fontSize={11} fontWeight={600} />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -970,11 +1015,8 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
                 <div className="w-full h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={Object.values(driverAverages).map((d: any) => ({
-                        name: d.name,
-                        'Média': d.liters > 0 ? Number((d.distance / d.liters).toFixed(2)) : 0
-                      })).filter(d => d['Média'] > 0).sort((a, b) => b['Média'] - a['Média'])}
-                      margin={{ top: 10, right: 10, left: -20, bottom: 40 }}
+                      data={dData}
+                      margin={{ top: 30, right: 10, left: -20, bottom: 40 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} angle={-45} textAnchor="end" />
@@ -983,14 +1025,17 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
                         cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }} 
                         contentStyle={{ borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                       />
-                      <Bar dataKey="Média" fill="#10B981" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                      <Bar dataKey="Média" fill="#10B981" radius={[6, 6, 0, 0]} maxBarSize={50}>
+                        <LabelList dataKey="Média" position="top" fill="#10B981" fontSize={11} fontWeight={600} />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {activeTab === 'schedules' && (
           <div className="p-6">
