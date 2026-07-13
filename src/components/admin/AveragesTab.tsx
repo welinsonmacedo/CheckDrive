@@ -11,6 +11,9 @@ export default function AveragesTab() {
   const [vehicleAveragesData, setVehicleAveragesData] = useState<any[]>([]);
   const [tableError, setTableError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncStartDate, setSyncStartDate] = useState('');
+  const [syncEndDate, setSyncEndDate] = useState('');
   
   // Date filters
   const [startDate, setStartDate] = useState('');
@@ -272,7 +275,7 @@ export default function AveragesTab() {
             vehicles: s.vehicles,
             profiles: s.profiles,
             vehicle_id: vId,
-            driver_id: dId,
+            driver_id: f2.profiles?.id || dId,
             schedule_id: s.id,
             fuel_submission_id: f2.id,
             notes: `Calculado usando o 2º abastecimento posterior à escala #${s.id}`
@@ -287,22 +290,57 @@ export default function AveragesTab() {
     return { list, map: scheduleFuelMap };
   };
 
-  const handleSyncHistory = async () => {
-    setLoading(true);
-    try {
-      const { list } = processData();
-      let insertedCount = 0;
+  
+  const handleOpenSyncModal = () => {
+    setSyncStartDate(startDate || '');
+    setSyncEndDate(endDate || '');
+    setShowSyncModal(true);
+  };
 
+  const confirmSyncHistory = async () => {
+    setLoading(true);
+    setShowSyncModal(false);
+    try {
+      const { list: rawList } = processData();
+      
+      const listMap = new Map();
+      for (const item of rawList) {
+         let include = true;
+         const d = new Date(item.start_date || item.created_at);
+         if (syncStartDate) {
+           const s = new Date(syncStartDate);
+           s.setHours(0,0,0,0);
+           if (d < s) include = false;
+         }
+         if (syncEndDate) {
+           const e = new Date(syncEndDate);
+           e.setHours(23,59,59,999);
+           if (d > e) include = false;
+         }
+
+         if (include) {
+           const existing = listMap.get(item.fuel_submission_id);
+           if (!existing || new Date(item.start_date) > new Date(existing.start_date)) {
+              listMap.set(item.fuel_submission_id, item);
+           }
+         }
+      }
+      const list = Array.from(listMap.values());
+      
+      let insertedCount = 0;
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       const { data: profData } = await supabase.from('profiles').select('company_id').eq('id', currentUser?.id).single();
       const companyId = profData?.company_id || null;
 
       for (const item of list) {
         const alreadyExists = vehicleAveragesData.some(
-          existing => existing.fuel_submission_id === item.fuel_submission_id
+          existing => 
+            (existing.fuel_submission_id && existing.fuel_submission_id === item.fuel_submission_id) || 
+            (existing.schedule_id && existing.schedule_id === item.schedule_id)
         );
 
         if (!alreadyExists) {
+
           const payload = {
             company_id: companyId,
             vehicle_id: item.vehicle_id,
@@ -890,7 +928,7 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
               </div>
               <div className="flex gap-2 shrink-0">
                 <button
-                  onClick={handleSyncHistory}
+                  onClick={handleOpenSyncModal}
                   disabled={loading}
                   className="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
                   title="Varre escalas e checklists e insere na nova tabela de médias dedicada"
@@ -1281,6 +1319,53 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
           </div>
         </div>
       )}
-    </div>
+    
+      {showSyncModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl animate-fade-in-up border border-app-border">
+            <h3 className="text-xl font-black text-text-main mb-2">Sincronizar Histórico</h3>
+            <p className="text-xs text-text-muted mb-6">
+              Selecione o período que deseja varrer e importar os dados. Os registros que já existem no banco (por abastecimento ou escala) serão ignorados para evitar duplicidade.
+            </p>
+
+            <div className="space-y-4 mb-6">
+              <div className="flex flex-col text-left">
+                <label className="text-xs font-black uppercase tracking-wider text-zinc-500 mb-1">Data Início</label>
+                <input
+                  type="date"
+                  value={syncStartDate}
+                  onChange={(e) => setSyncStartDate(e.target.value)}
+                  className="bg-app-bg border border-app-border rounded-xl px-3 py-2 text-xs font-semibold text-text-main focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div className="flex flex-col text-left">
+                <label className="text-xs font-black uppercase tracking-wider text-zinc-500 mb-1">Data Fim</label>
+                <input
+                  type="date"
+                  value={syncEndDate}
+                  onChange={(e) => setSyncEndDate(e.target.value)}
+                  className="bg-app-bg border border-app-border rounded-xl px-3 py-2 text-xs font-semibold text-text-main focus:outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowSyncModal(false)}
+                className="px-5 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-xs transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmSyncHistory}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors shadow-sm"
+              >
+                Iniciar Importação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+  </div>
   );
 }
