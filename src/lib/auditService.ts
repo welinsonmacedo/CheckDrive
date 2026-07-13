@@ -2,31 +2,42 @@ import { supabase } from "@/src/lib/supabase";
 
 let isAuditing = false;
 
-export const runSilentAudit = async () => {
+export const runSilentAudit = async (companyId?: string) => {
   if (isAuditing) return;
   isAuditing = true;
   try {
     // Threshold: 1 hour after end_at
     const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
 
-    // Check if the user is authenticated and has permission implicitly by attempting fetch
-    const { data: expired, error } = await supabase
+    let query = supabase
       .from("schedules")
       .select(
         "*, routes(origin, destination), vehicles(plate), profiles(participates_in_ranking, score_profiles(penalty_start, penalty_end, penalty_fuel, penalty_yard, apply_penalty_start, apply_penalty_end, apply_penalty_fuel, apply_penalty_yard, base_value, calculation_type))",
       )
       .lt("end_at", oneHourAgo)
       .eq("penalty_applied", false);
+      
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    }
+
+    // Check if the user is authenticated and has permission implicitly by attempting fetch
+    const { data: expired, error } = await query;
 
     // If RLS prevents it or no records, just silently exit
     if (error || !expired || expired.length === 0) {
       return;
     }
 
-    const { data: settings } = await supabase
+    let settingsQuery = supabase
       .from("app_settings")
-      .select("*")
-      .single();
+      .select("*");
+      
+    if (companyId) {
+      settingsQuery = settingsQuery.eq("company_id", companyId);
+    }
+
+    const { data: settings } = await settingsQuery.maybeSingle();
     const appSettings = settings || {};
 
     const formatDate = (dateString: string) => {

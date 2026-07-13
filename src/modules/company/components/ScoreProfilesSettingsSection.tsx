@@ -22,7 +22,7 @@ export default function ScoreProfilesSettingsSection() {
 
   const fetchData = async () => {
     try {
-      const { data } = await supabase.from('score_profiles').select('*').order('name');
+      const { data } = await supabase.from('score_profiles').select('*').eq("company_id", user?.company_id).order('name');
       setProfiles(data || []);
     } catch (err) {
       console.error(err);
@@ -47,7 +47,8 @@ export default function ScoreProfilesSettingsSection() {
         apply_penalty_fuel: form.apply_penalty_fuel,
         apply_penalty_yard: form.apply_penalty_yard,
         closing_rule: form.closing_rule,
-        closing_value: form.closing_value || null
+        closing_value: form.closing_value || null,
+        company_id: user?.company_id
       };
 
       if (form.id) {

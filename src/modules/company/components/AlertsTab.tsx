@@ -72,6 +72,7 @@ export default function AlertsTab() {
           profiles (full_name)
         `,
         )
+        .eq("company_id", user?.company_id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;

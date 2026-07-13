@@ -218,9 +218,9 @@ export default function MaintenanceTab() {
     try {
       const { data: issuesData, error } = await supabase.from("checklist_issues").select(`
           *,
-          auto_alerts (*).eq("company_id", user?.company_id)
-        `,
-        )
+          auto_alerts (*)
+        `)
+        .eq("company_id", user?.company_id)
         .order("created_at", { ascending: false });
 
       if (error) {

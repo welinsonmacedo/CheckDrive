@@ -81,6 +81,7 @@ export default function AdminDashboard() {
     penalty_fuel: 50,
     penalty_yard: 50,
   });
+  const [companyData, setCompanyData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [vehiclesWithPending, setVehiclesWithPending] = useState<any[]>([]);
   const [openDropdowns, setOpenDropdowns] = useState<string[]>([]);
@@ -95,10 +96,10 @@ export default function AdminDashboard() {
     fetchNotificationCount();
 
     // Background audit specifically invoked when admin is online
-    runSilentAudit();
+    runSilentAudit(user?.company_id);
     const intervalId = setInterval(
       () => {
-        runSilentAudit();
+        runSilentAudit(user?.company_id);
         fetchNotificationCount();
       },
       60 * 60 * 1000,
@@ -207,11 +208,37 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: settings } = await supabase
+      let { data: settings } = await supabase
         .from("app_settings")
         .select("*")
-        .single();
+        .eq("company_id", user?.company_id)
+        .maybeSingle();
+
+      if (!settings && user?.company_id) {
+         const { data: newSettings } = await supabase.from("app_settings").insert({
+           company_id: user.company_id,
+           system_type: 'logistics',
+           initial_value: 1000,
+           require_external_photos: false,
+           require_fuel_receipt_photo: false,
+           require_location: false,
+           km_limit_enabled: false,
+           max_km_limit: 500,
+           manual_checklist_activate: true
+         }).select().single();
+         settings = newSettings;
+      }
+
       if (settings) setAppSettings(settings);
+
+      if (user?.company_id) {
+        const { data: company } = await supabase
+          .from("companies")
+          .select("*")
+          .eq("id", user.company_id)
+          .single();
+        if (company) setCompanyData(company);
+      }
     } catch (error) {
       console.error("Error fetching settings:", error);
     } finally {
@@ -444,8 +471,25 @@ export default function AdminDashboard() {
 
       {/* Sidebar */}
       <aside className="group w-full md:absolute md:left-0 md:top-0 md:bottom-0 md:w-20 md:hover:w-72 flex-shrink-0 bg-white/95 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl flex flex-col print:hidden transition-[width] duration-300 z-50 overflow-x-hidden overflow-y-auto md:overflow-y-hidden">
+        {/* Company Logo & Name */}
+        {companyData && (
+          <div className="flex items-center gap-3 px-4 py-6 border-b border-gray-100 overflow-hidden">
+            <div className="min-w-[40px] w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+              {companyData.logo_url ? (
+                <img src={companyData.logo_url} alt={companyData.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-blue-600 font-bold text-lg">{companyData.name?.charAt(0)}</span>
+              )}
+            </div>
+            <div className="flex-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <h2 className="text-sm font-bold text-gray-900 truncate">{companyData.name}</h2>
+              <p className="text-xs text-gray-500 font-medium tracking-wide">PAINEL ADMINISTRATIVO</p>
+            </div>
+          </div>
+        )}
+
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto overflow-x-hidden md:hide-scrollbar">
+        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto overflow-x-hidden md:hide-scrollbar">
           {navItems.map((item) => (
             <motion.button
               key={item.id}

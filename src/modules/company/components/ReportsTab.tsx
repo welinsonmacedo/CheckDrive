@@ -279,6 +279,7 @@ export default function ReportsTab() {
           fuel_check:checklist_submissions!schedules_fuel_checklist_id_fkey(type, details)
         `,
         )
+        .eq("company_id", user?.company_id)
         .gte("start_at", `${startDate}T00:00:00Z`)
         .lte("start_at", `${endDate}T23:59:59Z`)
         .order("start_at", { ascending: false });

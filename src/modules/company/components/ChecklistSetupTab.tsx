@@ -31,14 +31,14 @@ export default function ChecklistSetupTab() {
   }, []);
 
   const fetchData = async () => {
-    const { data: types } = await supabase.from('checklist_types').select('*').order('title');
+    const { data: types } = await supabase.from('checklist_types').select('*').eq("company_id", user?.company_id).order('title');
     let currentTypes = types || [];
     
     // Auto-create 'Lançamento Manual' type if it doesn't exist
     const hasManualType = currentTypes.some(t => t.slug === 'manual');
     if (!hasManualType && currentTypes.length > 0) {
        const { data: manualType } = await supabase.from('checklist_types').insert([
-         { title: 'Lançamento Manual', slug: 'manual' }
+         { title: 'Lançamento Manual', slug: 'manual', company_id: user?.company_id }
        ]).select().single();
        if (manualType) {
          currentTypes = [...currentTypes, manualType];
@@ -50,6 +50,7 @@ export default function ChecklistSetupTab() {
     const { data: items } = await supabase
       .from('checklist_items')
       .select('*')
+      .eq("company_id", user?.company_id)
       .order('is_trailer_item', { ascending: true })
       .order('created_at', { ascending: true });
     setChecklistItems(items || []);
@@ -99,7 +100,8 @@ export default function ChecklistSetupTab() {
         is_trailer_item: itemForm.is_trailer_item,
         appears_in_manual: itemForm.appears_in_manual,
         input_type: finalInputType,
-        order_index: itemForm.is_required ? 1 : 0
+        order_index: itemForm.is_required ? 1 : 0,
+        company_id: user?.company_id
       }));
 
       // Se estiver editando, remove os antigos antes de inserir os novos
@@ -117,7 +119,8 @@ export default function ChecklistSetupTab() {
           title: encodedTitle,
           is_trailer_item: itemForm.is_trailer_item,
           input_type: finalInputType,
-          order_index: itemForm.is_required ? 1 : 0
+          order_index: itemForm.is_required ? 1 : 0,
+          company_id: user?.company_id
         }));
         const { error: err3 } = await supabase.from('checklist_items').insert(fallbackInserts);
         if (err3) {
@@ -177,10 +180,10 @@ export default function ChecklistSetupTab() {
   const createDefaultTypes = async () => {
     try {
       await supabase.from('checklist_types').insert([
-        { title: 'Início de Viagem', slug: 'start' },
-        { title: 'Abastecimento', slug: 'fuel' },
-        { title: 'Fim de Viagem', slug: 'end' },
-        { title: 'Pátio / Interno', slug: 'yard' }
+        { title: 'Início de Viagem', slug: 'start', company_id: user?.company_id },
+        { title: 'Abastecimento', slug: 'fuel', company_id: user?.company_id },
+        { title: 'Fim de Viagem', slug: 'end', company_id: user?.company_id },
+        { title: 'Pátio / Interno', slug: 'yard', company_id: user?.company_id }
       ]);
       fetchData();
     } catch (error: any) {

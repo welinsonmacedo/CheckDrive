@@ -71,7 +71,8 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
     setLoading(true);
     try {
       const { data } = await supabase.from('audit_logs')
-        .select('*, profiles(full_name)')
+        .select('*, profiles!audit_logs_driver_id_fkey(full_name)')
+        .eq("company_id", user?.company_id)
         .order('created_at', { ascending: false });
       setAuditLogs(data || []);
     } catch (error) {
@@ -86,7 +87,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
     if (silent) {
       setSaving(true);
       try {
-        await runSilentAudit();
+        await runSilentAudit(user?.company_id);
         fetchAuditLogs();
       } catch (error) {
         console.error('Silent audit background error:', error);

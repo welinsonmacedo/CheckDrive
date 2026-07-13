@@ -113,7 +113,8 @@ export default function AveragesTab() {
           `).eq("company_id", user?.company_id)
           .order('created_at', { ascending: true }),
         supabase.from('checklist_items')
-          .select('id, title, input_type'),
+          .select('id, title, input_type')
+          .eq("company_id", user?.company_id),
         supabase.from('vehicle_averages')
           .select(`
             id,
@@ -135,6 +136,7 @@ export default function AveragesTab() {
             vehicles(id, plate),
             profiles(id, full_name)
           `)
+          .eq("company_id", user?.company_id)
           .order('start_date', { ascending: false })
       ]);
         

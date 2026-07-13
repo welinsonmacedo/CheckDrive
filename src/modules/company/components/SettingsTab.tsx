@@ -61,7 +61,7 @@ export default function SettingsTab({
            max_km_limit: appSettings.max_km_limit,
            manual_checklist_activate: appSettings.manual_checklist_activate ?? true,
         })
-        .eq("id", "global");
+        .eq("id", appSettings.id);
       if (error) throw error;
       alert("Configurações salvas com sucesso.");
       fetchData();
