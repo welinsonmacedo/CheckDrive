@@ -16,6 +16,7 @@ export default function AveragesTab() {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncStartDate, setSyncStartDate] = useState('');
   const [syncEndDate, setSyncEndDate] = useState('');
+  const [syncDriverId, setSyncDriverId] = useState('');
   
   // Date filters
   const [startDate, setStartDate] = usePersistentState('averages_startDate', '');
@@ -296,6 +297,7 @@ export default function AveragesTab() {
   const handleOpenSyncModal = () => {
     setSyncStartDate(startDate || '');
     setSyncEndDate(endDate || '');
+    setSyncDriverId(filterDriver || '');
     setShowSyncModal(true);
   };
 
@@ -319,6 +321,7 @@ export default function AveragesTab() {
            e.setHours(23,59,59,999);
            if (d > e) include = false;
          }
+         if (syncDriverId && item.driver_id !== syncDriverId) include = false;
 
          if (include) {
            const existing = listMap.get(item.fuel_submission_id);
@@ -356,7 +359,7 @@ export default function AveragesTab() {
             distance: item.distance,
             liters: item.liters,
             average: item.average,
-            status: 'reviewed',
+            status: 'pending',
             notes: item.notes
           };
 
@@ -1349,6 +1352,20 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
                   onChange={(e) => setSyncEndDate(e.target.value)}
                   className="bg-app-bg border border-app-border rounded-xl px-3 py-2 text-xs font-semibold text-text-main focus:outline-none focus:border-primary"
                 />
+              </div>
+
+              <div className="flex flex-col text-left">
+                <label className="text-xs font-black uppercase tracking-wider text-zinc-500 mb-1">Motorista (Opcional)</label>
+                <select
+                  value={syncDriverId}
+                  onChange={(e) => setSyncDriverId(e.target.value)}
+                  className="bg-app-bg border border-app-border rounded-xl px-3 py-2 text-xs font-semibold text-text-main focus:outline-none focus:border-primary"
+                >
+                  <option value="">Todos</option>
+                  {uniqueDrivers.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
