@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import PrintHeader from "./PrintHeader";
 
 interface VehicleDetailsModalProps {
@@ -30,6 +31,8 @@ export default function VehicleDetailsModal({
   vehicle,
   onClose,
 }: VehicleDetailsModalProps) {
+  const { user } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState("current");
   const [closings, setClosings] = useState<any[]>([]);
@@ -46,9 +49,7 @@ export default function VehicleDetailsModal({
   }, [vehicle.id, selectedPeriod, closings]);
 
   const fetchClosings = async () => {
-    const { data } = await supabase
-      .from("score_closings")
-      .select("*")
+    const { data } = await supabase.from("score_closings").select("*").eq("company_id", user?.company_id)
       .order("created_at", { ascending: false });
     setClosings(data || []);
   };
@@ -104,11 +105,8 @@ export default function VehicleDetailsModal({
       }
 
       // Fetch Submissions
-      const { data: subs } = await supabase
-        .from("checklist_submissions")
-        .select(
-          "*, profiles!checklist_submissions_driver_id_fkey(full_name), routes(origin, destination)",
-        )
+      const { data: subs } = await supabase.from("checklist_submissions").select("*, profiles!checklist_submissions_driver_id_fkey(full_name), routes(origin, destination)")
+        .eq("company_id", user?.company_id)
         .eq("vehicle_id", vehicle.id)
         .gte("created_at", startOfMonth)
         .lte("created_at", endOfMonth)
@@ -117,9 +115,8 @@ export default function VehicleDetailsModal({
       setSubmissions(subs || []);
 
       // Fetch Issues
-      const { data: defs } = await supabase
-        .from("checklist_issues")
-        .select("*, profiles!checklist_issues_driver_id_fkey(full_name)")
+      const { data: defs } = await supabase.from("checklist_issues").select("*, profiles!checklist_issues_driver_id_fkey(full_name)")
+        .eq("company_id", user?.company_id)
         .eq("vehicle_id", vehicle.id)
         .gte("created_at", startOfMonth)
         .lte("created_at", endOfMonth)

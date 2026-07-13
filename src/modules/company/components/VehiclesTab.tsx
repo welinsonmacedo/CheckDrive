@@ -37,14 +37,13 @@ export default function VehiclesTab() {
     setLoading(true);
     try {
       const [vRes, tRes, typesRes, modelsRes, modRes] = await Promise.all([
-        supabase
-          .from("vehicles")
-          .select("*, vehicle_modalities(name)")
+        supabase.from("vehicles").select("*, vehicle_modalities(name)")
+          .eq("company_id", user?.company_id)
           .order("plate"),
-        supabase.from("trailers").select("*").order("plate"),
-        supabase.from("vehicle_types").select("*").order("name"),
-        supabase.from("vehicle_models").select("*").order("name"),
-        supabase.from("vehicle_modalities").select("*").order("name"),
+        supabase.from("trailers").select("*").eq("company_id", user?.company_id).order("plate"),
+        supabase.from("vehicle_types").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("vehicle_models").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id).order("name"),
       ]);
       setVehicles(vRes.data || []);
       setTrailers(tRes.data || []);
@@ -76,9 +75,7 @@ export default function VehiclesTab() {
         return true;
       }
 
-      const { count, error: countErr } = await supabase
-        .from('vehicles')
-        .select('*', { count: 'exact', head: true })
+      const { count, error: countErr } = await supabase.from('vehicles').select('*', { count: 'exact', head: true }).eq("company_id", user?.company_id)
         .eq('company_id', user.company_id)
         .eq('active', true);
 

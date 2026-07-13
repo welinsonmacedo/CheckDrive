@@ -18,6 +18,7 @@ import {
   Printer,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { useState, useEffect } from "react";
 import AddressFromCoordinates from "@/src/components/common/AddressFromCoordinates";
 import PrintHeader from "./PrintHeader";
@@ -31,6 +32,8 @@ export default function ChecklistDetailsModal({
   selectedSub,
   onClose,
 }: ChecklistDetailsModalProps) {
+  const { user } = useAuth();
+
   useEffect(() => {
     if (selectedSub) {
       document.body.classList.add("modal-open-for-print");
@@ -58,9 +61,7 @@ export default function ChecklistDetailsModal({
   useEffect(() => {
     const fetchPenalties = async () => {
       try {
-        const { data, error } = await supabase
-          .from("manual_penalties")
-          .select("*")
+        const { data, error } = await supabase.from("manual_penalties").select("*").eq("company_id", user?.company_id)
           .order("name");
         if (!error && data) {
           setManualPenalties(data);
@@ -84,9 +85,7 @@ export default function ChecklistDetailsModal({
     try {
       console.log("Buscando issues para o submission:", selectedSub.id);
 
-      const { data: issuesData, error } = await supabase
-        .from("checklist_issues")
-        .select("*")
+      const { data: issuesData, error } = await supabase.from("checklist_issues").select("*").eq("company_id", user?.company_id)
         .eq("submission_id", selectedSub.id)
         .order("created_at", { ascending: false });
 
@@ -111,19 +110,13 @@ export default function ChecklistDetailsModal({
           ...new Set(issuesData.map((i: any) => i.driver_id).filter(Boolean)),
         ];
 
-        const { data: vehicles } = await supabase
-          .from("vehicles")
-          .select("id, plate, model")
+        const { data: vehicles } = await supabase.from("vehicles").select("id, plate, model").eq("company_id", user?.company_id)
           .in("id", vehicleIds);
 
-        const { data: trailers } = await supabase
-          .from("trailers")
-          .select("id, plate, model")
+        const { data: trailers } = await supabase.from("trailers").select("id, plate, model").eq("company_id", user?.company_id)
           .in("id", trailerIds);
 
-        const { data: drivers } = await supabase
-          .from("profiles")
-          .select("id, full_name")
+        const { data: drivers } = await supabase.from("profiles").select("id, full_name").eq("company_id", user?.company_id)
           .in("id", driverIds);
 
         const issuesWithRelations = issuesData.map((issue: any) => ({
@@ -244,9 +237,8 @@ export default function ChecklistDetailsModal({
         .eq("driver_id", selectedSub.driver_id)
         .maybeSingle();
 
-      const { data: profileArgs } = await supabase
-        .from("profiles")
-        .select("score_profiles(base_value)")
+      const { data: profileArgs } = await supabase.from("profiles").select("score_profiles(base_value)")
+        .eq("company_id", user?.company_id)
         .eq("id", selectedSub.driver_id)
         .maybeSingle();
 

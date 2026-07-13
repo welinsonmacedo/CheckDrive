@@ -132,9 +132,7 @@ export default function MaintenanceTab() {
         setAlerts(alertsData);
       }
 
-      const { data: submissions, error: subError } = await supabase
-        .from("checklist_submissions")
-        .select("vehicle_id, odometer, created_at")
+      const { data: submissions, error: subError } = await supabase.from("checklist_submissions").select("vehicle_id, odometer, created_at").eq("company_id", user?.company_id)
         .order("created_at", { ascending: false });
 
       if (!subError && submissions) {
@@ -154,8 +152,8 @@ export default function MaintenanceTab() {
   async function fetchCatalog() {
     try {
       const [itemsRes, suppliersRes, checklistItemsRes] = await Promise.all([
-        supabase.from("inventory_items").select("*").order("name"),
-        supabase.from("inventory_suppliers").select("*").order("name"),
+        supabase.from("inventory_items").select("*").eq("company_id", user?.company_id).eq("company_id", user?.company_id).order("name"),
+        supabase.from("inventory_suppliers").select("*").eq("company_id", user?.company_id).eq("company_id", user?.company_id).order("name"),
         supabase.from("checklist_items").select("title").order("order_index"),
       ]);
 
@@ -218,12 +216,9 @@ export default function MaintenanceTab() {
     setLoading(true);
 
     try {
-      const { data: issuesData, error } = await supabase
-        .from("checklist_issues")
-        .select(
-          `
+      const { data: issuesData, error } = await supabase.from("checklist_issues").select(`
           *,
-          auto_alerts (*)
+          auto_alerts (*).eq("company_id", user?.company_id)
         `,
         )
         .order("created_at", { ascending: false });
@@ -239,9 +234,7 @@ export default function MaintenanceTab() {
         ...new Set(issuesData.map((i: any) => i.submission_id)),
       ];
 
-      const { data: submissionsData } = await supabase
-        .from("checklist_submissions")
-        .select("id, type")
+      const { data: submissionsData } = await supabase.from("checklist_submissions").select("id, type").eq("company_id", user?.company_id)
         .in("id", submissionIds);
 
       const fuelSubmissionIds =
@@ -269,27 +262,21 @@ export default function MaintenanceTab() {
 
       let vehiclesData: any[] = [];
       if (vehicleIds.length > 0) {
-        const { data } = await supabase
-          .from("vehicles")
-          .select("id, plate, model")
+        const { data } = await supabase.from("vehicles").select("id, plate, model").eq("company_id", user?.company_id)
           .in("id", vehicleIds);
         vehiclesData = data || [];
       }
 
       let trailersData: any[] = [];
       if (trailerIds.length > 0) {
-        const { data } = await supabase
-          .from("trailers")
-          .select("id, plate")
+        const { data } = await supabase.from("trailers").select("id, plate").eq("company_id", user?.company_id)
           .in("id", trailerIds);
         trailersData = data || [];
       }
 
       let driversData: any[] = [];
       if (driverIds.length > 0) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, full_name")
+        const { data } = await supabase.from("profiles").select("id, full_name").eq("company_id", user?.company_id)
           .in("id", driverIds);
         driversData = data || [];
       }
@@ -445,9 +432,7 @@ export default function MaintenanceTab() {
 
         // Fetch real-time current odometer of the vehicle if available
         if (issue.vehicle_id) {
-          supabase
-            .from("checklist_submissions")
-            .select("odometer")
+          supabase.from("checklist_submissions").select("odometer").eq("company_id", user?.company_id)
             .eq("vehicle_id", issue.vehicle_id)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -672,9 +657,7 @@ export default function MaintenanceTab() {
         ) {
           let company_id = inventoryItems[0]?.company_id || null;
           if (!company_id) {
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("company_id")
+            const { data: profile } = await supabase.from("profiles").select("company_id").eq("company_id", user?.company_id)
               .eq("id", user?.id)
               .single();
             if (profile) company_id = profile.company_id;
@@ -702,9 +685,7 @@ export default function MaintenanceTab() {
               if (txError) throw txError;
 
               // decrement
-              const { data: currentItemData } = await supabase
-                .from("inventory_items")
-                .select("current_quantity")
+              const { data: currentItemData } = await supabase.from("inventory_items").select("current_quantity").eq("company_id", user?.company_id)
                 .eq("id", item.item_id)
                 .single();
               if (currentItemData) {
@@ -1047,9 +1028,7 @@ export default function MaintenanceTab() {
 
         let supplierId = "";
         if (user?.company_id && cnpj) {
-          const { data: existingSuppliers } = await supabase
-            .from("inventory_suppliers")
-            .select("id")
+          const { data: existingSuppliers } = await supabase.from("inventory_suppliers").select("id").eq("company_id", user?.company_id)
             .eq("company_id", user.company_id)
             .eq("cnpj_cpf", cnpj)
             .limit(1);
@@ -1083,9 +1062,7 @@ export default function MaintenanceTab() {
             
             let itemId = "";
             if (user?.company_id && xProd) {
-              const { data: existingItems } = await supabase
-                .from("inventory_items")
-                .select("id")
+              const { data: existingItems } = await supabase.from("inventory_items").select("id").eq("company_id", user?.company_id)
                 .eq("company_id", user.company_id)
                 .ilike("name", xProd)
                 .limit(1);

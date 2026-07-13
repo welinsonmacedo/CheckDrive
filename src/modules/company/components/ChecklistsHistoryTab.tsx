@@ -11,6 +11,8 @@ interface ChecklistsHistoryTabProps {
 export default function ChecklistsHistoryTab({
   onViewDetails,
 }: ChecklistsHistoryTabProps) {
+  const { user } = useAuth();
+
   const { user: currentUser } = useAuth();
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -30,9 +32,8 @@ export default function ChecklistsHistoryTab({
   const fetchSubmissions = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from("checklist_submissions")
-        .select("*, profiles(full_name), vehicles(plate)")
+      const { data } = await supabase.from("checklist_submissions").select("*, profiles(full_name), vehicles(plate)")
+        .eq("company_id", user?.company_id)
         .order("created_at", { ascending: false });
       setSubmissions(data || []);
     } catch (error) {
@@ -47,9 +48,7 @@ export default function ChecklistsHistoryTab({
     setUnlinkChecked(false);
     setLinkedSchedulesToUnlink([]);
     try {
-      const { data: linkedSch } = await supabase
-        .from("schedules")
-        .select("id")
+      const { data: linkedSch } = await supabase.from("schedules").select("id").eq("company_id", user?.company_id)
         .or(
           `start_checklist_id.eq.${sub.id},end_checklist_id.eq.${sub.id},fuel_checklist_id.eq.${sub.id}`,
         );
@@ -74,9 +73,7 @@ export default function ChecklistsHistoryTab({
           return;
         }
         for (const sch of linkedSchedulesToUnlink) {
-          const { data: q } = await supabase
-            .from("schedules")
-            .select("start_checklist_id,end_checklist_id,fuel_checklist_id")
+          const { data: q } = await supabase.from("schedules").select("start_checklist_id,end_checklist_id,fuel_checklist_id").eq("company_id", user?.company_id)
             .eq("id", sch.id)
             .single();
           const updates: any = {};

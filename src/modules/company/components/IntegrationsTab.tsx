@@ -142,12 +142,9 @@ export default function IntegrationsTab() {
         });
       }
 
-      const { data: rulesData, error: rulesError } = await supabase
-        .from("integration_whatsapp_rules")
-        .select(
-          `
+      const { data: rulesData, error: rulesError } = await supabase.from("integration_whatsapp_rules").select(`
         *,
-        auto_alerts(title)
+        auto_alerts(title).eq("company_id", user?.company_id)
       `,
         )
         .eq("company_id", user.company_id);

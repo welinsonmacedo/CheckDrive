@@ -40,17 +40,13 @@ export default function AdmUsersTab() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
+      const { data } = await supabase.from("profiles").select("*").eq("company_id", user?.company_id)
         .in("role", ["admin", "standard"])
         .order("full_name");
 
       setUsers(data || []);
 
-      const { data: mData } = await supabase
-        .from("vehicle_modalities")
-        .select("*")
+      const { data: mData } = await supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id)
         .order("name");
       setModalities(mData || []);
     } catch (error) {
@@ -205,9 +201,7 @@ export default function AdmUsersTab() {
         return true;
       }
 
-      const { count, error: countErr } = await supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
+      const { count, error: countErr } = await supabase.from("profiles").select("*", { count: "exact", head: true }).eq("company_id", user?.company_id)
         .eq("company_id", user.company_id)
         .eq("active", true);
 

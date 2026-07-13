@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { Trophy, Star, History } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import DriverRankingDetailsModal from "@/src/modules/company/components/DriverRankingDetailsModal";
 
 export default function RankingTab({ appSettings }: { appSettings: any }) {
+  const { user } = useAuth();
+
   const [ranking, setRanking] = useState<any[]>([]);
   const [closings, setClosings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,9 +25,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
   }, [selectedPeriod]);
 
   const fetchClosings = async () => {
-    const { data } = await supabase
-      .from("score_closings")
-      .select("id, period_start, period_end")
+    const { data } = await supabase.from("score_closings").select("id, period_start, period_end").eq("company_id", user?.company_id)
       .order("created_at", { ascending: false });
     if (data) setClosings(data);
   };
@@ -39,11 +40,8 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
     setLoading(true);
     try {
       if (selectedPeriod === "current") {
-        const { data: drivers } = await supabase
-          .from("profiles")
-          .select(
-            "id, full_name, role, participates_in_ranking, score_profiles(name), driver_performance(score)",
-          )
+        const { data: drivers } = await supabase.from("profiles").select("id, full_name, role, participates_in_ranking, score_profiles(name), driver_performance(score)")
+          .eq("company_id", user?.company_id)
           .eq("role", "driver");
 
         if (!drivers) {
@@ -58,9 +56,7 @@ export default function RankingTab({ appSettings }: { appSettings: any }) {
           now.getMonth(),
           1,
         ).toISOString();
-        const { data: schedules } = await supabase
-          .from("schedules")
-          .select("driver_id")
+        const { data: schedules } = await supabase.from("schedules").select("driver_id").eq("company_id", user?.company_id)
           .gte("start_at", startOfMonth);
 
         const scheduleCounts =

@@ -35,7 +35,7 @@ export default function InventoryTab() {
     setSqlError(null);
     try {
       // Intentionally request from a table that might not exist to catch error
-      const { error: checkErr } = await supabase.from("inventory_items").select("id").limit(1);
+      const { error: checkErr } = await supabase.from("inventory_items").select("id").eq("company_id", user?.company_id).limit(1);
       
       if (checkErr && checkErr.message.includes('does not exist')) {
         setSqlError("missing_tables");
@@ -44,9 +44,9 @@ export default function InventoryTab() {
       }
 
       const [itemsRes, suppliersRes, transRes] = await Promise.all([
-        supabase.from("inventory_items").select("*").order("name"),
-        supabase.from("inventory_suppliers").select("*").order("name"),
-        supabase.from("inventory_transactions").select(`*, inventory_items(name), inventory_suppliers(name)`).order("created_at", { ascending: false })
+        supabase.from("inventory_items").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("inventory_suppliers").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("inventory_transactions").select(`*, inventory_items(name), inventory_suppliers(name)`).eq("company_id", user?.company_id).order("created_at", { ascending: false })
       ]);
 
       if (itemsRes.error) throw itemsRes.error;
@@ -68,9 +68,7 @@ export default function InventoryTab() {
     try {
       let company_id = null;
       if (!itemForm.id) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("company_id")
+        const { data: profile } = await supabase.from("profiles").select("company_id").eq("company_id", user?.company_id)
           .eq("id", user?.id)
           .single();
         if (profile) company_id = profile.company_id;
@@ -128,9 +126,7 @@ export default function InventoryTab() {
   const handleSaveNf = async () => {
     try {
       let company_id = null;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("company_id")
+      const { data: profile } = await supabase.from("profiles").select("company_id").eq("company_id", user?.company_id)
         .eq("id", user?.id)
         .single();
       if (profile) company_id = profile.company_id;

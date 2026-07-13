@@ -83,7 +83,8 @@ export default function TrackingTab() {
       // Fetch latest odometer for vehicles
       const odometerMap: Record<string, number> = {};
       const odoPromises = vData.map(async (v: any) => {
-         const { data } = await supabase.from('checklist_submissions').select('odometer').eq("company_id", user?.company_id)
+         const { data } = await supabase.from('checklist_submissions')
+           .select('odometer')
            .eq('vehicle_id', v.id)
            .not('odometer', 'is', null)
            .order('created_at', { ascending: false })
@@ -100,7 +101,8 @@ export default function TrackingTab() {
       const lastWeek = new Date();
       lastWeek.setDate(lastWeek.getDate() - 7);
       
-      const { data: sData } = await supabase.from('schedules').select(`
+      const { data: sData } = await supabase.from('schedules')
+        .select(`
           *,
           profiles:driver_id (full_name),
           vehicles:vehicle_id (plate),
@@ -108,7 +110,7 @@ export default function TrackingTab() {
           bait1:baits!schedules_bait1_id_fkey(name),
           bait2:baits!schedules_bait2_id_fkey(name),
           bait3:baits!schedules_bait3_id_fkey(name)
-        `).eq("company_id", user?.company_id)
+        `)
         .gte('start_at', lastWeek.toISOString())
         .order('start_at', { ascending: false });
 

@@ -49,12 +49,11 @@ export default function DriversTab() {
     try {
       const [{ data }, { data: modData }, { data: scoreProfilesData }] =
         await Promise.all([
-          supabase
-            .from("profiles")
-            .select("*, score_profiles(name)")
+          supabase.from("profiles").select("*, score_profiles(name)")
+            .eq("company_id", user?.company_id)
             .eq("role", "driver")
             .order("full_name"),
-          supabase.from("vehicle_modalities").select("*").order("name"),
+          supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id).order("name"),
           supabase.from("score_profiles").select("*").order("name"),
         ]);
 
@@ -255,9 +254,7 @@ export default function DriversTab() {
         return true;
       }
 
-      const { count, error: countErr } = await supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true })
+      const { count, error: countErr } = await supabase.from("profiles").select("*", { count: "exact", head: true }).eq("company_id", user?.company_id)
         .eq("company_id", user.company_id)
         .eq("active", true);
 

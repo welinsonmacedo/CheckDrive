@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Download, FileText, ChevronDown } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { motion } from "motion/react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
 export default function ClosingHistoryTab() {
+  const { user } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [closings, setClosings] = useState<any[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -18,12 +21,9 @@ export default function ClosingHistoryTab() {
   const fetchClosings = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from("score_closings")
-        .select(
-          `
+      const { data } = await supabase.from("score_closings").select(`
           *,
-          closed_by ( full_name ),
+          closed_by ( full_name).eq("company_id", user?.company_id),
           score_closing_items ( id, driver_id, score, total_checklists, profiles (full_name) )
         `,
         )

@@ -39,13 +39,11 @@ export default function NotificationsTab() {
       setLoading(true);
 
       // 1. Fetch ALL pending checklist issues
-      const { data: allIssuesData, error: issuesError } = await supabase
-        .from("checklist_issues")
-        .select(`
+      const { data: allIssuesData, error: issuesError } = await supabase.from("checklist_issues").select(`
           *,
           vehicle:vehicles(id, plate),
           trailer:trailers(id, plate)
-        `)
+        `).eq("company_id", user?.company_id)
         .eq("company_id", user?.company_id)
         .or("status.eq.pending,and(status.eq.resolved,resolved_by.is.null)")
         .order("created_at", { ascending: false });
@@ -126,9 +124,7 @@ export default function NotificationsTab() {
       }
 
       // Fetch latest odometer submissions to check triggers
-      const { data: recentSubmissions } = await supabase
-        .from("checklist_submissions")
-        .select("vehicle_id, odometer")
+      const { data: recentSubmissions } = await supabase.from("checklist_submissions").select("vehicle_id, odometer").eq("company_id", user?.company_id)
         .eq("company_id", user?.company_id)
         .order("created_at", { ascending: false });
 

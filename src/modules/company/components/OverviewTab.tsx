@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { decodeItemTitle } from '@/src/lib/maskUtils';
 import { 
   Trophy, 
@@ -42,18 +43,12 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      const { count: checklistCount } = await supabase
-        .from('checklist_submissions')
-        .select('*', { count: 'exact', head: true })
+      const { count: checklistCount } = await supabase.from('checklist_submissions').select('*', { count: 'exact', head: true }).eq("company_id", user?.company_id)
         .gte('created_at', today.toISOString());
 
-      const { count: vehicleCount } = await supabase
-        .from('vehicles')
-        .select('*', { count: 'exact', head: true });
+      const { count: vehicleCount } = await supabase.from('vehicles').select('*', { count: 'exact', head: true }).eq("company_id", user?.company_id);
 
-      const { data: issuesData } = await supabase
-        .from('checklist_issues')
-        .select('vehicle_id, trailer_id, item_title')
+      const { data: issuesData } = await supabase.from('checklist_issues').select('vehicle_id, trailer_id, item_title').eq("company_id", user?.company_id)
         .in('status', ['pending', 'waiting']);
 
       const uniqueIssuesSet = new Set<string>();
@@ -108,9 +103,7 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
         },
       ]);
 
-      const { data: activity } = await supabase
-        .from('checklist_submissions')
-        .select(`id, created_at, details, status, type, profiles (full_name), vehicles (plate)`)
+      const { data: activity } = await supabase.from('checklist_submissions').select(`id, created_at, details, status, type, profiles (full_name), vehicles (plate)`).eq("company_id", user?.company_id)
         .order('created_at', { ascending: false }).limit(6);
       setRecentActivity(activity || []);
 
@@ -132,9 +125,7 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
   const fetchVehiclesWithPending = async () => {
     setLoadingVehicles(true);
     try {
-      const { data: vehicles, error: vehiclesError } = await supabase
-        .from('vehicles')
-        .select('*');
+      const { data: vehicles, error: vehiclesError } = await supabase.from('vehicles').select('*').eq("company_id", user?.company_id);
 
       if (vehiclesError) {
         console.error('Erro ao buscar veículos:', vehiclesError);
@@ -150,9 +141,7 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
       }
 
       // 1. Fetch active issues to count current active/pending defects per vehicle
-      const { data: activeIssues, error: issuesError } = await supabase
-        .from('checklist_issues')
-        .select('id, vehicle_id, trailer_id, item_title')
+      const { data: activeIssues, error: issuesError } = await supabase.from('checklist_issues').select('id, vehicle_id, trailer_id, item_title').eq("company_id", user?.company_id)
         .in('status', ['pending', 'waiting']);
 
       if (issuesError) {
@@ -172,9 +161,7 @@ export default function OverviewTab({ setActiveTab, appSettings }: { setActiveTa
       });
 
       // 2. Fetch all historical issues to build high-quality Principais Reincidências (frequent defects chart)
-      const { data: allIssues, error: allIssuesError } = await supabase
-        .from('checklist_issues')
-        .select('item_title');
+      const { data: allIssues, error: allIssuesError } = await supabase.from('checklist_issues').select('item_title').eq("company_id", user?.company_id);
 
       if (allIssuesError) {
         console.error('Erro ao buscar todos os defeitos:', allIssuesError);

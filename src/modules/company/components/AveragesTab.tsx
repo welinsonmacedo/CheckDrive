@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { motion } from 'motion/react';
 import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer, Plus, PlusCircle, Trash2, Droplet, Camera, BarChart2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, LabelList } from 'recharts';
@@ -7,6 +8,8 @@ import { usePersistentState } from '@/src/hooks/usePersistentState';
 import PrintHeader from './PrintHeader';
 
 export default function AveragesTab() {
+  const { user } = useAuth();
+
   const [activeTab, setActiveTab] = usePersistentState<'vehicles' | 'drivers' | 'schedules' | 'charts'>('averages_activeTab', 'vehicles');
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
@@ -79,8 +82,7 @@ export default function AveragesTab() {
     setTableError(null);
     try {
       const [subsRes, schedsRes, itemsRes, avgsRes] = await Promise.all([
-        supabase.from('checklist_submissions')
-          .select(`
+        supabase.from('checklist_submissions').select(`
             id, 
             created_at, 
             odometer, 
@@ -88,10 +90,9 @@ export default function AveragesTab() {
             type,
             vehicles(id, plate), 
             profiles(id, full_name)
-          `)
+          `).eq("company_id", user?.company_id)
           .order('created_at', { ascending: true }),
-        supabase.from('schedules')
-          .select(`
+        supabase.from('schedules').select(`
             id,
             vehicle_id,
             driver_id,
@@ -109,7 +110,7 @@ export default function AveragesTab() {
             adjusted_liters,
             adjusted_fuel_date,
             adjusted_status
-          `)
+          `).eq("company_id", user?.company_id)
           .order('created_at', { ascending: true }),
         supabase.from('checklist_items')
           .select('id, title, input_type'),
@@ -335,7 +336,7 @@ export default function AveragesTab() {
       
       let insertedCount = 0;
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      const { data: profData } = await supabase.from('profiles').select('company_id').eq('id', currentUser?.id).single();
+      const { data: profData } = await supabase.from('profiles').select('company_id').eq("company_id", user?.company_id).eq('id', currentUser?.id).single();
       const companyId = profData?.company_id || null;
 
       for (const item of list) {
@@ -573,7 +574,7 @@ export default function AveragesTab() {
       const average = litersNumVal > 0 ? distance / litersNumVal : 0;
 
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profData } = await supabase.from('profiles').select('company_id').eq('id', user?.id).single();
+      const { data: profData } = await supabase.from('profiles').select('company_id').eq("company_id", user?.company_id).eq('id', user?.id).single();
       const companyId = profData?.company_id || null;
 
       const { error } = await supabase.from('vehicle_averages').insert([{

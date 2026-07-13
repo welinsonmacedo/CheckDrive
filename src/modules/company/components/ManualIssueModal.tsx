@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Upload, Camera } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import imageCompression from 'browser-image-compression';
 import { decodeItemTitle } from '@/src/lib/maskUtils';
 import { validateFileUpload } from '@/src/modules/shared/utils/validators';
@@ -11,6 +12,8 @@ interface ManualIssueModalProps {
 }
 
 export default function ManualIssueModal({ onClose, onSuccess }: ManualIssueModalProps) {
+  const { user } = useAuth();
+
   const [loading, setLoading] = useState(false);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [trailers, setTrailers] = useState<any[]>([]);
@@ -32,8 +35,8 @@ export default function ManualIssueModal({ onClose, onSuccess }: ManualIssueModa
   const fetchData = async () => {
     try {
       const [vRes, tRes, typesRes] = await Promise.all([
-        supabase.from('vehicles').select('*').eq('active', true),
-        supabase.from('trailers').select('*').eq('active', true),
+        supabase.from('vehicles').select('*').eq("company_id", user?.company_id).eq("company_id", user?.company_id).eq('active', true),
+        supabase.from('trailers').select('*').eq("company_id", user?.company_id).eq("company_id", user?.company_id).eq('active', true),
         supabase.from('checklist_types').select('id').eq('slug', 'manual').maybeSingle()
       ]);
       

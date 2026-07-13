@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { motion, AnimatePresence } from "motion/react";
 import {
   AlertTriangle,
@@ -63,6 +64,8 @@ const groupResolvedIssues = (data: any[]) => {
 };
 
 export default function ReportsTab() {
+  const { user } = useAuth();
+
   const [activeReport, setActiveReport] = usePersistentState<
     "defects" | "pending_by_plate" | "mileage" | "history" | "purchases" | "schedules"
   >("reports_activeReport", "defects");
@@ -119,8 +122,8 @@ export default function ReportsTab() {
   const fetchHistoryEntities = async () => {
     try {
       const [{ data: vs }, { data: ts }] = await Promise.all([
-        supabase.from("vehicles").select("id, plate").order("plate"),
-        supabase.from("trailers").select("id, plate").order("plate"),
+        supabase.from("vehicles").select("id, plate").eq("company_id", user?.company_id).order("plate"),
+        supabase.from("trailers").select("id, plate").eq("company_id", user?.company_id).order("plate"),
       ]);
       const combined = [
         ...(vs || []).map((v) => ({ ...v, type: "vehicle" })),
@@ -144,11 +147,8 @@ export default function ReportsTab() {
 
       const column = entity.type === "vehicle" ? "vehicle_id" : "trailer_id";
 
-      const { data, error } = await supabase
-        .from("checklist_issues")
-        .select(
-          "*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)",
-        )
+      const { data, error } = await supabase.from("checklist_issues").select("*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)")
+        .eq("company_id", user?.company_id)
         .eq(column, entityId)
         .gte("created_at", `${startDate}T00:00:00Z`)
         .lte("created_at", `${endDate}T23:59:59Z`)
@@ -183,9 +183,7 @@ export default function ReportsTab() {
     setLoading(true);
     try {
       // 1. Fetch from inventory_transactions
-      const { data: stockTransactions, error: errStock } = await supabase
-        .from("inventory_transactions")
-        .select(`*, inventory_items(name)`)
+      const { data: stockTransactions, error: errStock } = await supabase.from("inventory_transactions").select(`*, inventory_items(name)`).eq("company_id", user?.company_id)
         .eq("type", "in")
         .gte("created_at", `${startDate}T00:00:00Z`)
         .lte("created_at", `${endDate}T23:59:59Z`);
@@ -194,9 +192,7 @@ export default function ReportsTab() {
 
       
       // 2. Fetch from checklist_issues
-      const { data: issuesData, error: errIssues } = await supabase
-        .from("checklist_issues")
-        .select(`*, vehicles(plate), trailers(plate)`)
+      const { data: issuesData, error: errIssues } = await supabase.from("checklist_issues").select(`*, vehicles(plate), trailers(plate)`).eq("company_id", user?.company_id)
         .in("status", ["resolved", "waiting"])
         .gte("updated_at", `${startDate}T00:00:00Z`)
         .lte("updated_at", `${endDate}T23:59:59Z`);
@@ -273,10 +269,7 @@ export default function ReportsTab() {
   const fetchSchedulesReport = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("schedules")
-        .select(
-          `
+      const { data, error } = await supabase.from("schedules").select(`
           id, start_at, end_at, requires_fueling,
           profiles(full_name),
           vehicles(plate),
@@ -334,11 +327,8 @@ export default function ReportsTab() {
   const fetchMileageReport = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("checklist_submissions")
-        .select(
-          "id, odometer, type, created_at, trailer_id, profiles(full_name), vehicles(plate)",
-        )
+      const { data, error } = await supabase.from("checklist_submissions").select("id, odometer, type, created_at, trailer_id, profiles(full_name), vehicles(plate)")
+        .eq("company_id", user?.company_id)
         .not("odometer", "is", null)
         .gte("created_at", `${startDate}T00:00:00Z`)
         .lte("created_at", `${endDate}T23:59:59Z`)
@@ -347,9 +337,7 @@ export default function ReportsTab() {
       if (error) throw error;
 
       // Fetch trailers separately safely
-      const { data: trailersReq } = await supabase
-        .from("trailers")
-        .select("id, plate");
+      const { data: trailersReq } = await supabase.from("trailers").select("id, plate").eq("company_id", user?.company_id);
       const trailersMap = new Map(
         (trailersReq || []).map((t: any) => [t.id, t.plate]),
       );
@@ -444,11 +432,8 @@ export default function ReportsTab() {
   const fetchPendingByPlateReport = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("checklist_issues")
-        .select(
-          "*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)"
-        )
+      const { data, error } = await supabase.from("checklist_issues").select("*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)")
+        .eq("company_id", user?.company_id)
         // NOTE: we could filter by date or not, but let's filter by the date range selected
         .gte("created_at", `${startDate}T00:00:00Z`)
         .lte("created_at", `${endDate}T23:59:59Z`);
@@ -493,11 +478,8 @@ export default function ReportsTab() {
   const fetchDefectsReport = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("checklist_issues")
-        .select(
-          "*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)",
-        )
+      const { data, error } = await supabase.from("checklist_issues").select("*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name)")
+        .eq("company_id", user?.company_id)
         .gte("created_at", `${startDate}T00:00:00Z`)
         .lte("created_at", `${endDate}T23:59:59Z`);
 

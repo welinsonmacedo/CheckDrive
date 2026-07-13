@@ -287,7 +287,7 @@ export default function ChecklistFlow() {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("full_name, modality_ids")
+          .select("full_name, modality_ids, company_id")
           .eq("id", user.id)
           .single();
         userProfile = profile;
@@ -299,9 +299,9 @@ export default function ChecklistFlow() {
       let vRes, rRes, tRes, settingsRes;
       try {
         [vRes, rRes, tRes, settingsRes] = await Promise.all([
-          supabase.from("vehicles").select("*").eq("active", true),
-          supabase.from("routes").select("*").eq("active", true),
-          supabase.from("trailers").select("*").eq("active", true),
+          supabase.from("vehicles").select("*").eq("company_id", userProfile?.company_id).eq("active", true),
+          supabase.from("routes").select("*").eq("company_id", userProfile?.company_id).eq("active", true),
+          supabase.from("trailers").select("*").eq("company_id", userProfile?.company_id).eq("active", true),
           supabase
             .from("app_settings")
             .select("*")

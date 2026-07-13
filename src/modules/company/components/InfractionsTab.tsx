@@ -707,9 +707,7 @@ export default function InfractionsTab() {
 
     try {
       // Check table existence
-      const { error: checkErr } = await supabase
-        .from("traffic_infractions")
-        .select("id")
+      const { error: checkErr } = await supabase.from("traffic_infractions").select("id").eq("company_id", user?.company_id)
         .limit(1);
       if (checkErr && checkErr.code === "42P01") {
         setSetupRequired(true);
@@ -718,15 +716,12 @@ export default function InfractionsTab() {
       }
 
       // Fetch infractions
-      const { data: infractionsData, error: fetchErr } = await supabase
-        .from("traffic_infractions")
-        .select(
-          `
+      const { data: infractionsData, error: fetchErr } = await supabase.from("traffic_infractions").select(`
           *,
           discounted_amount,
           installments,
           license_plate,
-          profiles:driver_id(full_name)
+          profiles:driver_id(full_name).eq("company_id", user?.company_id)
         `,
         )
         .order("infraction_date", { ascending: false });
@@ -740,9 +735,7 @@ export default function InfractionsTab() {
       if (infractionsData) setInfractions(infractionsData);
 
       // Fetch drivers
-      const { data: driversData } = await supabase
-        .from("profiles")
-        .select("id, full_name")
+      const { data: driversData } = await supabase.from("profiles").select("id, full_name").eq("company_id", user?.company_id)
         .eq("role", "driver")
         .order("full_name");
 
@@ -750,14 +743,10 @@ export default function InfractionsTab() {
 
       // Fetch vehicles and trailers
       const [vehiclesRes, trailersRes] = await Promise.all([
-        supabase
-          .from("vehicles")
-          .select("id, plate, model")
+        supabase.from("vehicles").select("id, plate, model").eq("company_id", user?.company_id)
           .eq("active", true)
           .order("plate"),
-        supabase
-          .from("trailers")
-          .select("id, plate")
+        supabase.from("trailers").select("id, plate").eq("company_id", user?.company_id)
           .eq("active", true)
           .order("plate"),
       ]);

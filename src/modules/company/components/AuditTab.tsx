@@ -18,6 +18,7 @@ import {
   Info
 } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import ClosingHistoryTab from '@/src/modules/company/components/ClosingHistoryTab';
 import { runSilentAudit } from '@/src/lib/auditService';
 import { motion, AnimatePresence } from 'motion/react';
@@ -27,6 +28,8 @@ interface AuditTabProps {
 }
 
 export default function AuditTab({ appSettings }: AuditTabProps) {
+  const { user } = useAuth();
+
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);

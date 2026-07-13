@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, Edit2 } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { encodeItemTitle, decodeItemTitle } from '@/src/lib/maskUtils';
 
 export default function ChecklistSetupTab() {
+  const { user } = useAuth();
+
   const [checklistTypes, setChecklistTypes] = useState<any[]>([]);
   const [checklistItems, setChecklistItems] = useState<any[]>([]);
   

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import PrintHeader from "./PrintHeader";
 
 interface DriverRankingDetailsModalProps {
@@ -36,6 +37,8 @@ export default function DriverRankingDetailsModal({
   appSettings,
   onClose,
 }: DriverRankingDetailsModalProps) {
+  const { user } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState(
     initialPeriodId || "current",
@@ -117,18 +120,16 @@ export default function DriverRankingDetailsModal({
       }
 
       // Fetch driver score profile setting
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*, score_profiles(*)")
+      const { data: profileData } = await supabase.from("profiles").select("*, score_profiles(*)")
+        .eq("company_id", user?.company_id)
         .eq("id", driver.id)
         .single();
 
       setScoreProfile(profileData?.score_profiles || null);
 
       // Fetch Submissions
-      const { data: subs } = await supabase
-        .from("checklist_submissions")
-        .select("*, vehicles(plate), routes(origin, destination)")
+      const { data: subs } = await supabase.from("checklist_submissions").select("*, vehicles(plate), routes(origin, destination)")
+        .eq("company_id", user?.company_id)
         .eq("driver_id", driver.id)
         .gte("created_at", startOfMonth)
         .lte("created_at", endOfMonth)
@@ -148,9 +149,8 @@ export default function DriverRankingDetailsModal({
       setAuditLogs(audits || []);
 
       // Fetch Schedules
-      const { data: scheds } = await supabase
-        .from("schedules")
-        .select("*, routes(origin, destination)")
+      const { data: scheds } = await supabase.from("schedules").select("*, routes(origin, destination)")
+        .eq("company_id", user?.company_id)
         .eq("driver_id", driver.id)
         .gte("start_at", startOfMonth)
         .lte("start_at", endOfMonth)

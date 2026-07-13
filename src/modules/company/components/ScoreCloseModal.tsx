@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Calendar } from 'lucide-react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 
 interface ScoreCloseModalProps {
   onClose: () => void;
@@ -9,6 +10,8 @@ interface ScoreCloseModalProps {
 }
 
 export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: ScoreCloseModalProps) {
+  const { user } = useAuth();
+
   const [loading, setLoading] = useState(false);
   
   // Format YYYY-MM-DD
@@ -42,9 +45,7 @@ export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: Sc
       const endDateTime = new Date(`${endDate}T23:59:59.999`).toISOString();
       const startDateTime = new Date(`${startDate}T00:00:00`).toISOString();
 
-      const { data: schedules } = await supabase
-        .from('schedules')
-        .select('driver_id')
+      const { data: schedules } = await supabase.from('schedules').select('driver_id').eq("company_id", user?.company_id)
         .gte('start_at', startDateTime)
         .lte('start_at', endDateTime);
 
@@ -54,7 +55,7 @@ export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: Sc
       }, {}) || {};
 
       // 2. Fetch current drivers performance
-      const { data: drivers } = await supabase.from('profiles').select('id, participates_in_ranking, score_profile_id, score_profiles(base_value, calculation_type), driver_performance(*)').eq('role', 'driver');
+      const { data: drivers } = await supabase.from('profiles').select('id, participates_in_ranking, score_profile_id, score_profiles(base_value, calculation_type).eq("company_id", user?.company_id).eq("company_id", user?.company_id), driver_performance(*)').eq('role', 'driver');
       
       const itemsToInsert = [];
       const resetsToUpsert = [];

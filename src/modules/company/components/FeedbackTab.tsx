@@ -21,6 +21,7 @@ import {
   ArrowUpDown
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { motion, AnimatePresence } from "motion/react";
 
 interface AdminNote {
@@ -30,6 +31,8 @@ interface AdminNote {
 }
 
 export default function FeedbackTab() {
+  const { user } = useAuth();
+
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   

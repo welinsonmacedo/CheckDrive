@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import AddressFromCoordinates from "@/src/components/common/AddressFromCoordinates";
 
 export default function FuelTab() {
+  const { user } = useAuth();
+
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -13,9 +16,8 @@ export default function FuelTab() {
   const fetchFuelSubmissions = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from("checklist_submissions")
-        .select("*, profiles(full_name), vehicles(plate)")
+      const { data } = await supabase.from("checklist_submissions").select("*, profiles(full_name), vehicles(plate)")
+        .eq("company_id", user?.company_id)
         .in("type", ["fuel", "Abastecimento"])
         .order("created_at", { ascending: false });
       setSubmissions(data || []);

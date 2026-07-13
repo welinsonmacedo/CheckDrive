@@ -69,39 +69,26 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
       const localStart = new Date(`${filterDate}T00:00:00`);
       const localEnd = new Date(`${filterDate}T23:59:59.999`);
 
-      const { data } = await supabase
-        .from("schedules")
-        .select(
-          "*, profiles(*), vehicles(plate, type), trailers(plate), routes(origin, destination, stops), bait1:baits!schedules_bait1_id_fkey(name), bait2:baits!schedules_bait2_id_fkey(name), bait3:baits!schedules_bait3_id_fkey(name)",
-        )
+      const { data } = await supabase.from("schedules").select("*, profiles(*), vehicles(plate, type), trailers(plate), routes(origin, destination, stops), bait1:baits!schedules_bait1_id_fkey(name), bait2:baits!schedules_bait2_id_fkey(name), bait3:baits!schedules_bait3_id_fkey(name)")
+        .eq("company_id", user?.company_id)
         .gte("start_at", localStart.toISOString())
         .lte("start_at", localEnd.toISOString())
         .order("start_at", { ascending: false });
       setSchedules(data || []);
 
-      const { data: d } = await supabase
-        .from("profiles")
-        .select("*")
+      const { data: d } = await supabase.from("profiles").select("*").eq("company_id", user?.company_id)
         .eq("role", "driver");
       setUsers(d || []);
-      const { data: v } = await supabase
-        .from("vehicles")
-        .select("id, plate, requires_trailer, modality_id")
+      const { data: v } = await supabase.from("vehicles").select("id, plate, requires_trailer, modality_id").eq("company_id", user?.company_id)
         .eq("active", true);
       setVehicles(v || []);
-      const { data: t } = await supabase
-        .from("trailers")
-        .select("id, plate")
+      const { data: t } = await supabase.from("trailers").select("id, plate").eq("company_id", user?.company_id)
         .eq("active", true);
       setTrailers(t || []);
-      const { data: r } = await supabase
-        .from("routes")
-        .select("id, origin, destination, stops, distance_km")
+      const { data: r } = await supabase.from("routes").select("id, origin, destination, stops, distance_km").eq("company_id", user?.company_id)
         .eq("active", true);
       setRoutes(r || []);
-      const { data: b } = await supabase
-        .from("baits")
-        .select("id, name")
+      const { data: b } = await supabase.from("baits").select("id, name").eq("company_id", user?.company_id)
         .eq("active", true)
         .order("name");
       setBaits(b || []);
@@ -208,9 +195,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
         endBuffer.setHours(endBuffer.getHours() + 12);
 
         // Search for any manual checklists for this driver within the schedule timeframe
-        let query = supabase
-          .from("checklist_submissions")
-          .select("id, type")
+        let query = supabase.from("checklist_submissions").select("id, type").eq("company_id", user?.company_id)
           .eq("driver_id", dataToInsert.driver_id)
           .gte("created_at", startBuffer.toISOString())
           .lte("created_at", endBuffer.toISOString());
@@ -303,9 +288,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
         endBuffer.setHours(endBuffer.getHours() + 12);
 
         // Query unlinked checklists for this schedule's timeframe and driver
-        let query = supabase
-          .from("checklist_submissions")
-          .select("id, type")
+        let query = supabase.from("checklist_submissions").select("id, type").eq("company_id", user?.company_id)
           .eq("driver_id", schedule.driver_id)
           .gte("created_at", startBuffer.toISOString())
           .lte("created_at", endBuffer.toISOString());

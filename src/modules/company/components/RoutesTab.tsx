@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { CheckCircle2, Search, X } from 'lucide-react';
 
 export default function RoutesTab() {
+  const { user } = useAuth();
+
   const [routes, setRoutes] = useState<any[]>([]);
   const [modalities, setModalities] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,8 +18,8 @@ export default function RoutesTab() {
     setLoading(true);
     try {
       const [rRes, mRes] = await Promise.all([
-        supabase.from('routes').select('*').order('origin'),
-        supabase.from('vehicle_modalities').select('*').order('name')
+        supabase.from('routes').select('*').eq("company_id", user?.company_id).eq("company_id", user?.company_id).order('origin'),
+        supabase.from('vehicle_modalities').select('*').eq("company_id", user?.company_id).eq("company_id", user?.company_id).order('name')
       ]);
       setRoutes(rRes.data || []);
       setModalities(mRes.data || []);

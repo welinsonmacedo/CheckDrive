@@ -110,9 +110,7 @@ export default function AdminDashboard() {
   const fetchNotificationCount = async () => {
     if (!user?.company_id) return;
     try {
-      const { data: issuesData } = await supabase
-        .from("checklist_issues")
-        .select("id, vehicle_id, trailer_id, item_title, status, resolved_by")
+      const { data: issuesData } = await supabase.from("checklist_issues").select("id, vehicle_id, trailer_id, item_title, status, resolved_by").eq("company_id", user?.company_id)
         .eq("company_id", user.company_id)
         .or("status.eq.pending,and(status.eq.resolved,resolved_by.is.null)");
 
@@ -133,9 +131,7 @@ export default function AdminDashboard() {
         .eq("company_id", user.company_id)
         .eq("active", true);
 
-      const { data: submissions } = await supabase
-        .from("checklist_submissions")
-        .select("vehicle_id, odometer")
+      const { data: submissions } = await supabase.from("checklist_submissions").select("vehicle_id, odometer").eq("company_id", user?.company_id)
         .eq("company_id", user.company_id)
         .order("created_at", { ascending: false });
 
@@ -225,16 +221,12 @@ export default function AdminDashboard() {
 
   const fetchVehiclesWithPending = async () => {
     try {
-      const { data: vehicles } = await supabase
-        .from("vehicles")
-        .select(
-          `
+      const { data: vehicles } = await supabase.from("vehicles").select(`
           *,
           checklist_submissions(
             status,
             details,
-            created_at
-          ),
+            created_at).eq("company_id", user?.company_id),
           maintenance_records(
             status,
             priority
@@ -716,9 +708,7 @@ export default function AdminDashboard() {
               {activeTab === "schedules" && (
                 <SchedulesTab
                   onViewChecklist={async (subId: string) => {
-                    const { data } = await supabase
-                      .from("checklist_submissions")
-                      .select("*, profiles(full_name), vehicles(plate)")
+                    const { data } = await supabase.from("checklist_submissions").select("*, profiles(full_name), vehicles(plate)").eq("company_id", user?.company_id)
                       .eq("id", subId)
                       .single();
                     if (data) setSelectedSub(data);

@@ -67,9 +67,7 @@ export function GlobalSearch({
 
     try {
       // Fetch company_id
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("company_id")
+      const { data: profile } = await supabase.from("profiles").select("company_id").eq("company_id", user?.company_id)
         .eq("id", user.id)
         .single();
       const companyId = profile?.company_id;
@@ -87,9 +85,7 @@ export function GlobalSearch({
 
       // Search Vehicles (only if admin)
       if (isAdmin) {
-        const { data: vehicles } = await supabase
-          .from("vehicles")
-          .select("id, plate, model")
+        const { data: vehicles } = await supabase.from("vehicles").select("id, plate, model").eq("company_id", user?.company_id)
           .eq("company_id", companyId)
           .or(`plate.ilike.${term},model.ilike.${term}`)
           .limit(3);
@@ -130,9 +126,7 @@ export function GlobalSearch({
       }
 
       // Search Inventory
-      const { data: inventory } = await supabase
-        .from("inventory_items")
-        .select("id, name, sku")
+      const { data: inventory } = await supabase.from("inventory_items").select("id, name, sku").eq("company_id", user?.company_id)
         .eq("company_id", companyId)
         .or(`name.ilike.${term},sku.ilike.${term}`)
         .limit(3);
@@ -151,9 +145,7 @@ export function GlobalSearch({
       }
 
       // Search Maintenance
-      const { data: maintenance } = await supabase
-        .from("checklist_issues")
-        .select("id, item_title, status, resolved_by")
+      const { data: maintenance } = await supabase.from("checklist_issues").select("id, item_title, status, resolved_by").eq("company_id", user?.company_id)
         .eq("company_id", companyId)
         .ilike("item_title", term)
         .limit(3);

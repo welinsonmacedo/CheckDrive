@@ -55,15 +55,11 @@ export default function AlertsTab() {
     setErrorMsg("");
     try {
       // Setup queries
-      const { data: vData } = await supabase
-        .from("vehicles")
-        .select("id, plate")
+      const { data: vData } = await supabase.from("vehicles").select("id, plate").eq("company_id", user?.company_id)
         .eq("active", true);
       if (vData) setVehicles(vData);
 
-      const { data: dData } = await supabase
-        .from("profiles")
-        .select("id, full_name")
+      const { data: dData } = await supabase.from("profiles").select("id, full_name").eq("company_id", user?.company_id)
         .eq("role", "driver");
       if (dData) setDrivers(dData);
 

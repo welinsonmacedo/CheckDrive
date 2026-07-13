@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { Settings, Plus, Trash2 } from 'lucide-react';
 
 export default function ManualPenaltiesSettingsSection() {
+  const { user } = useAuth();
+
   const [penalties, setPenalties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -18,7 +21,7 @@ export default function ManualPenaltiesSettingsSection() {
     setLoading(true);
     setErrorMsg('');
     try {
-      const { data, error } = await supabase.from('manual_penalties').select('*').order('name');
+      const { data, error } = await supabase.from('manual_penalties').select('*').eq("company_id", user?.company_id).eq("company_id", user?.company_id).order('name');
       if (error) throw error;
       setPenalties(data || []);
     } catch (error: any) {

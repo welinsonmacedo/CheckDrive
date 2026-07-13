@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { CheckCircle2, Search, X } from 'lucide-react';
 
 export default function BaitsTab() {
+  const { user } = useAuth();
+
   const [baits, setBaits] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [saving, setSaving] = useState(false);
@@ -13,7 +16,7 @@ export default function BaitsTab() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from('baits').select('*').order('name');
+      const { data } = await supabase.from('baits').select('*').eq("company_id", user?.company_id).eq("company_id", user?.company_id).order('name');
       setBaits(data || []);
     } catch (error) {
       console.error('Error fetching baits:', error);

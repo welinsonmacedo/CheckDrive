@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Save, AlertCircle, Camera } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import imageCompression from "browser-image-compression";
 
 interface ChecklistEditModalProps {
@@ -15,6 +16,8 @@ export default function ChecklistEditModal({
   onClose,
   onSaved,
 }: ChecklistEditModalProps) {
+  const { user } = useAuth();
+
   const [loading, setLoading] = useState(false);
   const [odometer, setOdometer] = useState(
     submission.odometer?.toString() || "",
@@ -92,9 +95,7 @@ export default function ChecklistEditModal({
         submission.type === "Abastecimento"
       )
         return;
-      const { data, error } = await supabase
-        .from("checklist_issues")
-        .select("*")
+      const { data, error } = await supabase.from("checklist_issues").select("*").eq("company_id", user?.company_id)
         .eq("submission_id", submission.id);
       if (!error && data && data.length > 0) {
         setDefectData((prev) => {
@@ -174,9 +175,7 @@ export default function ChecklistEditModal({
       }[] = [];
 
       // Fetch existing issues for this submission once to match
-      const { data: existingIssues } = await supabase
-        .from("checklist_issues")
-        .select("id, item_title")
+      const { data: existingIssues } = await supabase.from("checklist_issues").select("id, item_title").eq("company_id", user?.company_id)
         .eq("submission_id", submission.id);
 
       if (submission.type !== "fuel" && submission.type !== "Abastecimento") {

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { Truck, Plus, Trash2, Edit2, Layers } from "lucide-react";
 
 export default function FleetSettingsSection() {
+  const { user } = useAuth();
+
   const [activeInternalTab, setActiveInternalTab] = useState<
     "modalities" | "types" | "models"
   >("types");
@@ -36,12 +39,11 @@ export default function FleetSettingsSection() {
     setLoading(true);
     try {
       const [typesRes, modelsRes, modalitiesRes] = await Promise.all([
-        supabase.from("vehicle_types").select("*").order("name"),
-        supabase
-          .from("vehicle_models")
-          .select("*, vehicle_types(name)")
+        supabase.from("vehicle_types").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("vehicle_models").select("*, vehicle_types(name)")
+          .eq("company_id", user?.company_id)
           .order("name"),
-        supabase.from("vehicle_modalities").select("*").order("name"),
+        supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id).order("name"),
       ]);
       setTypes(typesRes.data || []);
       setModels(modelsRes.data || []);

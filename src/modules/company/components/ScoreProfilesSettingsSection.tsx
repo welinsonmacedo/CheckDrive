@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/src/lib/supabase';
+import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { Plus, Trash2, Edit2, ShieldAlert } from 'lucide-react';
 
 export default function ScoreProfilesSettingsSection() {
+  const { user } = useAuth();
+
   const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
