@@ -20,12 +20,12 @@ export default function Ranking() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: userProfile } = await supabase.from('profiles').select('score_profile_id, score_profiles(name)').eq('id', user.id).single();
+      const { data: userProfile } = await supabase.from('profiles').select('company_id, score_profile_id, score_profiles(name)').eq('id', user.id).single();
       const userProfileId = userProfile?.score_profile_id;
       const spName = (userProfile?.score_profiles as any)?.name;
       if (spName) setProfileName(spName);
 
-      const { data: settings } = await supabase.from('app_settings').select('system_type').single();
+      const { data: settings } = await supabase.from('app_settings').select('system_type').eq("company_id", userProfile?.company_id).maybeSingle();
       if (settings) setSystemType(settings.system_type);
 
       const now = new Date();
@@ -33,6 +33,7 @@ export default function Ranking() {
       const { data: schedules } = await supabase
         .from('schedules')
         .select('driver_id')
+        .eq('company_id', userProfile?.company_id)
         .gte('start_at', startOfMonth);
 
       const scheduleCounts = schedules?.reduce((acc: any, s: any) => {
@@ -49,9 +50,11 @@ export default function Ranking() {
             full_name,
             role,
             participates_in_ranking,
-            score_profile_id
+            score_profile_id,
+            company_id
           )
         `)
+        .eq('profiles.company_id', userProfile?.company_id)
         .eq('profiles.role', 'driver');
         
       if (userProfileId) {

@@ -47,17 +47,17 @@ export default function DriverHome() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: settings } = await supabase.from('app_settings').select('system_type, manual_checklist_activate').single();
-      if (settings) {
-        setSystemType(settings.system_type);
-        setManualChecklistActivate(settings.manual_checklist_activate !== false);
-      }
-
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
+
+      const { data: settings } = await supabase.from('app_settings').select('system_type, manual_checklist_activate').eq("company_id", profile?.company_id).maybeSingle();
+      if (settings) {
+        setSystemType(settings.system_type);
+        setManualChecklistActivate(settings.manual_checklist_activate !== false);
+      }
       
       let score = 0;
       const { data: perf, error: perfError } = await supabase

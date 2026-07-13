@@ -359,7 +359,7 @@ export default function ChecklistFlow() {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("full_name, modality_ids")
+          .select("full_name, modality_ids, company_id")
           .eq("id", user.id)
           .single();
         userProfile = profile;
@@ -371,13 +371,13 @@ export default function ChecklistFlow() {
       let vRes, rRes, tRes, settingsRes;
       try {
         [vRes, rRes, tRes, settingsRes] = await Promise.all([
-          supabase.from("vehicles").select("*").eq("active", true),
-          supabase.from("routes").select("*").eq("active", true),
-          supabase.from("trailers").select("*").eq("active", true),
+          supabase.from("vehicles").select("*").eq("company_id", userProfile?.company_id).eq("active", true),
+          supabase.from("routes").select("*").eq("company_id", userProfile?.company_id).eq("active", true),
+          supabase.from("trailers").select("*").eq("company_id", userProfile?.company_id).eq("active", true),
           supabase
             .from("app_settings")
             .select("*")
-            .eq("id", "global")
+            .eq("company_id", userProfile?.company_id)
             .maybeSingle(),
         ]);
 
@@ -517,7 +517,8 @@ export default function ChecklistFlow() {
           .from("checklist_types")
           .select("id")
           .eq("slug", type || "start")
-          .single();
+          .eq("company_id", userProfile?.company_id)
+          .maybeSingle();
         typeData = typeRes.data;
 
         if (typeData) {
@@ -525,6 +526,7 @@ export default function ChecklistFlow() {
             .from("checklist_items")
             .select("*")
             .eq("type_id", typeData.id)
+            .eq("company_id", userProfile?.company_id)
             .order("order_index");
           itemsData = itemsRes.data;
         }
@@ -1355,6 +1357,11 @@ export default function ChecklistFlow() {
                     ? "Fotos de Abastecimento"
                     : "Fotos Externas do Veículo"}
                 </h3>
+
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-[10px] leading-relaxed">
+                  <span className="font-bold uppercase tracking-wider block mb-1">Atenção</span>
+                  Dê preferência a retirar a foto diretamente do app. Caso for preciso usar a galeria, fotos antigas são verificadas pelo app via metadados.
+                </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   {(type === "fuel" || type === "Abastecimento"

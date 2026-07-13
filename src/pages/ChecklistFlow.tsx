@@ -442,7 +442,8 @@ export default function ChecklistFlow() {
           .from("checklist_types")
           .select("id")
           .eq("slug", type || "start")
-          .single();
+          .eq("company_id", userProfile?.company_id)
+          .maybeSingle();
         typeData = typeRes.data;
 
         if (typeData) {
@@ -450,6 +451,7 @@ export default function ChecklistFlow() {
             .from("checklist_items")
             .select("*")
             .eq("type_id", typeData.id)
+            .eq("company_id", userProfile?.company_id)
             .order("order_index");
           itemsData = itemsRes.data;
         }
@@ -1166,6 +1168,11 @@ export default function ChecklistFlow() {
                 <h3 className="text-xs font-bold text-text-muted uppercase tracking-widest mb-2">
                   Fotos Externas do Veículo
                 </h3>
+                
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-[10px] leading-relaxed">
+                  <span className="font-bold uppercase tracking-wider block mb-1">Atenção</span>
+                  Dê preferência a retirar a foto diretamente do app. Caso for preciso usar a galeria, fotos antigas são verificadas pelo app via metadados.
+                </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   {[

@@ -18,7 +18,7 @@ export default function DriverPenalties() {
     try {
       if (!user) return;
 
-      const { data: settings } = await supabase.from('app_settings').select('system_type').single();
+      const { data: settings } = await supabase.from('app_settings').select('system_type').eq("company_id", user?.company_id).maybeSingle();
       if (settings) setSystemType(settings.system_type);
 
       // Start of current month
