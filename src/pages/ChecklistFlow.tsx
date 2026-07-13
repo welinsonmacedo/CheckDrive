@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
+  Image as ImageIcon,
   Camera,
   ChevronRight,
   ChevronLeft,
@@ -1175,42 +1176,66 @@ export default function ChecklistFlow() {
                   ].map(({ key, label }) => {
                     const currentPhoto = (formData.photos as any)[key];
                     return (
-                      <div
-                        key={key}
-                        className="relative h-28 rounded-2xl border border-app-border bg-app-bg flex flex-col items-center justify-center p-3 text-center overflow-hidden"
-                      >
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handlePhotoUpload(key, file);
-                          }}
-                        />
+                      <div key={key} className="flex flex-col gap-2 w-full">
+                        <div className="text-left px-1">
+                          <span className="text-xs font-bold text-text-main uppercase tracking-wider">
+                            {label}
+                          </span>
+                        </div>
                         {currentPhoto ? (
-                          <>
+                          <div className="relative h-28 w-full rounded-2xl border border-app-border bg-app-bg overflow-hidden shadow-sm">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handlePhotoUpload(key, file);
+                              }}
+                            />
                             <img
                               src={URL.createObjectURL(currentPhoto)}
                               className="absolute inset-0 w-full h-full object-cover"
                               alt={label}
                             />
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
-                              <span className="text-[10px] font-black text-white uppercase tracking-wider">
+                            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center z-20 transition-opacity">
+                              <span className="text-xs font-black text-white uppercase tracking-wider mb-1">
                                 {label}
                               </span>
+                              <span className="text-[10px] text-white/90 uppercase tracking-widest font-bold px-3 py-1 bg-black/30 rounded-full">
+                                Toque para alterar
+                              </span>
                             </div>
-                          </>
+                          </div>
                         ) : (
-                          <div className="space-y-1.5">
-                            <Camera
-                              size={24}
-                              className="mx-auto text-text-muted"
-                            />
-                            <span className="text-[10px] font-bold text-text-main uppercase tracking-wider block">
-                              {label}
-                            </span>
+                          <div className="grid grid-cols-2 gap-3 h-20">
+                            <div className="relative rounded-xl border border-app-border bg-app-bg hover:bg-zinc-50 transition-colors flex flex-col items-center justify-center overflow-hidden shadow-sm">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handlePhotoUpload(key, file);
+                                }}
+                              />
+                              <Camera size={20} className="text-primary mb-1" />
+                              <span className="text-[10px] font-black text-text-main uppercase tracking-wider">Câmera</span>
+                            </div>
+                            <div className="relative rounded-xl border border-app-border bg-app-bg hover:bg-zinc-50 transition-colors flex flex-col items-center justify-center overflow-hidden shadow-sm">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handlePhotoUpload(key, file);
+                                }}
+                              />
+                              <ImageIcon size={20} className="text-emerald-500 mb-1" />
+                              <span className="text-[10px] font-black text-text-main uppercase tracking-wider">Galeria</span>
+                            </div>
                           </div>
                         )}
                       </div>
