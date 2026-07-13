@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { motion } from 'motion/react';
-import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer, Plus, PlusCircle, Trash2, Droplet, Camera } from 'lucide-react';
+import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer, Plus, PlusCircle, Trash2, Droplet, Camera, BarChart2 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { usePersistentState } from '@/src/hooks/usePersistentState';
 import PrintHeader from './PrintHeader';
 
 export default function AveragesTab() {
-  const [activeTab, setActiveTab] = usePersistentState<'vehicles' | 'drivers' | 'schedules'>('averages_activeTab', 'vehicles');
+  const [activeTab, setActiveTab] = usePersistentState<'vehicles' | 'drivers' | 'schedules' | 'charts'>('averages_activeTab', 'vehicles');
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [fuelLiterItems, setFuelLiterItems] = useState<any[]>([]);
@@ -647,7 +648,8 @@ export default function AveragesTab() {
   const tabs = [
     { id: 'vehicles', label: 'Médias por Veículo' },
     { id: 'drivers', label: 'Médias por Motorista' },
-    { id: 'schedules', label: 'Histórico de Médias (Individual)' }
+    { id: 'schedules', label: 'Histórico de Médias (Individual)' },
+    { id: 'charts', label: 'Análises Gráficas' }
   ];
 
   if (tableError === 'missing_table') {
@@ -918,6 +920,74 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+
+        {activeTab === 'charts' && (
+          <div className="p-6 space-y-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-col gap-1 text-left">
+                <h3 className="text-xl font-black text-text-main flex items-center gap-2 text-left">
+                  <BarChart2 size={24} className="text-primary" /> Análises Gráficas
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Visão gráfica do consumo médio (Km/L) por veículo e motorista no período selecionado.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Vehicle Chart */}
+              <div className="bg-app-bg border border-app-border rounded-3xl p-6 flex flex-col items-center">
+                <h4 className="text-sm font-black text-text-main mb-6 w-full text-center">Top Médias por Veículo (Km/L)</h4>
+                <div className="w-full h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={Object.values(vehicleAverages).map((v: any) => ({
+                        name: v.plate,
+                        'Média': v.liters > 0 ? Number((v.distance / v.liters).toFixed(2)) : 0
+                      })).filter(d => d['Média'] > 0).sort((a, b) => b['Média'] - a['Média'])}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 40 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} angle={-45} textAnchor="end" />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
+                      <Tooltip 
+                        cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }} 
+                        contentStyle={{ borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Bar dataKey="Média" fill="#4F46E5" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Driver Chart */}
+              <div className="bg-app-bg border border-app-border rounded-3xl p-6 flex flex-col items-center">
+                <h4 className="text-sm font-black text-text-main mb-6 w-full text-center">Top Médias por Motorista (Km/L)</h4>
+                <div className="w-full h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={Object.values(driverAverages).map((d: any) => ({
+                        name: d.name,
+                        'Média': d.liters > 0 ? Number((d.distance / d.liters).toFixed(2)) : 0
+                      })).filter(d => d['Média'] > 0).sort((a, b) => b['Média'] - a['Média'])}
+                      margin={{ top: 10, right: 10, left: -20, bottom: 40 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} angle={-45} textAnchor="end" />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
+                      <Tooltip 
+                        cursor={{ fill: 'rgba(79, 70, 229, 0.05)' }} 
+                        contentStyle={{ borderRadius: '16px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Bar dataKey="Média" fill="#10B981" radius={[6, 6, 0, 0]} maxBarSize={50} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </div>
           </div>
         )}
