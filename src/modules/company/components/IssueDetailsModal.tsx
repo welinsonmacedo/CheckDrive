@@ -231,7 +231,7 @@ export default function IssueDetailsModal({
                   <div>
                     {isResolved ? (
                       <span className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-md uppercase text-[10px] font-black tracking-widest border border-emerald-200 print:border-zinc-900 print:bg-white print:text-zinc-900">
-                        Resolvido
+                        Resolvido{issue.resolution_type ? ` - ${issue.resolution_type === 'preventiva' ? 'Preventiva' : 'Corretiva'}` : ''}
                       </span>
                     ) : isWaiting ? (
                       <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-md uppercase text-[10px] font-black tracking-widest border border-amber-200 print:border-zinc-500 print:bg-white print:text-zinc-500">

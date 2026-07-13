@@ -106,7 +106,7 @@ export default function DefectPrintModal({
                 }`}
               >
                 {defect.status === "resolved" ? (
-                  <><CheckCircle2 size={14} /> Resolvido</>
+                  <><CheckCircle2 size={14} /> Resolvido{defect.resolution_type ? ` - ${defect.resolution_type === 'preventiva' ? 'Preventiva' : 'Corretiva'}` : ''}</>
                 ) : defect.status === "waiting" ? (
                   <><Clock size={14} /> Aguardando</>
                 ) : (
