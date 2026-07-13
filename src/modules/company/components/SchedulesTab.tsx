@@ -648,7 +648,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                               const pwd = "Pw@" + btoa(email).replace(/[^a-zA-Z0-9]/g, "").substring(0, 10) + "Xy9";
                               const link = `${window.location.origin}/quick-login?e=${encodeURIComponent(email)}&p=${encodeURIComponent(pwd)}&s=${sch.id}`;
                               navigator.clipboard.writeText(link);
-                              alert("Link de acesso temporário copiado para a área de transferência!");
+                              
+                              const expiresAt = new Date(new Date(sch.start_at).getTime() + 24 * 60 * 60 * 1000);
+                              const formatted = expiresAt.toLocaleString('pt-BR');
+                              alert(`Link de acesso copiado!\n\nEle expira em 24h a partir do início da escala:\n${formatted}`);
                             }}
                             className="text-orange-500 hover:underline text-[10px] font-bold"
                             title="Gerar link de acesso sem login"

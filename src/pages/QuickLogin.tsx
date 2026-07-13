@@ -51,7 +51,7 @@ export default function QuickLogin() {
             const now = Date.now();
             if (now - startAt > 24 * 60 * 60 * 1000) {
               await supabase.auth.signOut();
-              throw new Error('Este link de acesso expirou (válido por 24 horas após o início da escala).');
+              throw new Error('Este link de acesso expirou (válido por 24 horas a partir da data de início de viagem da escala).');
             }
           }
         }
