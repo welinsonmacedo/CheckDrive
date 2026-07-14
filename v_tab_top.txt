@@ -1,0 +1,300 @@
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/src/lib/supabase";
+import { CheckCircle2, Search, X, Eye } from "lucide-react";
+import VehicleDetailsModal from "@/src/modules/company/components/VehicleDetailsModal";
+import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
+
+export default function VehiclesTab() {
+  const { user } = useAuth();
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [trailers, setTrailers] = useState<any[]>([]);
+  const [types, setTypes] = useState<any[]>([]);
+  const [models, setModels] = useState<any[]>([]);
+  const [modalities, setModalities] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+
+  const [vehicleForm, setVehicleForm] = useState<any>({
+    id: "",
+    plate: "",
+    model: "",
+    type: "",
+    requires_trailer: false,
+    modality_id: "",
+    renavam: "",
+    manufacture_year: "",
+    model_year: "",
+    crv_number: "",
+    fuel_type: "",
+    color: "",
+    antt: "",
+    insurance_id: "",
+    photo_front_url: "",
+    photo_right_url: "",
+    photo_left_url: "",
+    photo_rear_url: "",
+    doc_crlv_url: "",
+    doc_antt_url: "",
+    doc_insurance_url: "",
+  });
+
+  const [insurances, setInsurances] = useState<any[]>([]);
+  const [dbError, setDbError] = useState(false);
+  const [photoFrontFile, setPhotoFrontFile] = useState<File | null>(null);
+  const [photoRightFile, setPhotoRightFile] = useState<File | null>(null);
+  const [photoLeftFile, setPhotoLeftFile] = useState<File | null>(null);
+  const [photoRearFile, setPhotoRearFile] = useState<File | null>(null);
+  const [docCrlvFile, setDocCrlvFile] = useState<File | null>(null);
+  const [docAnttFile, setDocAnttFile] = useState<File | null>(null);
+  const [docInsuranceFile, setDocInsuranceFile] = useState<File | null>(null);
+
+  const [trailerForm, setTrailerForm] = useState({ id: "", plate: "" });
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [vRes, tRes, typesRes, modelsRes, modRes, insurancesRes] = await Promise.all([
+        supabase.from("vehicles").select("*, vehicle_modalities(name)")
+          .eq("company_id", user?.company_id)
+          .order("plate"),
+        supabase.from("trailers").select("*").eq("company_id", user?.company_id).order("plate"),
+        supabase.from("vehicle_types").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("vehicle_models").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("insurances").select("*").eq("company_id", user?.company_id).order("name"),
+      ]);
+      setVehicles(vRes.data || []);
+      setTrailers(tRes.data || []);
+      setTypes(typesRes.data || []);
+      setModels(modelsRes.data || []);
+      setModalities(modRes.data || []);
+      if (insurancesRes.error && insurancesRes.error.code !== '42P01') { console.error(insurancesRes.error); } else if (insurancesRes.data) { setInsurances(insurancesRes.data); }
+    } catch (error) {
+      console.error("Error fetching vehicles:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const checkVehicleLimit = async (): Promise<boolean> => {
+    if (!user?.company_id) return true;
+    try {
+      const { data: company, error: companyErr } = await supabase
+        .from('companies')
+        .select('max_vehicles')
+        .eq('id', user.company_id)
+        .single();
+      
+      if (companyErr || !company) {
+        console.warn("Could not fetch company limits, skipping check.", companyErr);
+        return true;
+      }
+
+      const { count, error: countErr } = await supabase.from('vehicles').select('*', { count: 'exact', head: true }).eq("company_id", user?.company_id)
+        .eq('company_id', user.company_id)
+        .eq('active', true);
+
+      if (countErr) {
+        console.warn("Could not query vehicles count, skipping check.", countErr);
+        return true;
+      }
+
+      const limit = company.max_vehicles || 10;
+      if ((count || 0) >= limit) {
+        alert(`Limite de veículos do seu plano atingido (${limit} veículos). Entre em contato para fazer um upgrade.`);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error("Error checking vehicle limits:", e);
+      return true;
+    }
+  };
+
+  
+  const handleSaveVehicle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      let isAllowed = true;
+      if (!vehicleForm.id) {
+         isAllowed = await checkVehicleLimit();
+      }
+      if (!isAllowed) {
+        setSaving(false);
+        return;
+      }
+
+      const uploadFile = async (file: File | null, existingUrl: string) => {
+        if (!file) return existingUrl;
+        const ext = file.name.split('.').pop();
+        const fileName = `${user?.company_id}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+        const { data, error } = await supabase.storage.from("vehicles-docs").upload(fileName, file);
+        if (error) {
+          console.error("Upload error", error);
+          if (error.message.includes("Bucket not found")) {
+            setDbError(true);
+          }
+          return existingUrl;
+        }
+        return data.path;
+      };
+
+      const payload = {
+        plate: vehicleForm.plate,
+        model: vehicleForm.model,
+        type: vehicleForm.type,
+        requires_trailer: vehicleForm.requires_trailer,
+        modality_id: vehicleForm.modality_id || null,
+        renavam: vehicleForm.renavam || null,
+        manufacture_year: vehicleForm.manufacture_year || null,
+        model_year: vehicleForm.model_year || null,
+        crv_number: vehicleForm.crv_number || null,
+        fuel_type: vehicleForm.fuel_type || null,
+        color: vehicleForm.color || null,
+        antt: vehicleForm.antt || null,
+        insurance_id: vehicleForm.insurance_id || null,
+        company_id: user?.company_id,
+        photo_front_url: await uploadFile(photoFrontFile, vehicleForm.photo_front_url),
+        photo_right_url: await uploadFile(photoRightFile, vehicleForm.photo_right_url),
+        photo_left_url: await uploadFile(photoLeftFile, vehicleForm.photo_left_url),
+        photo_rear_url: await uploadFile(photoRearFile, vehicleForm.photo_rear_url),
+        doc_crlv_url: await uploadFile(docCrlvFile, vehicleForm.doc_crlv_url),
+        doc_antt_url: await uploadFile(docAnttFile, vehicleForm.doc_antt_url),
+        doc_insurance_url: await uploadFile(docInsuranceFile, vehicleForm.doc_insurance_url),
+      };
+
+      if (vehicleForm.id) {
+        const { error } = await supabase.from("vehicles").update(payload).eq("id", vehicleForm.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("vehicles").insert([payload]);
+        if (error) throw error;
+      }
+
+      setVehicleForm({
+                    id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "",
+                    renavam: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "",
+                    photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "",
+                    doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: ""
+                  });
+                  setPhotoFrontFile(null); setPhotoRightFile(null); setPhotoLeftFile(null); setPhotoRearFile(null);
+                  setDocCrlvFile(null); setDocAnttFile(null); setDocInsuranceFile(null);
+
+      setPhotoFrontFile(null); setPhotoRightFile(null); setPhotoLeftFile(null); setPhotoRearFile(null);
+      setDocCrlvFile(null); setDocAnttFile(null); setDocInsuranceFile(null);
+      fetchData();
+    } catch (error: any) {
+      if (error.code === '42703') {
+        alert("Campos de veículos desatualizados no banco. Por favor adicione as colunas renavam, manufacture_year, model_year, etc à tabela vehicles.");
+        setDbError(true);
+      } else {
+        alert("Erro: " + error.message);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+
+  const handleSaveTrailer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (trailerForm.id) {
+        const { error } = await supabase
+          .from("trailers")
+          .update({
+            plate: trailerForm.plate,
+          })
+          .eq("id", trailerForm.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("trailers").insert([
+          {
+            plate: trailerForm.plate,
+          },
+        ]);
+        if (error) throw error;
+      }
+      setTrailerForm({ id: "", plate: "" });
+      fetchData();
+    } catch (error: any) {
+      alert("Erro: " + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleStatus = async (
+    table: string,
+    id: string,
+    currentStatus: boolean,
+  ) => {
+    if (
+      !window.confirm(
+        `Deseja ${currentStatus ? "desabilitar" : "habilitar"} este registro?`,
+      )
+    )
+      return;
+    try {
+      if (table === "vehicles" && !currentStatus) {
+        const isAllowed = await checkVehicleLimit();
+        if (!isAllowed) return;
+      }
+      const { error } = await supabase
+        .from(table)
+        .update({ active: !currentStatus })
+        .eq("id", id);
+      if (error) throw error;
+      fetchData();
+    } catch (error: any) {
+      console.error("Toggle status error:", error);
+      alert("Erro ao alterar status. Detalhes: " + error.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-8 text-center text-text-muted font-bold text-xs">
+        Carregando veículos...
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className={`grid grid-cols-1 xl:grid-cols-12 gap-6 items-start ${selectedVehicle ? 'print:hidden' : ''}`}>
+        <div className="xl:col-span-8 space-y-6">
+        <div className="bento-card !p-0">
+          <div className="p-5 border-b border-app-border flex items-center justify-between">
+            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+              Veículos na Frota
+            </span>
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+              />
+              <input
+                type="text"
+                placeholder="Filtrar placa..."
+                className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] text-text-main outline-none focus:ring-1 focus:ring-primary w-48 border border-app-border"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-app-bg/50">
+                <tr>
+                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">
+                    Placa
+                  </th>

@@ -42,6 +42,7 @@ export default function MaintenanceTab() {
   const [alertFilter, setAlertFilter] = usePersistentState<
     "all" | "driver" | "alert_km" | "alert_date" | "expired"
   >("maintenance_alertFilter", "all");
+  const [trackingTypeFilter, setTrackingTypeFilter] = usePersistentState<"all" | "km" | "date">("maintenance_trackingTypeFilter", "all");
   const [trackingFilter, setTrackingFilter] = usePersistentState<
     "all" | "overdue" | "near" | "ok"
   >("maintenance_trackingFilter", "all");
@@ -975,6 +976,9 @@ export default function MaintenanceTab() {
 
     if (!matchesSearch) return false;
 
+    if (trackingTypeFilter === "km" && alert.trigger_type !== "km") return false;
+    if (trackingTypeFilter === "date" && alert.trigger_type !== "date") return false;
+
     if (trackingFilter === "all") return true;
 
     const isKm = alert.trigger_type === "km";
@@ -1322,6 +1326,16 @@ export default function MaintenanceTab() {
             </div>
 
             <div className="flex flex-col md:flex-row gap-3">
+              <select
+                value={trackingTypeFilter}
+                onChange={(e) => setTrackingTypeFilter(e.target.value as any)}
+                className="h-9 px-3 bg-app-bg rounded-xl text-xs font-bold text-text-main border border-app-border focus:ring-1 focus:ring-primary focus:outline-none"
+              >
+                <option value="all">Todos os Tipos</option>
+                <option value="km">Por KM</option>
+                <option value="date">Por Data</option>
+              </select>
+
               <select
                 value={trackingFilter}
                 onChange={(e) => setTrackingFilter(e.target.value as any)}

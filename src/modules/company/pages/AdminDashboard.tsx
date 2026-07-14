@@ -8,6 +8,7 @@ import {
   BarChart3,
   LayoutDashboard,
   BookOpen,
+  Shield,
   AlertTriangle,
   ShieldAlert,
   ClipboardCheck,
@@ -57,6 +58,7 @@ import AlertsTab from "@/src/modules/company/components/AlertsTab";
 import InfractionsTab from "@/src/modules/company/components/InfractionsTab";
 import FeedbackTab from "@/src/modules/company/components/FeedbackTab";
 import NotificationsTab from "@/src/modules/company/components/NotificationsTab";
+import InsurancesTab from "@/src/modules/company/components/InsurancesTab";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
 import { GlobalSearch } from "@/src/modules/company/components/GlobalSearch";
@@ -427,6 +429,12 @@ export default function AdminDashboard() {
       color: "from-blue-500 to-indigo-500",
     },
     {
+      id: "insurances",
+      icon: Shield,
+      label: "Seguradoras",
+      color: "from-indigo-500 to-blue-500",
+    },
+    {
       id: "drivers",
       icon: Users,
       label: "Motoristas",
@@ -729,6 +737,7 @@ export default function AdminDashboard() {
               {activeTab === "tracking" && <TrackingTab />}
               {activeTab === "reports" && <ReportsTab />}
               {activeTab === "adm_users" && <AdmUsersTab />}
+              {activeTab === "insurances" && <InsurancesTab />}
               {activeTab === "drivers" && <DriversTab />}
               {activeTab === "vehicles" && <VehiclesTab />}
               {activeTab === "routes" && <RoutesTab />}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { createClient } from "@supabase/supabase-js";
-import { CheckCircle2, Search, X, Plus, Key } from "lucide-react";
+import { CheckCircle2, Search, X, Plus, Key, ChevronLeft, ChevronRight, Edit2, User } from "lucide-react";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
 export default function DriversTab() {
@@ -10,16 +10,23 @@ export default function DriversTab() {
   const [modalities, setModalities] = useState<any[]>([]);
   const [scoreProfiles, setScoreProfiles] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentUserIndex, setCurrentUserIndex] = useState(0);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [showForm, setShowForm] = useState(false);
 
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [userForm, setUserForm] = useState({
     id: "",
     fullName: "",
     email: "",
     cpf: "",
+    cnhNumber: "",
+    cnhCategory: "",
+    cnhExpirationDate: "",
+    cnhFirstDate: "",
+    photoUrl: "",
     role: "driver",
     password: "",
     driverType: "Interno/Pátio",
@@ -78,9 +85,28 @@ export default function DriversTab() {
     const parsedName = userForm.fullName;
 
     // Create a payload object, wrap in try/catch to gracefully ignore missing columns if user hasn't run schematic yet
-    const updatePayload = {
+    const uploadPhoto = async () => {
+      if (!photoFile) return userForm.photoUrl;
+      const ext = photoFile.name.split('.').pop();
+      const fileName = `${user?.company_id}_${Date.now()}_avatar.${ext}`;
+      const { data, error } = await supabase.storage.from("driver-docs").upload(fileName, photoFile);
+      if (error) {
+        if (error.message.includes("Bucket not found")) alert("Crie o bucket 'driver-docs' no Storage.");
+        return userForm.photoUrl;
+      }
+      return data.path;
+    };
+    
+    const newPhotoUrl = await uploadPhoto();
+    
+    const updatePayload: any = {
       full_name: parsedName,
       cpf: userForm.cpf || null,
+      cnh_number: userForm.cnhNumber || null,
+      cnh_category: userForm.cnhCategory || null,
+      cnh_expiration_date: userForm.cnhExpirationDate || null,
+      cnh_first_date: userForm.cnhFirstDate || null,
+      photo_url: newPhotoUrl || null,
       role: userForm.role,
       driver_type: userForm.driverType,
       participates_in_ranking: userForm.participatesInRanking,
@@ -102,6 +128,11 @@ export default function DriversTab() {
             .update({
               full_name: parsedName,
               cpf: userForm.cpf || null,
+              cnh_number: userForm.cnhNumber || null,
+              cnh_category: userForm.cnhCategory || null,
+              cnh_expiration_date: userForm.cnhExpirationDate || null,
+              cnh_first_date: userForm.cnhFirstDate || null,
+              photo_url: newPhotoUrl || null,
               role: userForm.role,
             })
             .eq("id", userForm.id);
@@ -195,8 +226,13 @@ export default function DriversTab() {
         modalityIds: [],
         scoreProfileId: "",
         isAuthUser: true,
+        cnhNumber: "",
+        cnhCategory: "",
+        cnhExpirationDate: "",
+        cnhFirstDate: "",
+        photoUrl: "",
       });
-
+      setPhotoFile(null);
       setShowForm(false);
 
       fetchUsers();
@@ -316,170 +352,195 @@ export default function DriversTab() {
     );
   }
 
+  const filteredUsers = users.filter((u) => u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || u.email?.toLowerCase().includes(searchTerm.toLowerCase()));
+  const currentUser = filteredUsers[currentUserIndex];
+
   return (
     <div className="flex-1 gap-6 items-start">
       {/* LISTA */}
       <div className="xl:col-span-8 bento-card !p-0">
         <div className="p-5 border-b border-app-border flex items-center justify-between">
           <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
-            Usuários Cadastrados
+            Motoristas / Usuários ({filteredUsers.length})
           </span>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={openCreateForm}
-              className="flex items-center gap-2 px-3 h-8 rounded-lg bg-primary text-white text-[10px] font-bold hover:opacity-90"
-            >
-              <Plus size={14} />
-              Novo
-            </button>
-
-            <div className="relative">
+          <div className="flex items-center justify-end gap-2 sm:gap-4 flex-wrap w-full sm:w-auto">
+            <div className="relative w-full sm:w-auto">
               <Search
                 size={14}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
               />
-
               <input
                 type="text"
                 placeholder="Pesquisar..."
-                className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] text-text-main outline-none focus:ring-1 focus:ring-primary w-48 border border-app-border"
+                className="h-10 pl-9 pr-4 bg-app-bg rounded-xl text-[11px] font-bold text-text-main outline-none focus:ring-1 focus:ring-primary w-full sm:w-64 border border-app-border"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentUserIndex(0);
+                }}
               />
             </div>
+            
+            <button
+              onClick={openCreateForm}
+              className="flex-1 sm:flex-none px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all shadow-sm"
+            >
+              <Plus size={14} /> Novo
+            </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-app-bg/50">
-              <tr>
-                <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                  Nome
-                </th>
+        {filteredUsers.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+              <Search className="text-slate-300" size={24} />
+            </div>
+            <p className="text-text-muted text-sm font-bold">Nenhum usuário encontrado.</p>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-hidden relative bg-white flex flex-col md:flex-row min-h-[400px]">
+            {filteredUsers.length > 1 && (
+              <>
+                <button
+                  onClick={() => setCurrentUserIndex(prev => (prev === 0 ? filteredUsers.length - 1 : prev - 1))}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white border border-app-border rounded-full flex items-center justify-center shadow-sm text-text-muted hover:text-primary z-10 hover:scale-105 transition-all"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button
+                  onClick={() => setCurrentUserIndex(prev => (prev === filteredUsers.length - 1 ? 0 : prev + 1))}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white border border-app-border rounded-full flex items-center justify-center shadow-sm text-text-muted hover:text-primary z-10 hover:scale-105 transition-all"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </>
+            )}
 
-                <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                  E-mail
-                </th>
+            <div className="flex flex-col md:flex-row gap-8 px-4 md:px-12 py-8 w-full max-w-4xl mx-auto">
+              <div className="w-full md:w-1/3 space-y-4">
+                <div className="aspect-square bg-slate-100 rounded-2xl border border-app-border overflow-hidden flex items-center justify-center">
+                  {currentUser.photo_url ? (
+                    <img
+                      src={supabase.storage.from("driver-docs").getPublicUrl(currentUser.photo_url).data.publicUrl}
+                      alt="Foto"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-center p-6 text-slate-400">
+                      <div className="w-16 h-16 bg-slate-200 rounded-full mx-auto mb-3 flex items-center justify-center">
+                        <User size={24} className="opacity-50" />
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider block">
+                        Sem Foto
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                  Tipo de Motorista
-                </th>
+              <div className="w-full md:w-2/3 flex flex-col justify-between">
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-3xl sm:text-4xl font-black text-text-main tracking-tight mb-2">
+                      {currentUser.full_name}
+                    </h2>
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentUser.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {currentUser.active !== false ? 'Ativo' : 'Inativo'}
+                    </span>
+                    <span className="ml-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-100 text-orange-700">
+                      {currentUser.driver_type || "Interno/Pátio"}
+                    </span>
+                  </div>
 
-                <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right">
-                  Ações
-                </th>
-              </tr>
-            </thead>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 pt-4 border-t border-app-border">
+                    <div>
+                      <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">E-mail</span>
+                      <span className="text-sm font-black text-text-main break-all">
+                        {currentUser.email || "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">CPF</span>
+                      <span className="text-sm font-black text-text-main">
+                        {currentUser.cpf || "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">CNH</span>
+                      <span className="text-sm font-black text-text-main">
+                        {currentUser.cnh_number || "N/A"} - {currentUser.cnh_category || "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Validade CNH</span>
+                      <span className="text-sm font-black text-text-main">
+                        {currentUser.cnh_expiration_date ? new Date(currentUser.cnh_expiration_date).toLocaleDateString('pt-BR') : "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Perfil de Pontuação</span>
+                      <span className="text-sm font-black text-text-main">
+                        {currentUser.score_profiles?.name || "N/A"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-            <tbody className="divide-y divide-app-border">
-              {users
-                .filter(
-                  (u) =>
-                    u.full_name
-                      ?.toLowerCase()
-                      .includes(searchTerm.toLowerCase()) ||
-                    u.email?.toLowerCase().includes(searchTerm.toLowerCase()),
-                )
-                .map((user) => {
-                  const cleanName = user.full_name;
-
-                  return (
-                    <tr
-                      key={user.id}
-                      className="hover:bg-app-bg/30 transition-colors"
+                <div className="flex flex-wrap gap-3 pt-6 border-t border-app-border mt-6">
+                  {currentUser.email && (
+                    <button
+                      onClick={() => handleResetPassword(currentUser.email)}
+                      className="flex-1 h-12 bg-app-bg border border-app-border hover:bg-slate-50 text-text-main font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-colors"
+                      title="Redefinir Senha"
                     >
-                      <td className="px-5 py-4">
-                        <span className="text-xs font-bold text-text-main">
-                          {cleanName}
-                        </span>
-                      </td>
+                      <Key size={16} /> Senha
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setUserForm({
+                        id: currentUser.id,
+                        fullName: currentUser.full_name || "",
+                        email: currentUser.email || "",
+                        cpf: currentUser.cpf || "",
+                        cnhNumber: currentUser.cnh_number || "",
+                        cnhCategory: currentUser.cnh_category || "",
+                        cnhExpirationDate: currentUser.cnh_expiration_date || "",
+                        cnhFirstDate: currentUser.cnh_first_date || "",
+                        photoUrl: currentUser.photo_url || "",
+                        role: "driver",
+                        password: "",
+                        driverType: currentUser.driver_type || "Interno/Pátio",
+                        participatesInRanking: currentUser.participates_in_ranking !== false,
+                        modalityIds: currentUser.modality_ids || [],
+                        scoreProfileId: currentUser.score_profile_id || "",
+                        isAuthUser: !!currentUser.email,
+                      });
+                      setShowForm(true);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="flex-1 h-12 bg-app-bg border border-app-border hover:bg-slate-50 text-text-main font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Edit2 size={16} /> Editar
+                  </button>
+                  <button
+                    onClick={() => toggleStatus(currentUser.id, currentUser.active !== false)}
+                    className={`w-12 h-12 flex items-center justify-center rounded-xl transition-colors ${currentUser.active !== false ? "bg-red-50 text-danger hover:bg-red-100" : "bg-green-50 text-success hover:bg-green-100"}`}
+                    title={currentUser.active !== false ? "Desabilitar" : "Habilitar"}
+                  >
+                    {currentUser.active !== false ? <X size={18} /> : <CheckCircle2 size={18} />}
+                  </button>
+                </div>
+              </div>
+            </div>
 
-                      <td className="px-5 py-4 text-xs text-text-muted">
-                        {user.email || "N/A"}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-orange-100 text-orange-700`}
-                        >
-                          {user.driver_type || "Interno/Pátio"}
-                        </span>
-
-                        {user.score_profiles && (
-                          <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-700">
-                            {user.score_profiles.name}
-                          </span>
-                        )}
-
-                        {!user.participates_in_ranking && (
-                          <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-500">
-                            Sem Pontuação
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4 text-right flex gap-2 justify-end">
-                        <button
-                          onClick={() => handleResetPassword(user.email)}
-                          title="Redefinir Senha"
-                          className="p-1.5 rounded-lg text-text-muted hover:bg-zinc-100 hover:text-primary transition-colors"
-                        >
-                          <Key size={16} />
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setUserForm({
-                              id: user.id,
-                              fullName: cleanName || "",
-                              email: user.email || "",
-                              cpf: user.cpf || "",
-                              role: "driver",
-                              password: "",
-                              driverType: user.driver_type || "Interno/Pátio",
-                              participatesInRanking:
-                                user.participates_in_ranking !== false,
-                              modalityIds: user.modality_ids || [],
-                              scoreProfileId: user.score_profile_id || "",
-                              isAuthUser: !!user.email,
-                            });
-
-                            setShowForm(true);
-
-                            window.scrollTo({
-                              top: 0,
-                              behavior: "smooth",
-                            });
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-zinc-100"
-                        >
-                          ✏️
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            toggleStatus(user.id, user.active !== false)
-                          }
-                          className="p-1.5 rounded-lg hover:bg-red-50"
-                        >
-                          {user.active !== false ? (
-                            <X size={14} />
-                          ) : (
-                            <CheckCircle2 size={14} />
-                          )}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-black uppercase text-slate-300 tracking-widest">
+              {currentUserIndex + 1} de {filteredUsers.length}
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* FORMULÁRIO */}
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
@@ -567,6 +628,69 @@ export default function DriversTab() {
                 }
                 className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
               />
+
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  type="text"
+                  placeholder="CNH"
+                  value={userForm.cnhNumber}
+                  onChange={(e) =>
+                    setUserForm({ ...userForm, cnhNumber: e.target.value })
+                  }
+                  className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
+                />
+                <input
+                  type="text"
+                  placeholder="Categoria Habilitação"
+                  value={userForm.cnhCategory}
+                  onChange={(e) =>
+                    setUserForm({ ...userForm, cnhCategory: e.target.value })
+                  }
+                  className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest pl-2 block">1ª Habilitação</label>
+                  <input
+                    type="date"
+                    value={userForm.cnhFirstDate}
+                    onChange={(e) =>
+                      setUserForm({ ...userForm, cnhFirstDate: e.target.value })
+                    }
+                    className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest pl-2 block">Validade CNH</label>
+                  <input
+                    type="date"
+                    value={userForm.cnhExpirationDate}
+                    onChange={(e) =>
+                      setUserForm({ ...userForm, cnhExpirationDate: e.target.value })
+                    }
+                    className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                 <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest pl-2 block">Foto do Motorista</label>
+                 <div className="flex items-center gap-4 bg-app-bg border border-app-border p-2 rounded-lg">
+                   {userForm.photoUrl && !photoFile && (
+                     <img src={supabase.storage.from("driver-docs").getPublicUrl(userForm.photoUrl).data.publicUrl} alt="Foto" className="w-10 h-10 rounded-full object-cover border border-app-border" />
+                   )}
+                   <input
+                     type="file"
+                     accept="image/*"
+                     onChange={(e) =>
+                       setPhotoFile(e.target.files?.[0] || null)
+                     }
+                     className="w-full file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[11px] file:font-black file:uppercase file:tracking-widest file:bg-primary file:text-white hover:file:opacity-90"
+                   />
+                 </div>
+              </div>
 
               {!userForm.id && userForm.isAuthUser && (
                 <input

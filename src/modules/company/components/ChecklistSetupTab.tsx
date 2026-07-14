@@ -25,6 +25,7 @@ export default function ChecklistSetupTab() {
   
   const [saving, setSaving] = useState(false);
   const [editingItemIds, setEditingItemIds] = useState<string[]>([]);
+  const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -129,7 +130,9 @@ export default function ChecklistSetupTab() {
       }
       
       setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
+                      setShowForm(false);
       setEditingItemIds([]);
+      setShowForm(false);
       fetchData();
     } catch (error: any) {
       alert('Erro: ' + error.message);
@@ -175,6 +178,7 @@ export default function ChecklistSetupTab() {
       newOption: ''
     });
     setEditingItemIds(item.ids);
+    setShowForm(true);
   };
 
   const createDefaultTypes = async () => {
@@ -206,7 +210,12 @@ export default function ChecklistSetupTab() {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        <div className="xl:col-span-4 bento-card xl:sticky xl:top-24 self-start order-1 xl:order-2">
+        {showForm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false) }}>
+            <div className="bg-white w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl p-6 sm:p-8 relative">
+              <button onClick={() => setShowForm(false)} className="absolute right-4 top-4 w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-rose-100 hover:text-rose-600 transition-colors">
+                <X size={16}/>
+              </button>
             <div>
               <h3 className="text-sm font-black text-text-main uppercase tracking-tight">{editingItemIds.length > 0 ? "Editando Item" : "Novo Item"}</h3>
               <p className="text-xs text-text-muted mt-1">{editingItemIds.length > 0 ? "Altere onde este item deve aparecer" : "Cadastre os itens e marque para qual tipo ele deve aparecer."}</p>
@@ -372,7 +381,9 @@ export default function ChecklistSetupTab() {
                     type="button"
                     onClick={() => {
                       setEditingItemIds([]);
+      setShowForm(false);
                       setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
+                      setShowForm(false);
                     }}
                     className="h-10 px-4 bg-zinc-200 text-zinc-700 flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:bg-zinc-300 transition-colors"
                   >
@@ -390,10 +401,27 @@ export default function ChecklistSetupTab() {
               </div>
           </form>
         </div>
+      </div>
+      )}
 
-        <div className="xl:col-span-8 bento-card !p-0 order-2 xl:order-1">
-          <div className="overflow-x-auto">
-             <table className="w-full text-left">
+                <div className="xl:col-span-12 bento-card !p-0 order-2 xl:order-1">
+          <div className="p-5 border-b border-app-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+              Itens do Checklist
+            </span>
+            <button
+              onClick={() => {
+                setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
+                setEditingItemIds([]);
+                setShowForm(true);
+              }}
+              className="px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-sm"
+            >
+              <Plus size={14} /> Novo Item
+            </button>
+          </div>
+          <div className="overflow-x-auto"> 
+            <table className="w-full text-left">
               <thead className="bg-app-bg/50">
                 <tr>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Item / Pergunta</th>

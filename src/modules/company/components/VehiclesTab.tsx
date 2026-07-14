@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
-import { CheckCircle2, Search, X, Eye } from "lucide-react";
+import { CheckCircle2, Search, X, Eye, Plus, ChevronLeft, ChevronRight, Edit2 } from "lucide-react";
 import VehicleDetailsModal from "@/src/modules/company/components/VehicleDetailsModal";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
@@ -14,42 +14,50 @@ export default function VehiclesTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+  const [formType, setFormType] = useState<"vehicle" | "trailer">("vehicle");
+  const [currentVehicleIndex, setCurrentVehicleIndex] = useState(0);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isTrailerFormOpen, setIsTrailerFormOpen] = useState(false);
 
-  const [vehicleForm, setVehicleForm] = useState<{
-    id: string;
-    plate: string;
-    model: string;
-    type: string;
-    requires_trailer: boolean;
-    modality_id: string;
-  }>({
-    id: "",
-    plate: "",
-    model: "",
-    type: "",
-    requires_trailer: false,
-    modality_id: "",
+  const [itemForm, setItemForm] = useState<any>({
+    id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "",
+    renavam: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "",
+    photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "",
+    doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "",
   });
+
+  const [insurances, setInsurances] = useState<any[]>([]);
+  const [dbError, setDbError] = useState(false);
+  
+  const [photoFrontFile, setPhotoFrontFile] = useState<File | null>(null);
+  const [photoRightFile, setPhotoRightFile] = useState<File | null>(null);
+  const [photoLeftFile, setPhotoLeftFile] = useState<File | null>(null);
+  const [photoRearFile, setPhotoRearFile] = useState<File | null>(null);
+  const [docCrlvFile, setDocCrlvFile] = useState<File | null>(null);
+  const [docAnttFile, setDocAnttFile] = useState<File | null>(null);
+  const [docInsuranceFile, setDocInsuranceFile] = useState<File | null>(null);
+
   const [trailerForm, setTrailerForm] = useState({ id: "", plate: "" });
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vRes, tRes, typesRes, modelsRes, modRes] = await Promise.all([
-        supabase.from("vehicles").select("*, vehicle_modalities(name)")
-          .eq("company_id", user?.company_id)
-          .order("plate"),
+      const [vRes, tRes, typesRes, modelsRes, modRes, insurancesRes] = await Promise.all([
+        supabase.from("vehicles").select("*, vehicle_modalities(name)").eq("company_id", user?.company_id).order("plate"),
         supabase.from("trailers").select("*").eq("company_id", user?.company_id).order("plate"),
         supabase.from("vehicle_types").select("*").eq("company_id", user?.company_id).order("name"),
         supabase.from("vehicle_models").select("*").eq("company_id", user?.company_id).order("name"),
         supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("insurances").select("*").eq("company_id", user?.company_id).order("name"),
       ]);
       setVehicles(vRes.data || []);
       setTrailers(tRes.data || []);
       setTypes(typesRes.data || []);
       setModels(modelsRes.data || []);
       setModalities(modRes.data || []);
+      if (insurancesRes.error && insurancesRes.error.code !== '42P01') { console.error(insurancesRes.error); } else if (insurancesRes.data) { setInsurances(insurancesRes.data); }
     } catch (error) {
       console.error("Error fetching vehicles:", error);
     } finally {
@@ -64,26 +72,10 @@ export default function VehiclesTab() {
   const checkVehicleLimit = async (): Promise<boolean> => {
     if (!user?.company_id) return true;
     try {
-      const { data: company, error: companyErr } = await supabase
-        .from('companies')
-        .select('max_vehicles')
-        .eq('id', user.company_id)
-        .single();
-      
-      if (companyErr || !company) {
-        console.warn("Could not fetch company limits, skipping check.", companyErr);
-        return true;
-      }
-
-      const { count, error: countErr } = await supabase.from('vehicles').select('*', { count: 'exact', head: true }).eq("company_id", user?.company_id)
-        .eq('company_id', user.company_id)
-        .eq('active', true);
-
-      if (countErr) {
-        console.warn("Could not query vehicles count, skipping check.", countErr);
-        return true;
-      }
-
+      const { data: company, error: companyErr } = await supabase.from('companies').select('max_vehicles').eq('id', user.company_id).single();
+      if (companyErr || !company) return true;
+      const { count, error: countErr } = await supabase.from('vehicles').select('*', { count: 'exact', head: true }).eq("company_id", user?.company_id).eq('active', true);
+      if (countErr) return true;
       const limit = company.max_vehicles || 10;
       if ((count || 0) >= limit) {
         alert(`Limite de veículos do seu plano atingido (${limit} veículos). Entre em contato para fazer um upgrade.`);
@@ -91,577 +83,379 @@ export default function VehiclesTab() {
       }
       return true;
     } catch (e) {
-      console.error("Error checking vehicle limits:", e);
       return true;
     }
   };
 
-  const handleSaveVehicle = async (e: React.FormEvent) => {
+  const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      if (vehicleForm.id) {
-        const { error } = await supabase
-          .from("vehicles")
-          .update({
-            plate: vehicleForm.plate,
-            model: vehicleForm.model,
-            type: vehicleForm.type,
-            requires_trailer: vehicleForm.requires_trailer,
-            modality_id: vehicleForm.modality_id || null,
-          })
-          .eq("id", vehicleForm.id);
-        if (error) throw error;
-      } else {
-        const isAllowed = await checkVehicleLimit();
-        if (!isAllowed) {
-          setSaving(false);
-          return;
+      let isAllowed = true;
+      if (!itemForm.id) {
+         isAllowed = await checkVehicleLimit();
+      }
+      if (!isAllowed) {
+        setSaving(false);
+        return;
+      }
+
+      const uploadFile = async (file: File | null, existingUrl: string) => {
+        if (!file) return existingUrl;
+        const ext = file.name.split('.').pop();
+        const fileName = `${user?.company_id}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+        const { data, error } = await supabase.storage.from("vehicles-docs").upload(fileName, file);
+        if (error) {
+          if (error.message.includes("Bucket not found")) setDbError(true);
+          return existingUrl;
         }
-        const { error } = await supabase.from("vehicles").insert([
-          {
-            plate: vehicleForm.plate,
-            model: vehicleForm.model,
-            type: vehicleForm.type,
-            requires_trailer: vehicleForm.requires_trailer,
-            modality_id: vehicleForm.modality_id || null,
-          },
-        ]);
-        if (error) throw error;
-      }
-      setVehicleForm({
-        id: "",
-        plate: "",
-        model: "",
-        type: "",
-        requires_trailer: false,
-        modality_id: "",
-      });
-      fetchData();
-    } catch (error: any) {
-      alert("Erro: " + error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
+        return data.path;
+      };
 
-  const handleSaveTrailer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      if (trailerForm.id) {
-        const { error } = await supabase
-          .from("trailers")
-          .update({
-            plate: trailerForm.plate,
-          })
-          .eq("id", trailerForm.id);
+      const payload = {
+        plate: itemForm.plate, model: itemForm.model, type: itemForm.type, requires_trailer: itemForm.requires_trailer,
+        modality_id: itemForm.modality_id || null, renavam: itemForm.renavam || null, manufacture_year: itemForm.manufacture_year || null,
+        model_year: itemForm.model_year || null, crv_number: itemForm.crv_number || null, fuel_type: itemForm.fuel_type || null,
+        color: itemForm.color || null, antt: itemForm.antt || null, insurance_id: itemForm.insurance_id || null,
+        company_id: user?.company_id,
+        photo_front_url: await uploadFile(photoFrontFile, itemForm.photo_front_url),
+        photo_right_url: await uploadFile(photoRightFile, itemForm.photo_right_url),
+        photo_left_url: await uploadFile(photoLeftFile, itemForm.photo_left_url),
+        photo_rear_url: await uploadFile(photoRearFile, itemForm.photo_rear_url),
+        doc_crlv_url: await uploadFile(docCrlvFile, itemForm.doc_crlv_url),
+        doc_antt_url: await uploadFile(docAnttFile, itemForm.doc_antt_url),
+        doc_insurance_url: await uploadFile(docInsuranceFile, itemForm.doc_insurance_url),
+      };
+
+      if (itemForm.id) {
+        const { error } = await supabase.from(formType === "trailer" ? "trailers" : "vehicles").update(payload).eq("id", itemForm.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("trailers").insert([
-          {
-            plate: trailerForm.plate,
-          },
-        ]);
+        const { error } = await supabase.from(formType === "trailer" ? "trailers" : "vehicles").insert([payload]);
         if (error) throw error;
       }
-      setTrailerForm({ id: "", plate: "" });
+
+      setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", renavam: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" });
+      setPhotoFrontFile(null); setPhotoRightFile(null); setPhotoLeftFile(null); setPhotoRearFile(null);
+      setDocCrlvFile(null); setDocAnttFile(null); setDocInsuranceFile(null);
+      setIsFormOpen(false);
       fetchData();
     } catch (error: any) {
-      alert("Erro: " + error.message);
+      if (error.code === '42703') {
+        alert(`Campos de ${formType === "trailer" ? "reboques" : "veículos"} desatualizados no banco. Por favor adicione as colunas necessárias à tabela ${formType === "trailer" ? "trailers" : "vehicles"}.`);
+        setDbError(true);
+      } else {
+        alert("Erro: " + error.message);
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  const toggleStatus = async (
-    table: string,
-    id: string,
-    currentStatus: boolean,
-  ) => {
-    if (
-      !window.confirm(
-        `Deseja ${currentStatus ? "desabilitar" : "habilitar"} este registro?`,
-      )
-    )
-      return;
+  const toggleStatus = async (table: string, id: string, currentStatus: boolean) => {
+    if (!window.confirm(`Deseja ${currentStatus ? "desabilitar" : "habilitar"} este registro?`)) return;
     try {
       if (table === "vehicles" && !currentStatus) {
         const isAllowed = await checkVehicleLimit();
         if (!isAllowed) return;
       }
-      const { error } = await supabase
-        .from(table)
-        .update({ active: !currentStatus })
-        .eq("id", id);
+      const { error } = await supabase.from(table).update({ active: !currentStatus }).eq("id", id);
       if (error) throw error;
       fetchData();
     } catch (error: any) {
-      console.error("Toggle status error:", error);
-      alert("Erro ao alterar status. Detalhes: " + error.message);
+      alert("Erro ao alterar status: " + error.message);
     }
   };
 
   if (loading) {
-    return (
-      <div className="p-8 text-center text-text-muted font-bold text-xs">
-        Carregando veículos...
-      </div>
-    );
+    return <div className="p-8 text-center text-text-muted font-bold text-xs">Carregando veículos...</div>;
   }
+
+  
+  const combinedItems = [
+    ...vehicles.map(v => ({ ...v, itemType: 'vehicle' })),
+    ...trailers.map(t => ({ ...t, itemType: 'trailer' }))
+  ];
+
+  const filteredItems = combinedItems.filter((item) => 
+    item.plate?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (item.itemType === 'vehicle' && item.model?.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const currentItem = filteredItems[currentVehicleIndex] || null;
 
   return (
     <>
-      <div className={`grid grid-cols-1 xl:grid-cols-12 gap-6 items-start ${selectedVehicle ? 'print:hidden' : ''}`}>
-        <div className="xl:col-span-8 space-y-6">
-        <div className="bento-card !p-0">
-          <div className="p-5 border-b border-app-border flex items-center justify-between">
-            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
-              Veículos na Frota
-            </span>
-            <div className="relative">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-              />
-              <input
-                type="text"
-                placeholder="Filtrar placa..."
-                className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] text-text-main outline-none focus:ring-1 focus:ring-primary w-48 border border-app-border"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+      <div className={`flex flex-col gap-6 ${selectedVehicle ? 'print:hidden' : ''}`}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="relative w-full sm:w-auto">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"/>
+            <input type="text" placeholder="Filtrar placa ou modelo..." className="h-10 pl-9 pr-4 bg-app-bg rounded-xl text-[11px] font-bold text-text-main outline-none focus:ring-1 focus:ring-primary w-full sm:w-64 border border-app-border" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentVehicleIndex(0); }}/>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-app-bg/50">
-                <tr>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">
-                    Placa
-                  </th>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">
-                    Modelo / Tipo
-                  </th>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">
-                    Modalidade
-                  </th>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">
-                    Reboque
-                  </th>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-app-border">
-                {vehicles.filter(
-                  (v) =>
-                    v.plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    v.model?.toLowerCase().includes(searchTerm.toLowerCase()),
-                ).length > 0 ? (
-                  vehicles
-                    .filter(
-                      (v) =>
-                        v.plate
-                          ?.toLowerCase()
-                          .includes(searchTerm.toLowerCase()) ||
-                        v.model
-                          ?.toLowerCase()
-                          .includes(searchTerm.toLowerCase()),
-                    )
-                    .map((v) => (
-                      <tr key={v.id} className="hover:bg-app-bg/30">
-                        <td className="px-5 py-4 text-xs font-mono font-bold">
-                          {v.plate}
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="text-xs font-bold">{v.model}</div>
-                          <div className="text-[9px] text-text-muted uppercase font-black tracking-widest">
-                            {v.type || "N/A"}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
-                            {v.vehicle_modalities?.name || "Não definida"}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          {v.requires_trailer ? (
-                            <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-700 text-[8px] font-black uppercase">
-                              Obrigatório
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[8px] font-black uppercase">
-                              Não
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-4 text-right flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setSelectedVehicle(v)}
-                            className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-colors"
-                            title="Resumo do Veículo"
-                          >
-                            <Eye size={14} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setVehicleForm({
-                                id: v.id,
-                                plate: v.plate || "",
-                                model: v.model || "",
-                                type: v.type || "",
-                                requires_trailer: v.requires_trailer || false,
-                                modality_id: v.modality_id || "",
-                              });
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-zinc-100 text-text-muted hover:text-primary transition-colors"
-                            title="Editar Veículo"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() =>
-                              toggleStatus("vehicles", v.id, v.active !== false)
-                            }
-                            className={`p-1.5 rounded-lg ${v.active !== false ? "hover:bg-red-50 text-text-muted hover:text-danger" : "bg-red-50 text-danger hover:bg-green-50 hover:text-success"} transition-colors`}
-                            title={
-                              v.active !== false ? "Desabilitar" : "Habilitar"
-                            }
-                          >
-                            {v.active !== false ? (
-                              <X size={14} />
-                            ) : (
-                              <CheckCircle2 size={14} />
-                            )}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      className="px-5 py-10 text-center text-xs text-text-muted italic"
-                    >
-                      Nenhum veículo cadastrado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button onClick={() => { setFormType("vehicle"); setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", renavam: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" }); setIsFormOpen(true); }} className="flex-1 sm:flex-none px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all shadow-sm">
+              <Plus size={14}/> Veículo
+            </button>
+            <button onClick={() => { setFormType("trailer"); setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", renavam: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" }); setIsFormOpen(true); }} className="flex-1 sm:flex-none px-4 py-2 bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:bg-slate-200 transition-all shadow-sm">
+              <Plus size={14}/> Reboque
+            </button>
           </div>
         </div>
 
-        <div className="bento-card !p-0">
-          <div className="p-5 border-b border-app-border flex items-center justify-between">
-            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
-              Reboques na Frota
-            </span>
+        {filteredItems.length === 0 ? (
+          <div className="p-12 text-center text-text-muted font-bold text-xs bg-app-bg rounded-2xl border border-app-border">
+            Nenhum veículo ou reboque encontrado para este filtro.
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-app-bg/50">
-                <tr>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">
-                    Placa
-                  </th>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-left">
-                    Status
-                  </th>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest text-right">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-app-border">
-                {trailers.filter((t) =>
-                  t.plate?.toLowerCase().includes(searchTerm.toLowerCase()),
-                ).length > 0 ? (
-                  trailers
-                    .filter((t) =>
-                      t.plate?.toLowerCase().includes(searchTerm.toLowerCase()),
-                    )
-                    .map((t) => (
-                      <tr key={t.id} className="hover:bg-app-bg/30">
-                        <td className="px-5 py-4 text-xs font-mono font-bold">
-                          {t.plate}
-                        </td>
-                        <td className="px-5 py-4">
-                          {t.active !== false ? (
-                            <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 text-[8px] font-black uppercase">
-                              Ativo
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-[8px] font-black uppercase">
-                              Inativo
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-4 text-right flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setTrailerForm({
-                                id: t.id,
-                                plate: t.plate || "",
-                              });
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-zinc-100 text-text-muted hover:text-primary transition-colors"
-                            title="Editar Reboque"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() =>
-                              toggleStatus("trailers", t.id, t.active !== false)
-                            }
-                            className={`p-1.5 rounded-lg ${t.active !== false ? "hover:bg-red-50 text-text-muted hover:text-danger" : "bg-red-50 text-danger hover:bg-green-50 hover:text-success"} transition-colors`}
-                            title={
-                              t.active !== false ? "Desabilitar" : "Habilitar"
-                            }
-                          >
-                            {t.active !== false ? (
-                              <X size={14} />
-                            ) : (
-                              <CheckCircle2 size={14} />
-                            )}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={3}
-                      className="px-5 py-10 text-center text-xs text-text-muted italic"
-                    >
-                      Nenhum reboque cadastrado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <div className="xl:col-span-4 space-y-6 xl:sticky xl:top-24 self-start">
-        <div className="bento-card">
-          <h3 className="text-sm font-black text-text-main mb-6 uppercase tracking-tight">
-            {vehicleForm.id ? "Editar Veículo" : "Novo Veículo"}
-          </h3>
-          <form onSubmit={handleSaveVehicle} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                Placa
-              </label>
-              <input
-                required
-                className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary"
-                placeholder="ABC-1234"
-                value={vehicleForm.plate}
-                onChange={(e) =>
-                  setVehicleForm({
-                    ...vehicleForm,
-                    plate: e.target.value.toUpperCase(),
-                  })
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                Tipo de Veículo
-              </label>
-              <select
-                required
-                className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary"
-                value={vehicleForm.type}
-                onChange={(e) =>
-                  setVehicleForm({
-                    ...vehicleForm,
-                    type: e.target.value,
-                    model: "",
-                  })
-                }
-              >
-                <option value="">Selecione o tipo</option>
-                {types.map((t) => (
-                  <option key={t.id} value={t.name}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                Modelo
-              </label>
-              <select
-                required
-                disabled={!vehicleForm.type}
-                className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary"
-                value={vehicleForm.model}
-                onChange={(e) =>
-                  setVehicleForm({ ...vehicleForm, model: e.target.value })
-                }
-              >
-                <option value="">Selecione o modelo</option>
-                {models
-                  .filter((m) => {
-                    const typeId = types.find(
-                      (t) => t.name === vehicleForm.type,
-                    )?.id;
-                    return m.type_id === typeId;
-                  })
-                  .map((m) => (
-                    <option key={m.id} value={m.name}>
-                      {m.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                Modalidade do Veículo
-              </label>
-              <select
-                className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary"
-                value={vehicleForm.modality_id}
-                onChange={(e) =>
-                  setVehicleForm({
-                    ...vehicleForm,
-                    modality_id: e.target.value,
-                  })
-                }
-              >
-                <option value="">Nenhuma / Geral</option>
-                {modalities.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <input
-                type="checkbox"
-                id="reqTrailer"
-                className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary"
-                checked={vehicleForm.requires_trailer}
-                onChange={(e) =>
-                  setVehicleForm({
-                    ...vehicleForm,
-                    requires_trailer: e.target.checked,
-                  })
-                }
-              />
-              <label
-                htmlFor="reqTrailer"
-                className="text-xs font-bold text-text-main cursor-pointer select-none"
-              >
-                Requer Reboque no Checklist
-              </label>
-            </div>
-
-            <div className="pt-2 flex gap-2">
-              {vehicleForm.id && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setVehicleForm({
-                      id: "",
-                      plate: "",
-                      model: "",
-                      type: "",
-                      requires_trailer: false,
-                      modality_id: "",
-                    })
-                  }
-                  className="flex-1 h-12 bg-app-bg text-text-main border border-app-border font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-100 transition-all shadow-sm"
-                >
-                  Cancelar
+        ) : (
+          <div className="relative bento-card p-6 flex flex-col gap-6 group">
+            {filteredItems.length > 1 && (
+              <>
+                <button onClick={() => setCurrentVehicleIndex(prev => (prev === 0 ? filteredItems.length - 1 : prev - 1))} className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white border border-app-border rounded-full flex items-center justify-center shadow-sm text-text-muted hover:text-primary z-10 hover:scale-105 transition-all">
+                  <ChevronLeft size={20}/>
                 </button>
-              )}
-              <button
-                disabled={saving}
-                className="flex-1 h-12 bg-primary text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:opacity-90 transition-all shadow-sm disabled:opacity-50"
-              >
-                {saving ? "Aguarde..." : "Salvar Veículo"}
+                <button onClick={() => setCurrentVehicleIndex(prev => (prev === filteredItems.length - 1 ? 0 : prev + 1))} className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white border border-app-border rounded-full flex items-center justify-center shadow-sm text-text-muted hover:text-primary z-10 hover:scale-105 transition-all">
+                  <ChevronRight size={20}/>
+                </button>
+              </>
+            )}
+
+            <div className="flex flex-col md:flex-row gap-8 px-4 md:px-10">
+              <div className="w-full md:w-1/3 space-y-4">
+                <div className="aspect-square bg-slate-100 rounded-2xl border border-app-border overflow-hidden flex items-center justify-center">
+                  {currentItem.photo_front_url ? (
+                    <img src={supabase.storage.from("vehicles-docs").getPublicUrl(currentItem.photo_front_url).data.publicUrl} alt="Frontal" className="w-full h-full object-cover"/>
+                  ) : (
+                    <div className="text-center p-6 text-slate-400">
+                      <div className="w-16 h-16 bg-slate-200 rounded-full mx-auto mb-3 flex items-center justify-center">
+                        <CheckCircle2 size={24} className="opacity-50"/>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider block">
+                        {currentItem.itemType === 'vehicle' ? "Sem foto principal" : "Reboque (Sem Foto)"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                    {['photo_right_url', 'photo_left_url', 'photo_rear_url'].map((k, i) => (
+                      <div key={i} className="aspect-square bg-slate-50 border border-app-border rounded-xl flex items-center justify-center overflow-hidden">
+                        {currentItem[k] ? (
+                          <img src={supabase.storage.from("vehicles-docs").getPublicUrl(currentItem[k]).data.publicUrl} className="w-full h-full object-cover"/>
+                        ) : (
+                          <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest text-center px-1">Sem<br/>Foto</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+              </div>
+
+              <div className="w-full md:w-2/3 flex flex-col justify-between">
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-4xl font-black text-text-main font-mono tracking-tight mb-2">{currentItem.plate}</h2>
+                    {currentItem.itemType === 'trailer' && (
+                      <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black uppercase tracking-widest mr-2 border border-slate-200">
+                        Reboque
+                      </span>
+                    )}
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentItem.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {currentItem.active !== false ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 pt-4 border-t border-app-border">
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Modelo</span>
+                        <span className="text-sm font-black text-text-main uppercase">{currentItem.model || "N/I"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Ano Mod/Fab</span>
+                        <span className="text-sm font-black text-text-main uppercase">{currentItem.model_year || "-"} / {currentItem.manufacture_year || "-"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Combustível</span>
+                        <span className="text-sm font-black text-text-main uppercase">{currentItem.fuel_type || "N/I"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Renavam</span>
+                        <span className="text-sm font-black text-text-main font-mono">{currentItem.renavam || "N/I"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Tipo</span>
+                        <span className="text-sm font-black text-text-main uppercase">{types.find((t) => t.id === currentItem.type)?.name || currentItem.type || "N/I"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Modalidade</span>
+                        <span className="text-sm font-black text-text-main uppercase">{modalities.find((m) => m.id === currentItem.modality_id)?.name || "N/I"}</span>
+                      </div>
+                    </div>
+                </div>
+
+                <div className="flex gap-3 pt-6 border-t border-app-border mt-6">
+                  {currentItem.itemType === 'vehicle' && (
+                    <button onClick={() => setSelectedVehicle(currentItem)} className="flex-1 h-12 bg-app-bg border border-app-border hover:bg-slate-50 text-text-main font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-colors">
+                      <Eye size={16}/> Ver Tudo
+                    </button>
+                  )}
+                  <button onClick={() => { 
+                    setFormType(currentItem.itemType); setItemForm({ ...currentItem, photo_front_url: currentItem.photo_front_url || "", photo_right_url: currentItem.photo_right_url || "", photo_left_url: currentItem.photo_left_url || "", photo_rear_url: currentItem.photo_rear_url || "", doc_crlv_url: currentItem.doc_crlv_url || "", doc_antt_url: currentItem.doc_antt_url || "", doc_insurance_url: currentItem.doc_insurance_url || "" }); setIsFormOpen(true);
+                  }} className={`${currentItem.itemType === 'vehicle' ? 'flex-1' : 'w-full'} h-12 bg-app-bg border border-app-border hover:bg-slate-50 text-text-main font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-colors`}>
+                    <Edit2 size={16}/> Editar
+                  </button>
+                  <button onClick={() => toggleStatus(currentItem.itemType === 'vehicle' ? "vehicles" : "trailers", currentItem.id, currentItem.active !== false)} className={`w-12 h-12 flex items-center justify-center rounded-xl transition-colors ${currentItem.active !== false ? "bg-red-50 text-danger hover:bg-red-100" : "bg-green-50 text-success hover:bg-green-100"}`} title={currentItem.active !== false ? "Desabilitar" : "Habilitar"}>
+                    {currentItem.active !== false ? <X size={18}/> : <CheckCircle2 size={18}/>}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-black uppercase text-slate-300 tracking-widest">
+              {currentVehicleIndex + 1} de {filteredItems.length}
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {isFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsFormOpen(false)}/>
+          <div className="relative bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl p-6 sm:p-8 flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-text-main uppercase tracking-tight">
+                {itemForm.id ? `Editar ${formType === "trailer" ? "Reboque" : "Veículo"}` : `Novo ${formType === "trailer" ? "Reboque" : "Veículo"}`}
+              </h3>
+              <button onClick={() => setIsFormOpen(false)} className="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-500 rounded-full hover:bg-rose-100 hover:text-rose-600 transition-colors">
+                <X size={16}/>
               </button>
             </div>
-          </form>
-        </div>
+            
+            <form onSubmit={handleSaveItem} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Placa</label>
+                  <input required className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" placeholder="ABC-1234" value={itemForm.plate} onChange={(e) => setItemForm({ ...itemForm, plate: e.target.value.toUpperCase() })}/>
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Modelo (Marca / Descrição)</label>
+                  <input required className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" placeholder="Ex: Scania R450" value={itemForm.model} onChange={(e) => setItemForm({ ...itemForm, model: e.target.value })}/>
+                </div>
+              </div>
 
-        <div className="bento-card">
-          <h3 className="text-sm font-black text-text-main mb-6 uppercase tracking-tight">
-            {trailerForm.id ? "Editar Reboque" : "Novo Reboque"}
-          </h3>
-          <form onSubmit={handleSaveTrailer} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                Placa do Reboque
-              </label>
-              <input
-                required
-                className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary"
-                placeholder="REB-9999"
-                value={trailerForm.plate}
-                onChange={(e) =>
-                  setTrailerForm({
-                    ...trailerForm,
-                    plate: e.target.value.toUpperCase(),
-                  })
-                }
-              />
-            </div>
-            <div className="pt-2 flex gap-2">
-              {trailerForm.id && (
-                <button
-                  type="button"
-                  onClick={() => setTrailerForm({ id: "", plate: "" })}
-                  className="flex-1 h-12 bg-app-bg text-text-main border border-app-border font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-100 transition-all shadow-sm"
-                >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Tipo de Veículo</label>
+                  <select required className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.type} onChange={(e) => setItemForm({ ...itemForm, type: e.target.value })}>
+                    <option value="">Selecione...</option>
+                    {types.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Modalidade do Veículo</label>
+                  <select className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.modality_id} onChange={(e) => setItemForm({ ...itemForm, modality_id: e.target.value })}>
+                    <option value="">Nenhuma / Geral</option>
+                    {modalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Renavam</label>
+                  <input type="text" className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.renavam} onChange={(e) => setItemForm({...itemForm, renavam: e.target.value})} placeholder="Renavam"/>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Ano de Fabricação</label>
+                  <input type="text" className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.manufacture_year} onChange={(e) => setItemForm({...itemForm, manufacture_year: e.target.value})} placeholder="Ex: 2020"/>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Ano Modelo</label>
+                  <input type="text" className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.model_year} onChange={(e) => setItemForm({...itemForm, model_year: e.target.value})} placeholder="Ex: 2021"/>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Número do CRV</label>
+                  <input type="text" className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.crv_number} onChange={(e) => setItemForm({...itemForm, crv_number: e.target.value})} placeholder="CRV"/>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Tipo Combustível</label>
+                  <input type="text" className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.fuel_type} onChange={(e) => setItemForm({...itemForm, fuel_type: e.target.value})} placeholder="Ex: Diesel"/>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Cor Predominante</label>
+                  <input type="text" className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.color} onChange={(e) => setItemForm({...itemForm, color: e.target.value})} placeholder="Ex: Branco"/>
+                </div>
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Seguradora</label>
+                  <select className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.insurance_id} onChange={(e) => setItemForm({...itemForm, insurance_id: e.target.value})}>
+                    <option value="">Selecione a Seguradora</option>
+                    {insurances.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">ANTT</label>
+                  <input type="text" className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.antt} onChange={(e) => setItemForm({...itemForm, antt: e.target.value})} placeholder="Número ANTT"/>
+                </div>
+              </div>
+
+              {formType === 'vehicle' && (<div className="flex items-center gap-3 pt-2">
+                <input type="checkbox" id="reqTrailer" className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary" checked={itemForm.requires_trailer} onChange={(e) => setItemForm({ ...itemForm, requires_trailer: e.target.checked })}/>
+                <label htmlFor="reqTrailer" className="text-xs font-bold text-text-main cursor-pointer select-none">
+                  Requer Reboque no Checklist
+                </label>
+              </div>)}
+
+              <div className="space-y-4 pt-2">
+                <h3 className="text-[12px] font-bold text-text-main">Fotos (Opcional)</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Frontal</label>
+                    <input type="file" accept="image/*" onChange={(e) => setPhotoFrontFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Lateral Direita</label>
+                    <input type="file" accept="image/*" onChange={(e) => setPhotoRightFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Lateral Esquerda</label>
+                    <input type="file" accept="image/*" onChange={(e) => setPhotoLeftFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Traseira</label>
+                    <input type="file" accept="image/*" onChange={(e) => setPhotoRearFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-2 border-b border-app-border pb-4">
+                <h3 className="text-[12px] font-bold text-text-main">Documentos (PDF/Opcional)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Documento CRLV</label>
+                    <input type="file" accept=".pdf,image/*" onChange={(e) => setDocCrlvFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Documento ANTT</label>
+                    <input type="file" accept=".pdf,image/*" onChange={(e) => setDocAnttFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Apólice Seguro</label>
+                    <input type="file" accept=".pdf,image/*" onChange={(e) => setDocInsuranceFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button type="button" onClick={() => setIsFormOpen(false)} className="flex-1 h-12 bg-app-bg text-text-main border border-app-border font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-100 transition-all shadow-sm">
                   Cancelar
                 </button>
-              )}
-              <button
-                disabled={saving}
-                className="flex-1 h-12 border border-primary text-primary font-black text-[10px] uppercase rounded-xl hover:bg-primary hover:text-white transition-all"
-              >
-                {saving ? "Aguarde..." : "Salvar Reboque"}
-              </button>
-            </div>
-          </form>
+                <button disabled={saving} className="flex-1 h-12 bg-primary text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:opacity-90 transition-all shadow-sm disabled:opacity-50">
+                  {saving ? "Aguarde..." : `Salvar ${formType === "trailer" ? "Reboque" : "Veículo"}`}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
-      </div>
+      )}
 
       {selectedVehicle && (
         <VehicleDetailsModal

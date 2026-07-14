@@ -44,6 +44,9 @@ export default function FuelTab() {
                   Data
                 </th>
                 <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                  Motorista
+                </th>
+                <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
                   Veículo
                 </th>
                 <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
@@ -69,6 +72,9 @@ export default function FuelTab() {
                   <tr key={sub.id}>
                     <td className="px-5 py-4 text-[10px] font-medium text-text-muted">
                       {new Date(sub.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-5 py-4 text-xs font-bold text-text-main">
+                      {sub.profiles?.full_name || sub.driver_profiles?.full_name || "N/I"}
                     </td>
                     <td className="px-5 py-4 text-xs font-mono font-bold text-text-main">
                       {sub.vehicles?.plate}
