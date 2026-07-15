@@ -17,6 +17,7 @@ export default function DriversTab() {
   const [showForm, setShowForm] = useState(false);
 
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [docCnhFile, setDocCnhFile] = useState<File | null>(null);
   const [userForm, setUserForm] = useState({
     id: "",
     fullName: "",
@@ -27,6 +28,7 @@ export default function DriversTab() {
     cnhExpirationDate: "",
     cnhFirstDate: "",
     photoUrl: "",
+    docCnhUrl: "",
     role: "driver",
     password: "",
     driverType: "Interno/Pátio",
@@ -97,7 +99,19 @@ export default function DriversTab() {
       return data.path;
     };
     
+    const uploadDocCnh = async () => {
+      if (!docCnhFile) return userForm.docCnhUrl;
+      const ext = docCnhFile.name.split('.').pop();
+      const fileName = `${user?.company_id}_${Date.now()}_cnh.${ext}`;
+      const { data, error } = await supabase.storage.from("driver-docs").upload(fileName, docCnhFile);
+      if (error) {
+        return userForm.docCnhUrl;
+      }
+      return data.path;
+    };
+    
     const newPhotoUrl = await uploadPhoto();
+    const newDocCnhUrl = await uploadDocCnh();
     
     const updatePayload: any = {
       full_name: parsedName,
@@ -107,6 +121,7 @@ export default function DriversTab() {
       cnh_expiration_date: userForm.cnhExpirationDate || null,
       cnh_first_date: userForm.cnhFirstDate || null,
       photo_url: newPhotoUrl || null,
+      doc_cnh_url: newDocCnhUrl || null,
       role: userForm.role,
       driver_type: userForm.driverType,
       participates_in_ranking: userForm.participatesInRanking,
@@ -133,6 +148,7 @@ export default function DriversTab() {
               cnh_expiration_date: userForm.cnhExpirationDate || null,
               cnh_first_date: userForm.cnhFirstDate || null,
               photo_url: newPhotoUrl || null,
+              doc_cnh_url: newDocCnhUrl || null,
               role: userForm.role,
             })
             .eq("id", userForm.id);
@@ -231,8 +247,10 @@ export default function DriversTab() {
         cnhExpirationDate: "",
         cnhFirstDate: "",
         photoUrl: "",
+        docCnhUrl: "",
       });
       setPhotoFile(null);
+      setDocCnhFile(null);
       setShowForm(false);
 
       fetchUsers();
@@ -473,9 +491,15 @@ export default function DriversTab() {
                       </span>
                     </div>
                     <div>
+                      <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">1ª Habilitação</span>
+                      <span className="text-sm font-black text-text-main">
+                        {currentUser.cnh_first_date ? new Date(currentUser.cnh_first_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "N/A"}
+                      </span>
+                    </div>
+                    <div>
                       <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Validade CNH</span>
                       <span className="text-sm font-black text-text-main">
-                        {currentUser.cnh_expiration_date ? new Date(currentUser.cnh_expiration_date).toLocaleDateString('pt-BR') : "N/A"}
+                        {currentUser.cnh_expiration_date ? new Date(currentUser.cnh_expiration_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "N/A"}
                       </span>
                     </div>
                     <div>
@@ -483,6 +507,35 @@ export default function DriversTab() {
                       <span className="text-sm font-black text-text-main">
                         {currentUser.score_profiles?.name || "N/A"}
                       </span>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Modalidades</span>
+                      <span className="text-sm font-black text-text-main uppercase">
+                        {currentUser.modality_ids && currentUser.modality_ids.length > 0 
+                          ? currentUser.modality_ids.map((id) => modalities.find(m => m.id === id)?.name || id).join(", ")
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Ranking</span>
+                      <span className="text-sm font-black text-text-main uppercase">
+                        {currentUser.participates_in_ranking !== false ? "Participa" : "Não Participa"}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 border-t border-app-border mt-4">
+                    <h4 className="text-[10px] font-black uppercase text-text-muted tracking-wider mb-3">Documentos Anexados (PDF/Fotos)</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {currentUser.photo_url && (
+                        <a href={supabase.storage.from('driver-docs').getPublicUrl(currentUser.photo_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 Foto do Motorista</a>
+                      )}
+                      {currentUser.doc_cnh_url && (
+                        <a href={supabase.storage.from('driver-docs').getPublicUrl(currentUser.doc_cnh_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 CNH</a>
+                      )}
+                      {!currentUser.photo_url && !currentUser.doc_cnh_url && (
+                        <span className="text-[10px] text-slate-400 italic">Nenhum documento anexado</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -509,6 +562,7 @@ export default function DriversTab() {
                         cnhExpirationDate: currentUser.cnh_expiration_date || "",
                         cnhFirstDate: currentUser.cnh_first_date || "",
                         photoUrl: currentUser.photo_url || "",
+                        docCnhUrl: currentUser.doc_cnh_url || "",
                         role: "driver",
                         password: "",
                         driverType: currentUser.driver_type || "Interno/Pátio",
@@ -676,7 +730,24 @@ export default function DriversTab() {
               </div>
               
               <div className="space-y-2">
-                 <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest pl-2 block">Foto do Motorista</label>
+                 <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest pl-2 block">Documento CNH (PDF/Foto)</label>
+                 <div className="flex items-center gap-4 bg-app-bg border border-app-border p-2 rounded-lg">
+                   {userForm.docCnhUrl && !docCnhFile && (
+                     <a href={supabase.storage.from("driver-docs").getPublicUrl(userForm.docCnhUrl).data.publicUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-primary hover:underline">Ver CNH atual</a>
+                   )}
+                   <input
+                     type="file"
+                     accept=".pdf,image/*"
+                     onChange={(e) =>
+                       setDocCnhFile(e.target.files?.[0] || null)
+                     }
+                     className="w-full file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[11px] file:font-black file:uppercase file:tracking-widest file:bg-primary file:text-white hover:file:opacity-90"
+                   />
+                 </div>
+              </div>
+
+              <div className="space-y-2">
+                 <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest pl-2 block">Documento CNH (PDF/Foto)</label>
                  <div className="flex items-center gap-4 bg-app-bg border border-app-border p-2 rounded-lg">
                    {userForm.photoUrl && !photoFile && (
                      <img src={supabase.storage.from("driver-docs").getPublicUrl(userForm.photoUrl).data.publicUrl} alt="Foto" className="w-10 h-10 rounded-full object-cover border border-app-border" />
