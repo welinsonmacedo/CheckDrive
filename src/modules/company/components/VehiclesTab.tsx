@@ -288,6 +288,77 @@ export default function VehiclesTab() {
                         <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Modalidade</span>
                         <span className="text-sm font-black text-text-main uppercase">{modalities.find((m) => m.id === currentItem.modality_id)?.name || "N/I"}</span>
                       </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Cor Predominante</span>
+                        <span className="text-sm font-black text-text-main uppercase">{currentItem.color || "N/I"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">ANTT</span>
+                        <span className="text-sm font-black text-text-main uppercase">{currentItem.antt || "N/I"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Seguradora</span>
+                        <span className="text-sm font-black text-text-main uppercase">{insurances.find((i) => i.id === currentItem.insurance_id)?.name || "N/I"}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-app-border">
+                      <h4 className="text-[10px] font-black uppercase text-text-muted tracking-wider mb-3">Documentos Anexados (PDF/Fotos)</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {currentItem.doc_crlv_url && (
+                          <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.doc_crlv_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 CRLV</a>
+                        )}
+                        {currentItem.doc_antt_url && (
+                          <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.doc_antt_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 ANTT</a>
+                        )}
+                        {currentItem.doc_insurance_url && (
+                          <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.doc_insurance_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 Apólice Seguro</a>
+                        )}
+                        {!currentItem.doc_crlv_url && !currentItem.doc_antt_url && !currentItem.doc_insurance_url && (
+                          <span className="text-[10px] text-slate-400 italic">Nenhum documento anexado</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-app-border">
+                      <h4 className="text-[10px] font-black uppercase text-text-muted tracking-wider mb-3">Galeria do Veículo</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {currentItem.photo_front_url && (
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-bold text-slate-400 text-center block">Frontal</span>
+                            <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_front_url).data.publicUrl} target="_blank" rel="noreferrer">
+                              <img src={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_front_url).data.publicUrl} alt="Frontal" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
+                            </a>
+                          </div>
+                        )}
+                        {currentItem.photo_right_url && (
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-bold text-slate-400 text-center block">Lateral Direita</span>
+                            <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_right_url).data.publicUrl} target="_blank" rel="noreferrer">
+                              <img src={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_right_url).data.publicUrl} alt="Direita" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
+                            </a>
+                          </div>
+                        )}
+                        {currentItem.photo_left_url && (
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-bold text-slate-400 text-center block">Lateral Esquerda</span>
+                            <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_left_url).data.publicUrl} target="_blank" rel="noreferrer">
+                              <img src={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_left_url).data.publicUrl} alt="Esquerda" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
+                            </a>
+                          </div>
+                        )}
+                        {currentItem.photo_rear_url && (
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-bold text-slate-400 text-center block">Traseira</span>
+                            <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_rear_url).data.publicUrl} target="_blank" rel="noreferrer">
+                              <img src={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_rear_url).data.publicUrl} alt="Traseira" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
+                            </a>
+                          </div>
+                        )}
+                        {!currentItem.photo_front_url && !currentItem.photo_right_url && !currentItem.photo_left_url && !currentItem.photo_rear_url && (
+                          <span className="text-[10px] text-slate-400 italic col-span-4">Nenhuma foto anexada</span>
+                        )}
+                      </div>
                     </div>
                 </div>
 
