@@ -298,8 +298,8 @@ export default function ReportsTab() {
   const fetchFleetAgeReport = async () => {
     setLoading(true);
     try {
-      const { data: vData, error: vErr } = await supabase.from("vehicles").select("id, plate, type, manufacture_year, model_year, is_active").eq("company_id", user?.company_id);
-      const { data: tData, error: tErr } = await supabase.from("trailers").select("id, plate, type, manufacture_year, model_year, is_active").eq("company_id", user?.company_id);
+      const { data: vData, error: vErr } = await supabase.from("vehicles").select("id, plate, type, manufacture_year, model_year, active").eq("company_id", user?.company_id);
+      const { data: tData, error: tErr } = await supabase.from("trailers").select("id, plate, type, manufacture_year, model_year, active").eq("company_id", user?.company_id);
       
       if (vErr) throw vErr;
       if (tErr) throw tErr;
@@ -324,7 +324,7 @@ export default function ReportsTab() {
 
       // Filter out non-active if you want, but probably good to see all or filter them. We'll show all active ones by default or just show all.
       // Actually, we'll just show all active ones to reflect the current fleet.
-      const activeItems = enriched.filter(item => item.is_active !== false);
+      const activeItems = enriched.filter(item => item.active !== false);
 
       setFleetAgeData(activeItems);
     } catch (err) {
