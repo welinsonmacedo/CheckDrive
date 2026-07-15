@@ -67,7 +67,7 @@ export default function ReportsTab() {
   const { user } = useAuth();
 
   const [activeReport, setActiveReport] = usePersistentState<
-    "defects" | "pending_by_plate" | "mileage" | "history" | "purchases" | "schedules"
+    "defects" | "pending_by_plate" | "mileage" | "history" | "purchases" | "schedules" | "fleet_age"
   >("reports_activeReport", "defects");
 
   // Date filters
@@ -118,6 +118,8 @@ export default function ReportsTab() {
   // Schedules Data
   const [schedulesData, setSchedulesData] = useState<any[]>([]);
   const [schedulesSearchTerm, setSchedulesSearchTerm] = useState("");
+  const [fleetAgeData, setFleetAgeData] = useState<any[]>([]);
+  const [fleetAgeSearchTerm, setFleetAgeSearchTerm] = useState("");
 
   const fetchHistoryEntities = async () => {
     try {
@@ -293,6 +295,45 @@ export default function ReportsTab() {
     }
   };
 
+  const fetchFleetAgeReport = async () => {
+    setLoading(true);
+    try {
+      const { data: vData, error: vErr } = await supabase.from("vehicles").select("id, plate, type, manufacture_year, model_year, is_active").eq("company_id", user?.company_id);
+      const { data: tData, error: tErr } = await supabase.from("trailers").select("id, plate, type, manufacture_year, model_year, is_active").eq("company_id", user?.company_id);
+      
+      if (vErr) throw vErr;
+      if (tErr) throw tErr;
+
+      const currentYear = new Date().getFullYear();
+      const allItems = [...(vData || []).map(v => ({...v, entityType: 'vehicle'})), ...(tData || []).map(t => ({...t, entityType: 'trailer'}))];
+      
+      const enriched = allItems.map(item => {
+        let age = 0;
+        const year = parseInt(item.model_year || item.manufacture_year || "0", 10);
+        if (year > 1900) {
+          age = currentYear - year;
+        } else {
+          age = -1; // Desconhecido
+        }
+        return {
+          ...item,
+          yearStr: year > 1900 ? year.toString() : "N/A",
+          age
+        };
+      });
+
+      // Filter out non-active if you want, but probably good to see all or filter them. We'll show all active ones by default or just show all.
+      // Actually, we'll just show all active ones to reflect the current fleet.
+      const activeItems = enriched.filter(item => item.is_active !== false);
+
+      setFleetAgeData(activeItems);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeReport === "defects") {
       fetchDefectsReport();
@@ -306,6 +347,8 @@ export default function ReportsTab() {
       fetchPurchasesReport();
     } else if (activeReport === "schedules") {
       fetchSchedulesReport();
+    } else if (activeReport === "fleet_age") {
+      fetchFleetAgeReport();
     }
   }, [activeReport, startDate, endDate]);
 
@@ -602,6 +645,17 @@ export default function ReportsTab() {
               <Calendar size={14} className="stroke-[2.2]" />
               <span>Escalas</span>
             </button>
+            <button
+              onClick={() => setActiveReport("fleet_age")}
+              className={`px-4.5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeReport === "fleet_age"
+                  ? "bg-white text-indigo-600 shadow-sm border border-gray-200/40"
+                  : "text-gray-550 hover:text-gray-800 hover:bg-gray-100/50"
+              }`}
+            >
+              <Activity size={14} className="stroke-[2.2]" />
+              <span>Idade da Frota</span>
+            </button>
           </div>
 
           {/* Date Picker Ribbon */}
@@ -645,6 +699,7 @@ export default function ReportsTab() {
                   fetchHistoryReport(selectedHistoryEntityId);
                 else if (activeReport === "purchases") fetchPurchasesReport();
                 else if (activeReport === "schedules") fetchSchedulesReport();
+                else if (activeReport === "fleet_age") fetchFleetAgeReport();
               }}
               className="h-10 w-10 bg-white border border-gray-200 hover:border-gray-300 rounded-xl hover:bg-gray-50 flex items-center justify-center transition-colors shadow-sm text-gray-500 hover:text-indigo-600 shrink-0"
               title="Recarregar Relatório"
@@ -670,6 +725,7 @@ export default function ReportsTab() {
                 {activeReport === "history" && "Histórico do Veículo"}
                 {activeReport === "purchases" && "Histórico de Manutenções"}
                 {activeReport === "schedules" && "Histórico de Agendamentos"}
+                {activeReport === "fleet_age" && "Idade da Frota"}
 
               </h1>
             </div>
@@ -1723,6 +1779,107 @@ export default function ReportsTab() {
                               </td>
                             </tr>
                           ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeReport === "fleet_age" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 print:hidden flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                  <div className="flex-1 w-full max-w-sm relative">
+                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por placa..."
+                      value={fleetAgeSearchTerm}
+                      onChange={(e) => setFleetAgeSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Dashboard Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:hidden">
+                  <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-sm flex flex-col items-center text-center">
+                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-1">Total de Veículos</span>
+                    <span className="text-3xl font-black text-gray-900">{fleetAgeData.length}</span>
+                  </div>
+                  <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 shadow-sm flex flex-col items-center text-center">
+                    <span className="text-[10px] font-black uppercase text-emerald-600/80 tracking-widest mb-1">Média de Idade</span>
+                    <span className="text-3xl font-black text-emerald-700">
+                      {(fleetAgeData.filter(v => v.age >= 0).reduce((acc, v) => acc + v.age, 0) / (fleetAgeData.filter(v => v.age >= 0).length || 1)).toFixed(1)} <span className="text-sm font-bold opacity-70">anos</span>
+                    </span>
+                  </div>
+                  <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 shadow-sm flex flex-col items-center text-center">
+                    <span className="text-[10px] font-black uppercase text-amber-600/80 tracking-widest mb-1">Mais Antigo</span>
+                    <span className="text-3xl font-black text-amber-700">
+                      {Math.max(0, ...fleetAgeData.filter(v => v.age >= 0).map(v => v.age))} <span className="text-sm font-bold opacity-70">anos</span>
+                    </span>
+                  </div>
+                  <div className="bg-indigo-50 p-5 rounded-2xl border border-indigo-100 shadow-sm flex flex-col items-center text-center">
+                    <span className="text-[10px] font-black uppercase text-indigo-600/80 tracking-widest mb-1">Novos (0-3 anos)</span>
+                    <span className="text-3xl font-black text-indigo-700">
+                      {fleetAgeData.filter(v => v.age >= 0 && v.age <= 3).length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden flex flex-col print:shadow-none print:border-none print:overflow-visible">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead className="bg-gray-50/50 text-gray-500 font-bold text-[10px] uppercase tracking-wider print:bg-white print:text-black">
+                        <tr>
+                          <th className="px-5 py-4 border-b border-gray-200">Tipo</th>
+                          <th className="px-5 py-4 border-b border-gray-200">Placa</th>
+                          <th className="px-5 py-4 border-b border-gray-200">Categoria</th>
+                          <th className="px-5 py-4 border-b border-gray-200 text-center">Ano Fab/Mod</th>
+                          <th className="px-5 py-4 border-b border-gray-200 text-center">Idade</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 print:divide-black">
+                        {fleetAgeData
+                          .filter(v => v.plate?.toLowerCase().includes(fleetAgeSearchTerm.toLowerCase()))
+                          .sort((a, b) => b.age - a.age)
+                          .map((v, i) => (
+                            <tr key={v.id || i} className="hover:bg-gray-50/50 transition-colors print:break-inside-avoid">
+                              <td className="px-5 py-4 font-bold text-gray-900 uppercase text-xs">
+                                {v.entityType === 'vehicle' ? 'Veículo' : 'Reboque'}
+                              </td>
+                              <td className="px-5 py-4 font-black text-indigo-600 uppercase">
+                                {v.plate}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-semibold text-gray-600">
+                                {v.type || "-"}
+                              </td>
+                              <td className="px-5 py-4 text-center text-xs font-mono font-bold text-gray-600">
+                                {v.manufacture_year || "-"}/{v.model_year || "-"}
+                              </td>
+                              <td className="px-5 py-4 text-center">
+                                {v.age >= 0 ? (
+                                  <span className={`inline-flex px-2 py-1 rounded-md text-xs font-black uppercase tracking-wider ${
+                                    v.age <= 3 ? 'bg-indigo-50 text-indigo-700' :
+                                    v.age <= 6 ? 'bg-emerald-50 text-emerald-700' :
+                                    v.age <= 10 ? 'bg-amber-50 text-amber-700' :
+                                    'bg-rose-50 text-rose-700'
+                                  }`}>
+                                    {v.age} {v.age === 1 ? 'ano' : 'anos'}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 text-xs font-bold uppercase">N/A</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        }
+                        {fleetAgeData.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-5 py-8 text-center text-sm font-bold text-gray-500">
+                              Nenhum veículo encontrado na frota.
+                            </td>
+                          </tr>
                         )}
                       </tbody>
                     </table>
