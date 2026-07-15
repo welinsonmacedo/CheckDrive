@@ -3001,8 +3001,8 @@ export default function MaintenanceTab() {
                                     <input
                                       className="w-full bg-white px-3 py-2 border border-zinc-200 rounded-xl text-xs font-mono text-zinc-700 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all hover:border-zinc-300"
                                       type="text"
-                                      maxLength={44}
-                                      placeholder="Insira a chave de 44 dígitos numéricos"
+                                      maxLength={100}
+                                      placeholder="Insira a chave/número (padrão 44 dígitos)"
                                       value={nf.nf_key}
                                       onChange={(e) => {
                                         const val = e.target.value.replace(
@@ -3015,9 +3015,8 @@ export default function MaintenanceTab() {
                                       }}
                                     />
                                     {nf.nf_key && nf.nf_key.length !== 44 && (
-                                      <span className="text-[10px] text-orange-655 block mt-1 font-semibold animate-pulse">
-                                        Aviso: Deve conter exatamente 44 dígitos (
-                                        {nf.nf_key.length}/44).
+                                      <span className="text-[10px] text-orange-655 block mt-1 font-semibold">
+                                        Aviso: Chave padrão possui 44 dígitos ({nf.nf_key.length}).
                                       </span>
                                     )}
                                   </div>
