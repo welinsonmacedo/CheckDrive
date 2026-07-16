@@ -624,7 +624,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                             Editar
                           </button>
                         )}
-                        {sch.profiles?.email?.endsWith('@noemail.local') && (
+                        {sch.profiles?.email && (
                           <button
                             onClick={() => {
                               const email = sch.profiles.email;
@@ -642,7 +642,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                             Copiar Link
                           </button>
                         )}
-                        {sch.profiles?.email?.endsWith('@noemail.local') && (
+                        {sch.profiles?.email && (
                           <button
                             onClick={() => setSelectedPrintSchedule(sch)}
                             className="text-blue-500 hover:underline text-[10px] font-bold ml-3"
