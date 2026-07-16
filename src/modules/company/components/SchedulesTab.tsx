@@ -744,7 +744,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                     className="text-xs font-bold"
                     placeholder="Selecionar veículo..."
                     isClearable
-                    options={vehicles.map((v) => ({
+                    options={vehicles.filter(v => {
+                      const drv = users.find(u => u.id === scheduleForm.driver_id);
+                      if (!drv || !drv.modality_ids || drv.modality_ids.length === 0) return true;
+                      return drv.modality_ids.includes(v.modality_id || "");
+                    }).map((v) => ({
                       value: v.id,
                       label: `${v.plate} (${v.type || "N/A"})`,
                     }))}
@@ -899,10 +903,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                         className="text-[11px] font-bold"
                         placeholder="Nenhuma"
                         isClearable
-                        options={baits.map((b) => ({
-                          value: b.id,
-                          label: `${b.name} (${b.identifier || 'S/N'})`,
-                        }))}
+                        options={baits.filter(b => b.id === scheduleForm.bait1_id || ![scheduleForm.bait2_id, scheduleForm.bait3_id].includes(b.id)).map((b) => ({ value: b.id, label: `${b.name} (${b.identifier || 'S/N'})` }))}
                         value={
                           baits
                             .map((b) => ({
@@ -928,10 +929,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                         className="text-[11px] font-bold"
                         placeholder="Nenhuma"
                         isClearable
-                        options={baits.map((b) => ({
-                          value: b.id,
-                          label: `${b.name} (${b.identifier || 'S/N'})`,
-                        }))}
+                        options={baits.filter(b => b.id === scheduleForm.bait2_id || ![scheduleForm.bait1_id, scheduleForm.bait3_id].includes(b.id)).map((b) => ({ value: b.id, label: `${b.name} (${b.identifier || 'S/N'})` }))}
                         value={
                           baits
                             .map((b) => ({
@@ -957,10 +955,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                         className="text-[11px] font-bold"
                         placeholder="Nenhuma"
                         isClearable
-                        options={baits.map((b) => ({
-                          value: b.id,
-                          label: `${b.name} (${b.identifier || 'S/N'})`,
-                        }))}
+                        options={baits.filter(b => b.id === scheduleForm.bait3_id || ![scheduleForm.bait1_id, scheduleForm.bait2_id].includes(b.id)).map((b) => ({ value: b.id, label: `${b.name} (${b.identifier || 'S/N'})` }))}
                         value={
                           baits
                             .map((b) => ({
