@@ -373,6 +373,19 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
     filterOrigin ? sch.routes?.origin === filterOrigin : true,
   );
 
+
+  const getRouteText = (r: any) => {
+    if (!r) return "";
+    let text = `${r.origin} → ${r.destination}`;
+    if (Array.isArray(r.stops)) {
+      const validStops = r.stops.filter((s) => typeof s === 'string' && !s.startsWith("__MODALITY:"));
+      if (validStops.length > 0) {
+        text = `${r.origin} → ${validStops.join(" → ")} → ${r.destination}`;
+      }
+    }
+    return text;
+  };
+
   const exportToWhatsApp = () => {
     let message = `*ESCALAS - ${new Date(`${filterDate}T12:00:00`).toLocaleDateString()}* - ${filterOrigin || "Todas as Origens"}
 
@@ -394,15 +407,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 `;
       message += `*PLACA:* ${sch.vehicles?.plate}${sch.trailers?.plate ? ` | REB: ${sch.trailers.plate}` : ""}
 `;
-      let routeText = `${sch.routes?.origin} → ${sch.routes?.destination}`;
-      if (Array.isArray(sch.routes?.stops)) {
-        const validStops = sch.routes.stops.filter(
-          (s) => !s.startsWith("__MODALITY:"),
-        );
-        if (validStops.length > 0) {
-          routeText = `${sch.routes.origin} → ${validStops.join(" → ")} → ${sch.routes.destination}`;
-        }
-      }
+      let routeText = getRouteText(sch.routes);
       message += `*ROTA:* ${routeText}
 `;
       message += `*SAÍDA:* ${start}
@@ -562,7 +567,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                       </td>
                       <td className="px-5 py-4">
                         <div className="text-[10px] font-bold text-text-main uppercase">
-                          {sch.routes?.origin} → {sch.routes?.destination}
+                          {getRouteText(sch.routes)}
                         </div>
                         <div className="text-[9px] font-mono text-text-muted mt-0.5">
                           {sch.vehicles?.plate}
@@ -829,13 +834,13 @@ ${formatted}`);
                     isClearable
                     options={routes.map((r) => ({
                       value: r.id,
-                      label: `${r.origin} → ${r.destination}`,
+                      label: getRouteText(r),
                     }))}
                     value={
                       routes
                         .map((r) => ({
                           value: r.id,
-                          label: `${r.origin} → ${r.destination}`,
+                          label: getRouteText(r),
                         }))
                         .find((o) => o.value === scheduleForm.route_id) || null
                     }

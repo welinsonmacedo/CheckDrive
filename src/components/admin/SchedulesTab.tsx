@@ -298,7 +298,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
                       {formatForLabel(sch.end_at)}
                     </td>
                     <td className="px-5 py-4">
-                      <div className="text-[10px] font-bold text-text-main uppercase">{sch.routes?.origin} → {sch.routes?.destination}</div>
+                      <div className="text-[10px] font-bold text-text-main uppercase">{getRouteText(sch.routes)}</div>
                       <div className="text-[9px] font-mono text-text-muted mt-0.5">
                         {sch.vehicles?.plate}
                         {sch.trailers?.plate && <span className="ml-2 text-primary font-bold">| REB: {sch.trailers.plate}</span>}
