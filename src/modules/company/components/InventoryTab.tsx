@@ -562,6 +562,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                     <th className="px-6 py-3">Data/Hora</th>
                     <th className="px-6 py-3">Item</th>
                     <th className="px-6 py-3">Fornecedor</th>
+                    <th className="px-6 py-3">NF-e</th>
                     <th className="px-6 py-3 text-right">Qtd.</th>
                     <th className="px-6 py-3 text-right">Preço Unit.</th>
                     <th className="px-6 py-3 text-right">Total</th>
@@ -572,7 +573,12 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                     <tr key={t.id} className="hover:bg-zinc-50 transition-colors">
                       <td className="px-6 py-3 text-xs font-medium text-zinc-600">{new Date(t.created_at).toLocaleString('pt-BR')}</td>
                       <td className="px-6 py-3 text-sm font-bold text-zinc-900">{t.inventory_items?.name || '-'}</td>
-                      <td className="px-6 py-3 text-xs text-zinc-600">{t.inventory_suppliers?.name || t.nf_number || '-'}</td>
+                      <td className="px-6 py-3 text-xs text-zinc-600">{t.inventory_suppliers?.name || '-'}</td>
+                      <td className="px-6 py-3 text-xs text-zinc-500">
+                        {t.nf_number ? <span className="font-bold text-zinc-800">NF: {t.nf_number}</span> : '-'}<br/>
+                        {t.date ? <span className="text-[10px]">Emi: {new Date(t.date).toLocaleDateString('pt-BR')}</span> : ''}
+                        {t.nf_key ? <div className="text-[9px] truncate max-w-[150px]" title={t.nf_key}>{t.nf_key}</div> : ''}
+                      </td>
                       <td className="px-6 py-3 text-sm font-bold text-green-600 text-right">+{t.quantity}</td>
                       <td className="px-6 py-3 text-sm text-zinc-700 text-right">R$ {(Number(t.unit_price) || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
                       <td className="px-6 py-3 text-sm font-bold text-zinc-900 text-right">R$ {(Number(t.total_price) || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
@@ -580,7 +586,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                   ))}
                   {transactions.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-6 text-center text-zinc-500 text-sm">Nenhuma entrada registrada.</td>
+                      <td colSpan={7} className="px-6 py-6 text-center text-zinc-500 text-sm">Nenhuma entrada registrada.</td>
                     </tr>
                   )}
                 </tbody>
