@@ -7,6 +7,7 @@ import { SupplierModal } from "../../../components/admin/SupplierModal";
 export default function InventoryTab() {
   const { user } = useAuth();
   const [activeSubTab, setActiveSubTab] = useState<"items" | "suppliers" | "nfs">("items");
+  const [itemsFilter, setItemsFilter] = useState<"all" | "in_stock" | "out_of_stock">("all");
   const [sqlError, setSqlError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -431,8 +432,30 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
       <div className="flex-1 overflow-y-auto bg-zinc-50 p-6">
         {activeSubTab === "items" && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center mb-2">
               <h2 className="text-lg font-bold text-zinc-800">Catálogo de Produtos</h2>
+            </div>
+            <div className="flex justify-between items-center">
+              <div className="flex gap-2 bg-white p-1 rounded-lg border border-zinc-200">
+                <button
+                  onClick={() => setItemsFilter("all")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${itemsFilter === "all" ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100"}`}
+                >
+                  Todos
+                </button>
+                <button
+                  onClick={() => setItemsFilter("in_stock")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${itemsFilter === "in_stock" ? "bg-green-600 text-white" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100"}`}
+                >
+                  Com Estoque
+                </button>
+                <button
+                  onClick={() => setItemsFilter("out_of_stock")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${itemsFilter === "out_of_stock" ? "bg-red-500 text-white" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100"}`}
+                >
+                  Sem Estoque
+                </button>
+              </div>
               <button
                 onClick={() => {
                   setItemForm({ id: "", sku: "", name: "", category: "", min_quantity: 0, current_quantity: 0 });
@@ -456,7 +479,12 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
-                  {items.map(item => (
+                  
+                  {items.filter(item => {
+                    if (itemsFilter === "in_stock") return item.current_quantity > 0;
+                    if (itemsFilter === "out_of_stock") return item.current_quantity <= 0;
+                    return true;
+                  }).map(item => (
                     <tr key={item.id} className="hover:bg-zinc-50 transition-colors">
                       <td className="px-6 py-3 text-sm font-semibold text-zinc-900">{item.name}</td>
                       <td className="px-6 py-3 text-xs text-zinc-500">{item.sku || '-'}</td>
@@ -484,6 +512,16 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                   {items.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-6 py-6 text-center text-zinc-500 text-sm">Nenhum produto cadastrado.</td>
+                    </tr>
+                  )}
+                
+                  {items.filter(item => {
+                    if (itemsFilter === "in_stock") return item.current_quantity > 0;
+                    if (itemsFilter === "out_of_stock") return item.current_quantity <= 0;
+                    return true;
+                  }).length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-6 text-center text-zinc-500 text-sm">Nenhum produto encontrado.</td>
                     </tr>
                   )}
                 </tbody>
