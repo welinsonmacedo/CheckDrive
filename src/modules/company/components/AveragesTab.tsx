@@ -14,6 +14,7 @@ export default function AveragesTab() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [fuelLiterItems, setFuelLiterItems] = useState<any[]>([]);
+  const [routes, setRoutes] = useState<any[]>([]);
   const [vehicleAveragesData, setVehicleAveragesData] = useState<any[]>([]);
   const [tableError, setTableError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,7 @@ export default function AveragesTab() {
     start_odometer: '',
     end_odometer: '',
     fuelSelectId: 'manual',
+    routeSelectId: '',
     liters: '',
     litersOdometer: '',
     litersDate: ''
@@ -53,6 +55,7 @@ export default function AveragesTab() {
     litersId: string | null;
     date: string;
     fuelSelectId: string;
+    routeSelectId: string;
     driver_id: string;
     vehicle_id: string;
     start_at: string;
@@ -65,6 +68,7 @@ export default function AveragesTab() {
     litersId: null,
     date: '',
     fuelSelectId: 'manual',
+    routeSelectId: '',
     driver_id: '',
     vehicle_id: '',
     start_at: '',
@@ -81,14 +85,14 @@ export default function AveragesTab() {
     setLoading(true);
     setTableError(null);
     try {
-      const [subsRes, schedsRes, itemsRes, avgsRes] = await Promise.all([
+      const [subsRes, schedsRes, routesRes, itemsRes, avgsRes] = await Promise.all([
         supabase.from('checklist_submissions').select(`
             id, 
             created_at, 
             odometer, 
             details, 
             type,
-            vehicles(id, plate), 
+            vehicles(id, plate),
             profiles(id, full_name)
           `).eq("company_id", (user as any)?.company_id)
           .order('created_at', { ascending: true }),
@@ -112,6 +116,7 @@ export default function AveragesTab() {
             adjusted_status
           `).eq("company_id", (user as any)?.company_id)
           .order('created_at', { ascending: true }),
+        supabase.from('routes').select('id, origin, destination').eq('company_id', (user as any)?.company_id).eq('active', true),
         supabase.from('checklist_items')
           .select('id, title, input_type')
           .eq("company_id", (user as any)?.company_id),
@@ -134,7 +139,8 @@ export default function AveragesTab() {
             notes,
             created_at,
             vehicles(id, plate),
-            profiles(id, full_name)
+            profiles(id, full_name),
+            schedules(routes(origin, destination))
           `)
           .eq("company_id", (user as any)?.company_id)
           .order('start_date', { ascending: false })
@@ -146,6 +152,8 @@ export default function AveragesTab() {
       setSubmissions(subsRes.data || []);
       setSchedules(schedsRes.data || []);
       setFuelLiterItems((itemsRes.data || []).filter(i => i.input_type === 'fuel_liters'));
+      setRoutes(routesRes.data || []);
+      setRoutes(routesRes.data || []);
 
       if (avgsRes.error) {
         if (avgsRes.error.code === '42P01') {
@@ -536,7 +544,8 @@ export default function AveragesTab() {
           liters: manualLitersNum || 0,
           average: average,
           status: 'reviewed',
-          fuel_submission_id: editData.fuelSelectId !== 'manual' ? editData.fuelSelectId : null
+          fuel_submission_id: editData.fuelSelectId !== 'manual' ? editData.fuelSelectId : null,
+          notes: editData.routeSelectId ? `Rota: ${routes.find(r => r.id === editData.routeSelectId)?.origin}${routes.find(r => r.id === editData.routeSelectId)?.destination ? ' - ' + routes.find(r => r.id === editData.routeSelectId)?.destination : ''}\nInformação manual` : 'Informação manual'
         })
         .eq('id', editingId);
 
@@ -591,7 +600,7 @@ export default function AveragesTab() {
         liters: litersNumVal || 0,
         average: average,
         status: 'reviewed',
-        notes: 'Informação manual',
+        notes: addFormData.routeSelectId ? `Rota: ${routes.find(r => r.id === addFormData.routeSelectId)?.origin}${routes.find(r => r.id === addFormData.routeSelectId)?.destination ? ' - ' + routes.find(r => r.id === addFormData.routeSelectId)?.destination : ''}\nInformação manual` : 'Informação manual',
         fuel_submission_id: addFormData.fuelSelectId !== 'manual' ? addFormData.fuelSelectId : null
       }]);
 
@@ -607,6 +616,7 @@ export default function AveragesTab() {
         start_odometer: '',
         end_odometer: '',
         fuelSelectId: 'manual',
+    routeSelectId: '',
         liters: '',
         litersOdometer: '',
         litersDate: ''
@@ -633,6 +643,7 @@ export default function AveragesTab() {
       litersId: row.fuel_submission_id,
       date: endDateLocal.toISOString().slice(0, 16),
       fuelSelectId: row.fuel_submission_id || 'manual',
+      routeSelectId: '',
       driver_id: row.driver_id || '',
       vehicle_id: row.vehicle_id || '',
       start_at: startDateLocal.toISOString().slice(0, 16),
@@ -1074,6 +1085,7 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
                     <th className="py-3 px-4 text-left">Período</th>
                     <th className="py-3 px-4 text-left">Veículo</th>
                     <th className="py-3 px-4 text-left">Motorista</th>
+                    <th className="py-3 px-4 text-left">Rota</th>
                     <th className="py-3 px-4 text-left">Km Inicial / Final</th>
                     <th className="py-3 px-4 text-left">Distância</th>
                     <th className="py-3 px-4 text-left">Litros</th>
@@ -1155,6 +1167,19 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
                           ) : (
                             row.profiles?.full_name?.split(' ')[0] || '-'
                           )}
+                        </td>
+
+                        <td className="py-3 px-4 font-mono text-sm text-zinc-400 text-left">
+                          {(() => {
+                            let routeStr = "-";
+                            if (row.schedules?.routes) {
+                              routeStr = row.schedules.routes.destination ? `${row.schedules.routes.origin} - ${row.schedules.routes.destination}` : row.schedules.routes.origin;
+                            } else if (row.notes && row.notes.includes("Rota: ")) {
+                              routeStr = row.notes.split("Rota: ")[1].split("\n")[0];
+                            }
+                            return routeStr;
+                          })()}
+
                         </td>
 
                         <td className="py-3 px-4 font-mono text-xs text-left">
@@ -1378,6 +1403,7 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
                           setAddFormData({
                             ...addFormData,
                             fuelSelectId: 'manual',
+    routeSelectId: '',
                             liters: '',
                             litersOdometer: '',
                             litersDate: ''

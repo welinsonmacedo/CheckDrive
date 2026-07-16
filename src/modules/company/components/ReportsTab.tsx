@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { motion, AnimatePresence } from "motion/react";
+import * as XLSX from "xlsx";
 import {
   AlertTriangle,
   FileText,
@@ -473,6 +474,46 @@ export default function ReportsTab() {
   };
 
   
+  
+  const exportPendingByPlateToExcel = () => {
+    if (!pendingByPlateData || pendingByPlateData.length === 0) {
+      alert("Não há dados para exportar.");
+      return;
+    }
+
+    const exportData: any[] = [];
+    
+    pendingByPlateData.forEach(group => {
+      group.issues.forEach((issue: any) => {
+        exportData.push({
+          "Placa": group.plate,
+          "Motorista": issue.profiles?.full_name || "Desconhecido",
+          "Data do Registro": new Date(issue.created_at).toLocaleString('pt-BR'),
+          "Item com Defeito": issue.item_name,
+          "Descrição": issue.description || "-",
+          "Status": issue.status === 'waiting' ? 'Aguardando Oficina' : 'Pendente'
+        });
+      });
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Pendentes por Placa");
+    
+    // Auto-fit columns
+    const wscols = [
+      {wch: 12}, // Placa
+      {wch: 25}, // Motorista
+      {wch: 20}, // Data do Registro
+      {wch: 25}, // Item com Defeito
+      {wch: 40}, // Descrição
+      {wch: 20}  // Status
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `Pendentes_por_Placa_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const fetchPendingByPlateReport = async () => {
     setLoading(true);
     try {
@@ -743,16 +784,26 @@ export default function ReportsTab() {
         {/* Printing Action Buttons on top of content */}
         <div className="flex flex-wrap justify-end gap-2.5 print:hidden mt-4">
           
+          
           {activeReport === "pending_by_plate" && (
-            <button
-              onClick={() => {
-                setTimeout(() => window.print(), 100);
-              }}
-              className="flex items-center gap-2 h-9 px-4 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm shadow-indigo-100/50"
-            >
-              <Printer size={15} /> Imprimir Relatório
-            </button>
+            <>
+              <button
+                onClick={exportPendingByPlateToExcel}
+                className="flex items-center gap-2 h-9 px-4 bg-green-50 border border-green-100 hover:bg-green-100 text-green-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm shadow-green-100/50"
+              >
+                <FileText size={15} /> Exportar Excel
+              </button>
+              <button
+                onClick={() => {
+                  setTimeout(() => window.print(), 100);
+                }}
+                className="flex items-center gap-2 h-9 px-4 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm shadow-indigo-100/50"
+              >
+                <Printer size={15} /> Imprimir Relatório
+              </button>
+            </>
           )}
+
 
           {activeReport === "defects" ? (
             <>
