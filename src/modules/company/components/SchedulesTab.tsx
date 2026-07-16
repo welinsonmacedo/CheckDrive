@@ -3,7 +3,7 @@ import { supabase } from "@/src/lib/supabase";
 import { motion } from "framer-motion";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import { useConfirm } from "@/src/modules/shared/contexts/ConfirmContext";
-import { Search, MessageCircle, RefreshCw } from "lucide-react";
+import { Search, MessageCircle, RefreshCw, Plus, X } from "lucide-react";
 import Select from "react-select";
 import SchedulePrintModal from "./SchedulePrintModal";
 
@@ -26,6 +26,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
   todayLocal.setMinutes(
     todayLocal.getMinutes() - todayLocal.getTimezoneOffset(),
   );
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [filterDate, setFilterDate] = useState(
     todayLocal.toISOString().split("T")[0],
   );
@@ -238,6 +239,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
         bait3_id: "",
         requires_fueling: true,
       });
+      setIsFormOpen(false);
       fetchData();
     } catch (error: any) {
       alert("Erro: " + error.message);
@@ -342,6 +344,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
   };
 
   const handleEdit = (sch: any) => {
+    setIsFormOpen(true);
     setScheduleForm({
       id: sch.id,
       driver_id: sch.driver_id || "",
@@ -413,8 +416,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      <div className="xl:col-span-8 bento-card !p-0">
+    <div className="grid grid-cols-1 gap-6 items-start">
+      <div className="bento-card !p-0">
         <div className="p-5 border-b border-app-border flex flex-col justify-between gap-4">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
@@ -429,6 +432,14 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
               >
                 <RefreshCw size={14} />
                 Vincular APP
+              </button>
+              <button
+                type="button"
+                onClick={() => { setScheduleForm({ id: "", driver_id: "", vehicle_id: "", trailer_id: "", route_id: "", start_at: "", end_at: "", bait1_id: "", bait2_id: "", bait3_id: "", requires_fueling: true }); setIsFormOpen(true); }}
+                className="flex items-center gap-2 px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm"
+              >
+                <Plus size={14} />
+                Nova Escala
               </button>
               {filteredSchedules.length > 0 && (
                 <button
@@ -624,7 +635,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                             Editar
                           </button>
                         )}
-                        {sch.profiles?.email && (
+                        {sch.profiles?.email?.endsWith('@noemail.local') && (
                           <button
                             onClick={() => {
                               const email = sch.profiles.email;
@@ -642,7 +653,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                             Copiar Link
                           </button>
                         )}
-                        {sch.profiles?.email && (
+                        {sch.profiles?.email?.endsWith('@noemail.local') && (
                           <button
                             onClick={() => setSelectedPrintSchedule(sch)}
                             className="text-blue-500 hover:underline text-[10px] font-bold ml-3"
@@ -669,399 +680,336 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
         </div>
       </div>
 
-      <div className="xl:col-span-4 bento-card space-y-5">
-        <div className="space-y-1">
-          <h3 className="text-sm font-black text-text-main uppercase tracking-tight">
-            {scheduleForm.id ? "Editar Escala" : "Nova Escala"}
-          </h3>
-          <p className="text-[10px] text-text-muted font-bold italic uppercase tracking-wider">
-            {scheduleForm.id
-              ? "Atualize as informações da escala"
-              : "Atribua uma jornada a um motorista"}
-          </p>
-        </div>
-        <form onSubmit={handleSaveSchedule} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-              Motorista
-            </label>
-            <Select
-              className="text-xs font-bold"
-              placeholder="Selecionar motorista..."
-              isClearable
-              options={users
-                .filter((u) => !u.full_name?.endsWith("//INTERNO"))
-                .map((u) => ({ value: u.id, label: u.full_name }))}
-              value={
-                users
-                  .filter((u) => !u.full_name?.endsWith("//INTERNO"))
-                  .map((u) => ({ value: u.id, label: u.full_name }))
-                  .find((o) => o.value === scheduleForm.driver_id) || null
-              }
-              onChange={(selected) =>
-                setScheduleForm({
-                  ...scheduleForm,
-                  driver_id: selected?.value || "",
-                })
-              }
-              styles={{
-                control: (base, state) => ({
-                  ...base,
-                  minHeight: "44px",
-                  borderRadius: "0.75rem",
-                  borderColor: state.isFocused ? "#0ea5e9" : "#e5e7eb",
-                  boxShadow: "none",
-                }),
-              }}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-              Veículo
-            </label>
-            <Select
-              className="text-xs font-bold"
-              placeholder="Selecionar veículo..."
-              isClearable
-              options={vehicles
-                .filter((v) => {
-                  const driver = users.find(
-                    (u) => u.id === scheduleForm.driver_id,
-                  );
-                  if (!v.modality_id) return true;
-                  if (
-                    driver &&
-                    driver.modality_ids &&
-                    driver.modality_ids.includes(v.modality_id)
-                  )
-                    return true;
-                  return false;
-                })
-                .map((v) => ({ value: v.id, label: v.plate }))}
-              value={
-                vehicles
-                  .map((v) => ({ value: v.id, label: v.plate }))
-                  .find((o) => o.value === scheduleForm.vehicle_id) || null
-              }
-              onChange={(selected) =>
-                setScheduleForm({
-                  ...scheduleForm,
-                  vehicle_id: selected?.value || "",
-                })
-              }
-              styles={{
-                control: (base, state) => ({
-                  ...base,
-                  minHeight: "44px",
-                  borderRadius: "0.75rem",
-                  borderColor: state.isFocused ? "#0ea5e9" : "#e5e7eb",
-                  boxShadow: "none",
-                }),
-              }}
-            />
-          </div>
-
-          {vehicles.find((v) => v.id === scheduleForm.vehicle_id)
-            ?.requires_trailer && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="space-y-1.5"
-            >
-              <label className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                Reboque (Obrigatório para este veículo)
-              </label>
-              <Select
-                className="text-xs font-bold"
-                placeholder="Selecionar reboque..."
-                isClearable
-                options={trailers.map((t) => ({ value: t.id, label: t.plate }))}
-                value={
-                  trailers
-                    .map((t) => ({ value: t.id, label: t.plate }))
-                    .find((o) => o.value === scheduleForm.trailer_id) || null
-                }
-                onChange={(selected) =>
-                  setScheduleForm({
-                    ...scheduleForm,
-                    trailer_id: selected?.value || "",
-                  })
-                }
-                styles={{
-                  control: (base, state) => ({
-                    ...base,
-                    minHeight: "44px",
-                    borderRadius: "0.75rem",
-                    borderColor: state.isFocused
-                      ? "#0ea5e9"
-                      : "rgba(14, 165, 233, 0.3)",
-                    backgroundColor: "rgba(239, 246, 255, 0.2)",
-                    boxShadow: "none",
-                  }),
-                }}
-              />
-            </motion.div>
-          )}
-
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-              Rota
-            </label>
-            <Select
-              className="text-xs font-bold"
-              placeholder="Selecionar rota..."
-              isClearable
-              options={routes.map((r) => {
-                const validStops =
-                  r.stops?.filter(
-                    (s: string) => !s.startsWith("__MODALITY:"),
-                  ) || [];
-                return {
-                  value: r.id,
-                  label: `${r.origin} → ${r.destination} ${validStops.length > 0 ? `(Paradas: ${validStops.join(", ")})` : ""}`,
-                };
-              })}
-              value={
-                routes
-                  .map((r) => {
-                    const validStops =
-                      r.stops?.filter(
-                        (s: string) => !s.startsWith("__MODALITY:"),
-                      ) || [];
-                    return {
-                      value: r.id,
-                      label: `${r.origin} → ${r.destination} ${validStops.length > 0 ? `(Paradas: ${validStops.join(", ")})` : ""}`,
-                    };
-                  })
-                  .find((o) => o.value === scheduleForm.route_id) || null
-              }
-              onChange={(selected) =>
-                setScheduleForm({
-                  ...scheduleForm,
-                  route_id: selected?.value || "",
-                })
-              }
-              styles={{
-                control: (base, state) => ({
-                  ...base,
-                  minHeight: "44px",
-                  borderRadius: "0.75rem",
-                  borderColor: state.isFocused ? "#0ea5e9" : "#e5e7eb",
-                  boxShadow: "none",
-                }),
-              }}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-primary uppercase tracking-widest">
-              Iscas (Opcional - Até 3)
-            </label>
-            <div className="space-y-2">
-              <Select
-                className="text-xs font-bold"
-                placeholder="Selecionar Isca 1..."
-                isClearable
-                options={baits.map((b) => ({
-                  value: b.id,
-                  label: b.name,
-                  isDisabled: [
-                    scheduleForm.bait2_id,
-                    scheduleForm.bait3_id,
-                  ].includes(b.id),
-                }))}
-                value={
-                  baits
-                    .map((b) => ({ value: b.id, label: b.name }))
-                    .find((o) => o.value === scheduleForm.bait1_id) || null
-                }
-                onChange={(selected) =>
-                  setScheduleForm({
-                    ...scheduleForm,
-                    bait1_id: selected?.value || "",
-                  })
-                }
-                styles={{
-                  control: (base, state) => ({
-                    ...base,
-                    minHeight: "44px",
-                    borderRadius: "0.75rem",
-                    borderColor: state.isFocused
-                      ? "#0ea5e9"
-                      : "rgba(14, 165, 233, 0.2)",
-                    backgroundColor: "rgba(14, 165, 233, 0.05)",
-                    boxShadow: "none",
-                  }),
-                }}
-              />
-              <Select
-                className="text-xs font-bold"
-                placeholder="Selecionar Isca 2..."
-                isClearable
-                isDisabled={!scheduleForm.bait1_id}
-                options={baits.map((b) => ({
-                  value: b.id,
-                  label: b.name,
-                  isDisabled: [
-                    scheduleForm.bait1_id,
-                    scheduleForm.bait3_id,
-                  ].includes(b.id),
-                }))}
-                value={
-                  baits
-                    .map((b) => ({ value: b.id, label: b.name }))
-                    .find((o) => o.value === scheduleForm.bait2_id) || null
-                }
-                onChange={(selected) =>
-                  setScheduleForm({
-                    ...scheduleForm,
-                    bait2_id: selected?.value || "",
-                  })
-                }
-                styles={{
-                  control: (base, state) => ({
-                    ...base,
-                    minHeight: "44px",
-                    borderRadius: "0.75rem",
-                    borderColor: state.isFocused
-                      ? "#0ea5e9"
-                      : "rgba(14, 165, 233, 0.2)",
-                    backgroundColor: "rgba(14, 165, 233, 0.05)",
-                    boxShadow: "none",
-                  }),
-                }}
-              />
-              <Select
-                className="text-xs font-bold"
-                placeholder="Selecionar Isca 3..."
-                isClearable
-                isDisabled={!scheduleForm.bait2_id}
-                options={baits.map((b) => ({
-                  value: b.id,
-                  label: b.name,
-                  isDisabled: [
-                    scheduleForm.bait1_id,
-                    scheduleForm.bait2_id,
-                  ].includes(b.id),
-                }))}
-                value={
-                  baits
-                    .map((b) => ({ value: b.id, label: b.name }))
-                    .find((o) => o.value === scheduleForm.bait3_id) || null
-                }
-                onChange={(selected) =>
-                  setScheduleForm({
-                    ...scheduleForm,
-                    bait3_id: selected?.value || "",
-                  })
-                }
-                styles={{
-                  control: (base, state) => ({
-                    ...base,
-                    minHeight: "44px",
-                    borderRadius: "0.75rem",
-                    borderColor: state.isFocused
-                      ? "#0ea5e9"
-                      : "rgba(14, 165, 233, 0.2)",
-                    backgroundColor: "rgba(14, 165, 233, 0.05)",
-                    boxShadow: "none",
-                  }),
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                Início
-              </label>
-              <input
-                type="datetime-local"
-                className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[10px] font-bold outline-none focus:border-primary transition-all"
-                value={scheduleForm.start_at}
-                onChange={(e) =>
-                  setScheduleForm({ ...scheduleForm, start_at: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                Prev. Fim
-              </label>
-              <input
-                type="datetime-local"
-                className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[10px] font-bold outline-none focus:border-primary transition-all"
-                value={scheduleForm.end_at}
-                onChange={(e) =>
-                  setScheduleForm({ ...scheduleForm, end_at: e.target.value })
-                }
-                required
-              />
-            </div>
-          </div>
-
-          <div className="pt-2 flex flex-col gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                className="w-4 h-4 rounded text-primary focus:ring-primary"
-                checked={scheduleForm.requires_fueling}
-                onChange={(e) =>
-                  setScheduleForm({
-                    ...scheduleForm,
-                    requires_fueling: e.target.checked,
-                  })
-                }
-              />
-              <span className="text-xs font-bold text-text-main">
-                Exige Abastecimento nesta escala
-              </span>
-            </label>
-            <div className="flex gap-3 flex-col sm:flex-row">
-              {scheduleForm.id && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setScheduleForm({
-                      id: "",
-                      driver_id: "",
-                      vehicle_id: "",
-                      trailer_id: "",
-                      route_id: "",
-                      start_at: "",
-                      end_at: "",
-                      bait1_id: "",
-                      bait2_id: "",
-                      bait3_id: "",
-                      requires_fueling: true,
-                    })
-                  }
-                  className="flex-1 h-12 bg-zinc-100 text-text-muted font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-zinc-200 transition-all font-mono"
-                >
-                  Cancelar
-                </button>
-              )}
+      
+      {isFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]"
+          >
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gray-50/50">
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-primary uppercase tracking-tight">
+                  {scheduleForm.id ? "Editar Escala" : "Nova Escala"}
+                </h3>
+                <p className="text-[10px] text-text-muted font-bold italic uppercase tracking-wider">
+                  {scheduleForm.id
+                    ? "Atualize as informações da escala"
+                    : "Atribua uma jornada a um motorista"}
+                </p>
+              </div>
               <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 h-12 bg-primary text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-primary-hover hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/25 disabled:opacity-50"
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 text-gray-500 transition-colors"
               >
-                {saving
-                  ? "Processando..."
-                  : scheduleForm.id
-                    ? "Salvar Alteração"
-                    : "Agendar Escala"}
+                <X size={16} />
               </button>
             </div>
-          </div>
-        </form>
-      </div>
+            
+            <div className="p-5 overflow-y-auto">
+              <form id="schedule-form" onSubmit={handleSaveSchedule} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                    Motorista
+                  </label>
+                  <Select
+                    className="text-xs font-bold"
+                    placeholder="Selecionar motorista..."
+                    isClearable
+                    options={users
+                      .filter((u) => !u.full_name?.endsWith("//INTERNO"))
+                      .map((u) => ({ value: u.id, label: u.full_name }))}
+                    value={
+                      users
+                        .filter((u) => !u.full_name?.endsWith("//INTERNO"))
+                        .map((u) => ({ value: u.id, label: u.full_name }))
+                        .find((o) => o.value === scheduleForm.driver_id) || null
+                    }
+                    onChange={(selected) =>
+                      setScheduleForm({
+                        ...scheduleForm,
+                        driver_id: selected ? selected.value : "",
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                    Veículo / Cavalo
+                  </label>
+                  <Select
+                    className="text-xs font-bold"
+                    placeholder="Selecionar veículo..."
+                    isClearable
+                    options={vehicles.map((v) => ({
+                      value: v.id,
+                      label: `${v.plate} (${v.type || "N/A"})`,
+                    }))}
+                    value={
+                      vehicles
+                        .map((v) => ({
+                          value: v.id,
+                          label: `${v.plate} (${v.type || "N/A"})`,
+                        }))
+                        .find((o) => o.value === scheduleForm.vehicle_id) || null
+                    }
+                    onChange={(selected) => {
+                      const selectedVehicle = vehicles.find(
+                        (v) => v.id === selected?.value,
+                      );
+                      setScheduleForm({
+                        ...scheduleForm,
+                        vehicle_id: selected ? selected.value : "",
+                        trailer_id: selectedVehicle?.requires_trailer
+                          ? scheduleForm.trailer_id
+                          : "",
+                      });
+                    }}
+                  />
+                </div>
+                {vehicles.find((v) => v.id === scheduleForm.vehicle_id)
+                  ?.requires_trailer && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                      Reboque (Obrigatório)
+                    </label>
+                    <Select
+                      className="text-xs font-bold"
+                      placeholder="Selecionar reboque..."
+                      isClearable
+                      options={trailers.map((t) => ({
+                        value: t.id,
+                        label: `${t.plate} (${t.type || "N/A"})`,
+                      }))}
+                      value={
+                        trailers
+                          .map((t) => ({
+                            value: t.id,
+                            label: `${t.plate} (${t.type || "N/A"})`,
+                          }))
+                          .find((o) => o.value === scheduleForm.trailer_id) ||
+                        null
+                      }
+                      onChange={(selected) =>
+                        setScheduleForm({
+                          ...scheduleForm,
+                          trailer_id: selected ? selected.value : "",
+                        })
+                      }
+                    />
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                    Rota
+                  </label>
+                  <Select
+                    className="text-xs font-bold"
+                    placeholder="Selecionar rota..."
+                    isClearable
+                    options={routes.map((r) => ({
+                      value: r.id,
+                      label: `${r.origin} → ${r.destination}`,
+                    }))}
+                    value={
+                      routes
+                        .map((r) => ({
+                          value: r.id,
+                          label: `${r.origin} → ${r.destination}`,
+                        }))
+                        .find((o) => o.value === scheduleForm.route_id) || null
+                    }
+                    onChange={(selected) =>
+                      setScheduleForm({
+                        ...scheduleForm,
+                        route_id: selected ? selected.value : "",
+                      })
+                    }
+                  />
+                </div>
 
-      {selectedPrintSchedule && (
-        <SchedulePrintModal schedule={selectedPrintSchedule} onClose={() => setSelectedPrintSchedule(null)} />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                      Data/Hora Início
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={scheduleForm.start_at}
+                      onChange={(e) =>
+                        setScheduleForm({
+                          ...scheduleForm,
+                          start_at: e.target.value,
+                        })
+                      }
+                      className="w-full h-10 px-3 rounded-xl border border-app-border bg-app-bg text-xs font-bold outline-none focus:border-primary transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                      Data/Hora Fim
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={scheduleForm.end_at}
+                      onChange={(e) =>
+                        setScheduleForm({
+                          ...scheduleForm,
+                          end_at: e.target.value,
+                        })
+                      }
+                      className="w-full h-10 px-3 rounded-xl border border-app-border bg-app-bg text-xs font-bold outline-none focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={scheduleForm.requires_fueling}
+                      onChange={(e) =>
+                        setScheduleForm({
+                          ...scheduleForm,
+                          requires_fueling: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                    />
+                    Exigir Checklist de Abastecimento
+                  </label>
+                </div>
+                
+                <div className="space-y-2 pt-2 border-t border-gray-100">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest block mb-2">
+                    Vincular Iscas (Opcional)
+                  </label>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                        Isca 1
+                      </label>
+                      <Select
+                        className="text-[11px] font-bold"
+                        placeholder="Nenhuma"
+                        isClearable
+                        options={baits.map((b) => ({
+                          value: b.id,
+                          label: `${b.name} (${b.identifier || 'S/N'})`,
+                        }))}
+                        value={
+                          baits
+                            .map((b) => ({
+                              value: b.id,
+                              label: `${b.name} (${b.identifier || 'S/N'})`,
+                            }))
+                            .find((o) => o.value === scheduleForm.bait1_id) || null
+                        }
+                        onChange={(selected) =>
+                          setScheduleForm({
+                            ...scheduleForm,
+                            bait1_id: selected ? selected.value : "",
+                          })
+                        }
+                      />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                        Isca 2
+                      </label>
+                      <Select
+                        className="text-[11px] font-bold"
+                        placeholder="Nenhuma"
+                        isClearable
+                        options={baits.map((b) => ({
+                          value: b.id,
+                          label: `${b.name} (${b.identifier || 'S/N'})`,
+                        }))}
+                        value={
+                          baits
+                            .map((b) => ({
+                              value: b.id,
+                              label: `${b.name} (${b.identifier || 'S/N'})`,
+                            }))
+                            .find((o) => o.value === scheduleForm.bait2_id) || null
+                        }
+                        onChange={(selected) =>
+                          setScheduleForm({
+                            ...scheduleForm,
+                            bait2_id: selected ? selected.value : "",
+                          })
+                        }
+                      />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                        Isca 3
+                      </label>
+                      <Select
+                        className="text-[11px] font-bold"
+                        placeholder="Nenhuma"
+                        isClearable
+                        options={baits.map((b) => ({
+                          value: b.id,
+                          label: `${b.name} (${b.identifier || 'S/N'})`,
+                        }))}
+                        value={
+                          baits
+                            .map((b) => ({
+                              value: b.id,
+                              label: `${b.name} (${b.identifier || 'S/N'})`,
+                            }))
+                            .find((o) => o.value === scheduleForm.bait3_id) || null
+                        }
+                        onChange={(selected) =>
+                          setScheduleForm({
+                            ...scheduleForm,
+                            bait3_id: selected ? selected.value : "",
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="schedule-form"
+                disabled={saving}
+                className="px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center gap-2 hover:bg-opacity-90 transition-all shadow-sm disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>Salvar Escala</>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
       )}
+
+<SchedulePrintModal schedule={selectedPrintSchedule} onClose={() => setSelectedPrintSchedule(null)} />
     </div>
   );
 }
