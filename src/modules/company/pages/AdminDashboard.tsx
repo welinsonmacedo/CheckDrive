@@ -98,22 +98,22 @@ export default function AdminDashboard() {
     fetchNotificationCount();
 
     // Background audit specifically invoked when admin is online
-    runSilentAudit(user?.company_id);
+    runSilentAudit((user as any)?.company_id);
     const intervalId = setInterval(
       () => {
-        runSilentAudit(user?.company_id);
+        runSilentAudit((user as any)?.company_id);
         fetchNotificationCount();
       },
       60 * 60 * 1000,
     ); // 60 minutes
 
     return () => clearInterval(intervalId);
-  }, [user?.company_id]);
+  }, [(user as any)?.company_id]);
 
   const fetchNotificationCount = async () => {
-    if (!user?.company_id) return;
+    if (!(user as any)?.company_id) return;
     try {
-      const { data: issuesData } = await supabase.from("checklist_issues").select("id, vehicle_id, trailer_id, item_title, status, resolved_by").eq("company_id", user?.company_id)
+      const { data: issuesData } = await supabase.from("checklist_issues").select("id, vehicle_id, trailer_id, item_title, status, resolved_by").eq("company_id", (user as any)?.company_id)
         .eq("company_id", user.company_id)
         .or("status.eq.pending,and(status.eq.resolved,resolved_by.is.null)");
 
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
         .eq("company_id", user.company_id)
         .eq("active", true);
 
-      const { data: submissions } = await supabase.from("checklist_submissions").select("vehicle_id, odometer").eq("company_id", user?.company_id)
+      const { data: submissions } = await supabase.from("checklist_submissions").select("vehicle_id, odometer").eq("company_id", (user as any)?.company_id)
         .eq("company_id", user.company_id)
         .order("created_at", { ascending: false });
 
@@ -213,10 +213,10 @@ export default function AdminDashboard() {
       let { data: settings } = await supabase
         .from("app_settings")
         .select("*")
-        .eq("company_id", user?.company_id)
+        .eq("company_id", (user as any)?.company_id)
         .maybeSingle();
 
-      if (!settings && user?.company_id) {
+      if (!settings && (user as any)?.company_id) {
          const { data: newSettings } = await supabase.from("app_settings").insert({
            company_id: user.company_id,
            system_type: 'logistics',
@@ -233,7 +233,7 @@ export default function AdminDashboard() {
 
       if (settings) setAppSettings(settings);
 
-      if (user?.company_id) {
+      if ((user as any)?.company_id) {
         const { data: company } = await supabase
           .from("companies")
           .select("*")
@@ -252,17 +252,14 @@ export default function AdminDashboard() {
     try {
       const { data: vehicles } = await supabase.from("vehicles").select(`
           *,
-          checklist_submissions(
-            status,
-            details,
-            created_at).eq("company_id", user?.company_id),
+          checklist_submissions(             status,             details,             created_at           ),
           maintenance_records(
             status,
             priority
           )
         `,
         )
-        .limit(5);
+        .eq("company_id", (user as any)?.company_id)         .limit(5);
 
       if (vehicles) {
         const processed = vehicles.map((vehicle) => {
@@ -761,7 +758,7 @@ export default function AdminDashboard() {
               {activeTab === "schedules" && (
                 <SchedulesTab
                   onViewChecklist={async (subId: string) => {
-                    const { data } = await supabase.from("checklist_submissions").select("*, profiles(full_name), vehicles(plate)").eq("company_id", user?.company_id)
+                    const { data } = await supabase.from("checklist_submissions").select("*, profiles(full_name), vehicles(plate)").eq("company_id", (user as any)?.company_id)
                       .eq("id", subId)
                       .single();
                     if (data) setSelectedSub(data);

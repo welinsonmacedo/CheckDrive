@@ -90,7 +90,7 @@ export default function AveragesTab() {
             type,
             vehicles(id, plate), 
             profiles(id, full_name)
-          `).eq("company_id", user?.company_id)
+          `).eq("company_id", (user as any)?.company_id)
           .order('created_at', { ascending: true }),
         supabase.from('schedules').select(`
             id,
@@ -110,11 +110,11 @@ export default function AveragesTab() {
             adjusted_liters,
             adjusted_fuel_date,
             adjusted_status
-          `).eq("company_id", user?.company_id)
+          `).eq("company_id", (user as any)?.company_id)
           .order('created_at', { ascending: true }),
         supabase.from('checklist_items')
           .select('id, title, input_type')
-          .eq("company_id", user?.company_id),
+          .eq("company_id", (user as any)?.company_id),
         supabase.from('vehicle_averages')
           .select(`
             id,
@@ -136,7 +136,7 @@ export default function AveragesTab() {
             vehicles(id, plate),
             profiles(id, full_name)
           `)
-          .eq("company_id", user?.company_id)
+          .eq("company_id", (user as any)?.company_id)
           .order('start_date', { ascending: false })
       ]);
         
@@ -338,7 +338,7 @@ export default function AveragesTab() {
       
       let insertedCount = 0;
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      const { data: profData } = await supabase.from('profiles').select('company_id').eq("company_id", user?.company_id).eq('id', currentUser?.id).single();
+      const { data: profData } = await supabase.from('profiles').select('company_id').eq("company_id", (user as any)?.company_id).eq('id', currentUser?.id).single();
       const companyId = profData?.company_id || null;
 
       for (const item of list) {
@@ -576,7 +576,7 @@ export default function AveragesTab() {
       const average = litersNumVal > 0 ? distance / litersNumVal : 0;
 
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profData } = await supabase.from('profiles').select('company_id').eq("company_id", user?.company_id).eq('id', user?.id).single();
+      const { data: profData } = await supabase.from('profiles').select('company_id').eq("company_id", (user as any)?.company_id).eq('id', user?.id).single();
       const companyId = profData?.company_id || null;
 
       const { error } = await supabase.from('vehicle_averages').insert([{

@@ -666,7 +666,7 @@ ${formatted}`);
                             Copiar Link
                           </button>
                         )}
-                        {sch.profiles?.email && !sch.profiles.email.endsWith('@noemail.local') && (
+                        {sch.profiles?.email && sch.profiles.email.endsWith('@noemail.local') && (
                           <button
                             onClick={() => setSelectedPrintSchedule(sch)}
                             className="text-blue-500 hover:underline text-[10px] font-bold ml-3"

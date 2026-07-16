@@ -95,7 +95,7 @@ export default function ChecklistEditModal({
         submission.type === "Abastecimento"
       )
         return;
-      const { data, error } = await supabase.from("checklist_issues").select("*").eq("company_id", user?.company_id)
+      const { data, error } = await supabase.from("checklist_issues").select("*").eq("company_id", (user as any)?.company_id)
         .eq("submission_id", submission.id);
       if (!error && data && data.length > 0) {
         setDefectData((prev) => {
@@ -175,7 +175,7 @@ export default function ChecklistEditModal({
       }[] = [];
 
       // Fetch existing issues for this submission once to match
-      const { data: existingIssues } = await supabase.from("checklist_issues").select("id, item_title").eq("company_id", user?.company_id)
+      const { data: existingIssues } = await supabase.from("checklist_issues").select("id, item_title").eq("company_id", (user as any)?.company_id)
         .eq("submission_id", submission.id);
 
       if (submission.type !== "fuel" && submission.type !== "Abastecimento") {

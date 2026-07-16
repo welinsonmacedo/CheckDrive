@@ -5,7 +5,7 @@ import { Save, Edit2, X, AlertCircle, Filter, CheckCircle2, Clock, Printer, Plus
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, LabelList } from 'recharts';
 
 export default function AveragesTab() {
-  const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers' | 'schedules'>('vehicles');
+  const [activeTab, setActiveTab] = useState<'vehicles' | 'drivers' | 'schedules' | 'charts'>('vehicles');
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [fuelLiterItems, setFuelLiterItems] = useState<any[]>([]);

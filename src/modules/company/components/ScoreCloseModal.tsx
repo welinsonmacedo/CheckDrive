@@ -45,7 +45,7 @@ export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: Sc
       const endDateTime = new Date(`${endDate}T23:59:59.999`).toISOString();
       const startDateTime = new Date(`${startDate}T00:00:00`).toISOString();
 
-      const { data: schedules } = await supabase.from('schedules').select('driver_id').eq("company_id", user?.company_id)
+      const { data: schedules } = await supabase.from('schedules').select('driver_id').eq("company_id", (user as any)?.company_id)
         .gte('start_at', startDateTime)
         .lte('start_at', endDateTime);
 
@@ -55,7 +55,7 @@ export default function ScoreCloseModal({ onClose, onSuccess, initialScore }: Sc
       }, {}) || {};
 
       // 2. Fetch current drivers performance
-      const { data: drivers } = await supabase.from('profiles').select('id, participates_in_ranking, score_profile_id, score_profiles(base_value, calculation_type).eq("company_id", user?.company_id).eq("company_id", user?.company_id), driver_performance(*)').eq('role', 'driver');
+      const { data: drivers } = await supabase.from('profiles').select('id, participates_in_ranking, score_profile_id, score_profiles(base_value, calculation_type), driver_performance(*)').eq('company_id', (user as any)?.company_id).eq('role', 'driver');
       
       const itemsToInsert = [];
       const resetsToUpsert = [];
