@@ -374,7 +374,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
   );
 
   const exportToWhatsApp = () => {
-    let message = `*ESCALAS - ${new Date(`${filterDate}T12:00:00`).toLocaleDateString()}* - ${filterOrigin || "Todas as Origens"}\n\n`;
+    let message = `*ESCALAS - ${new Date(`${filterDate}T12:00:00`).toLocaleDateString()}* - ${filterOrigin || "Todas as Origens"}
+
+`;
 
     filteredSchedules.forEach((sch, index) => {
       const start = new Date(sch.start_at).toLocaleTimeString([], {
@@ -386,9 +388,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
         minute: "2-digit",
       });
 
-      message += `*${index + 1}. MOTORISTA:* ${sch.profiles?.full_name}\n`;
-      message += `*VEÍCULO:* ${sch.vehicles?.type || "Não definido"}\n`;
-      message += `*PLACA:* ${sch.vehicles?.plate}${sch.trailers?.plate ? ` | REB: ${sch.trailers.plate}` : ""}\n`;
+      message += `*${index + 1}. MOTORISTA:* ${sch.profiles?.full_name}
+`;
+      message += `*VEÍCULO:* ${sch.vehicles?.type || "Não definido"}
+`;
+      message += `*PLACA:* ${sch.vehicles?.plate}${sch.trailers?.plate ? ` | REB: ${sch.trailers.plate}` : ""}
+`;
       let routeText = `${sch.routes?.origin} → ${sch.routes?.destination}`;
       if (Array.isArray(sch.routes?.stops)) {
         const validStops = sch.routes.stops.filter(
@@ -398,17 +403,22 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
           routeText = `${sch.routes.origin} → ${validStops.join(" → ")} → ${sch.routes.destination}`;
         }
       }
-      message += `*ROTA:* ${routeText}\n`;
-      message += `*SAÍDA:* ${start}\n`;
-      message += `*CHEGADA:* ${end}\n`;
+      message += `*ROTA:* ${routeText}
+`;
+      message += `*SAÍDA:* ${start}
+`;
+      message += `*CHEGADA:* ${end}
+`;
 
       const baits = [sch.bait1?.name, sch.bait2?.name, sch.bait3?.name].filter(
         Boolean,
       );
       if (baits.length > 0) {
-        message += `*ISCAS:* ${baits.join(", ")}\n`;
+        message += `*ISCAS:* ${baits.join(", ")}
+`;
       }
-      message += `\n`;
+      message += `
+`;
     });
 
     const encodedMessage = encodeURIComponent(message);
@@ -635,7 +645,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                             Editar
                           </button>
                         )}
-                        {sch.profiles?.email && !sch.profiles.email.endsWith('@noemail.local') && (
+                        {sch.profiles?.email && sch.profiles.email.endsWith('@noemail.local') && (
                           <button
                             onClick={() => {
                               const email = sch.profiles.email;
@@ -645,7 +655,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                               
                               const expiresAt = new Date(new Date(sch.start_at).getTime() + 24 * 60 * 60 * 1000);
                               const formatted = expiresAt.toLocaleString('pt-BR');
-                              alert(`Link de acesso copiado!\n\nEle expira em 24h a partir do início da escala:\n${formatted}`);
+                              alert(`Link de acesso copiado!
+
+Ele expira em 24h a partir do início da escala:
+${formatted}`);
                             }}
                             className="text-orange-500 hover:underline text-[10px] font-bold"
                             title="Gerar link de acesso sem login"
