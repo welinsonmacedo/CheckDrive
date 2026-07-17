@@ -758,6 +758,7 @@ export default function MaintenanceTab() {
       setResolvingIssueId(null);
       setResolvingIssueData(null);
       setSelectedIdsToResolve([]);
+      setSelectedRows([]);
       setResolveNotes("");
       setResolveNf("");
       setResolveValue("");
@@ -832,6 +833,45 @@ export default function MaintenanceTab() {
       console.error(err);
       alert("Erro ao excluir pendência.");
     }
+  }
+
+  function handleBulkResolve() {
+    if (selectedRows.length === 0) return;
+
+    const idsToResolve = [];
+    const grouped_issues = [];
+
+    selectedRows.forEach((rowId) => {
+      const row = issues.find((i) => i.id === rowId);
+      if (row && row.grouped_issues && row.grouped_issues.length > 0) {
+        idsToResolve.push(...row.grouped_issues.map((gi) => gi.id));
+        grouped_issues.push(...row.grouped_issues);
+      } else if (row) {
+        idsToResolve.push(row.id);
+        grouped_issues.push(row);
+      }
+    });
+
+    const firstRow = issues.find((i) => i.id === selectedRows[0]) || grouped_issues[0];
+
+    let issueToOpen;
+    if (selectedRows.length === 1 && !firstRow.grouped_issues) {
+      // Just one normal issue
+      issueToOpen = firstRow;
+    } else {
+      issueToOpen = {
+        ...firstRow,
+        id: "bulk_resolve",
+        item_title: `Resolução em Lote (${selectedRows.length} pendências)`,
+        grouped_ids: idsToResolve,
+        grouped_issues: grouped_issues,
+        auto_alert_id: null, // Bulk resolve doesn't support calibrating multiple alerts at once
+        auto_alerts: null,
+        status: "pending",
+      };
+    }
+
+    openResolveModal(issueToOpen, "resolve");
   }
 
   async function handleBulkDelete() {
@@ -1659,13 +1699,22 @@ export default function MaintenanceTab() {
               {selectedRows.length > 0 &&
                 (activeTab === "pending" || activeTab === "waiting") &&
                 user?.role === "admin" && (
-                  <button
-                    onClick={handleBulkDelete}
-                    className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors uppercase tracking-wider"
-                  >
-                    <Trash2 size={14} />
-                    Excluir ({selectedRows.length})
-                  </button>
+                  <>
+                    <button
+                      onClick={handleBulkDelete}
+                      className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors uppercase tracking-wider"
+                    >
+                      <Trash2 size={14} />
+                      Excluir ({selectedRows.length})
+                    </button>
+                    <button
+                      onClick={handleBulkResolve}
+                      className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors uppercase tracking-wider"
+                    >
+                      <Wrench size={14} />
+                      Resolver Selecionadas ({selectedRows.length})
+                    </button>
+                  </>
                 )}
 
               <button
