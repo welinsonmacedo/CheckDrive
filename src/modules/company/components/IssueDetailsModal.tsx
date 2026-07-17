@@ -320,13 +320,14 @@ export default function IssueDetailsModal({
                       {parsedNfs.length > 0 ? (
                         <div className="space-y-4">
                           {parsedNfs.map((nf: any, idx: number) => {
+                            const isStock = nf.is_stock || (nf.nf_number || "").includes("Estoque");
                             const nfSum = nf.items?.reduce((acc: number, item: any) => acc + (Number(item.quantity) || 1) * (Number(item.unit_price) || 0), 0) || 0;
                             return (
-                              <div key={idx} className="bg-white border-2 border-zinc-100 rounded-xl overflow-hidden print:border-zinc-300">
-                                <div className="bg-zinc-50 px-4 py-3 border-b border-zinc-100 flex justify-between items-center print:bg-white print:border-zinc-300">
-                                  <div className="flex items-center gap-2 font-black text-zinc-900">
-                                    <Receipt size={14} className="text-zinc-400" />
-                                    <span>NF: {nf.nf_number || "S/N"}</span>
+                              <div key={idx} className={`bg-white border-2 ${isStock ? 'border-blue-100' : 'border-zinc-100'} rounded-xl overflow-hidden print:border-zinc-300`}>
+                                <div className={`${isStock ? 'bg-blue-50/50' : 'bg-zinc-50'} px-4 py-3 border-b ${isStock ? 'border-blue-100' : 'border-zinc-100'} flex justify-between items-center print:bg-white print:border-zinc-300`}>
+                                  <div className={`flex items-center gap-2 font-black ${isStock ? 'text-blue-900' : 'text-zinc-900'}`}>
+                                    {isStock ? <Package size={14} className="text-blue-500" /> : <Receipt size={14} className="text-zinc-400" />}
+                                    <span>{isStock ? "Peças do Estoque" : `NF: ${nf.nf_number || "S/N"}`}</span>
                                   </div>
                                   <span className="text-emerald-700 font-black">
                                     R$ {nfSum.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}

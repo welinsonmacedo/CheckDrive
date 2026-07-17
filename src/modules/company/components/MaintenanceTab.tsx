@@ -393,26 +393,26 @@ export default function MaintenanceTab() {
     }
 
     if (Array.isArray(loadedNfs) && loadedNfs.length > 0) {
-      setResolveNfs(loadedNfs);
+      const actualNfs = loadedNfs.filter((n: any) => !n.is_stock && !(n.nf_number || "").includes("Estoque - Origem NF"));
+      const stockGroups = loadedNfs.filter((n: any) => n.is_stock || (n.nf_number || "").includes("Estoque - Origem NF"));
+      
+      if (actualNfs.length > 0) {
+        setResolveNfs(actualNfs);
+      } else {
+        setResolveNfs([{ id: Date.now().toString(), nf_number: "", nf_key: "", items: [{ id: `item-${Date.now()}`, item_id: "", name: "", quantity: 1, unit_price: 0 }] }]);
+      }
+      
+      const loadedStock = [];
+      for (const sg of stockGroups) {
+        if (sg.items) {
+          loadedStock.push(...sg.items.map((i: any) => ({ ...i, name: i.name.replace(" (Uso do Estoque)", "") })));
+        }
+      }
+      setResolveStockItems(loadedStock);
     } else {
-      setResolveNfs([
-        {
-          id: Date.now().toString(),
-          nf_number: "",
-          nf_key: "",
-          items: [
-            {
-              id: `item-${Date.now()}`,
-              item_id: "",
-              name: "",
-              quantity: 1,
-              unit_price: 0,
-            },
-          ],
-        },
-      ]);
+      setResolveNfs([{ id: Date.now().toString(), nf_number: "", nf_key: "", items: [{ id: `item-${Date.now()}`, item_id: "", name: "", quantity: 1, unit_price: 0 }] }]);
+      setResolveStockItems([]);
     }
-    setResolveStockItems([]);
     setShowAddItemDialog(false);
 
     if (issue.auto_alerts) {
@@ -548,38 +548,15 @@ export default function MaintenanceTab() {
           nf.items?.some((i: any) => i.name?.trim()),
       );
 
-      // Get origin NFs for stock items
-      const stockGroupsByOriginNf: Record<string, any> = {};
-      for (const item of resolveStockItems) {
-        if (!item.item_id || !item.quantity) continue;
-        let originNf = "S/N";
-        let originNfKey = "";
-        const { data: txs } = await supabase
-          .from("inventory_transactions")
-          .select("nf_number, nf_key")
-          .eq("item_id", item.item_id)
-          .eq("type", "in")
-          .order("created_at", { ascending: false })
-          .limit(1);
-        if (txs && txs.length > 0) {
-          originNf = txs[0].nf_number || "S/N";
-          originNfKey = txs[0].nf_key || "";
-        }
-        const groupKey = originNf;
-        if (!stockGroupsByOriginNf[groupKey]) {
-          stockGroupsByOriginNf[groupKey] = {
-            id: `pseudo-nf-${Date.now()}-${Math.random()}`,
-            nf_number: `Estoque - Origem NF: ${originNf}`,
-            nf_key: originNfKey,
-            items: [],
-          };
-        }
-        stockGroupsByOriginNf[groupKey].items.push({
-          ...item,
-          name: `${item.name} (Uso do Estoque)`,
+      if (resolveStockItems.length > 0) {
+        validResolveNfs.push({
+          id: `stock-usage-${Date.now()}`,
+          is_stock: true,
+          nf_number: "Itens de Estoque",
+          nf_key: "",
+          items: resolveStockItems.filter((i: any) => i.item_id && i.quantity),
         });
       }
-      validResolveNfs.push(...Object.values(stockGroupsByOriginNf));
 
       const nfsJSONString = JSON.stringify(validResolveNfs);
       const stockJSONString = JSON.stringify(resolveStockItems);
@@ -692,7 +669,7 @@ export default function MaintenanceTab() {
         ) {
           let company_id = inventoryItems[0]?.company_id || null;
           if (!company_id) {
-            const { data: profile } = await supabase.from("profiles").select("company_id").eq("company_id", (user as any)?.company_id)
+            const { data: profile } = await supabase.from("profiles").select("company_id")
               .eq("id", user?.id)
               .single();
             if (profile) company_id = profile.company_id;
@@ -709,6 +686,7 @@ export default function MaintenanceTab() {
                 quantity: -Math.abs(Number(item.quantity)),
                 unit_price: Number(item.unit_price),
                 total_price: total,
+                date: new Date().toISOString(),
                 notes: `Estoque utilizado para pendência. ${resolvingIssueData?.item_title || ""}`,
                 created_by: user?.id,
               };
@@ -720,7 +698,7 @@ export default function MaintenanceTab() {
               if (txError) throw txError;
 
               // decrement
-              const { data: currentItemData } = await supabase.from("inventory_items").select("current_quantity").eq("company_id", (user as any)?.company_id)
+              const { data: currentItemData } = await supabase.from("inventory_items").select("current_quantity")
                 .eq("id", item.item_id)
                 .single();
               if (currentItemData) {
