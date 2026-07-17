@@ -479,7 +479,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                     <th className="px-6 py-3">Produto</th>
                     <th className="px-6 py-3">Código/SKU</th>
                     <th className="px-6 py-3">Categoria</th>
-                    <th className="px-6 py-3">Estoque</th>
+                    <th className="px-6 py-3">{itemsFilter === "used" ? "Qtd. Usada" : "Estoque"}</th>
                     <th className="px-6 py-3 text-right">Custo Médio</th>
                     <th className="px-6 py-3">Ações</th>
                   </tr>
@@ -508,8 +508,8 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                       <td className="px-6 py-3 text-xs text-zinc-500">{item.sku || '-'}</td>
                       <td className="px-6 py-3 text-xs text-zinc-500">{item.category || '-'}</td>
                       <td className="px-6 py-3 text-sm font-bold text-zinc-900">
-                        {item.current_quantity}{' '}
-                        {item.current_quantity <= item.min_quantity && (
+                        {itemsFilter === "used" ? Math.abs(transactions.filter(tx => tx.item_id === item.id && tx.type === 'out').reduce((acc, tx) => acc + Number(tx.quantity), 0)) : item.current_quantity}{' '}
+                        {itemsFilter !== "used" && item.current_quantity <= item.min_quantity && (
                           <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold ml-2">BAIXO</span>
                         )}
                       </td>
@@ -639,7 +639,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
-                  {transactions.map(t => (
+                  {transactions.filter(t => t.type === 'in').map(t => (
                     <tr key={t.id} className="hover:bg-zinc-50 transition-colors">
                       <td className="px-6 py-3 text-xs font-medium text-zinc-600">{new Date(t.created_at).toLocaleString('pt-BR')}</td>
                       <td className="px-6 py-3 text-sm font-bold text-zinc-900">{t.inventory_items?.name || '-'}</td>
