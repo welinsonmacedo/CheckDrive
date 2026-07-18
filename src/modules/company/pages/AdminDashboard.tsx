@@ -30,7 +30,7 @@ import {
   Navigation,
   HardDrive,
   MessageSquare,
-  PackageSearch,
+  PackageSearch, Menu,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -371,7 +371,7 @@ export default function AdminDashboard() {
     },
     {
       id: "inventory",
-      icon: PackageSearch,
+      icon: PackageSearch, Menu,
       label: "Estoque",
       color: "from-teal-500 to-emerald-500",
     },
