@@ -99,7 +99,7 @@ export default function AdminDashboard() {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     const isMobile = window.innerWidth <= 768 || /Mobi|Android/i.test(navigator.userAgent);
     setIsMobileDevice(isMobile);
-    if (isMobile && !isStandalone) {
+    if (!isStandalone) {
       setIsPwaInstalled(false);
     }
   }, []);
@@ -498,32 +498,53 @@ export default function AdminDashboard() {
   ];
 
 
-  if (isMobileDevice && !isPwaInstalled) {
+  if (!isPwaInstalled) {
     return (
       <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center p-6 text-center">
         <div className="w-24 h-24 mb-6 rounded-3xl overflow-hidden shadow-2xl shadow-primary/20">
-          <img src="https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/logo.jpeg" alt="Logo" className="w-full h-full object-cover" />
+          <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
         </div>
         <h1 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">Instale o App</h1>
-        <p className="text-slate-500 mb-10 text-sm max-w-[280px] leading-relaxed">
-          Para acessar o Painel Admin pelo celular, adicione o aplicativo à sua tela de início.
+        <p className="text-slate-500 mb-8 text-sm max-w-[280px] leading-relaxed">
+          Para acessar o Painel Admin, instale o aplicativo no seu dispositivo (celular ou computador).
         </p>
         
-        <div className="w-full max-w-sm space-y-6 text-left bg-slate-50 p-6 rounded-3xl border border-slate-100">
-          <div className="flex items-start gap-4">
-            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0 mt-0.5">1</div>
-            <div>
-              <p className="font-bold text-slate-700 text-sm">No Safari (iOS)</p>
-              <p className="text-xs text-slate-500 mt-1">Toque no ícone de Compartilhar e depois em "Adicionar à Tela de Início".</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold shrink-0 mt-0.5">2</div>
-            <div>
-              <p className="font-bold text-slate-700 text-sm">No Chrome (Android)</p>
-              <p className="text-xs text-slate-500 mt-1">Toque nos 3 pontinhos e depois em "Instalar aplicativo" ou "Adicionar à Tela Inicial".</p>
-            </div>
-          </div>
+        <div className="w-full max-w-sm space-y-6 text-left bg-slate-50 p-6 rounded-3xl border border-slate-100 overflow-y-auto max-h-[50vh]">
+          {isMobileDevice ? (
+            <>
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0 mt-0.5">1</div>
+                <div>
+                  <p className="font-bold text-slate-700 text-sm">No Safari (iOS)</p>
+                  <p className="text-xs text-slate-500 mt-1">Toque no ícone de Compartilhar e depois em "Adicionar à Tela de Início".</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold shrink-0 mt-0.5">2</div>
+                <div>
+                  <p className="font-bold text-slate-700 text-sm">No Chrome (Android)</p>
+                  <p className="text-xs text-slate-500 mt-1">Toque nos 3 pontinhos e depois em "Instalar aplicativo" ou "Adicionar à Tela Inicial".</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold shrink-0 mt-0.5">1</div>
+                <div>
+                  <p className="font-bold text-slate-700 text-sm">No Chrome / Edge (Computador)</p>
+                  <p className="text-xs text-slate-500 mt-1">Clique no ícone de instalação <span className="font-bold">(&#8853;)</span> ou <span className="font-bold">(&#10515;)</span> na barra de endereços do navegador, ou vá no menu e clique em "Instalar CheckDrive".</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold shrink-0 mt-0.5">2</div>
+                <div>
+                  <p className="font-bold text-slate-700 text-sm">No Safari (Mac)</p>
+                  <p className="text-xs text-slate-500 mt-1">Vá em Arquivo &gt; Adicionar ao Dock.</p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );

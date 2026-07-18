@@ -115,7 +115,10 @@ export default function Login() {
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden border border-zinc-200">
         <div className="p-8">
-          <div className="mb-8 text-center">
+          <div className="mb-8 text-center flex flex-col items-center justify-center">
+            <div className="w-24 h-24 mb-4 rounded-3xl overflow-hidden shadow-2xl shadow-primary/20">
+              <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
+            </div>
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900 mb-2 italic">
               CheckDrive
             </h1>
