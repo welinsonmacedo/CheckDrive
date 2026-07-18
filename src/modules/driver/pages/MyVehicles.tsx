@@ -66,8 +66,8 @@ export default function MyVehicles() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user?.company_id) fetchData();
+  }, [user?.company_id]);
 
   const checkVehicleLimit = async (): Promise<boolean> => {
     if (!user?.company_id) return true;
