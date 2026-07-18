@@ -60,6 +60,8 @@ import FeedbackTab from "@/src/modules/company/components/FeedbackTab";
 import NotificationsTab from "@/src/modules/company/components/NotificationsTab";
 import InsurancesTab from "@/src/modules/company/components/InsurancesTab";
 import MyVehicles from "@/src/modules/driver/pages/MyVehicles";
+import MyDrivers from "@/src/modules/driver/pages/MyDrivers";
+import MyDrivers from "@/src/modules/driver/pages/MyDrivers";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 
 import { GlobalSearch } from "@/src/modules/company/components/GlobalSearch";
@@ -334,6 +336,12 @@ export default function AdminDashboard() {
       icon: Truck,
       label: "Meus Veículos",
       color: "from-teal-500 to-green-500",
+    },
+    {
+      id: "my_drivers",
+      icon: Users,
+      label: "Meus Motoristas",
+      color: "from-amber-500 to-yellow-500",
     },
     {
       id: "checklists",
@@ -745,6 +753,7 @@ export default function AdminDashboard() {
               {activeTab === "drivers" && <DriversTab />}
               {activeTab === "vehicles" && <VehiclesTab />}
               {activeTab === "my_vehicles" && <MyVehicles />}
+              {activeTab === "my_drivers" && <MyDrivers />}
               {activeTab === "routes" && <RoutesTab />}
               {activeTab === "checklist_setup" && <ChecklistSetupTab />}
               {activeTab === "baits" && <BaitsTab />}
