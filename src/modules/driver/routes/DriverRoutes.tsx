@@ -8,14 +8,12 @@ import DriverProfile from '../pages/DriverProfile';
 import DriverAverages from '../pages/DriverAverages';
 import DriverNotifications from '../pages/DriverNotifications';
 import DriverLayout from '../layouts/DriverLayout';
-import MyVehicles from '../pages/MyVehicles';
 
 export default function DriverRoutes() {
   return (
     <Routes>
       <Route element={<DriverLayout />}>
         <Route path="home" element={<DriverHome />} />
-        <Route path="vehicles" element={<MyVehicles />} />
         <Route path="checklist/:type" element={<ChecklistFlow />} />
         <Route path="history" element={<DriverAverages />} />
         <Route path="ranking" element={<Ranking />} />
