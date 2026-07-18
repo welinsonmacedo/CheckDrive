@@ -26,7 +26,7 @@ import {
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import ManualIssueModal from "@/src/modules/company/components/ManualIssueModal";
-import { SupplierModal } from "../../../components/admin/SupplierModal";
+import { SupplierModal } from "./SupplierModal";
 import IssueDetailsModal from "./IssueDetailsModal";
 import { usePersistentState } from "@/src/hooks/usePersistentState";
 

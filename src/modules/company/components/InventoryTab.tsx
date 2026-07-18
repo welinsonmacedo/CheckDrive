@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import { Package, Truck, FileText, Plus, Search, Edit2, Trash2, X, Check, FileCheck, Layers, Upload, Eye } from "lucide-react";
-import { SupplierModal } from "../../../components/admin/SupplierModal";
+import { SupplierModal } from "./SupplierModal";
 
 export default function InventoryTab() {
   const { user } = useAuth();

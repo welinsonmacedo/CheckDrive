@@ -271,10 +271,6 @@ export default function MyVehicles() {
       {selectedVehicle && (
         <VehicleDetailsModal
           vehicle={selectedVehicle}
-          type={types.find((t) => t.id === selectedVehicle.type)}
-          model={models.find((m) => m.id === selectedVehicle.model)}
-          modality={modalities.find((m) => m.id === selectedVehicle.modality_id)}
-          insurance={insurances.find((i) => i.id === selectedVehicle.insurance_id)}
           onClose={() => setSelectedVehicle(null)}
         />
       )}
