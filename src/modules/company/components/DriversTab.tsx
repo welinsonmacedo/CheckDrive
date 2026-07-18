@@ -611,7 +611,7 @@ export default function DriversTab() {
           />
 
           {/* MODAL */}
-          <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl p-8 animate-fade-in">
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl p-4 sm:p-8 animate-fade-in">
             {/* HEADER */}
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
@@ -689,7 +689,7 @@ export default function DriversTab() {
                 className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input
                   type="text"
                   placeholder="CNH"
@@ -710,7 +710,7 @@ export default function DriversTab() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest pl-2 block">1ª Habilitação</label>
                   <input
@@ -816,7 +816,7 @@ export default function DriversTab() {
                   <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
                     Modalidades Permitidas
                   </span>
-                  <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
                     {modalities.map((mod) => (
                       <label
                         key={mod.id}

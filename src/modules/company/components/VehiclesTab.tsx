@@ -263,7 +263,7 @@ export default function VehiclesTab() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 pt-4 border-t border-app-border">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-app-border">
                       <div>
                         <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Modelo</span>
                         <span className="text-sm font-black text-text-main uppercase">{currentItem.model || "N/I"}</span>
@@ -322,7 +322,7 @@ export default function VehiclesTab() {
 
                     <div className="pt-4 border-t border-app-border">
                       <h4 className="text-[10px] font-black uppercase text-text-muted tracking-wider mb-3">Galeria do Veículo</h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                         {currentItem.photo_front_url && (
                           <div className="space-y-1">
                             <span className="text-[9px] font-bold text-slate-400 text-center block">Frontal</span>
@@ -477,7 +477,7 @@ export default function VehiclesTab() {
 
               <div className="space-y-4 pt-2">
                 <h3 className="text-[12px] font-bold text-text-main">Fotos (Opcional)</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Frontal</label>
                     <input type="file" accept="image/*" onChange={(e) => setPhotoFrontFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>

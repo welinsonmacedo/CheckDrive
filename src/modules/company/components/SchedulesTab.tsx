@@ -515,7 +515,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
               {new Date(`${filterDate}T12:00:00`).toLocaleDateString()}
             </div>
           ) : (
-            <table className="w-full">
+            <div className="overflow-x-auto w-full"><table className="w-full">
               <thead className="bg-app-bg/50">
                 <tr>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
@@ -693,7 +693,7 @@ ${formatted}`);
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </div>

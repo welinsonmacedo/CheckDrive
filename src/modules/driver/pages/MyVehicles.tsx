@@ -185,200 +185,99 @@ export default function MyVehicles() {
   const currentItem = filteredItems[currentVehicleIndex] || null;
 
   return (
-    <>
-      <div className={`flex flex-col gap-6 ${selectedVehicle ? 'print:hidden' : ''}`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="relative w-full sm:w-auto">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"/>
-            <input type="text" placeholder="Filtrar placa ou modelo..." className="h-10 pl-9 pr-4 bg-app-bg rounded-xl text-[11px] font-bold text-text-main outline-none focus:ring-1 focus:ring-primary w-full sm:w-64 border border-app-border" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentVehicleIndex(0); }}/>
-          </div>
-        </div>
-
-        {filteredItems.length === 0 ? (
-          <div className="p-12 text-center text-text-muted font-bold text-xs bg-app-bg rounded-2xl border border-app-border">
-            Nenhum veículo ou reboque encontrado para este filtro.
-          </div>
-        ) : (
-          <div className="relative bento-card p-6 flex flex-col gap-6 group">
-            {filteredItems.length > 1 && (
-              <>
-                <button onClick={() => setCurrentVehicleIndex(prev => (prev === 0 ? filteredItems.length - 1 : prev - 1))} className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white border border-app-border rounded-full flex items-center justify-center shadow-sm text-text-muted hover:text-primary z-10 hover:scale-105 transition-all">
-                  <ChevronLeft size={20}/>
-                </button>
-                <button onClick={() => setCurrentVehicleIndex(prev => (prev === filteredItems.length - 1 ? 0 : prev + 1))} className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white border border-app-border rounded-full flex items-center justify-center shadow-sm text-text-muted hover:text-primary z-10 hover:scale-105 transition-all">
-                  <ChevronRight size={20}/>
-                </button>
-              </>
-            )}
-
-            <div className="flex flex-col md:flex-row gap-8 px-4 md:px-10">
-              <div className="w-full md:w-1/3 space-y-4">
-                <div className="aspect-square bg-slate-100 rounded-2xl border border-app-border overflow-hidden flex items-center justify-center">
-                  {currentItem.photo_front_url ? (
-                    <img src={supabase.storage.from("vehicles-docs").getPublicUrl(currentItem.photo_front_url).data.publicUrl} alt="Frontal" className="w-full h-full object-cover"/>
-                  ) : (
-                    <div className="text-center p-6 text-slate-400">
-                      <div className="w-16 h-16 bg-slate-200 rounded-full mx-auto mb-3 flex items-center justify-center">
-                        <CheckCircle2 size={24} className="opacity-50"/>
-                      </div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider block">
-                        {currentItem.itemType === 'vehicle' ? "Sem foto principal" : "Reboque (Sem Foto)"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                    {['photo_right_url', 'photo_left_url', 'photo_rear_url'].map((k, i) => (
-                      <div key={i} className="aspect-square bg-slate-50 border border-app-border rounded-xl flex items-center justify-center overflow-hidden">
-                        {currentItem[k] ? (
-                          <img src={supabase.storage.from("vehicles-docs").getPublicUrl(currentItem[k]).data.publicUrl} className="w-full h-full object-cover"/>
-                        ) : (
-                          <span className="text-[8px] font-bold text-slate-300 uppercase tracking-widest text-center px-1">Sem<br/>Foto</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-              </div>
-
-              <div className="w-full md:w-2/3 flex flex-col justify-between">
-                <div className="space-y-6">
-                  <div>
-                    <h2 className="text-4xl font-black text-text-main font-mono tracking-tight mb-2">{currentItem.plate}</h2>
-                    {currentItem.itemType === 'trailer' && (
-                      <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black uppercase tracking-widest mr-2 border border-slate-200">
-                        Reboque
-                      </span>
-                    )}
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentItem.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {currentItem.active !== false ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 pt-4 border-t border-app-border">
-                      <div>
-                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Modelo</span>
-                        <span className="text-sm font-black text-text-main uppercase">{currentItem.model || "N/I"}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Ano Mod/Fab</span>
-                        <span className="text-sm font-black text-text-main uppercase">{currentItem.model_year || "-"} / {currentItem.manufacture_year || "-"}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Combustível</span>
-                        <span className="text-sm font-black text-text-main uppercase">{currentItem.fuel_type || "N/I"}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Renavam</span>
-                        <span className="text-sm font-black text-text-main font-mono">{currentItem.renavam || "N/I"}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Tipo</span>
-                        <span className="text-sm font-black text-text-main uppercase">{types.find((t) => t.id === currentItem.type)?.name || currentItem.type || "N/I"}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Modalidade</span>
-                        <span className="text-sm font-black text-text-main uppercase">{modalities.find((m) => m.id === currentItem.modality_id)?.name || "N/I"}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Cor Predominante</span>
-                        <span className="text-sm font-black text-text-main uppercase">{currentItem.color || "N/I"}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">ANTT</span>
-                        <span className="text-sm font-black text-text-main uppercase">{currentItem.antt || "N/I"}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Seguradora</span>
-                        <span className="text-sm font-black text-text-main uppercase">{insurances.find((i) => i.id === currentItem.insurance_id)?.name || "N/I"}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="pt-4 border-t border-app-border">
-                      <h4 className="text-[10px] font-black uppercase text-text-muted tracking-wider mb-3">Documentos Anexados (PDF/Fotos)</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {currentItem.doc_crlv_url && (
-                          <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.doc_crlv_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 CRLV</a>
-                        )}
-                        {currentItem.doc_antt_url && (
-                          <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.doc_antt_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 ANTT</a>
-                        )}
-                        {currentItem.doc_insurance_url && (
-                          <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.doc_insurance_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 Apólice Seguro</a>
-                        )}
-                        {!currentItem.doc_crlv_url && !currentItem.doc_antt_url && !currentItem.doc_insurance_url && (
-                          <span className="text-[10px] text-slate-400 italic">Nenhum documento anexado</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-app-border">
-                      <h4 className="text-[10px] font-black uppercase text-text-muted tracking-wider mb-3">Galeria do Veículo</h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {currentItem.photo_front_url && (
-                          <div className="space-y-1">
-                            <span className="text-[9px] font-bold text-slate-400 text-center block">Frontal</span>
-                            <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_front_url).data.publicUrl} target="_blank" rel="noreferrer">
-                              <img src={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_front_url).data.publicUrl} alt="Frontal" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
-                            </a>
-                          </div>
-                        )}
-                        {currentItem.photo_right_url && (
-                          <div className="space-y-1">
-                            <span className="text-[9px] font-bold text-slate-400 text-center block">Lateral Direita</span>
-                            <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_right_url).data.publicUrl} target="_blank" rel="noreferrer">
-                              <img src={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_right_url).data.publicUrl} alt="Direita" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
-                            </a>
-                          </div>
-                        )}
-                        {currentItem.photo_left_url && (
-                          <div className="space-y-1">
-                            <span className="text-[9px] font-bold text-slate-400 text-center block">Lateral Esquerda</span>
-                            <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_left_url).data.publicUrl} target="_blank" rel="noreferrer">
-                              <img src={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_left_url).data.publicUrl} alt="Esquerda" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
-                            </a>
-                          </div>
-                        )}
-                        {currentItem.photo_rear_url && (
-                          <div className="space-y-1">
-                            <span className="text-[9px] font-bold text-slate-400 text-center block">Traseira</span>
-                            <a href={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_rear_url).data.publicUrl} target="_blank" rel="noreferrer">
-                              <img src={supabase.storage.from('vehicles-docs').getPublicUrl(currentItem.photo_rear_url).data.publicUrl} alt="Traseira" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
-                            </a>
-                          </div>
-                        )}
-                        {!currentItem.photo_front_url && !currentItem.photo_right_url && !currentItem.photo_left_url && !currentItem.photo_rear_url && (
-                          <span className="text-[10px] text-slate-400 italic col-span-4">Nenhuma foto anexada</span>
-                        )}
-                      </div>
-                    </div>
-                </div>
-
-                <div className="flex gap-3 pt-6 border-t border-app-border mt-6">
-                  {currentItem.itemType === 'vehicle' && (
-                    <button onClick={() => setSelectedVehicle(currentItem)} className="flex-1 h-12 bg-app-bg border border-app-border hover:bg-slate-50 text-text-main font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-colors">
-                      <Eye size={16}/> Ver Tudo
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] font-black uppercase text-slate-300 tracking-widest">
-              {currentVehicleIndex + 1} de {filteredItems.length}
-            </div>
-          </div>
-        )}
-
+    <div className="flex flex-col gap-6 w-full">
+      <div className="flex justify-between items-center px-1 mb-2">
+        <h2 className="text-2xl font-extrabold text-text-main tracking-tight">Meus Veículos</h2>
       </div>
 
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
+        <div className="relative w-full sm:w-auto">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"/>
+          <input 
+            type="text" 
+            placeholder="Filtrar placa ou modelo..." 
+            className="h-10 pl-9 pr-4 bg-app-bg rounded-xl text-[11px] font-bold text-text-main outline-none focus:ring-1 focus:ring-primary w-full sm:w-80 border border-app-border" 
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
 
+      {filteredItems.length === 0 ? (
+        <div className="p-12 text-center text-text-muted font-bold text-xs bg-app-bg rounded-2xl border border-app-border">
+          Nenhum veículo ou reboque encontrado para este filtro.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredItems.map((item, index) => (
+            <div key={item.id} className="bento-card p-6 flex flex-col gap-4 hover:shadow-md transition-shadow">
+              <div className="flex flex-col gap-4">
+                <div className="aspect-video w-full rounded-2xl bg-slate-100 border border-app-border overflow-hidden flex items-center justify-center shrink-0">
+                  {item.photo_front_url ? (
+                    <img src={supabase.storage.from("vehicle-docs").getPublicUrl(item.photo_front_url).data.publicUrl} alt="Veículo" className="w-full h-full object-cover"/>
+                  ) : (
+                    <div className="text-center p-6 text-slate-400 flex flex-col items-center">
+                      <div className="w-12 h-12 bg-slate-200 rounded-full mb-2 flex items-center justify-center">
+                        <span className="opacity-50 font-bold text-xs">FOTO</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <h3 className="text-lg font-black text-text-main uppercase tracking-tight truncate">
+                      {item.plate}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-blue-100 text-blue-600 shrink-0">
+                      {item.itemType === 'vehicle' ? 'Veículo' : 'Reboque'}
+                    </span>
+                  </div>
+                  
+                  {item.itemType === 'vehicle' && (
+                    <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-app-border">
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Modelo</span>
+                        <span className="text-[10px] font-bold text-text-main truncate block" title={item.model}>{item.model || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Cor</span>
+                        <span className="text-[10px] font-bold text-text-main">{item.color || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Ano Mod/Fab</span>
+                        <span className="text-[10px] font-bold text-text-main">{item.model_year || '-'}/{item.manufacture_year || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Renavam</span>
+                        <span className="text-[10px] font-bold text-text-main">{item.renavam || '-'}</span>
+                      </div>
+                    </div>
+                  )}
+                  {item.itemType === 'vehicle' && (
+                    <div className="mt-6 pt-4 border-t border-app-border">
+                      <button onClick={() => setSelectedVehicle(item)} className="w-full h-10 bg-app-bg border border-app-border hover:bg-slate-50 text-text-main font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 transition-colors">
+                        <Eye size={16}/> Ver Tudo
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      
       {selectedVehicle && (
         <VehicleDetailsModal
           vehicle={selectedVehicle}
+          type={types.find((t) => t.id === selectedVehicle.type)}
+          model={models.find((m) => m.id === selectedVehicle.model)}
+          modality={modalities.find((m) => m.id === selectedVehicle.modality_id)}
+          insurance={insurances.find((i) => i.id === selectedVehicle.insurance_id)}
           onClose={() => setSelectedVehicle(null)}
         />
       )}
-    </>
+    </div>
   );
 }

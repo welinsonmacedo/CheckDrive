@@ -255,7 +255,7 @@ export default function VehicleDetailsModal({
                 <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-2 mb-3">
                   <Info size={14} className="text-slate-400" /> Detalhes Cadastrais e Especificações
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Renavam</span>
                     <span className="text-xs font-semibold text-slate-700">{vehicle.renavam || 'Não informado'}</span>
@@ -306,7 +306,7 @@ export default function VehicleDetailsModal({
 
                 <div className="pt-4 border-t border-slate-200/60 mt-4">
                   <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-wider mb-3">Galeria do Veículo</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     {vehicle.photo_front_url && (
                       <div className="space-y-1">
                         <span className="text-[9px] font-bold text-slate-400 text-center block">Frontal</span>

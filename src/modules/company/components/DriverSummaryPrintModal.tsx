@@ -225,7 +225,7 @@ export default function DriverSummaryPrintModal({
                 </h3>
 
                 <div className="overflow-hidden border border-zinc-300 rounded-xl">
-                  <table className="w-full text-left border-collapse">
+                  <div className="overflow-x-auto w-full"><table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-zinc-50 text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider border-b border-zinc-300">
                         <th className="px-3 py-2.5">Auto / Cód</th>
@@ -311,7 +311,7 @@ export default function DriverSummaryPrintModal({
                         );
                       })}
                     </tbody>
-                  </table>
+                  </table></div>
                 </div>
               </div>
 

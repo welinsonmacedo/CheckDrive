@@ -1191,7 +1191,7 @@ export default function MaintenanceTab() {
         </head>
         <body>
           <h1>Acompanhamento de Manutenções - ${new Date().toLocaleDateString("pt-BR")}</h1>
-          <table>
+          <div className="overflow-x-auto w-full"><table>
             <thead>
               <tr>
                 <th>Status</th>
@@ -1263,7 +1263,7 @@ export default function MaintenanceTab() {
 
     printContent += `
             </tbody>
-          </table>
+          </table></div>
         </body>
       </html>
     `;

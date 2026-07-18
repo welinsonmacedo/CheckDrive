@@ -473,7 +473,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
               </button>
             </div>
             <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-              <table className="w-full text-left">
+              <div className="overflow-x-auto w-full"><table className="w-full text-left">
                 <thead className="bg-zinc-50 border-b border-zinc-200 text-xs font-black text-zinc-500 uppercase tracking-wider">
                   <tr>
                     <th className="px-6 py-3">Produto</th>
@@ -555,7 +555,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                     </tr>
                   )}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </div>
         )}
@@ -625,7 +625,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
               </div>
             </div>
             <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-              <table className="w-full text-left">
+              <div className="overflow-x-auto w-full"><table className="w-full text-left">
                 <thead className="bg-zinc-50 border-b border-zinc-200 text-xs font-black text-zinc-500 uppercase tracking-wider">
                   <tr>
                     <th className="px-6 py-3">Data/Hora</th>
@@ -665,7 +665,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                     </tr>
                   )}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </div>
         )}
