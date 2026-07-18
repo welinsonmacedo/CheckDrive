@@ -19,7 +19,8 @@ export default function MyDrivers() {
     try {
       const { data } = await supabase
         .from("profiles")
-        .select("*, driver_modalities(modality_id)")
+        .select("*")
+        .eq("role", "driver")
         .eq("company_id", user?.company_id)
         .order("full_name");
       setUsers(data || []);
