@@ -120,7 +120,7 @@ export default function Login() {
               CheckDrive
             </h1>
             <p className="text-zinc-500 text-sm italic font-bold uppercase tracking-widest">
-              Gestão de Frotas
+              Sua frota conectada, segura e eficiente
             </p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">

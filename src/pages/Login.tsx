@@ -83,7 +83,7 @@ export default function Login() {
         <div className="p-8">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900 mb-2 italic">CheckDrive</h1>
-            <p className="text-zinc-500 text-sm italic font-bold uppercase tracking-widest">Gestão de Frotas</p>
+            <p className="text-zinc-500 text-sm italic font-bold uppercase tracking-widest">Sua frota conectada, segura e eficiente</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             {error && <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100">{error}</div>}
