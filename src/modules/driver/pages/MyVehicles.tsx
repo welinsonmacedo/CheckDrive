@@ -214,7 +214,7 @@ export default function MyVehicles() {
               <div className="flex flex-col gap-4">
                 <div className="aspect-video w-full rounded-2xl bg-slate-100 border border-app-border overflow-hidden flex items-center justify-center shrink-0">
                   {item.photo_front_url ? (
-                    <img src={supabase.storage.from("vehicle-docs").getPublicUrl(item.photo_front_url).data.publicUrl} alt="Veículo" className="w-full h-full object-cover"/>
+                    <img src={((item.photo_front_url)?.startsWith('http') ? (item.photo_front_url) : supabase.storage.from('vehicles-docs').getPublicUrl(item.photo_front_url).data.publicUrl)} alt="Veículo" className="w-full h-full object-cover"/>
                   ) : (
                     <div className="text-center p-6 text-slate-400 flex flex-col items-center">
                       <div className="w-12 h-12 bg-slate-200 rounded-full mb-2 flex items-center justify-center">

@@ -446,7 +446,7 @@ export default function DriversTab() {
                 <div className="aspect-square bg-slate-100 rounded-2xl border border-app-border overflow-hidden flex items-center justify-center">
                   {currentUser.photo_url ? (
                     <img
-                      src={supabase.storage.from("driver-docs").getPublicUrl(currentUser.photo_url).data.publicUrl}
+                      src={((currentUser.photo_url)?.startsWith('http') ? (currentUser.photo_url) : supabase.storage.from('driver-docs').getPublicUrl(currentUser.photo_url).data.publicUrl)}
                       alt="Foto"
                       className="w-full h-full object-cover"
                     />
@@ -534,10 +534,10 @@ export default function DriversTab() {
                     <h4 className="text-[10px] font-black uppercase text-text-muted tracking-wider mb-3">Documentos Anexados (PDF/Fotos)</h4>
                     <div className="flex flex-wrap gap-2">
                       {currentUser.photo_url && (
-                        <a href={supabase.storage.from('driver-docs').getPublicUrl(currentUser.photo_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 Foto do Motorista</a>
+                        <a href={((currentUser.photo_url)?.startsWith('http') ? (currentUser.photo_url) : supabase.storage.from('driver-docs').getPublicUrl(currentUser.photo_url).data.publicUrl)} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 Foto do Motorista</a>
                       )}
                       {currentUser.doc_cnh_url && (
-                        <a href={supabase.storage.from('driver-docs').getPublicUrl(currentUser.doc_cnh_url).data.publicUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 CNH</a>
+                        <a href={((currentUser.doc_cnh_url)?.startsWith('http') ? (currentUser.doc_cnh_url) : supabase.storage.from('driver-docs').getPublicUrl(currentUser.doc_cnh_url).data.publicUrl)} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-primary hover:border-primary/30 transition-colors">📄 CNH</a>
                       )}
                       {!currentUser.photo_url && !currentUser.doc_cnh_url && (
                         <span className="text-[10px] text-slate-400 italic">Nenhum documento anexado</span>
@@ -739,7 +739,7 @@ export default function DriversTab() {
                  <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest pl-2 block">Documento CNH (PDF/Foto)</label>
                  <div className="flex items-center gap-4 bg-app-bg border border-app-border p-2 rounded-lg">
                    {userForm.docCnhUrl && !docCnhFile && (
-                     <a href={supabase.storage.from("driver-docs").getPublicUrl(userForm.docCnhUrl).data.publicUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-primary hover:underline">Ver CNH atual</a>
+                     <a href={((userForm.docCnhUrl)?.startsWith('http') ? (userForm.docCnhUrl) : supabase.storage.from('driver-docs').getPublicUrl(userForm.docCnhUrl).data.publicUrl)} target="_blank" rel="noreferrer" className="text-xs font-bold text-primary hover:underline">Ver CNH atual</a>
                    )}
                    <input
                      type="file"
@@ -756,7 +756,7 @@ export default function DriversTab() {
                  <label className="text-[10px] text-text-muted font-bold uppercase tracking-widest pl-2 block">Documento CNH (PDF/Foto)</label>
                  <div className="flex items-center gap-4 bg-app-bg border border-app-border p-2 rounded-lg">
                    {userForm.photoUrl && !photoFile && (
-                     <img src={supabase.storage.from("driver-docs").getPublicUrl(userForm.photoUrl).data.publicUrl} alt="Foto" className="w-10 h-10 rounded-full object-cover border border-app-border" />
+                     <img src={((userForm.photoUrl)?.startsWith('http') ? (userForm.photoUrl) : supabase.storage.from('driver-docs').getPublicUrl(userForm.photoUrl).data.publicUrl)} alt="Foto" className="w-10 h-10 rounded-full object-cover border border-app-border" />
                    )}
                    <input
                      type="file"
