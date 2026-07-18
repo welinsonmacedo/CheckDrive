@@ -275,7 +275,7 @@ export default function DefectPrintModal({
                                     <span className="font-black text-sm text-emerald-700 print:text-zinc-900">R$ {nfSum.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                                   </div>
                                   {nf.items && nf.items.length > 0 && (
-                                    <table className="w-full text-xs">
+                                    <table className="w-full text-xs whitespace-nowrap">
                                       <thead>
                                         <tr className="text-left text-[10px] uppercase tracking-wider text-zinc-500 bg-zinc-100/50 print:bg-white border-b border-zinc-200 print:border-zinc-400">
                                           <th className="px-4 py-2 font-black">Peça/Serviço</th>

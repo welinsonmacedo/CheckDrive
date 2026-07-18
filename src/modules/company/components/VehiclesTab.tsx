@@ -236,7 +236,7 @@ export default function VehiclesTab() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {['photo_right_url', 'photo_left_url', 'photo_rear_url'].map((k, i) => (
                       <div key={i} className="aspect-square bg-slate-50 border border-app-border rounded-xl flex items-center justify-center overflow-hidden">
                         {currentItem[k] ? (

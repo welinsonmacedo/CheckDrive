@@ -546,7 +546,7 @@ export default function VehicleDetailsModal({
                   {submissions.length > 0 ? (
                     <div className="overflow-hidden border border-slate-100 rounded-2xl bg-white shadow-sm">
                       <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse whitespace-nowrap">
                           <thead className="bg-slate-50/70 border-b border-slate-100">
                             <tr>
                               <th className="px-5 py-3.5 text-[9px] font-black text-slate-450 uppercase tracking-widest">

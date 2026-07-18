@@ -515,7 +515,7 @@ export default function NotificationsTab() {
 
                         {/* Metric progress and status */}
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-gray-100 w-full md:w-auto">
-                          <div className="grid grid-cols-2 gap-3 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200/60 text-left min-w-[140px]">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200/60 text-left min-w-[140px]">
                             <div>
                               <span className="block text-[7px] font-black text-gray-400 uppercase tracking-widest leading-none">
                                 Métrica

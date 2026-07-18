@@ -345,7 +345,7 @@ export default function DriverRankingDetailsModal({
                   </h3>
                   <div className="overflow-hidden border border-app-border rounded-xl shadow-sm bg-white">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left">
+                      <table className="w-full text-left whitespace-nowrap">
                         <thead className="bg-zinc-50 border-b border-app-border">
                           <tr>
                             <th className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">

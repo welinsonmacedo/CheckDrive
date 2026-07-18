@@ -386,7 +386,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
             <div className="flex-1 overflow-x-auto">
               
               {/* Responsive Wide Desktop Table Container */}
-              <table className="w-full text-left border-collapse hidden md:table font-sans">
+              <table className="w-full text-left border-collapse hidden md:table font-sans whitespace-nowrap">
                 <thead className="bg-gray-50/70 border-b border-gray-150/80 sticky top-0 font-sans">
                   <tr>
                     <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest font-sans">

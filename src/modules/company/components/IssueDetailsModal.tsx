@@ -154,7 +154,7 @@ export default function IssueDetailsModal({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100 print:border-zinc-300 print:bg-white">
                       <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest block mb-1 flex items-center gap-1">
                         <Car size={12} /> Veículo

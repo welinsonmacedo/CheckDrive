@@ -161,7 +161,7 @@ export default function ClosingHistoryTab() {
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-app-border bg-white">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left whitespace-nowrap">
                       <thead className="bg-app-bg/50">
                         <tr>
                           <th className="px-4 py-2 text-[10px] font-black text-text-muted uppercase tracking-widest">

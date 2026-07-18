@@ -1749,7 +1749,7 @@ export default function MaintenanceTab() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left whitespace-nowrap">
                 <thead className="bg-app-bg/50">
                   <tr>
                     {(activeTab === "pending" || activeTab === "waiting") &&

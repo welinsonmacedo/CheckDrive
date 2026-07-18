@@ -864,7 +864,7 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
           <div className="p-6">
             <h3 className="text-xl font-black text-text-main mb-6">Média de Consumo (Por Veículo)</h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left whitespace-nowrap">
                 <thead className="bg-app-bg text-[10px] uppercase tracking-widest text-text-muted font-black border-y border-app-border">
                   <tr>
                     <th className="py-3 px-4 flex items-center gap-1"><Filter size={12}/> Veículo (Placa)</th>
@@ -903,7 +903,7 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
           <div className="p-6">
             <h3 className="text-xl font-black text-text-main mb-6">Média de Consumo (Por Motorista)</h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left whitespace-nowrap">
                 <thead className="bg-app-bg text-[10px] uppercase tracking-widest text-text-muted font-black border-y border-app-border">
                   <tr>
                     <th className="py-3 px-4 flex items-center gap-1"><Filter size={12}/> Motorista</th>
@@ -1079,7 +1079,7 @@ CREATE POLICY "Managers can manage vehicle_averages" ON public.vehicle_averages
               </div>
             </div>
             <div className="overflow-x-auto text-left">
-              <table className="w-full text-left">
+              <table className="w-full text-left whitespace-nowrap">
                 <thead className="bg-app-bg text-[10px] uppercase tracking-widest text-text-muted font-black border-y border-app-border text-left">
                   <tr>
                     <th className="py-3 px-4 text-left">Período</th>

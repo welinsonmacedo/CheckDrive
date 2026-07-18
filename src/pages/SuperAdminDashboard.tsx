@@ -483,7 +483,7 @@ export default function SuperAdminDashboard({ user }: SuperAdminDashboardProps) 
               </button>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left whitespace-nowrap">
                 <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300">
                   <tr>
                     <th className="px-6 py-4 font-medium text-sm">Empresa</th>

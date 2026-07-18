@@ -434,7 +434,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
     <div className="grid grid-cols-1 gap-6 items-start">
       <div className="bento-card !p-0">
         <div className="p-5 border-b border-app-border flex flex-col justify-between gap-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full">
             <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
               Escalas Agendadas
             </span>
@@ -515,7 +515,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
               {new Date(`${filterDate}T12:00:00`).toLocaleDateString()}
             </div>
           ) : (
-            <div className="overflow-x-auto w-full"><table className="w-full">
+            <div className="overflow-x-auto w-full"><table className="w-full whitespace-nowrap">
               <thead className="bg-app-bg/50">
                 <tr>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
@@ -853,7 +853,7 @@ ${formatted}`);
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
                       Data/Hora Início

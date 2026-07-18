@@ -269,7 +269,7 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
          ) : filteredSchedules.length === 0 ? (
              <div className="p-8 text-center text-text-muted font-bold text-xs uppercase tracking-widest">Nenhuma escala programada para {new Date(`${filterDate}T12:00:00`).toLocaleDateString()}</div>
          ) : (
-            <table className="w-full">
+            <table className="w-full whitespace-nowrap">
               <thead className="bg-app-bg/50">
                 <tr>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">Motorista</th>

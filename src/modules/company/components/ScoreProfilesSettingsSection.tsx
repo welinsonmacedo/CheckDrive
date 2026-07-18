@@ -182,7 +182,7 @@ export default function ScoreProfilesSettingsSection() {
 
         {profiles.length > 0 ? (
           <div className="overflow-x-auto border border-app-border rounded-xl">
-             <table className="w-full text-left text-xs">
+             <table className="w-full text-left text-xs whitespace-nowrap">
                <thead className="bg-zinc-50 border-b border-app-border">
                  <tr>
                    <th className="px-4 py-3 font-bold text-text-muted uppercase tracking-widest text-[9px]">Nome</th>

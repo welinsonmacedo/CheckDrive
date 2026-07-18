@@ -442,7 +442,7 @@ export default function ChecklistDetailsModal({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-8 space-y-10 print:overflow-visible print:p-0 print:block">
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-10 print:overflow-visible print:p-0 print:block">
             <PrintHeader />
             {/* Header Impressão */}
             <div className="hidden print:block mb-8 border-b-2 border-zinc-200 pb-6 mt-4">
@@ -966,7 +966,7 @@ export default function ChecklistDetailsModal({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   {Object.entries(selectedSub.photos).map(([pos, url]: any) => {
                     const photoUrl = getPhotoUrl(url);
                     const fakeIssue = {

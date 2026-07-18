@@ -473,7 +473,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
               </button>
             </div>
             <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-              <div className="overflow-x-auto w-full"><table className="w-full text-left">
+              <div className="overflow-x-auto w-full"><table className="w-full text-left whitespace-nowrap">
                 <thead className="bg-zinc-50 border-b border-zinc-200 text-xs font-black text-zinc-500 uppercase tracking-wider">
                   <tr>
                     <th className="px-6 py-3">Produto</th>
@@ -625,7 +625,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
               </div>
             </div>
             <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-              <div className="overflow-x-auto w-full"><table className="w-full text-left">
+              <div className="overflow-x-auto w-full"><table className="w-full text-left whitespace-nowrap">
                 <thead className="bg-zinc-50 border-b border-zinc-200 text-xs font-black text-zinc-500 uppercase tracking-wider">
                   <tr>
                     <th className="px-6 py-3">Data/Hora</th>
@@ -690,7 +690,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                   autoFocus
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 mb-1">Código / SKU</label>
                   <input
@@ -733,7 +733,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 mb-1">Estoque Mínimo</label>
                   <input
@@ -925,7 +925,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
               <button onClick={() => setSelectedTx(null)} className="text-zinc-500 hover:text-zinc-800 cursor-pointer"><X size={20} /></button>
             </div>
             <div className="p-6 space-y-4 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-zinc-500 uppercase">Data/Hora</label>
                   <p className="text-sm text-zinc-900">{new Date(selectedTx.created_at).toLocaleString('pt-BR')}</p>
@@ -950,7 +950,7 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
 
               {selectedTx.nf_number && (
                 <div className="bg-zinc-50 p-3 rounded-lg border border-zinc-200">
-                  <div className="grid grid-cols-2 gap-3 mb-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-500 uppercase">Nota Fiscal</label>
                       <p className="text-sm font-bold text-zinc-900">{selectedTx.nf_number}</p>

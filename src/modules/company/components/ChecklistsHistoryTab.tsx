@@ -118,7 +118,7 @@ export default function ChecklistsHistoryTab({
   return (
     <div className="space-y-6">
       <div className="bento-card !p-0 overflow-hidden">
-        <div className="p-5 border-b border-app-border flex items-center justify-between">
+        <div className="p-5 border-b border-app-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
             Histórico de Envios
           </span>
@@ -130,14 +130,14 @@ export default function ChecklistsHistoryTab({
             <input
               type="text"
               placeholder="Filtrar motorista ou placa..."
-              className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] text-text-main outline-none focus:ring-1 focus:ring-primary w-64 border border-app-border"
+              className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] text-text-main outline-none focus:ring-1 focus:ring-primary w-full sm:w-64 border border-app-border"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left whitespace-nowrap">
             <thead className="bg-app-bg/50">
               <tr>
                 <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
@@ -258,7 +258,7 @@ export default function ChecklistsHistoryTab({
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl relative">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
                 <div className="flex items-center gap-2 text-danger">
                   <AlertTriangle size={20} className="fill-danger/20" />
                   <h3 className="text-sm font-black uppercase tracking-wider">

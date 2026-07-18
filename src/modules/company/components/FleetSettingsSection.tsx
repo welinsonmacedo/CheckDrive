@@ -268,7 +268,7 @@ export default function FleetSettingsSection() {
             )}
 
             <div className="overflow-hidden border border-zinc-200 rounded-2xl bg-white shadow-sm">
-              <div className="overflow-x-auto w-full"><table className="w-full text-left text-sm">
+              <div className="overflow-x-auto w-full"><table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-zinc-50 border-b border-zinc-200">
                   <tr>
                     <th className="px-5 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[10px]">
@@ -429,7 +429,7 @@ export default function FleetSettingsSection() {
             )}
 
             <div className="overflow-hidden border border-zinc-200 rounded-2xl bg-white shadow-sm">
-              <div className="overflow-x-auto w-full"><table className="w-full text-left text-sm">
+              <div className="overflow-x-auto w-full"><table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-zinc-50 border-b border-zinc-200">
                   <tr>
                     <th className="px-5 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[10px]">
@@ -589,7 +589,7 @@ export default function FleetSettingsSection() {
             )}
 
             <div className="overflow-hidden border border-zinc-200 rounded-2xl bg-white shadow-sm">
-              <div className="overflow-x-auto w-full"><table className="w-full text-left text-sm">
+              <div className="overflow-x-auto w-full"><table className="w-full text-left text-sm whitespace-nowrap">
                 <thead className="bg-zinc-50 border-b border-zinc-200">
                   <tr>
                     <th className="px-5 py-3 font-bold text-zinc-500 uppercase tracking-widest text-[10px]">

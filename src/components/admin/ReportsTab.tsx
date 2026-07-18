@@ -647,7 +647,7 @@ export default function ReportsTab() {
                       </div>
                       
                       <div className="flex-1 overflow-auto max-h-[400px] print:max-h-none print:overflow-visible">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse whitespace-nowrap">
                           <thead className="bg-gray-50/70 sticky top-0 border-b border-gray-200/80 z-10">
                             <tr>
                               <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest font-sans">
@@ -725,7 +725,7 @@ export default function ReportsTab() {
                       </div>
                       
                       <div className="flex-1 overflow-auto max-h-[400px] print:max-h-none print:overflow-visible">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse whitespace-nowrap">
                           <thead className="bg-gray-50/70 sticky top-0 border-b border-gray-200/80 z-10 font-sans">
                             <tr>
                               <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
@@ -813,7 +813,7 @@ export default function ReportsTab() {
                   </div>
                   
                   <div className="flex-1 overflow-auto print:overflow-visible">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
                       <thead className="bg-gray-50/75 sticky top-0 border-b border-gray-200/80 z-10 font-sans">
                         <tr>
                           <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
@@ -912,7 +912,7 @@ export default function ReportsTab() {
                     </div>
 
                     <div className="flex-1 overflow-auto max-h-[600px] print:max-h-none print:overflow-visible">
-                      <table className="w-full text-left border-collapse">
+                      <table className="w-full text-left border-collapse whitespace-nowrap">
                         <thead className="bg-gray-50/70 sticky top-0 border-b border-gray-200/80 z-10">
                           <tr>
                             <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">
@@ -1036,7 +1036,7 @@ export default function ReportsTab() {
                   </div>
 
                   <div className="flex-1 overflow-auto max-h-[600px] print:max-h-none print:overflow-visible">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse whitespace-nowrap">
                       <thead className="bg-gray-50/70 sticky top-0 border-b border-gray-200/80 z-10">
                         <tr>
                           <th className="px-5 py-3.5 text-[9px] font-black text-gray-400 uppercase tracking-widest">Data</th>

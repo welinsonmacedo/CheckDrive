@@ -1049,7 +1049,7 @@ export default function InfractionsTab() {
           {/* Table */}
           <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 text-xs uppercase tracking-wider">
                     <th className="px-6 py-4 font-medium">Motorista</th>

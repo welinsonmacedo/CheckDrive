@@ -1478,7 +1478,7 @@ export default function MaintenanceTab() {
 
                   statsContent = (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-4 gap-1 bg-zinc-50 p-3 rounded-2xl border border-zinc-100">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-zinc-50 p-3 rounded-2xl border border-zinc-100">
                         <div className="text-center">
                           <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">
                             Revisão
@@ -1686,7 +1686,7 @@ export default function MaintenanceTab() {
       ) : (
         /* Lista de Pendências */
         <div className="bento-card !p-0 overflow-hidden">
-          <div className="p-5 border-b border-app-border flex items-center justify-between">
+          <div className="p-5 border-b border-app-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
               {activeTab === "pending"
                 ? "Pendências de Manutenção"
@@ -1747,7 +1747,7 @@ export default function MaintenanceTab() {
                   <input
                     type="text"
                     placeholder="Filtrar placa, item ou motorista..."
-                    className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] border border-app-border w-56 lg:w-64"
+                    className="h-8 pl-9 pr-4 bg-app-bg rounded-lg text-[10px] border border-app-border w-full sm:w-56 lg:w-64"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -1801,7 +1801,7 @@ export default function MaintenanceTab() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left whitespace-nowrap">
                 <thead className="bg-app-bg/50">
                   <tr>
                     {(activeTab === "pending" || activeTab === "waiting") &&
@@ -2667,7 +2667,7 @@ export default function MaintenanceTab() {
                               Defina os prazos adequados.
                             </p>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div>
                                 <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">
                                   Próximo Vencimento

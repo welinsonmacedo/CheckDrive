@@ -387,7 +387,7 @@ export default function ChecklistSetupTab() {
 
         <div className="xl:col-span-8 bento-card !p-0 order-2 xl:order-1">
           <div className="overflow-x-auto">
-             <table className="w-full text-left">
+             <table className="w-full text-left whitespace-nowrap">
               <thead className="bg-app-bg/50">
                 <tr>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Item / Pergunta</th>

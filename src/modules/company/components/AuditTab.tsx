@@ -390,7 +390,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
             <div className="flex-1 overflow-x-auto">
               
               {/* Responsive Wide Desktop Table Container */}
-              <table className="w-full text-left border-collapse hidden md:table">
+              <table className="w-full text-left border-collapse hidden md:table whitespace-nowrap">
                 <thead className="bg-gray-50/70 border-b border-gray-150/80 sticky top-0">
                   <tr>
                     <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">
@@ -673,7 +673,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
                     </span>
                   </div>
                   
-                  <div className="border-t border-gray-100 pt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div className="border-t border-gray-100 pt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <p className="text-[9px] uppercase font-black text-gray-400">Motorista penalizado</p>
                       <p className="font-extrabold text-gray-800 text-[11px]">{contestingLog.profiles?.full_name}</p>
