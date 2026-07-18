@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { Home, Trophy, AlertTriangle, User as UserIcon, Droplets, Bell } from 'lucide-react';
+import { Home, Trophy, AlertTriangle, User as UserIcon, Droplets, Bell, Truck } from 'lucide-react';
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { supabase } from '@/src/lib/supabase';
 import localforage from 'localforage';
@@ -62,6 +62,18 @@ export default function DriverLayout() {
             <Home size={20} />
             <span className="text-[10px] font-bold uppercase tracking-wider">
               Início
+            </span>
+          </Link>
+
+          <Link
+            to="/driver/vehicles"
+            className={`flex flex-col items-center gap-1 transition-colors ${
+              location.pathname.includes('/driver/vehicles') ? 'text-primary' : 'text-zinc-400'
+            }`}
+          >
+            <Truck size={20} />
+            <span className="text-[10px] font-bold uppercase tracking-wider">
+              Veículos
             </span>
           </Link>
 
