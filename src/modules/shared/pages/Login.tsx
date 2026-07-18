@@ -117,7 +117,7 @@ export default function Login() {
         <div className="p-8">
           <div className="mb-8 text-center flex flex-col items-center justify-center">
             <div className="w-24 h-24 mb-4 rounded-3xl overflow-hidden shadow-2xl shadow-primary/20">
-              <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
+              <img src="https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/logo.jpeg" alt="Logo" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900 mb-2 italic">
               CheckDrive

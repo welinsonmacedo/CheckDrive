@@ -12,7 +12,9 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['logo.png', 'logo.jpeg'],
+        devOptions: {
+          enabled: true
+        },
         workbox: {
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB
         },
@@ -25,25 +27,25 @@ export default defineConfig(({ mode }) => {
           display: 'standalone',
           icons: [
             {
-              src: 'logo.png',
+              src: 'https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/logo.jpeg',
               sizes: '192x192',
-              type: 'image/png'
+              type: 'image/jpeg'
             },
             {
-              src: 'logo.png',
+              src: 'https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/logo.jpeg',
               sizes: '512x512',
-              type: 'image/png'
+              type: 'image/jpeg'
             },
             {
-              src: 'logo.png',
+              src: 'https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/logo.jpeg',
               sizes: '192x192',
-              type: 'image/png',
+              type: 'image/jpeg',
               purpose: 'any maskable'
             },
             {
-              src: 'logo.png',
+              src: 'https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/logo.jpeg',
               sizes: '512x512',
-              type: 'image/png',
+              type: 'image/jpeg',
               purpose: 'any maskable'
             }
           ]

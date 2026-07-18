@@ -502,7 +502,7 @@ export default function AdminDashboard() {
     return (
       <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center p-6 text-center">
         <div className="w-24 h-24 mb-6 rounded-3xl overflow-hidden shadow-2xl shadow-primary/20">
-          <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
+          <img src="https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/logo.jpeg" alt="Logo" className="w-full h-full object-cover" />
         </div>
         <h1 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">Instale o App</h1>
         <p className="text-slate-500 mb-8 text-sm max-w-[280px] leading-relaxed">
@@ -577,11 +577,7 @@ export default function AdminDashboard() {
         {companyData && (
           <div className="flex items-center gap-3 px-4 py-6 border-b border-gray-100 overflow-hidden">
             <div className="min-w-[40px] w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden relative">
-              {companyData.logo_url ? (
-                <img src={companyData.logo_url} alt={companyData.name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-blue-600 font-bold text-lg">{companyData.name?.charAt(0)}</span>
-              )}
+              <img src={companyData.logo_url || 'https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/logo.jpeg'} alt={companyData.name} className="w-full h-full object-cover" />
             </div>
             <div className="flex-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               <h2 className="text-sm font-bold text-gray-900 truncate">{companyData.name}</h2>
