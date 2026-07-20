@@ -307,19 +307,8 @@ export default function ReportsTab() {
         .gte("resolved_at", `${startDate}T00:00:00Z`)
         .lte("resolved_at", `${endDate}T23:59:59Z`);
       if (error) throw error;
-      let mappedData = data.map((d) => {
-        let status = d.status;
-        const notesStr = String(d.resolution_notes || "").toLowerCase();
-        if (
-          status === "resolved" &&
-          (!d.resolved_by || notesStr.includes("automaticamente pelo check list"))
-        ) {
-          status = "pending";
-        }
-        return { ...d, status };
-      });
-      
-      const resolvedData = mappedData.filter(d => d.status === "resolved");
+      // Do not convert resolved back to pending for this specific report.
+      const resolvedData = data.filter(d => d.status === "resolved");
       setResolvedIssuesData(groupResolvedIssues(resolvedData));
     } catch (error) {
       console.error("Error fetching resolved issues report", error);
@@ -381,8 +370,10 @@ export default function ReportsTab() {
       fetchPurchasesReport();
     } else if (activeReport === "schedules") {
       fetchSchedulesReport();
-    } else if (activeReport === "fleet_age" || activeReport === "resolved_issues") {
+    } else if (activeReport === "fleet_age") {
       fetchFleetAgeReport();
+    } else if (activeReport === "resolved_issues") {
+      fetchResolvedIssuesReport();
     }
   }, [activeReport, startDate, endDate]);
 
