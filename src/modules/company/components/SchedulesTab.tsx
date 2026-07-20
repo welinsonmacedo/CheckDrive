@@ -514,8 +514,76 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
               Nenhuma escala programada para{" "}
               {new Date(`${filterDate}T12:00:00`).toLocaleDateString()}
             </div>
-          ) : (
-            <div className="overflow-x-auto w-full"><table className="w-full whitespace-nowrap">
+          ) : (<>{/* Mobile View */}
+            <div className="grid grid-cols-1 gap-4 md:hidden p-4">
+              {filteredSchedules.map((sch) => {
+                const hasChecklist = !!(sch.start_checklist_id || sch.end_checklist_id || sch.fuel_checklist_id);
+                const createdTime = sch.created_at ? new Date(sch.created_at).getTime() : new Date(sch.start_at).getTime();
+                const isWithinOneHour = Date.now() - createdTime <= 60 * 60 * 1000;
+                const canEdit = !hasChecklist && (user?.role === "admin" || isWithinOneHour);
+                const canDelete = user?.role === "admin" && !hasChecklist;
+
+                return (
+                  <div key={sch.id} className="bg-white p-4 rounded-xl border border-app-border flex flex-col gap-3 relative shadow-sm">
+                    {/* Header */}
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-sm font-black text-text-main block">{sch.profiles?.full_name}</span>
+                        <div className="text-[10px] font-bold text-text-muted mt-1 space-y-0.5">
+                          <div>Início: {formatForLabel(sch.start_at)}</div>
+                          <div>Fim: {formatForLabel(sch.end_at)}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">{sch.vehicles?.plate}</span>
+                        {sch.trailers?.plate && <div className="text-[9px] font-bold text-primary mt-1 uppercase">REB: {sch.trailers.plate}</div>}
+                      </div>
+                    </div>
+
+                    {/* Route & Baits */}
+                    <div className="bg-gray-50 rounded-lg p-2 text-xs">
+                      <div className="font-bold text-gray-700 uppercase">{getRouteText(sch.routes)}</div>
+                      {(sch.bait1 || sch.bait2 || sch.bait3) && (
+                        <div className="text-[10px] font-bold text-fuchsia-600 mt-1 uppercase">
+                          Iscas: {[sch.bait1?.name, sch.bait2?.name, sch.bait3?.name].filter(Boolean).join(", ")}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Checklists */}
+                    <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase">
+                      {sch.start_checklist_id ? (
+                        <button onClick={() => onViewChecklist(sch.start_checklist_id)} className="px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200">Início ✓</button>
+                      ) : <span className="px-2 py-1 rounded bg-gray-100 text-gray-400">Início ✗</span>}
+                      
+                      {sch.end_checklist_id ? (
+                        <button onClick={() => onViewChecklist(sch.end_checklist_id)} className="px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200">Fim ✓</button>
+                      ) : <span className="px-2 py-1 rounded bg-gray-100 text-gray-400">Fim ✗</span>}
+
+                      {sch.requires_fueling ? (
+                        sch.fuel_checklist_id ? (
+                          <button onClick={() => onViewChecklist(sch.fuel_checklist_id)} className="px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200">Abast. ✓</button>
+                        ) : <span className="px-2 py-1 rounded bg-orange-100 text-orange-600">Abast. ✗</span>
+                      ) : <span className="px-2 py-1 rounded bg-gray-100 text-gray-400 opacity-50 line-through">Abast.</span>}
+                    </div>
+
+                    {/* Actions */}
+                    {(canEdit || canDelete || user?.role === "admin") && (
+                      <div className="flex justify-end gap-3 mt-1 pt-3 border-t border-gray-100">
+                        {canEdit && <button onClick={() => handleEdit(sch)} className="text-xs font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest">Editar</button>}
+                        {canDelete && <button onClick={() => handleDelete(sch.id)} className="text-xs font-black text-red-500 hover:text-red-700 uppercase tracking-widest">Excluir</button>}
+                        {user?.role === "admin" && (
+                           <button onClick={() => handlePrint(sch)} className="text-xs font-black text-zinc-500 hover:text-zinc-700 uppercase tracking-widest">Imprimir</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop View */}
+            <div className="hidden md:block overflow-x-auto w-full"><table className="w-full whitespace-nowrap">
               <thead className="bg-app-bg/50">
                 <tr>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest">
@@ -694,6 +762,7 @@ ${formatted}`);
                 })}
               </tbody>
             </table></div>
+          </>
           )}
         </div>
       </div>
