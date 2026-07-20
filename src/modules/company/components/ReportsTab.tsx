@@ -738,11 +738,31 @@ export default function ReportsTab() {
         grouped[plate].push(d);
       });
 
-      const groupedArray = Object.keys(grouped).map(plate => ({
-        plate,
-        issues: grouped[plate],
-        count: grouped[plate].length
-      })).sort((a, b) => b.count - a.count);
+      const groupedArray = Object.keys(grouped).map(plate => {
+        const issues = grouped[plate];
+        
+        const groupedIssues: Record<string, any> = {};
+        issues.forEach(iss => {
+          // Identify repeated defects by title ONLY
+          const key = iss.item_title;
+          if (!groupedIssues[key]) {
+             groupedIssues[key] = { ...iss, repeatCount: 1 };
+          } else {
+             groupedIssues[key].repeatCount += 1;
+             const currentDesc = groupedIssues[key].description || "";
+             const newDesc = iss.description || "";
+             if (newDesc && !currentDesc.includes(newDesc)) {
+                groupedIssues[key].description = currentDesc ? `${currentDesc} | ${newDesc}` : newDesc;
+             }
+          }
+        });
+        
+        return {
+          plate,
+          issues: Object.values(groupedIssues),
+          count: issues.length
+        };
+      }).sort((a, b) => b.count - a.count);
 
       setPendingByPlateData(groupedArray);
     } catch (err) {
