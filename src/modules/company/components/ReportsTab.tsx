@@ -308,7 +308,11 @@ export default function ReportsTab() {
         .lte("resolved_at", `${endDate}T23:59:59Z`);
       if (error) throw error;
       // Do not convert resolved back to pending for this specific report.
-      const resolvedData = data.filter(d => d.status === "resolved");
+      const resolvedData = data.filter(d => {
+        const notesStr = String(d.resolution_notes || "").toLowerCase();
+        const isAutoResolved = !d.resolved_by || notesStr.includes("automaticamente pelo check list") || notesStr.includes("automaticamente");
+        return d.status === "resolved" && !isAutoResolved;
+      });
       setResolvedIssuesData(groupResolvedIssues(resolvedData));
     } catch (error) {
       console.error("Error fetching resolved issues report", error);
