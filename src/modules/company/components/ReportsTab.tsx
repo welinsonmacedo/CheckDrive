@@ -794,7 +794,7 @@ export default function ReportsTab() {
         return { ...d, status };
       });
 
-      mappedData = groupResolvedIssues(mappedData);
+      // mappedData = groupResolvedIssues(mappedData);
       const stats = {
         total: mappedData.length,
         pending: mappedData.filter((d) => d.status === "pending").length,
