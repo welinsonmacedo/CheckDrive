@@ -1974,8 +1974,9 @@ export default function ReportsTab() {
                           <th className="px-5 py-4 border-b border-gray-200">Data Resolução</th>
                           <th className="px-5 py-4 border-b border-gray-200">Placa</th>
                           <th className="px-5 py-4 border-b border-gray-200">Item(s) Resolvido(s)</th>
+                          <th className="px-5 py-4 border-b border-gray-200">Descrição do Defeito</th>
                           <th className="px-5 py-4 border-b border-gray-200 text-center">Resolvido Por</th>
-                          <th className="px-5 py-4 border-b border-gray-200 text-center">Observação</th>
+                          <th className="px-5 py-4 border-b border-gray-200 text-center">Observação da Resolução</th>
                           <th className="px-5 py-4 border-b border-gray-200 text-right">Custo</th>
                         </tr>
                       </thead>
@@ -1999,10 +2000,13 @@ export default function ReportsTab() {
                               <td className="px-5 py-4 text-xs font-semibold text-gray-800 whitespace-normal min-w-[200px]">
                                 {v.item_title}
                               </td>
+                              <td className="px-5 py-4 text-xs font-medium text-gray-600 whitespace-normal min-w-[200px] max-w-xs">
+                                {v.description || "-"}
+                              </td>
                               <td className="px-5 py-4 text-center text-xs font-bold text-gray-600">
                                 {v.resolver?.full_name || "Sistema"}
                               </td>
-                              <td className="px-5 py-4 text-center text-xs font-medium text-gray-500 whitespace-normal min-w-[200px] truncate max-w-xs">
+                              <td className="px-5 py-4 text-center text-xs font-medium text-gray-500 whitespace-normal min-w-[200px] max-w-xs">
                                 {v.resolution_notes || "-"}
                               </td>
                               <td className="px-5 py-4 text-right text-xs font-black text-emerald-600">
@@ -2013,7 +2017,7 @@ export default function ReportsTab() {
                         }
                         {resolvedIssuesData.length === 0 && (
                           <tr>
-                            <td colSpan={6} className="px-5 py-8 text-center text-sm font-bold text-gray-500">
+                            <td colSpan={7} className="px-5 py-8 text-center text-sm font-bold text-gray-500">
                               Nenhuma pendência resolvida encontrada no período.
                             </td>
                           </tr>
