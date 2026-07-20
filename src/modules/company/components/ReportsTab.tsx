@@ -304,8 +304,8 @@ export default function ReportsTab() {
     try {
       const { data, error } = await supabase.from("checklist_issues").select("*, vehicles(plate), trailers(plate), profiles!checklist_issues_driver_id_fkey(full_name), resolver:profiles!checklist_issues_resolved_by_fkey(full_name)")
         .eq("company_id", user?.company_id)
-        .gte("created_at", `${startDate}T00:00:00Z`)
-        .lte("created_at", `${endDate}T23:59:59Z`);
+        .gte("resolved_at", `${startDate}T00:00:00Z`)
+        .lte("resolved_at", `${endDate}T23:59:59Z`);
       if (error) throw error;
       let mappedData = data.map((d) => {
         let status = d.status;
@@ -508,6 +508,41 @@ export default function ReportsTab() {
 
   
   
+  
+  const exportResolvedIssuesToExcel = () => {
+    if (!resolvedIssuesData || resolvedIssuesData.length === 0) {
+      alert("Não há dados para exportar.");
+      return;
+    }
+
+    const exportData = resolvedIssuesData.map((d) => ({
+      "Data de Resolução": d.resolved_at ? new Date(d.resolved_at).toLocaleString('pt-BR') : "-",
+      "Placa": d.vehicles?.plate || d.trailers?.plate || "-",
+      "Item Resolvido": d.item_title,
+      "Descrição": d.description || "-",
+      "Resolvido Por": d.resolver?.full_name || "Sistema",
+      "Observações": d.resolution_notes || "-",
+      "Custo (R$)": d.resolution_value ? Number(d.resolution_value).toFixed(2) : "0.00"
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Pendencias_Resolvidas");
+    
+    const wscols = [
+      {wch: 20}, // Data
+      {wch: 12}, // Placa
+      {wch: 30}, // Item
+      {wch: 40}, // Descricao
+      {wch: 25}, // Resolvido Por
+      {wch: 40}, // Observacoes
+      {wch: 15}  // Custo
+    ];
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, `Pendencias_Resolvidas_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const exportPendingByPlateToExcel = () => {
     if (!pendingByPlateData || pendingByPlateData.length === 0) {
       alert("Não há dados para exportar.");
@@ -833,6 +868,26 @@ export default function ReportsTab() {
         <div className="flex flex-wrap justify-end gap-2.5 print:hidden mt-4">
           
           
+          
+          {activeReport === "resolved_issues" && (
+            <>
+              <button
+                onClick={exportResolvedIssuesToExcel}
+                className="flex items-center gap-2 h-9 px-4 bg-green-50 border border-green-100 hover:bg-green-100 text-green-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm shadow-green-100/50"
+              >
+                <FileText size={15} /> Exportar Excel
+              </button>
+              <button
+                onClick={() => {
+                  setTimeout(() => window.print(), 100);
+                }}
+                className="flex items-center gap-2 h-9 px-4 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm shadow-indigo-100/50"
+              >
+                <Printer size={15} /> Imprimir Relatório
+              </button>
+            </>
+          )}
+
           {activeReport === "pending_by_plate" && (
             <>
               <button
@@ -1936,10 +1991,10 @@ export default function ReportsTab() {
                       <tbody className="divide-y divide-gray-100 print:divide-black">
                         {resolvedIssuesData
                           .filter(v => 
-                            (v.vehicles?.plate?.toLowerCase().includes(resolvedSearchTerm.toLowerCase())) ||
-                            (v.trailers?.plate?.toLowerCase().includes(resolvedSearchTerm.toLowerCase())) ||
-                            (v.item_title?.toLowerCase().includes(resolvedSearchTerm.toLowerCase())) ||
-                            (v.resolution_notes?.toLowerCase().includes(resolvedSearchTerm.toLowerCase()))
+                            (v.vehicles?.plate?.toLowerCase()?.includes(resolvedSearchTerm.toLowerCase())) ||
+                            (v.trailers?.plate?.toLowerCase()?.includes(resolvedSearchTerm.toLowerCase())) ||
+                            (v.item_title?.toLowerCase()?.includes(resolvedSearchTerm.toLowerCase())) ||
+                            (v.resolution_notes?.toLowerCase()?.includes(resolvedSearchTerm.toLowerCase()))
                           )
                           .sort((a, b) => new Date(b.resolved_at).getTime() - new Date(a.resolved_at).getTime())
                           .map((v, i) => (
@@ -2034,7 +2089,7 @@ export default function ReportsTab() {
                       </thead>
                       <tbody className="divide-y divide-gray-100 print:divide-black">
                         {fleetAgeData
-                          .filter(v => v.plate?.toLowerCase().includes(fleetAgeSearchTerm.toLowerCase()))
+                          .filter(v => v.plate?.toLowerCase()?.includes(fleetAgeSearchTerm.toLowerCase()))
                           .sort((a, b) => b.age - a.age)
                           .map((v, i) => (
                             <tr key={v.id || i} className="hover:bg-gray-50/50 transition-colors print:break-inside-avoid">
