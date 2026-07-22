@@ -261,6 +261,10 @@ export default function VehicleDetailsModal({
                     <span className="text-xs font-semibold text-slate-700">{vehicle.renavam || 'Não informado'}</span>
                   </div>
                   <div>
+                    <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Chassi</span>
+                    <span className="text-xs font-semibold text-slate-700 font-mono uppercase">{vehicle.chassi || 'Não informado'}</span>
+                  </div>
+                  <div>
                     <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Ano Fab/Mod</span>
                     <span className="text-xs font-semibold text-slate-700">{vehicle.manufacture_year || '-'}/{vehicle.model_year || '-'}</span>
                   </div>

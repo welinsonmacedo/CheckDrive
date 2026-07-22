@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
-import { CheckCircle2, Search, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { CheckCircle2, Search, Eye, ChevronLeft, ChevronRight, FileSpreadsheet, FileText } from "lucide-react";
 import VehicleDetailsModal from "@/src/modules/company/components/VehicleDetailsModal";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
+import { exportVehiclesToExcel, exportVehiclesToPDF } from "@/src/utils/exportVehicleCatalog";
 
 export default function MyVehicles() {
   const { user } = useAuth();
@@ -23,7 +24,7 @@ export default function MyVehicles() {
 
   const [itemForm, setItemForm] = useState<any>({
     id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "",
-    renavam: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "",
+    renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "",
     photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "",
     doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "",
   });
@@ -114,7 +115,7 @@ export default function MyVehicles() {
 
       const payload = {
         plate: itemForm.plate, model: itemForm.model, type: itemForm.type, requires_trailer: itemForm.requires_trailer,
-        modality_id: itemForm.modality_id || null, renavam: itemForm.renavam || null, manufacture_year: itemForm.manufacture_year || null,
+        modality_id: itemForm.modality_id || null, renavam: itemForm.renavam || null, chassi: itemForm.chassi || null, manufacture_year: itemForm.manufacture_year || null,
         model_year: itemForm.model_year || null, crv_number: itemForm.crv_number || null, fuel_type: itemForm.fuel_type || null,
         color: itemForm.color || null, antt: itemForm.antt || null, insurance_id: itemForm.insurance_id || null,
         company_id: user?.company_id,
@@ -135,7 +136,7 @@ export default function MyVehicles() {
         if (error) throw error;
       }
 
-      setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", renavam: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" });
+      setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" });
       setPhotoFrontFile(null); setPhotoRightFile(null); setPhotoLeftFile(null); setPhotoRearFile(null);
       setDocCrlvFile(null); setDocAnttFile(null); setDocInsuranceFile(null);
       setIsFormOpen(false);
@@ -179,6 +180,7 @@ export default function MyVehicles() {
 
   const filteredItems = combinedItems.filter((item) => 
     item.plate?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    item.chassi?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (item.itemType === 'vehicle' && item.model?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
@@ -195,11 +197,29 @@ export default function MyVehicles() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"/>
           <input 
             type="text" 
-            placeholder="Filtrar placa ou modelo..." 
+            placeholder="Filtrar placa, modelo ou chassi..." 
             className="h-10 pl-9 pr-4 bg-app-bg rounded-xl text-[11px] font-bold text-text-main outline-none focus:ring-1 focus:ring-primary w-full sm:w-80 border border-app-border" 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => exportVehiclesToExcel(filteredItems, "Meus_Veiculos")}
+            className="px-3.5 py-2 bg-emerald-50 border border-emerald-200/80 text-emerald-700 hover:bg-emerald-100 text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
+            title="Exportar catálogo em Excel (.xlsx)"
+          >
+            <FileSpreadsheet size={14} /> Excel
+          </button>
+          <button
+            type="button"
+            onClick={() => exportVehiclesToPDF(filteredItems, "MEUS VEÍCULOS E REBOQUES")}
+            className="px-3.5 py-2 bg-rose-50 border border-rose-200/80 text-rose-700 hover:bg-rose-100 text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
+            title="Exportar catálogo em PDF"
+          >
+            <FileText size={14} /> PDF
+          </button>
         </div>
       </div>
 
@@ -251,6 +271,10 @@ export default function MyVehicles() {
                       <div>
                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Renavam</span>
                         <span className="text-[10px] font-bold text-text-main">{item.renavam || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Chassi</span>
+                        <span className="text-[10px] font-bold text-text-main uppercase font-mono">{item.chassi || '-'}</span>
                       </div>
                     </div>
                   )}

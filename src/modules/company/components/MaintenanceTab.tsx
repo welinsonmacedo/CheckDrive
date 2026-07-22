@@ -22,12 +22,14 @@ import {
   Printer,
   Edit,
   Upload,
+  History,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import ManualIssueModal from "@/src/modules/company/components/ManualIssueModal";
 import { SupplierModal } from "./SupplierModal";
 import IssueDetailsModal from "./IssueDetailsModal";
+import AlertHistoryModal from "./AlertHistoryModal";
 import { usePersistentState } from "@/src/hooks/usePersistentState";
 
 export default function MaintenanceTab() {
@@ -56,6 +58,7 @@ export default function MaintenanceTab() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
   const [selectedViewIssue, setSelectedViewIssue] = useState<any | null>(null);
+  const [selectedAlertForHistory, setSelectedAlertForHistory] = useState<any | null>(null);
   const [zoom, setZoom] = useState(1);
 
   const [resolvingIssueData, setResolvingIssueData] = useState<any | null>(
@@ -444,6 +447,58 @@ export default function MaintenanceTab() {
             });
         }
       }
+    }
+  }
+
+  async function handleOpenResolveForAlert(alertItem: any) {
+    try {
+      setLoading(true);
+      // Check for existing pending issue for this auto_alert_id
+      const { data: existingIssues } = await supabase
+        .from("checklist_issues")
+        .select(`
+          *,
+          vehicles (id, plate, model),
+          auto_alerts (*)
+        `)
+        .eq("company_id", (user as any)?.company_id || user?.id)
+        .eq("auto_alert_id", alertItem.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      let targetIssue = existingIssues && existingIssues.length > 0 ? existingIssues[0] : null;
+
+      if (!targetIssue) {
+        const newIssuePayload = {
+          company_id: (user as any)?.company_id || user?.id,
+          auto_alert_id: alertItem.id,
+          vehicle_id: alertItem.target_vehicle_id || null,
+          item_title: alertItem.title,
+          description: `Manutenção agendada via Alerta Automático: ${alertItem.title}`,
+          status: "pending",
+          severity: "medium",
+          created_at: new Date().toISOString(),
+        };
+
+        const { data: created, error } = await supabase
+          .from("checklist_issues")
+          .insert([newIssuePayload])
+          .select(`
+            *,
+            vehicles (id, plate, model),
+            auto_alerts (*)
+          `)
+          .single();
+
+        if (error) throw error;
+        targetIssue = created;
+      }
+
+      openResolveModal(targetIssue, "resolve");
+    } catch (err: any) {
+      alert("Erro ao preparar formulário de baixa: " + err.message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -1674,8 +1729,27 @@ export default function MaintenanceTab() {
                       </div>
                     </div>
 
-                    <div className="border-t border-zinc-100 pt-4">
+                    <div className="border-t border-zinc-100 pt-4 space-y-3">
                       {statsContent}
+
+                      <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAlertForHistory(alert)}
+                          className="flex-1 py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                          title="Ver histórico de manutenções executadas para esta regra"
+                        >
+                          <History size={14} /> Histórico
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenResolveForAlert(alert)}
+                          className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                          title="Registrar manutenção concluída / Dar baixa nesta regra"
+                        >
+                          <Wrench size={14} /> Registrar Baixa
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1853,7 +1927,7 @@ export default function MaintenanceTab() {
                     <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
                       <div>
                         {imageUrl ? (
-                          <button onClick={() => setPhotoModalUrl(imageUrl)} className="text-xs text-blue-600 font-bold flex items-center gap-1">
+                          <button onClick={() => setSelectedImage(imageUrl)} className="text-xs text-blue-600 font-bold flex items-center gap-1">
                             📷 Ver Foto
                           </button>
                         ) : (
@@ -1863,15 +1937,15 @@ export default function MaintenanceTab() {
                       <div className="flex gap-2">
                         {activeTab === "resolved" ? (
                           <>
-                            <button onClick={() => setPrintIssue(issue)} className="p-2 text-zinc-400 hover:text-zinc-600 rounded-lg">
+                            <button onClick={() => setSelectedViewIssue(issue)} className="p-2 text-zinc-400 hover:text-zinc-600 rounded-lg">
                               <Printer size={16} />
                             </button>
-                            <button onClick={() => { setSelectedIssue(issue); setResolutionModalOpen(true); }} className="px-3 py-1.5 bg-zinc-900 text-white text-[10px] font-black uppercase rounded-lg">
+                            <button onClick={() => setSelectedIssue(issue)} className="px-3 py-1.5 bg-zinc-900 text-white text-[10px] font-black uppercase rounded-lg">
                               Detalhes
                             </button>
                           </>
                         ) : (
-                          <button onClick={() => { setSelectedIssue(issue); setResolutionModalOpen(true); }} className="px-3 py-1.5 bg-primary text-white text-[10px] font-black uppercase rounded-lg">
+                          <button onClick={() => setSelectedIssue(issue)} className="px-3 py-1.5 bg-primary text-white text-[10px] font-black uppercase rounded-lg">
                             Analisar
                           </button>
                         )}
@@ -3838,6 +3912,14 @@ ADD COLUMN IF NOT EXISTS maintenance_end_date DATE;`}
         <IssueDetailsModal
           issue={selectedViewIssue}
           onClose={() => setSelectedViewIssue(null)}
+        />
+      )}
+
+      {selectedAlertForHistory && (
+        <AlertHistoryModal
+          isOpen={!!selectedAlertForHistory}
+          alert={selectedAlertForHistory}
+          onClose={() => setSelectedAlertForHistory(null)}
         />
       )}
     </div>

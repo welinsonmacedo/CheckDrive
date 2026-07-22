@@ -13,8 +13,10 @@ import {
   X,
   Search,
   Filter,
+  History,
 } from "lucide-react";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
+import AlertHistoryModal from "@/src/modules/company/components/AlertHistoryModal";
 
 export default function AlertsTab() {
   const { user } = useAuth();
@@ -24,6 +26,7 @@ export default function AlertsTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [selectedAlertForHistory, setSelectedAlertForHistory] = useState<any | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -243,30 +246,10 @@ WITH CHECK (company_id = get_default_company_id());
 -- 2. Adicionar coluna na tabela de checklist_issues para ligar à pendência
 ALTER TABLE public.checklist_issues ADD COLUMN IF NOT EXISTS auto_alert_id UUID REFERENCES public.auto_alerts(id);
 
--- 3. Função e Trigger para resetar o alerta automaticamente quando a pendência for resolvida
-CREATE OR REPLACE FUNCTION reset_auto_alert_on_resolve()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_alert RECORD;
-    v_current_km NUMERIC;
-BEGIN
-    IF NEW.status = 'resolved' AND OLD.status = 'pending' AND NEW.auto_alert_id IS NOT NULL THEN
-        SELECT * INTO v_alert FROM auto_alerts WHERE id = NEW.auto_alert_id;
-        IF v_alert.trigger_type = 'km' THEN
-            SELECT odometer INTO v_current_km FROM checklist_submissions WHERE vehicle_id = NEW.vehicle_id ORDER BY created_at DESC LIMIT 1;
-            IF v_current_km IS NOT NULL THEN
-                UPDATE auto_alerts SET last_km = v_current_km WHERE id = v_alert.id;
-            ELSE
-                UPDATE auto_alerts SET last_km = v_alert.last_km + v_alert.interval_km WHERE id = v_alert.id;
-            END IF;
-        END IF;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
+-- 3. Remover quaisquer triggers automáticos de baixa no checklist_submissions
+DROP TRIGGER IF EXISTS trigger_auto_reset_alert_on_submission ON public.checklist_submissions;
 DROP TRIGGER IF EXISTS trigger_reset_auto_alert ON public.checklist_issues;
-CREATE TRIGGER trigger_reset_auto_alert AFTER UPDATE ON public.checklist_issues FOR EACH ROW EXECUTE FUNCTION reset_auto_alert_on_resolve();`}
+DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
           </pre>
         </div>
         <button
@@ -641,6 +624,13 @@ CREATE TRIGGER trigger_reset_auto_alert AFTER UPDATE ON public.checklist_issues 
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
+                    onClick={() => setSelectedAlertForHistory(alert)}
+                    className="p-1.5 text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center gap-1 text-[11px] font-bold"
+                    title="Ver Histórico de Manutenções"
+                  >
+                    <History size={14} /> Histórico
+                  </button>
+                  <button
                     onClick={() => {
                       setForm({
                         id: alert.id,
@@ -751,6 +741,14 @@ CREATE TRIGGER trigger_reset_auto_alert AFTER UPDATE ON public.checklist_issues 
             </div>
           ))}
         </div>
+      )}
+
+      {selectedAlertForHistory && (
+        <AlertHistoryModal
+          isOpen={!!selectedAlertForHistory}
+          alert={selectedAlertForHistory}
+          onClose={() => setSelectedAlertForHistory(null)}
+        />
       )}
     </div>
   );

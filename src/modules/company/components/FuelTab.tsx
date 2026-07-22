@@ -53,15 +53,7 @@ export default function FuelTab() {
                 </div>
                 <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
                   <span className="text-xs text-text-muted">KM: <strong className="text-text-main font-bold">{sub.odometer || "-"}</strong></span>
-                  <button
-                    onClick={() => {
-                      setSelectedSubmission(sub);
-                      setDetailsModalOpen(true);
-                    }}
-                    className="text-xs font-black uppercase text-indigo-600 tracking-wider hover:text-indigo-800 transition"
-                  >
-                    Ver Check-list
-                  </button>
+                  <span className="text-xs font-mono font-bold text-text-main">{sub.vehicles?.plate}</span>
                 </div>
               </div>
             ))

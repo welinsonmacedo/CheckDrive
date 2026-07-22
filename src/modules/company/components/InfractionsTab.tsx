@@ -1089,18 +1089,18 @@ export default function InfractionsTab() {
                     </div>
 
                     <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100">
-                      <button onClick={() => setViewInfraction(inf)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Ver Detalhes">
+                      <button onClick={() => { setFormData(inf); setIsModalOpen(true); }} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Ver / Editar">
                         <Eye size={18} />
                       </button>
                       {inf.attachment_url && (
-                        <button onClick={() => setAttachmentUrl(inf.attachment_url)} className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" title="Ver Anexo">
-                          <Paperclip size={18} />
+                        <button onClick={() => setSelectedAttachment(inf.attachment_url)} className="p-2 text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" title="Ver Anexo">
+                          <FileText size={18} />
                         </button>
                       )}
-                      <button onClick={() => handlePrint(inf)} className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg" title="Imprimir Recibo">
+                      <button onClick={() => setPrintInfraction(inf)} className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg" title="Imprimir Recibo">
                         <Printer size={18} />
                       </button>
-                      <button onClick={() => setEditingInfraction(inf)} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Editar">
+                      <button onClick={() => { setFormData(inf); setIsModalOpen(true); }} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Editar">
                         <Edit2 size={18} />
                       </button>
                       <button onClick={() => handleDelete(inf.id)} className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Excluir">

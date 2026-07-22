@@ -570,10 +570,27 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
                     {/* Actions */}
                     {(canEdit || canDelete || user?.role === "admin") && (
                       <div className="flex justify-end gap-3 mt-1 pt-3 border-t border-gray-100">
-                        {canEdit && <button onClick={() => handleEdit(sch)} className="text-xs font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest">Editar</button>}
-                        {canDelete && <button onClick={() => handleDelete(sch.id)} className="text-xs font-black text-red-500 hover:text-red-700 uppercase tracking-widest">Excluir</button>}
+                        {canEdit && (
+                          <button onClick={() => {
+                            setScheduleForm({
+                              id: sch.id,
+                              driver_id: sch.driver_id || "",
+                              vehicle_id: sch.vehicle_id || "",
+                              trailer_id: sch.trailer_id || "",
+                              route_id: sch.route_id || "",
+                              start_at: formatForInput(sch.start_at),
+                              end_at: formatForInput(sch.end_at),
+                              bait1_id: sch.bait1_id || "",
+                              bait2_id: sch.bait2_id || "",
+                              bait3_id: sch.bait3_id || "",
+                              requires_fueling: sch.requires_fueling !== false,
+                            });
+                            setIsFormOpen(true);
+                          }} className="text-xs font-black text-blue-500 hover:text-blue-700 uppercase tracking-widest">Editar</button>
+                        )}
+                        {canDelete && <button onClick={() => deleteItem(sch.id, !!(sch.start_checklist_id || sch.end_checklist_id))} className="text-xs font-black text-red-500 hover:text-red-700 uppercase tracking-widest">Excluir</button>}
                         {user?.role === "admin" && (
-                           <button onClick={() => handlePrint(sch)} className="text-xs font-black text-zinc-500 hover:text-zinc-700 uppercase tracking-widest">Imprimir</button>
+                           <button onClick={() => setSelectedPrintSchedule(sch)} className="text-xs font-black text-zinc-500 hover:text-zinc-700 uppercase tracking-widest">Imprimir</button>
                         )}
                       </div>
                     )}

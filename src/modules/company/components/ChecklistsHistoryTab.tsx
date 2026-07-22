@@ -172,7 +172,7 @@ export default function ChecklistsHistoryTab({
                     Detalhes
                   </button>
                   {currentUser?.role === "admin" && (
-                    <button onClick={() => handleDelete(sub.id)} className="px-2 py-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                    <button onClick={() => handleOpenDelete(sub)} className="px-2 py-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
                       <Trash2 size={16} />
                     </button>
                   )}
