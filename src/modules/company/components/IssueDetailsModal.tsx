@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Package, createPortal } from "react-dom";
+import { createPortal } from "react-dom";
 import {
   X,
   Printer,
@@ -13,7 +13,8 @@ import {
   Camera,
   AlertTriangle,
   Receipt,
-  UserCircle2
+  UserCircle2,
+  Package
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import PrintHeader from "./PrintHeader";
