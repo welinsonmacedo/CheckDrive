@@ -51,7 +51,7 @@ export default function MaintenanceTab() {
   >("maintenance_trackingFilter", "all");
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = usePersistentState<
-    "pending" | "waiting" | "resolved" | "tracking"
+    "pending" | "waiting" | "waiting_nf" | "resolved" | "tracking"
   >("maintenance_activeTab", "pending");
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
@@ -1024,7 +1024,19 @@ export default function MaintenanceTab() {
 
   // Filtrar issues por status e search
   const filteredIssues = issues
-    .filter((issue) => issue.status === activeTab)
+    .filter((issue) => {
+      // Ocultar itens marcados como normal no checklist (que geraram resolução automática)
+      if (issue.status === "resolved" && issue.resolution_notes?.toLowerCase().includes("normal no checklist")) {
+        return false;
+      }
+      if (activeTab === "waiting_nf") {
+        return issue.status === "resolved" && issue.resolution_notes?.startsWith("[AGUARDANDO_NF]");
+      }
+      if (activeTab === "resolved") {
+        return issue.status === "resolved" && !issue.resolution_notes?.startsWith("[AGUARDANDO_NF]");
+      }
+      return issue.status === activeTab;
+    })
     .filter((issue) => {
       if (alertFilter === "all") return true;
       if (alertFilter === "driver") return !issue.auto_alert_id;
@@ -1067,7 +1079,8 @@ export default function MaintenanceTab() {
 
   const pendingCount = issues.filter((i) => i.status === "pending").length;
   const waitingCount = issues.filter((i) => i.status === "waiting").length;
-  const resolvedCount = issues.filter((i) => i.status === "resolved").length;
+  const waitingNfCount = issues.filter((i) => i.status === "resolved" && i.resolution_notes?.startsWith("[AGUARDANDO_NF]")).length;
+  const resolvedCount = issues.filter((i) => i.status === "resolved" && !i.resolution_notes?.startsWith("[AGUARDANDO_NF]") && !i.resolution_notes?.toLowerCase().includes("normal no checklist")).length;
 
   const filteredAlertsForTracking = alerts.filter((alert) => {
     const titleMatch = (alert.title || "")
@@ -1377,6 +1390,25 @@ export default function MaintenanceTab() {
               {waitingCount > 0 && (
                 <span className="ml-1 px-2 py-0.5 text-xs bg-amber-100 text-amber-600 rounded-full font-bold">
                   {waitingCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("waiting_nf");
+                setSelectedRows([]);
+              }}
+              className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                activeTab === "waiting_nf"
+                  ? "text-primary border-b-2 border-primary bg-primary/5"
+                  : "text-text-muted hover:text-text-main hover:bg-gray-50"
+              }`}
+            >
+              <Receipt size={16} />
+              Aguardando NF
+              {waitingNfCount > 0 && (
+                <span className="ml-1 px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full font-bold">
+                  {waitingNfCount}
                 </span>
               )}
             </button>
@@ -1770,12 +1802,14 @@ export default function MaintenanceTab() {
                 ? "Pendências de Manutenção"
                 : activeTab === "waiting"
                   ? "Manutenções em Aguardo"
-                  : "Manutenções Resolvidas"}
+                  : activeTab === "waiting_nf"
+                    ? "Aguardando NF"
+                    : "Manutenções Resolvidas"}
             </span>
 
             <div className="flex items-center gap-4">
               {selectedRows.length > 0 &&
-                (activeTab === "pending" || activeTab === "waiting") &&
+                (activeTab === "pending" || activeTab === "waiting" || activeTab === "waiting_nf") &&
                 user?.role === "admin" && (
                   <>
                     <button
@@ -1862,6 +1896,18 @@ export default function MaintenanceTab() {
                       serviços.
                     </p>
                   </>
+                ) : activeTab === "waiting_nf" ? (
+                  <>
+                    <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center">
+                      <Receipt size={32} className="text-blue-500" />
+                    </div>
+                    <p className="text-sm text-gray-500 font-bold">
+                      Nenhuma pendência aguardando NF!
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      As manutenções resolvidas que aguardam nota fiscal aparecerão aqui.
+                    </p>
+                  </>
                 ) : (
                   <>
                     <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
@@ -1887,7 +1933,7 @@ export default function MaintenanceTab() {
                   <div key={issue.id} className={`bg-white rounded-xl border p-4 flex flex-col gap-3 shadow-sm transition-colors ${isSelected ? 'border-primary ring-1 ring-primary bg-primary/5' : 'border-app-border'}`}>
                     <div className="flex justify-between items-start">
                       <div className="flex gap-2 items-start">
-                        {(activeTab === "pending" || activeTab === "waiting") && user?.role === "admin" && (
+                        {(activeTab === "pending" || activeTab === "waiting" || activeTab === "waiting_nf") && user?.role === "admin" && (
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -1972,7 +2018,7 @@ export default function MaintenanceTab() {
               <table className="w-full text-left whitespace-nowrap">
                 <thead className="bg-app-bg/50">
                   <tr>
-                    {(activeTab === "pending" || activeTab === "waiting") &&
+                    {(activeTab === "pending" || activeTab === "waiting" || activeTab === "waiting_nf") &&
                       user?.role === "admin" && (
                         <th className="px-5 py-3 w-10">
                           <input
@@ -2028,7 +2074,7 @@ export default function MaintenanceTab() {
                         key={issue.id}
                         className={`transition-colors ${selectedRows.includes(issue.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-gray-50"}`}
                       >
-                        {(activeTab === "pending" || activeTab === "waiting") &&
+                        {(activeTab === "pending" || activeTab === "waiting" || activeTab === "waiting_nf") &&
                           user?.role === "admin" && (
                             <td className="px-5 py-4 w-10">
                               <input

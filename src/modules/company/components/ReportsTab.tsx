@@ -163,7 +163,13 @@ export default function ReportsTab() {
 
       if (error) throw error;
 
-      const filteredData = (data || []).map((d: any) => {
+      const filteredData = (data || []).filter((d: any) => {
+        const notesStr = String(d.resolution_notes || "").toLowerCase();
+        if (d.status === "resolved" && notesStr.includes("normal no checklist")) {
+          return false;
+        }
+        return true;
+      }).map((d: any) => {
         let status = d.status;
         const notesStr = String(d.resolution_notes || "").toLowerCase();
         
@@ -312,7 +318,7 @@ export default function ReportsTab() {
       // Do not convert resolved back to pending for this specific report.
       const resolvedData = data.filter(d => {
         const notesStr = String(d.resolution_notes || "").toLowerCase();
-        const isAutoResolved = !d.resolved_by || d.resolver?.role === "driver" || notesStr.includes("automaticamente pelo check list") || notesStr.includes("automaticamente");
+        const isAutoResolved = !d.resolved_by || d.resolver?.role === "driver" || notesStr.includes("automaticamente pelo check list") || notesStr.includes("automaticamente") || notesStr.includes("normal no checklist");
         return d.status === "resolved" && !isAutoResolved;
       });
       setResolvedIssuesData(groupResolvedIssues(resolvedData));
@@ -718,7 +724,13 @@ export default function ReportsTab() {
       if (error) throw error;
 
       // Only pending defects
-      let mappedData = data.map((d: any) => {
+      let mappedData = data.filter((d: any) => {
+        const notesStr = String(d.resolution_notes || "").toLowerCase();
+        if (d.status === "resolved" && notesStr.includes("normal no checklist")) {
+          return false;
+        }
+        return true;
+      }).map((d: any) => {
         let status = d.status;
         const notesStr = String(d.resolution_notes || "").toLowerCase();
         if (
@@ -782,7 +794,13 @@ export default function ReportsTab() {
 
       if (error) throw error;
 
-      let mappedData = data.map((d) => {
+      let mappedData = data.filter((d: any) => {
+        const notesStr = String(d.resolution_notes || "").toLowerCase();
+        if (d.status === "resolved" && notesStr.includes("normal no checklist")) {
+          return false;
+        }
+        return true;
+      }).map((d) => {
         let status = d.status;
         const notesStr = String(d.resolution_notes || "").toLowerCase();
         if (
