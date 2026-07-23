@@ -174,6 +174,32 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
         requires_fueling: scheduleForm.requires_fueling,
       };
 
+      // Conflict validation: Check for overlapping schedules for the same driver, vehicle, or trailer
+      const orConditions = [
+        `driver_id.eq.${dataToInsert.driver_id}`,
+        `vehicle_id.eq.${dataToInsert.vehicle_id}`
+      ];
+      if (dataToInsert.trailer_id) {
+        orConditions.push(`trailer_id.eq.${dataToInsert.trailer_id}`);
+      }
+
+      const { data: conflicts, error: conflictError } = await supabase
+        .from("schedules")
+        .select("id")
+        .eq("company_id", user?.company_id || user?.id)
+        .or(orConditions.join(","))
+        .lt("start_at", dataToInsert.end_at)
+        .gt("end_at", dataToInsert.start_at);
+
+      if (conflictError) throw conflictError;
+
+      const actualConflicts = conflicts?.filter((c) => c.id !== scheduleForm.id) || [];
+      if (actualConflicts.length > 0) {
+        alert("Conflito de escala! Já existe uma escala agendada para este motorista, veículo ou carreta neste intervalo de horário.");
+        setSaving(false);
+        return;
+      }
+
       if (scheduleForm.id) {
         const { error } = await supabase
           .from("schedules")
