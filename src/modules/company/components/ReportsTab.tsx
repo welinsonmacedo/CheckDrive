@@ -2165,7 +2165,12 @@ export default function ReportsTab() {
                                 {v.resolver?.full_name || "Sistema"}
                               </td>
                               <td className="px-5 py-4 text-center text-xs font-medium text-gray-500 whitespace-normal min-w-[200px] max-w-xs">
-                                {v.resolution_notes || "-"}
+                                {v.resolution_notes?.startsWith("[AGUARDANDO_NF]") && (
+                                  <span className="inline-block px-2 py-0.5 mb-1 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-md whitespace-nowrap">AGUARDANDO NF</span>
+                                )}
+                                <div className="mt-0.5">
+                                  {v.resolution_notes ? v.resolution_notes.replace("[AGUARDANDO_NF] ", "").replace("[AGUARDANDO_NF]", "") : "-"}
+                                </div>
                               </td>
                               <td className="px-5 py-4 text-right text-xs font-black text-emerald-600">
                                 R$ {(v.resolution_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

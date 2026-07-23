@@ -305,8 +305,13 @@ export default function IssueDetailsModal({
                       <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest block mb-2 flex items-center gap-1">
                         <FileText size={12} /> Descrição OS
                       </span>
+                      {issue.resolution_notes.startsWith("[AGUARDANDO_NF]") && (
+                        <span className="inline-block px-2 py-1 mb-2 bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-wider rounded-md border border-blue-200">
+                          Aguardando NF
+                        </span>
+                      )}
                       <p className="text-sm font-medium text-zinc-800 whitespace-pre-wrap bg-blue-50 p-5 rounded-xl border border-blue-100 leading-relaxed print:border-zinc-300 print:bg-white">
-                        {issue.resolution_notes}
+                        {issue.resolution_notes.replace("[AGUARDANDO_NF] ", "").replace("[AGUARDANDO_NF]", "")}
                       </p>
                     </div>
                   )}

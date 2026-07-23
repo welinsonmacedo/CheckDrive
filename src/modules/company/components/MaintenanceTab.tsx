@@ -23,6 +23,7 @@ import {
   Edit,
   Upload,
   History,
+  Receipt,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -91,7 +92,7 @@ export default function MaintenanceTab() {
   const [resolveWarningKm, setResolveWarningKm] = useState("");
   const [isResolving, setIsResolving] = useState(false);
   const [resolveSubStatus, setResolveSubStatus] = useState<
-    "resolved" | "waiting"
+    "resolved" | "waiting" | "waiting_nf"
   >("resolved");
 
   const [resolveNfs, setResolveNfs] = useState<any[]>([
@@ -362,16 +363,19 @@ export default function MaintenanceTab() {
     issue: any,
     actionType: "resolve" | "delete" = "resolve",
   ) {
+    const isWaitingNf = issue.resolution_notes?.startsWith("[AGUARDANDO_NF]");
+    const cleanNotes = issue.resolution_notes?.replace("[AGUARDANDO_NF] ", "")?.replace("[AGUARDANDO_NF]", "") || "";
+
     setModalActionType(actionType);
     setResolvingIssueData(issue);
     setResolvingIssueId(issue.grouped_ids || [issue.id]);
     setSelectedIdsToResolve(issue.grouped_ids || [issue.id]);
-    setResolveNotes(issue.resolution_notes || "");
+    setResolveNotes(cleanNotes);
     setResolveType(issue.resolution_type || "");
     setResolveCategory(issue.item_category || "");
     setResolveStartDate(issue.maintenance_start_date ? issue.maintenance_start_date.split("T")[0] : "");
     setResolveEndDate(issue.maintenance_end_date ? issue.maintenance_end_date.split("T")[0] : "");
-    setResolveSubStatus(issue.status === "waiting" ? "waiting" : "resolved");
+    setResolveSubStatus(issue.status === "waiting" ? "waiting" : isWaitingNf ? "waiting_nf" : "resolved");
     setResolveNf("");
     setResolveValue(issue.resolution_value?.toString() || "");
     setResolvePhotos([]);
@@ -651,7 +655,7 @@ export default function MaintenanceTab() {
               }
             : {
                 status: "resolved",
-                resolution_notes: resolveNotes,
+                resolution_notes: resolveSubStatus === "waiting_nf" ? `[AGUARDANDO_NF] ${resolveNotes}` : resolveNotes,
                 resolution_type: resolveType || null,
                 item_category: resolveCategory || null,
                 maintenance_start_date: resolveStartDate || null,
@@ -693,7 +697,7 @@ export default function MaintenanceTab() {
               }
             : {
                 status: "resolved",
-                resolution_notes: resolveNotes,
+                resolution_notes: resolveSubStatus === "waiting_nf" ? `[AGUARDANDO_NF] ${resolveNotes}` : resolveNotes,
                 resolution_type: resolveType || null,
                 item_category: resolveCategory || null,
                 maintenance_start_date: resolveStartDate || null,
@@ -1917,10 +1921,17 @@ export default function MaintenanceTab() {
                       )}
 
                       {issue.status === "resolved" && (
-                        <div className="mt-2 bg-green-50 p-2 rounded-lg border border-green-100 text-xs">
-                          <div className="font-bold text-green-700">Resolvido: {new Date(issue.resolved_at!).toLocaleDateString()}</div>
-                          {issue.resolution_value && <div className="text-green-800 font-medium">Custo: R$ {Number(issue.resolution_value).toFixed(2)}</div>}
-                        </div>
+                        issue.resolution_notes?.startsWith("[AGUARDANDO_NF]") ? (
+                          <div className="mt-2 bg-blue-50 p-2 rounded-lg border border-blue-100 text-xs">
+                            <div className="font-bold text-blue-700">Aguardando NF: {new Date(issue.resolved_at!).toLocaleDateString()}</div>
+                            {issue.resolution_value && <div className="text-blue-800 font-medium">Custo: R$ {Number(issue.resolution_value).toFixed(2)}</div>}
+                          </div>
+                        ) : (
+                          <div className="mt-2 bg-green-50 p-2 rounded-lg border border-green-100 text-xs">
+                            <div className="font-bold text-green-700">Resolvido: {new Date(issue.resolved_at!).toLocaleDateString()}</div>
+                            {issue.resolution_value && <div className="text-green-800 font-medium">Custo: R$ {Number(issue.resolution_value).toFixed(2)}</div>}
+                          </div>
+                        )
                       )}
                     </div>
 
@@ -2205,10 +2216,17 @@ export default function MaintenanceTab() {
                             <div className="flex items-start justify-end gap-6 text-left">
                               <div className="flex-1 max-w-[200px]">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <div className="text-sm text-green-600 font-semibold flex items-center gap-1">
-                                    <CheckCircle size={14} />
-                                    Resolvido
-                                  </div>
+                                  {issue.resolution_notes?.startsWith("[AGUARDANDO_NF]") ? (
+                                    <div className="text-sm text-blue-600 font-semibold flex items-center gap-1">
+                                      <Receipt size={14} />
+                                      Aguardando NF
+                                    </div>
+                                  ) : (
+                                    <div className="text-sm text-green-600 font-semibold flex items-center gap-1">
+                                      <CheckCircle size={14} />
+                                      Resolvido
+                                    </div>
+                                  )}
                                   {issue.resolution_type && (
                                     <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-700">
                                       {issue.resolution_type}
@@ -2230,7 +2248,7 @@ export default function MaintenanceTab() {
 
                                 {issue.resolution_notes && (
                                   <div className="text-text-muted text-xs mt-1">
-                                    {issue.resolution_notes}
+                                    {issue.resolution_notes.replace("[AGUARDANDO_NF] ", "").replace("[AGUARDANDO_NF]", "")}
                                   </div>
                                 )}
 
@@ -2540,14 +2558,18 @@ export default function MaintenanceTab() {
                   <span
                     className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border text-left ${
                       modalActionType === "resolve"
-                        ? resolveSubStatus === "waiting"
+                        ? resolveSubStatus === "waiting_nf"
+                          ? "bg-blue-50 text-blue-700 border-blue-200"
+                          : resolveSubStatus === "waiting"
                           ? "bg-amber-50 text-amber-700 border-amber-200"
                           : "bg-emerald-50 text-emerald-700 border-emerald-200"
                         : "bg-rose-50 text-rose-700 border-rose-200"
                     }`}
                   >
                     {modalActionType === "resolve"
-                      ? resolveSubStatus === "waiting"
+                      ? resolveSubStatus === "waiting_nf"
+                        ? "Aguardando NF"
+                        : resolveSubStatus === "waiting"
                         ? "Aguardando Peças / Serviço"
                         : "Solucionar Pendência de Manutenção"
                       : "Excluir Registro de Pendência"}
@@ -2585,7 +2607,7 @@ export default function MaintenanceTab() {
             {/* Sub Status Switcher (Only for Resolve) */}
             {modalActionType === "resolve" && !sqlError && (
               <div className="px-6 pt-5 shrink-0 text-left">
-                <div className="bg-zinc-100 p-1 rounded-2xl flex border border-zinc-200/50 max-w-md">
+                <div className="bg-zinc-100 p-1 rounded-2xl flex border border-zinc-200/50 w-full max-w-2xl overflow-x-auto whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => {
@@ -2626,6 +2648,25 @@ export default function MaintenanceTab() {
                     />
                     Colocar em Aguardo
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResolveSubStatus("waiting_nf");
+                    }}
+                    className={`flex-1 py-1.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      resolveSubStatus === "waiting_nf"
+                        ? "bg-white text-blue-800 shadow-sm font-black"
+                        : "text-zinc-500 hover:text-zinc-805"
+                    }`}
+                  >
+                    <Receipt
+                      size={15}
+                      className={
+                        resolveSubStatus === "waiting_nf" ? "text-blue-500" : ""
+                      }
+                    />
+                    Aguardando NF
+                  </button>
                 </div>
               </div>
             )}
@@ -2635,7 +2676,8 @@ export default function MaintenanceTab() {
               {modalActionType === "resolve" &&
                 !sqlError &&
                 (resolveSubStatus === "resolved" ||
-                  resolveSubStatus === "waiting") && (
+                  resolveSubStatus === "waiting" ||
+                  resolveSubStatus === "waiting_nf") && (
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full min-h-0">
                     {/* Left Column: Context, General Fields and Alert info */}
                     <div className="lg:col-span-6 flex flex-col space-y-6 overflow-y-auto pr-3 min-h-0 text-left">
@@ -3864,7 +3906,9 @@ ADD COLUMN IF NOT EXISTS maintenance_end_date DATE;`}
                   disabled={isResolving || selectedIdsToResolve.length === 0}
                   className={`px-5 py-2.5 text-xs font-black text-white rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer shadow-md uppercase tracking-wider ${
                     modalActionType === "resolve"
-                      ? resolveSubStatus === "waiting"
+                      ? resolveSubStatus === "waiting_nf"
+                        ? "bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-blue-600/10"
+                        : resolveSubStatus === "waiting"
                         ? "bg-amber-600 hover:bg-amber-655 active:scale-95 shadow-amber-600/10"
                         : "bg-emerald-600 hover:bg-emerald-655 active:scale-95 shadow-emerald-600/10"
                       : "bg-rose-600 hover:bg-rose-700 active:scale-95 shadow-rose-600/10"
@@ -3874,7 +3918,9 @@ ADD COLUMN IF NOT EXISTS maintenance_end_date DATE;`}
                     <>
                       <Clock size={14} className="animate-spin" />
                       {modalActionType === "resolve"
-                        ? resolveSubStatus === "waiting"
+                        ? resolveSubStatus === "waiting_nf"
+                          ? "Marcando..."
+                          : resolveSubStatus === "waiting"
                           ? "Sinalizando..."
                           : "Resolvendo..."
                         : "Excluindo..."}
@@ -3882,7 +3928,12 @@ ADD COLUMN IF NOT EXISTS maintenance_end_date DATE;`}
                   ) : (
                     <>
                       {modalActionType === "resolve" ? (
-                        resolveSubStatus === "waiting" ? (
+                        resolveSubStatus === "waiting_nf" ? (
+                          <>
+                            <Receipt size={14} />
+                            Aguardando NF
+                          </>
+                        ) : resolveSubStatus === "waiting" ? (
                           <>
                             <Clock size={14} />
                             Salvar Alterações
