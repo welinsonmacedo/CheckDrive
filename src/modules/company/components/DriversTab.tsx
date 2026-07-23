@@ -143,21 +143,25 @@ export default function DriversTab() {
           .eq("id", userForm.id);
 
         if (error) {
-          // fallback if columns don't exist
-          await supabase
+          console.error("Update Error in DriversTab:", error);
+          // fallback if CNH/photo columns don't exist yet
+          const { error: fallbackError } = await supabase
             .from("profiles")
             .update({
               full_name: parsedName,
               cpf: userForm.cpf || null,
-              cnh_number: userForm.cnhNumber || null,
-              cnh_category: userForm.cnhCategory || null,
-              cnh_expiration_date: userForm.cnhExpirationDate || null,
-              cnh_first_date: userForm.cnhFirstDate || null,
-              photo_url: newPhotoUrl || null,
-              doc_cnh_url: newDocCnhUrl || null,
               role: userForm.role,
+              driver_type: userForm.driverType,
+              participates_in_ranking: userForm.participatesInRanking,
+              modality_ids: userForm.modalityIds,
+              score_profile_id: userForm.scoreProfileId || null,
             })
             .eq("id", userForm.id);
+            
+          if (fallbackError) {
+             console.error("Fallback Update Error:", fallbackError);
+             throw fallbackError;
+          }
         }
       } else {
         const isAllowed = await checkUserLimit();
@@ -215,14 +219,27 @@ export default function DriversTab() {
 
           if (profileError) {
             console.warn(
-              "Could not upsert profile directly (possibly RLS)",
+              "Could not upsert profile directly (possibly RLS or missing columns)",
               profileError,
             );
 
-            await supabase
+            const { error: fallbackError } = await supabase
               .from("profiles")
-              .update(updatePayload)
+              .update({
+                full_name: parsedName,
+                cpf: userForm.cpf || null,
+                role: userForm.role,
+                driver_type: userForm.driverType,
+                participates_in_ranking: userForm.participatesInRanking,
+                modality_ids: userForm.modalityIds,
+                score_profile_id: userForm.scoreProfileId || null,
+              })
               .eq("id", data.user.id);
+              
+            if (fallbackError) {
+               console.error("Fallback Insert Error:", fallbackError);
+               throw fallbackError;
+            }
           }
 
           if (userForm.role === "driver" && userForm.participatesInRanking) {
