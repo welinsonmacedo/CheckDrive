@@ -15,13 +15,7 @@ export default function DriverHome() {
   const [schedulesToday, setSchedulesToday] = useState<any[]>([]);
   const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
   const [notifCount, setNotifCount] = useState(0);
-  const [showUpdateModal, setShowUpdateModal] = useState(() => {
-    try {
-      return sessionStorage.getItem('app_update_alert_dismissed') !== 'true';
-    } catch {
-      return true;
-    }
-  });
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [hiddenSchedules, setHiddenSchedules] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem('hiddenSchedules');
@@ -332,51 +326,6 @@ export default function DriverHome() {
           <span className="block text-secondary text-[11px] leading-tight font-medium">Lembre-se de realizar as fotos obrigatórias dos 4 ângulos do veículo.</span>
         </div>
       </div>
-
-      <AnimatePresence>
-        {showUpdateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-amber-200 rounded-3xl p-6 shadow-2xl max-w-sm w-full relative overflow-hidden"
-            >
-              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 to-orange-500" />
-              <div className="flex items-center gap-3.5 mb-4 mt-2">
-                <div className="w-11 h-11 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600 border border-amber-100 shrink-0">
-                  <AlertTriangle className="stroke-[2.5]" size={22} />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-[#92400e] text-sm uppercase tracking-wider">Atenção Motorista</h3>
-                  <p className="text-[11px] text-amber-700/80 font-medium">Atualização Necessária</p>
-                </div>
-              </div>
-              <div className="bg-amber-50/50 border border-amber-100/60 rounded-2xl p-4 mb-6">
-                <p className="text-zinc-800 text-sm font-semibold leading-relaxed">
-                  Favor procurar o setor <strong className="text-zinc-950">Frota</strong> para atualização de aplicativo até o dia <strong className="text-amber-700">20/06/2026</strong>.
-                </p>
-              </div>
-              <div className="flex">
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      sessionStorage.setItem('app_update_alert_dismissed', 'true');
-                    } catch (e) {
-                      console.error(e);
-                    }
-                    setShowUpdateModal(false);
-                  }}
-                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm py-3 px-6 rounded-xl shadow-md cursor-pointer select-none transition-all duration-200 text-center active:scale-[0.98]"
-                >
-                  Entendi
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

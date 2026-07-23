@@ -19,7 +19,13 @@ export default function QuickLogin() {
         const s = searchParams.get('s');
 
         if (!e || !p) {
-          throw new Error('Link inválido ou malformado.');
+          if (user) {
+            navigate(user.role === 'admin' || user.role === 'standard' ? '/admin/dashboard' : '/driver/home');
+            return;
+          }
+          setError(true);
+          setStatus('O Acesso Rápido é utilizado via link individual de escala enviado ao motorista ou por QR Code. Por favor, acesse com suas credenciais na tela de login.');
+          return;
         }
 
         setStatus('Autenticando motorista...');
@@ -88,8 +94,8 @@ export default function QuickLogin() {
             <h1 className="text-xl font-bold text-zinc-900 mb-2">Acesso Negado</h1>
             <p className="text-sm text-zinc-500 mb-6">{status}</p>
             <button
-              onClick={() => navigate('/')}
-              className="px-6 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors"
+              onClick={() => navigate('/login')}
+              className="px-6 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-md"
             >
               Ir para Tela de Login
             </button>

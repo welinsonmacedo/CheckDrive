@@ -5,6 +5,7 @@ import { DriverGuard, CompanyGuard, SuperAdminGuard } from '@/src/modules/shared
 import { ProtectedRoute } from '@/src/modules/shared/components/auth/ProtectedRoute';
 
 // Pages
+import LandingPage from '@/src/modules/shared/pages/LandingPage';
 import Privacy from '@/src/modules/shared/pages/Privacy';
 import Login from '@/src/modules/shared/pages/Login';
 import ResetPassword from '@/src/modules/shared/pages/ResetPassword';
@@ -26,6 +27,7 @@ export default function AppRoutes() {
     if (
       path !== '/' &&
       path !== '/login' &&
+      path !== '/landing' &&
       path !== '/reset-password' &&
       path !== '/privacy' &&
       !path.startsWith('/login')
@@ -37,6 +39,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/landing" element={<LandingPage />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/login" element={<Login />} />
       <Route path="/quick-login" element={<QuickLogin />} />
