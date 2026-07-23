@@ -480,7 +480,6 @@ export default function MaintenanceTab() {
           item_title: alertItem.title,
           description: `Manutenção agendada via Alerta Automático: ${alertItem.title}`,
           status: "pending",
-          severity: "medium",
           created_at: new Date().toISOString(),
         };
 
