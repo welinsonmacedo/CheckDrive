@@ -44,6 +44,7 @@ export default function VehicleDetailsModal({
     return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
   });
   const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
+  const [insuranceName, setInsuranceName] = useState<string | null>(null);
 
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [issues, setIssues] = useState<any[]>([]);
@@ -60,15 +61,39 @@ export default function VehicleDetailsModal({
       const startOfMonth = new Date(`${startDate}T00:00:00Z`).toISOString();
       const endOfMonth = new Date(`${endDate}T23:59:59Z`).toISOString();
 
+      // Fetch Insurance Name
+      if (vehicle.insurance_id) {
+        const { data: insData } = await supabase.from("insurances").select("name").eq("id", vehicle.insurance_id).single();
+        if (insData) {
+          setInsuranceName(insData.name);
+        }
+      }
+
       // Fetch Submissions
-      const { data: subs } = await supabase.from("checklist_submissions").select("*, profiles!checklist_submissions_driver_id_fkey(full_name), routes(origin, destination)")
+      const { data: subs } = await supabase.from("checklist_submissions").select("*, profiles!checklist_submissions_driver_id_fkey(full_name), routes(origin, destination), schedules_start:schedules!schedules_start_checklist_id_fkey(routes(origin, destination)), schedules_end:schedules!schedules_end_checklist_id_fkey(routes(origin, destination)), schedules_fuel:schedules!schedules_fuel_checklist_id_fkey(routes(origin, destination))")
         .eq("company_id", user?.company_id)
         .eq("vehicle_id", vehicle.id)
         .gte("created_at", startOfMonth)
         .lte("created_at", endOfMonth)
         .order("created_at", { ascending: false });
 
-      setSubmissions(subs || []);
+      const mappedSubs = (subs || []).map((sub: any) => {
+        let route = sub.routes;
+        if (!route && sub.schedules_start && sub.schedules_start.length > 0) {
+           route = sub.schedules_start[0].routes;
+        }
+        if (!route && sub.schedules_end && sub.schedules_end.length > 0) {
+           route = sub.schedules_end[0].routes;
+        }
+        if (!route && sub.schedules_fuel && sub.schedules_fuel.length > 0) {
+           route = sub.schedules_fuel[0].routes;
+        }
+        return {
+           ...sub,
+           resolved_route: route
+        };
+      });
+      setSubmissions(mappedSubs);
 
       // Fetch Issues
       const { data: defs } = await supabase.from("checklist_issues").select("*, profiles!checklist_issues_driver_id_fkey(full_name)")
@@ -233,7 +258,7 @@ export default function VehicleDetailsModal({
                   </div>
                   <div className="col-span-2">
                     <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Seguradora</span>
-                    <span className="text-xs font-semibold text-slate-700">{vehicle.insurance_id ? 'Vínculo Ativo' : 'Não informado'}</span>
+                    <span className="text-xs font-semibold text-slate-700">{insuranceName || (vehicle.insurance_id ? 'Vínculo Ativo' : 'Não informado')}</span>
                   </div>
                 </div>
 
@@ -571,8 +596,8 @@ export default function VehicleDetailsModal({
                                       className="text-slate-400 shrink-0"
                                     />
                                     <span className="truncate max-w-[200px]">
-                                      {sub.routes
-                                        ? `${sub.routes.origin} → ${sub.routes.destination}`
+                                      {sub.resolved_route
+                                        ? `${sub.resolved_route.origin} → ${sub.resolved_route.destination}`
                                         : "Espontânea / Sem Rota"}
                                     </span>
                                   </div>
