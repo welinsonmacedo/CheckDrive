@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import PrintHeader from "./PrintHeader";
+import AttachmentViewModal from "./AttachmentViewModal";
 
 interface VehicleDetailsModalProps {
   vehicle: any;
@@ -34,75 +35,30 @@ export default function VehicleDetailsModal({
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState("current");
-  const [closings, setClosings] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
+  });
+  const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
 
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [issues, setIssues] = useState<any[]>([]);
 
-  useEffect(() => {
-    fetchClosings();
-  }, []);
+  
 
   useEffect(() => {
     fetchVehicleDetails();
-  }, [vehicle.id, selectedPeriod, closings]);
-
-  const fetchClosings = async () => {
-    const { data } = await supabase.from("score_closings").select("*").eq("company_id", user?.company_id)
-      .order("created_at", { ascending: false });
-    setClosings(data || []);
-  };
+  }, [vehicle.id, startDate, endDate]);
 
   const fetchVehicleDetails = async () => {
     setLoading(true);
     try {
-      let startOfMonth: string;
-      let endOfMonth: string;
-
-      if (selectedPeriod === "current") {
-        const now = new Date();
-        startOfMonth = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          1,
-        ).toISOString();
-        endOfMonth = new Date(
-          now.getFullYear(),
-          now.getMonth() + 1,
-          0,
-          23,
-          59,
-          59,
-          999,
-        ).toISOString();
-      } else {
-        const closing = closings.find((c) => c.id === selectedPeriod);
-        if (closing) {
-          startOfMonth = new Date(
-            `${closing.period_start}T00:00:00Z`,
-          ).toISOString();
-          endOfMonth = new Date(
-            `${closing.period_end}T23:59:59Z`,
-          ).toISOString();
-        } else {
-          const now = new Date();
-          startOfMonth = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            1,
-          ).toISOString();
-          endOfMonth = new Date(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            0,
-            23,
-            59,
-            59,
-            999,
-          ).toISOString();
-        }
-      }
+      const startOfMonth = new Date(`${startDate}T00:00:00Z`).toISOString();
+      const endOfMonth = new Date(`${endDate}T23:59:59Z`).toISOString();
 
       // Fetch Submissions
       const { data: subs } = await supabase.from("checklist_submissions").select("*, profiles!checklist_submissions_driver_id_fkey(full_name), routes(origin, destination)")
@@ -188,35 +144,26 @@ export default function VehicleDetailsModal({
 
           <div className="flex items-center gap-3 shrink-0">
             {/* Period Selector */}
-            <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 hover:border-slate-300 transition-colors">
-              <Calendar size={14} className="text-slate-400 mr-2 shrink-0" />
-              <select
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="bg-transparent text-xs font-bold text-slate-700 outline-none pr-6 cursor-pointer appearance-none"
-              >
-                <option value="current">Período Atual</option>
-                {closings.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {new Date(`${c.period_start}T12:00:00Z`).toLocaleDateString(
-                      "pt-BR",
-                      { month: "short", year: "2-digit" },
-                    )}{" "}
-                    (
-                    {new Date(`${c.period_start}T12:00:00Z`).toLocaleDateString(
-                      "pt-BR",
-                      { day: "2-digit" },
-                    )}{" "}
-                    a{" "}
-                    {new Date(`${c.period_end}T12:00:00Z`).toLocaleDateString(
-                      "pt-BR",
-                      { day: "2-digit" },
-                    )}
-                    )
-                  </option>
-                ))}
-              </select>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-500" />
+            <div className="flex items-center gap-2">
+              <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 hover:border-slate-300 transition-colors">
+                <Calendar size={14} className="text-slate-400 mr-2 shrink-0" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                />
+              </div>
+              <span className="text-slate-400 text-xs font-bold">a</span>
+              <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 hover:border-slate-300 transition-colors">
+                <Calendar size={14} className="text-slate-400 mr-2 shrink-0" />
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                />
+              </div>
             </div>
 
             {/* Print Button */}
@@ -314,33 +261,33 @@ export default function VehicleDetailsModal({
                     {vehicle.photo_front_url && (
                       <div className="space-y-1">
                         <span className="text-[9px] font-bold text-slate-400 text-center block">Frontal</span>
-                        <a href={((vehicle.photo_front_url)?.startsWith('http') ? (vehicle.photo_front_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_front_url).data.publicUrl)} target="_blank" rel="noreferrer">
+                        <button onClick={() => setSelectedAttachment(((vehicle.photo_front_url)?.startsWith('http') ? (vehicle.photo_front_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_front_url).data.publicUrl))} className="focus:outline-none">
                           <img src={((vehicle.photo_front_url)?.startsWith('http') ? (vehicle.photo_front_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_front_url).data.publicUrl)} alt="Frontal" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
-                        </a>
+                        </button>
                       </div>
                     )}
                     {vehicle.photo_right_url && (
                       <div className="space-y-1">
                         <span className="text-[9px] font-bold text-slate-400 text-center block">Lateral Direita</span>
-                        <a href={((vehicle.photo_right_url)?.startsWith('http') ? (vehicle.photo_right_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_right_url).data.publicUrl)} target="_blank" rel="noreferrer">
+                        <button onClick={() => setSelectedAttachment(((vehicle.photo_right_url)?.startsWith('http') ? (vehicle.photo_right_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_right_url).data.publicUrl))} className="focus:outline-none">
                           <img src={((vehicle.photo_right_url)?.startsWith('http') ? (vehicle.photo_right_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_right_url).data.publicUrl)} alt="Direita" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
-                        </a>
+                        </button>
                       </div>
                     )}
                     {vehicle.photo_left_url && (
                       <div className="space-y-1">
                         <span className="text-[9px] font-bold text-slate-400 text-center block">Lateral Esquerda</span>
-                        <a href={((vehicle.photo_left_url)?.startsWith('http') ? (vehicle.photo_left_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_left_url).data.publicUrl)} target="_blank" rel="noreferrer">
+                        <button onClick={() => setSelectedAttachment(((vehicle.photo_left_url)?.startsWith('http') ? (vehicle.photo_left_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_left_url).data.publicUrl))} className="focus:outline-none">
                           <img src={((vehicle.photo_left_url)?.startsWith('http') ? (vehicle.photo_left_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_left_url).data.publicUrl)} alt="Esquerda" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
-                        </a>
+                        </button>
                       </div>
                     )}
                     {vehicle.photo_rear_url && (
                       <div className="space-y-1">
                         <span className="text-[9px] font-bold text-slate-400 text-center block">Traseira</span>
-                        <a href={((vehicle.photo_rear_url)?.startsWith('http') ? (vehicle.photo_rear_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_rear_url).data.publicUrl)} target="_blank" rel="noreferrer">
+                        <button onClick={() => setSelectedAttachment(((vehicle.photo_rear_url)?.startsWith('http') ? (vehicle.photo_rear_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_rear_url).data.publicUrl))} className="focus:outline-none">
                           <img src={((vehicle.photo_rear_url)?.startsWith('http') ? (vehicle.photo_rear_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.photo_rear_url).data.publicUrl)} alt="Traseira" className="w-full h-16 object-cover rounded-lg border border-slate-200 hover:opacity-80 transition-opacity" />
-                        </a>
+                        </button>
                       </div>
                     )}
                     {!vehicle.photo_front_url && !vehicle.photo_right_url && !vehicle.photo_left_url && !vehicle.photo_rear_url && (
@@ -659,8 +606,13 @@ export default function VehicleDetailsModal({
           )}
         </div>
       </motion.div>
+      {selectedAttachment && (
+        <AttachmentViewModal
+          attachmentUrl={selectedAttachment}
+          onClose={() => setSelectedAttachment(null)}
+        />
+      )}
     </div>
   );
-
   return createPortal(modalContent, document.body);
 }

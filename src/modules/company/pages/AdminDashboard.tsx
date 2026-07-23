@@ -91,6 +91,18 @@ export default function AdminDashboard() {
   const [vehiclesWithPending, setVehiclesWithPending] = useState<any[]>([]);
   const [openDropdowns, setOpenDropdowns] = useState<string[]>([]);
   const [notifCount, setNotifCount] = useState(0);
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([searchParams.get("tab") || "overview"]));
+
+  useEffect(() => {
+    setVisitedTabs((prev) => {
+      if (!prev.has(activeTab)) {
+        const next = new Set(prev);
+        next.add(activeTab);
+        return next;
+      }
+      return prev;
+    });
+  }, [activeTab]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPwaInstalled, setIsPwaInstalled] = useState(true);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
@@ -808,75 +820,106 @@ export default function AdminDashboard() {
           {/* Vehicles with Pending Section */}
 
           {/* Tab Content */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className={`print:h-auto print:overflow-visible ${activeTab === "notifications" ? "flex-1 flex flex-col overflow-hidden h-full" : ""}`}
-            >
-              {activeTab === "overview" && (
-                <OverviewTab
-                  setActiveTab={setActiveTab}
-                  appSettings={appSettings}
-                />
-              )}
-              {activeTab === "notifications" && <NotificationsTab />}
-              {activeTab === "tracking" && <TrackingTab />}
-              {activeTab === "reports" && <ReportsTab />}
-              {activeTab === "adm_users" && <AdmUsersTab />}
-              {activeTab === "insurances" && <InsurancesTab />}
-              {activeTab === "drivers" && <DriversTab />}
-              {activeTab === "vehicles" && <VehiclesTab />}
-              {activeTab === "my_vehicles" && <MyVehicles />}
-              {activeTab === "my_drivers" && <MyDrivers />}
-              {activeTab === "routes" && <RoutesTab />}
-              {activeTab === "checklist_setup" && <ChecklistSetupTab />}
-              {activeTab === "baits" && <BaitsTab />}
-              {activeTab === "ranking" && (
-                <RankingTab appSettings={appSettings} />
-              )}
-              {activeTab === "checklists" && (
+          {/* Tab Content */}
+          <div className="w-full h-full relative">
+            <div className={activeTab === "overview" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("overview") && <OverviewTab setActiveTab={setActiveTab} appSettings={appSettings} />}
+            </div>
+            <div className={activeTab === "notifications" ? "flex-1 flex flex-col overflow-hidden h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("notifications") && <NotificationsTab />}
+            </div>
+            <div className={activeTab === "tracking" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("tracking") && <TrackingTab />}
+            </div>
+            <div className={activeTab === "reports" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("reports") && <ReportsTab />}
+            </div>
+            <div className={activeTab === "adm_users" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("adm_users") && <AdmUsersTab />}
+            </div>
+            <div className={activeTab === "insurances" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("insurances") && <InsurancesTab />}
+            </div>
+            <div className={activeTab === "drivers" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("drivers") && <DriversTab />}
+            </div>
+            <div className={activeTab === "vehicles" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("vehicles") && <VehiclesTab />}
+            </div>
+            <div className={activeTab === "my_vehicles" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("my_vehicles") && <MyVehicles />}
+            </div>
+            <div className={activeTab === "my_drivers" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("my_drivers") && <MyDrivers />}
+            </div>
+            <div className={activeTab === "routes" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("routes") && <RoutesTab />}
+            </div>
+            <div className={activeTab === "checklist_setup" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("checklist_setup") && <ChecklistSetupTab />}
+            </div>
+            <div className={activeTab === "baits" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("baits") && <BaitsTab />}
+            </div>
+            <div className={activeTab === "ranking" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("ranking") && <RankingTab appSettings={appSettings} />}
+            </div>
+            <div className={activeTab === "checklists" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("checklists") && (
                 <ChecklistsHistoryTab
-                  onViewDetails={(sub) => {
-                    setSelectedSub(sub);
-                  }}
+                  onViewDetails={(sub) => setSelectedSub(sub)}
                 />
               )}
-              {activeTab === "maintenance" && <MaintenanceTab />}
-              {activeTab === "infractions" && <InfractionsTab />}
-              {activeTab === "inventory" && <InventoryTab />}
-              {activeTab === "abastecimentos" && <FuelTab />}
-              {activeTab === "averages" && <AveragesTab />}
-              {activeTab === "schedules" && (
+            </div>
+            <div className={activeTab === "maintenance" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("maintenance") && <MaintenanceTab />}
+            </div>
+            <div className={activeTab === "infractions" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("infractions") && <InfractionsTab />}
+            </div>
+            <div className={activeTab === "inventory" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("inventory") && <InventoryTab />}
+            </div>
+            <div className={activeTab === "abastecimentos" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("abastecimentos") && <FuelTab />}
+            </div>
+            <div className={activeTab === "averages" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("averages") && <AveragesTab />}
+            </div>
+            <div className={activeTab === "schedules" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("schedules") && (
                 <SchedulesTab
-                  onViewChecklist={async (subId: string) => {
-                    const { data } = await supabase.from("checklist_submissions").select("*, profiles(full_name), vehicles(plate)").eq("company_id", (user as any)?.company_id)
+                  onViewChecklist={async (subId) => {
+                    const { data } = await supabase.from("checklist_submissions").select("*, profiles(full_name), vehicles(plate)").eq("company_id", user?.company_id)
                       .eq("id", subId)
                       .single();
                     if (data) setSelectedSub(data);
                   }}
                 />
               )}
-              {activeTab === "audit" && user?.role === "admin" && (
-                <AuditTab appSettings={appSettings} />
-              )}
-              {activeTab === "feedback" && user?.role === "admin" && (
-                <FeedbackTab />
-              )}
-              {activeTab === "database" && <DatabaseTab />}
-              {activeTab === "alerts" && <AlertsTab />}
-              {activeTab === "settings" && user?.role === "admin" && (
+            </div>
+            <div className={activeTab === "audit" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("audit") && user?.role === "admin" && <AuditTab appSettings={appSettings} />}
+            </div>
+            <div className={activeTab === "feedback" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("feedback") && user?.role === "admin" && <FeedbackTab />}
+            </div>
+            <div className={activeTab === "database" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("database") && <DatabaseTab />}
+            </div>
+            <div className={activeTab === "alerts" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("alerts") && <AlertsTab />}
+            </div>
+            <div className={activeTab === "settings" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("settings") && user?.role === "admin" && (
                 <SettingsTab
                   appSettings={appSettings}
                   setAppSettings={setAppSettings}
                   fetchData={fetchData}
                 />
               )}
-            </motion.div>
-          </AnimatePresence>
+            </div>
+          </div>
         </div>
       </div>
 
