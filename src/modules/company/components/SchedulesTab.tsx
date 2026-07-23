@@ -72,8 +72,8 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
 
       const { data } = await supabase.from("schedules").select("*, profiles(*), vehicles(plate, type), trailers(plate), routes(origin, destination, stops), bait1:baits!schedules_bait1_id_fkey(name), bait2:baits!schedules_bait2_id_fkey(name), bait3:baits!schedules_bait3_id_fkey(name)")
         .eq("company_id", user?.company_id)
-        .gte("start_at", localStart.toISOString())
         .lte("start_at", localEnd.toISOString())
+        .gte("end_at", localStart.toISOString())
         .order("start_at", { ascending: false });
       setSchedules(data || []);
 
@@ -176,9 +176,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
       // Conflict validation: Check for overlapping schedules for the same driver, vehicle, or trailer
       const orConditions = [
-        `driver_id.eq.${dataToInsert.driver_id}`,
-        `vehicle_id.eq.${dataToInsert.vehicle_id}`
+        `driver_id.eq.${dataToInsert.driver_id}`
       ];
+      if (dataToInsert.vehicle_id) {
+        orConditions.push(`vehicle_id.eq.${dataToInsert.vehicle_id}`);
+      }
       if (dataToInsert.trailer_id) {
         orConditions.push(`trailer_id.eq.${dataToInsert.trailer_id}`);
       }
@@ -187,6 +189,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
         .from("schedules")
         .select("id")
         .eq("company_id", user?.company_id || user?.id)
+        .is("end_checklist_id", null)
         .or(orConditions.join(","))
         .lt("start_at", dataToInsert.end_at)
         .gt("end_at", dataToInsert.start_at);
