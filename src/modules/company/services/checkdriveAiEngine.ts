@@ -1263,41 +1263,58 @@ async function queryGeminiAi(companyId: string, rawQuery: string): Promise<strin
       }
     };
 
-    const vehicles = await fetchVehicles(companyId);
-    const drivers = await fetchDrivers(companyId);
-
-    const issues = await safeFetch(() =>
-      supabase
-        .from("checklist_issues")
-        .select("item_title, priority, status, created_at")
-        .in("status", ["pending", "open", "in_progress"])
-        .limit(20)
-    );
-
-    const submissions = await safeFetch(() =>
-      supabase
-        .from("checklist_submissions")
-        .select("type, created_at, odometer")
-        .order("created_at", { ascending: false })
-        .limit(20)
-    );
-
-    const fuel = await safeFetch(() =>
-      supabase.from("vehicle_averages").select("average, distance, liters").limit(20)
-    );
-
-    const inventory = await safeFetch(() =>
-      supabase.from("inventory_items").select("name, sku, current_quantity, min_quantity").limit(20)
-    );
-
-    const insurances = await safeFetch(() =>
-      supabase.from("insurances").select("name, claims_phone, support_phone").limit(10)
-    );
-
-    const companyData = await safeFetch(async () => {
-      const res = await supabase.from("companies").select("name, plan_name, max_vehicles, max_users").limit(1);
-      return { data: res.data?.[0] || null };
-    });
+    const [
+      vehicles,
+      drivers,
+      issues,
+      submissions,
+      fuel,
+      schedules,
+      infractions,
+      inventory,
+      insurances,
+      companyData,
+      routes,
+      suppliers,
+    ] = await Promise.all([
+      fetchVehicles(companyId),
+      fetchDrivers(companyId),
+      safeFetch(() =>
+        supabase
+          .from("checklist_issues")
+          .select("item_title, priority, status, created_at, vehicle_id")
+          .in("status", ["pending", "open", "in_progress"])
+          .limit(30)
+      ),
+      safeFetch(() =>
+        supabase
+          .from("checklist_submissions")
+          .select("type, created_at, odometer, driver_id, vehicle_id")
+          .order("created_at", { ascending: false })
+          .limit(30)
+      ),
+      safeFetch(() =>
+        supabase.from("vehicle_averages").select("average, distance, liters, vehicle_id").limit(30)
+      ),
+      safeFetch(() =>
+        supabase.from("schedules").select("start_at, end_at, vehicle_id, driver_id").limit(30)
+      ),
+      safeFetch(() =>
+        supabase.from("traffic_infractions").select("fine_amount, points, infraction_date, vehicle_id, driver_id").limit(30)
+      ),
+      safeFetch(() =>
+        supabase.from("inventory_items").select("name, sku, current_quantity, min_quantity").limit(30)
+      ),
+      safeFetch(() =>
+        supabase.from("insurances").select("name, claims_phone, support_phone").limit(15)
+      ),
+      safeFetch(async () => {
+        const res = await supabase.from("companies").select("name, plan_name, max_vehicles, max_users").limit(1);
+        return { data: res.data?.[0] || null };
+      }),
+      safeFetch(() => supabase.from("routes").select("name, origin, destination, distance_km").limit(20)),
+      safeFetch(() => supabase.from("inventory_suppliers").select("name, phone, contact_name").limit(20)),
+    ]);
 
     const contextData = {
       empresa: companyData?.name || "Empresa",
@@ -1307,38 +1324,52 @@ async function queryGeminiAi(companyId: string, rawQuery: string): Promise<strin
       ocorrencias_manutencao_pendentes: issues,
       ultimos_checklists: submissions,
       medias_combustivel: fuel,
+      escalas_viagens: schedules,
+      multas_transito: infractions,
       estoque_pecas: inventory,
       seguradoras: insurances,
+      rotas: routes,
+      fornecedores: suppliers,
     };
 
-    const prompt = `Você é o CheckDrive AI, um assistente virtual especialista e extremamente inteligente em gestão de frotas e logística.
+    const prompt = `Você é o CheckDrive AI, um assistente virtual de inteligência artificial de elite especialista em gestão de frotas e logística.
 Abaixo estão os DADOS REAIS ATUALIZADOS extraídos diretamente do banco de dados da empresa em tempo real:
 
---- BANCO DE DADOS DA EMPRESA EM TEMPO REAL ---
+=== BANCO DE DADOS DA EMPRESA EM TEMPO REAL ===
 ${JSON.stringify(contextData, null, 2)}
-----------------------------------------------
+================================================
 
 Pergunta do Gestor/Usuário: "${rawQuery}"
 
-Instruções Importantes para a Resposta:
-1. Responda a pergunta do usuário de forma extremamente precisa, objetiva e completa usando os dados do banco acima.
-2. Por exemplo, se o usuário perguntar "Qual a placa do veículo mais velho da frota?" ou "Qual o veículo mais novo?", verifique o campo "manufacture_year" ou "model_year" ou "year" de todos os veículos no JSON, ordene mentalmente os anos e responda claramente indicando a placa (ex: ABC-1234), o modelo (ex: Volvo FH) e o ano do veículo!
-3. Se a pergunta for sobre motoristas, estoques, checklists ou manutenção, cite os dados exatos do JSON.
-4. Se por algum motivo a frota de veículos estiver vazia no JSON, informe que não há veículos cadastrados e sugira cadastrá-los na aba Veículos.
-5. Responda em Português do Brasil com excelente formatação em Markdown (use negritos, tópicos, listas e emojis organizados).
-6. NUNCA invente informações. Seja 100% coerente com o banco de dados fornecido.`;
+Instruções Cruciais para a Resposta:
+1. Responda a QUALQUER pergunta do usuário com máxima precisão, clareza, objetividade e riqueza de detalhes.
+2. Se a pergunta solicitar uma LISTA (ex: "liste todas as placas", "quais os motoristas", "quais os itens de estoque"), responda com a lista completa e organizada em Markdown (use numeração ou tópicos), incluindo placas, modelos, status e detalhes de cada item.
+3. Se a pergunta for um pedido de RELATÓRIO ou BALANÇO (ex: "gere um relatório completo", "resumo da frota"), estruture um relatório executivo bem formatado com seções separadas para veículos, motoristas, manutenção, custos e multas.
+4. Se a pergunta for comparativa ou específica (ex: "qual o veículo mais velho", "qual o mais novo", "maior quilometragem"), verifique os campos dos objetos do JSON (como manufacture_year, model_year, odometer, current_km), faça os cálculos/comparações necessários e indique a placa, modelo, ano/valor exatos.
+5. Se o banco de dados estiver com a frota vazia ou sem registros para a solicitação, informe educadamente o status e oriente o usuário sobre como cadastrar os dados na plataforma.
+6. Sempre responda em Português do Brasil com excelente formatação em Markdown (negritos, tabelas ou listas, e emojis profissionais).
+7. Mantenha 100% de fidelidade aos dados do JSON. Não invente veículos ou informações falsas.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: "Você é o assistente inteligente da plataforma CheckDrive. Forneça respostas impecáveis, precisas e baseadas estritamente nos dados reais da frota.",
-        temperature: 0.1,
-      },
-    });
+    const modelCandidates = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 
-    if (response && response.text) {
-      return response.text.trim();
+    for (const modelCandidate of modelCandidates) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelCandidate,
+          contents: prompt,
+          config: {
+            systemInstruction:
+              "Você é o assistente inteligente oficial da plataforma CheckDrive. Forneça respostas impecáveis, estruturadas, precisas e baseadas estritamente nos dados reais da frota.",
+            temperature: 0.1,
+          },
+        });
+
+        if (response && response.text) {
+          return response.text.trim();
+        }
+      } catch (mErr) {
+        console.warn(`CheckDrive AI - Modelo ${modelCandidate} falhou, tentando próximo:`, mErr);
+      }
     }
   } catch (err) {
     console.warn("CheckDrive AI - Gemini API fallback trigger:", err);
