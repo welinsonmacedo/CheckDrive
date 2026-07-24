@@ -28,13 +28,17 @@ interface Message {
 }
 
 const EXAMPLE_PROMPTS = [
-  "Quais veículos estão com manutenção atrasada?",
   "Gere um resumo da operação de hoje.",
-  "Quais motoristas tiveram o pior consumo?",
+  "Quais veículos estão com manutenção atrasada?",
   "Quanto gastei com combustível este mês?",
-  "Quais veículos possuem mais ocorrências?",
-  "Quais veículos estão parados?",
+  "Quais peças estão no estoque?",
+  "Quais motoristas estão em viagem?",
+  "Quais multas foram registradas?",
   "Quais documentos estão vencidos?",
+  "Quais seguradoras temos cadastradas?",
+  "Qual o nosso plano contratado?",
+  "Quais veículos estão parados?",
+  "Quais motoristas tiveram o pior consumo?",
 ];
 
 export default function CheckDriveAiTab() {
