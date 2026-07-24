@@ -1238,17 +1238,31 @@ const handleGeneralReportQuery = async (companyId: string): Promise<string> => {
 };
 
 // 24. Gemini AI Intelligent Context Engine
+const getGeminiApiKey = (): string | undefined => {
+  try {
+    if (typeof process !== "undefined" && process?.env && process.env.GEMINI_API_KEY) {
+      return process.env.GEMINI_API_KEY;
+    }
+  } catch (e) {
+    // ignore
+  }
+  try {
+    if (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_GEMINI_API_KEY) {
+      return (import.meta as any).env.VITE_GEMINI_API_KEY;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return undefined;
+};
+
 export function isGeminiConnected(): boolean {
-  const apiKey =
-    process.env.GEMINI_API_KEY ||
-    (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_GEMINI_API_KEY);
+  const apiKey = getGeminiApiKey();
   return Boolean(apiKey && apiKey.trim().length > 0);
 }
 
 async function queryGeminiAi(companyId: string, rawQuery: string): Promise<string | null> {
-  const apiKey =
-    process.env.GEMINI_API_KEY ||
-    (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_GEMINI_API_KEY);
+  const apiKey = getGeminiApiKey();
   if (!apiKey) return null;
 
   try {
