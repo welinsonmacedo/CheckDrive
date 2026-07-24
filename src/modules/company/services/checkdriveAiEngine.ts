@@ -1238,6 +1238,13 @@ const handleGeneralReportQuery = async (companyId: string): Promise<string> => {
 };
 
 // 24. Gemini AI Intelligent Context Engine
+export function isGeminiConnected(): boolean {
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_GEMINI_API_KEY);
+  return Boolean(apiKey && apiKey.trim().length > 0);
+}
+
 async function queryGeminiAi(companyId: string, rawQuery: string): Promise<string | null> {
   const apiKey =
     process.env.GEMINI_API_KEY ||

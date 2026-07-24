@@ -3,6 +3,7 @@ import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import {
   processCheckDriveAiQuery,
   INTENT_REGISTRY,
+  isGeminiConnected,
 } from "../services/checkdriveAiEngine";
 import {
   Bot,
@@ -45,6 +46,7 @@ const EXAMPLE_PROMPTS = [
 
 export default function CheckDriveAiTab() {
   const { user } = useAuth();
+  const geminiConnected = isGeminiConnected();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome-1",
@@ -213,17 +215,38 @@ export default function CheckDriveAiTab() {
             <Bot size={22} className="text-blue-400" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-black text-white tracking-wide">
                 🤖 CheckDrive AI
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Base de Dados Conectada
+                Base de Dados
               </span>
+              {geminiConnected ? (
+                <span
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 flex items-center gap-1.5 shadow-sm"
+                  title="API Gemini 2.5 Flash conectada e ativa para IA generativa inteligente"
+                >
+                  <Sparkles size={11} className="text-emerald-400" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  Gemini AI: Conectado 🟢
+                </span>
+              ) : (
+                <span
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center gap-1.5 shadow-sm"
+                  title="Sem chave GEMINI_API_KEY configurada - utilizando motor local"
+                >
+                  <Zap size={11} className="text-amber-400" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  Gemini AI: Offline (Motor Local) 🟡
+                </span>
+              )}
             </div>
-            <p className="text-[11px] text-zinc-400 font-medium">
-              Interpretação de intenções & consultas automáticas em linguagem natural
+            <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
+              {geminiConnected
+                ? "Motor Gemini AI ativo • Consultas inteligentes em linguagem natural e relatórios em tempo real"
+                : "Motor de intenções locais ativo • Consultas estruturadas no banco de dados"}
             </p>
           </div>
         </div>
