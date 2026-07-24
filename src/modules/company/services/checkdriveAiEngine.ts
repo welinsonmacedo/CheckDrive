@@ -5,7 +5,7 @@ export interface IntentDefinition {
   id: string;
   name: string;
   description: string;
-  category: "VEÍCULOS" | "MOTORISTAS" | "CHECKLIST" | "MANUTENÇÃO" | "ABASTECIMENTO" | "DOCUMENTOS" | "MULTAS" | "ALERTAS" | "ESTOQUE" | "ESCALAS" | "SEGURADORAS" | "AUDITORIA" | "GERAL";
+  category: "VEÍCULOS" | "MOTORISTAS" | "CHECKLIST" | "MANUTENÇÃO" | "ABASTECIMENTO" | "DOCUMENTOS" | "MULTAS" | "ALERTAS" | "ESTOQUE" | "ESCALAS" | "SEGURADORAS" | "AUDITORIA" | "RELATÓRIOS" | "GERAL";
   keywords: string[];
   phrases?: string[];
   handler: (companyId: string, query: string) => Promise<string>;
@@ -1148,9 +1148,100 @@ const handleFleetCompositionQuery = async (companyId: string): Promise<string> =
   return response;
 };
 
-// 21. Gemini AI Intelligent Context Engine
+// 21. Listar Todas as Placas da Frota
+const handleListAllPlates = async (companyId: string): Promise<string> => {
+  const vehicles = await fetchVehicles(companyId);
+
+  if (!vehicles || vehicles.length === 0) {
+    return "🚚 Nenhum veículo/placa encontrado no banco de dados da empresa.";
+  }
+
+  let response = `📋 **Lista Completa de Placas da Frota (${vehicles.length} Veículos Cadastrados)**\n\n`;
+
+  vehicles.forEach((v, idx) => {
+    const status = v.active !== false ? "🟢 Ativo" : "🔴 Inativo";
+    const typeStr = v.type ? ` (${v.type})` : "";
+    const modelStr = v.model || "Caminhão/Veículo";
+    const fabMod = v.manufacture_year || v.model_year ? ` - Ano: ${v.manufacture_year || v.model_year}` : "";
+    const km = Number(v.odometer) || Number(v.current_km);
+    const kmStr = km ? ` - ${km.toLocaleString("pt-BR")} km` : "";
+
+    response += `${idx + 1}. Placa: **${v.plate}** | **${modelStr}**${typeStr}${fabMod}${kmStr} [${status}]\n`;
+  });
+
+  return response;
+};
+
+// 22. Listar Todos os Motoristas
+const handleListAllDrivers = async (companyId: string): Promise<string> => {
+  const drivers = await fetchDrivers(companyId);
+
+  if (!drivers || drivers.length === 0) {
+    return "👨‍✈️ Nenhum motorista encontrado no cadastro da empresa.";
+  }
+
+  let response = `👨‍✈️ **Lista Completa de Motoristas da Empresa (${drivers.length} Cadastrados)**\n\n`;
+
+  drivers.forEach((d, idx) => {
+    const status = d.active !== false ? "🟢 Ativo" : "🔴 Inativo";
+    const cnh = d.cnh_expiration ? ` - CNH Vencimento: ${formatDate(d.cnh_expiration)}` : "";
+    response += `${idx + 1}. **${d.full_name || "Motorista"}** ${cnh} [${status}]\n`;
+  });
+
+  return response;
+};
+
+// 23. Relatório Geral e Completo da Operação
+const handleGeneralReportQuery = async (companyId: string): Promise<string> => {
+  const [vehicles, drivers, issuesRes, fuelRes, infractionsRes] = await Promise.all([
+    fetchVehicles(companyId),
+    fetchDrivers(companyId),
+    supabase.from("checklist_issues").select("id, status").in("status", ["pending", "open", "in_progress"]),
+    supabase.from("vehicle_averages").select("distance, liters"),
+    supabase.from("traffic_infractions").select("fine_amount"),
+  ]);
+
+  const totalV = vehicles?.length || 0;
+  const activeV = vehicles?.filter((v) => v.active !== false).length || 0;
+  const totalD = drivers?.length || 0;
+  const activeD = drivers?.filter((d) => d.active !== false).length || 0;
+  const pendingIssues = issuesRes.data?.length || 0;
+
+  const totalFuelLiters = (fuelRes.data || []).reduce((acc: number, f: any) => acc + (Number(f.liters) || 0), 0);
+  const totalFineAmount = (infractionsRes.data || []).reduce((acc: number, i: any) => acc + (Number(i.fine_amount) || 0), 0);
+
+  let response = `📊 **Relatório Executivo Geral e Balanço da Operação**\n\n`;
+
+  response += `🚚 **Frota de Veículos (${totalV} Unidades):**\n`;
+  response += `- **Status:** ${activeV} ativos e ${totalV - activeV} inativos.\n`;
+  if (vehicles && vehicles.length > 0) {
+    response += `- **Placas Registradas:** ${vehicles.map((v) => `**${v.plate}**`).join(", ")}\n`;
+  }
+
+  response += `\n👨‍✈️ **Equipe de Motoristas (${totalD} Condutores):**\n`;
+  response += `- **Status:** ${activeD} motoristas ativos na operação.\n`;
+
+  response += `\n🔧 **Ocorrências e Manutenção:**\n`;
+  response += `- **Ocorrências / Defeitos Abertos:** ${pendingIssues} pendência(s) de manutenção.\n`;
+
+  if (totalFuelLiters > 0) {
+    response += `\n⛽ **Consumo de Combustível:**\n`;
+    response += `- **Volume Total Registrado:** ${totalFuelLiters.toLocaleString("pt-BR")} Litros.\n`;
+  }
+
+  if (totalFineAmount > 0) {
+    response += `\n🚨 **Multas de Trânsito:**\n`;
+    response += `- **Valor Total de Infrações:** R$ ${totalFineAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n`;
+  }
+
+  return response;
+};
+
+// 24. Gemini AI Intelligent Context Engine
 async function queryGeminiAi(companyId: string, rawQuery: string): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey =
+    process.env.GEMINI_API_KEY ||
+    (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_GEMINI_API_KEY);
   if (!apiKey) return null;
 
   try {
@@ -1297,16 +1388,52 @@ const handleUniversalSearch = async (companyId: string, rawQuery: string): Promi
     matchingInsurances.length > 0;
 
   if (!hasAnyMatch) {
+    if (normalized.includes("placa") || normalized.includes("placas") || normalized.includes("lista") || normalized.includes("listar") || normalized.includes("liste")) {
+      return await handleListAllPlates(companyId);
+    }
+    if (normalized.includes("motorista") || normalized.includes("motoristas") || normalized.includes("condutor")) {
+      return await handleListAllDrivers(companyId);
+    }
+    if (normalized.includes("relatorio") || normalized.includes("balanco") || normalized.includes("resumo") || normalized.includes("extrato")) {
+      return await handleGeneralReportQuery(companyId);
+    }
+    if (normalized.includes("velho") || normalized.includes("antigo") || normalized.includes("novo") || normalized.includes("idade") || normalized.includes("ano")) {
+      return await handleVehicleAgeQuery(companyId);
+    }
+    if (normalized.includes("km") || normalized.includes("quilometragem") || normalized.includes("rodado") || normalized.includes("odometro")) {
+      return await handleOdometerQuery(companyId);
+    }
+    if (normalized.includes("manutencao") || normalized.includes("oficina") || normalized.includes("defeito") || normalized.includes("quebra") || normalized.includes("atrasad")) {
+      return await handleLateMaintenance(companyId);
+    }
+    if (normalized.includes("combustivel") || normalized.includes("diesel") || normalized.includes("gasolina") || normalized.includes("abastecimento") || normalized.includes("gastei")) {
+      return await handleFuelCost(companyId);
+    }
+    if (normalized.includes("multa") || normalized.includes("multas") || normalized.includes("infracao") || normalized.includes("infracoes")) {
+      return await handleTrafficInfractions(companyId);
+    }
+    if (normalized.includes("estoque") || normalized.includes("peca") || normalized.includes("pecas") || normalized.includes("almoxarifado")) {
+      return await handleInventoryQuery(companyId);
+    }
+    if (normalized.includes("veiculo") || normalized.includes("veiculos") || normalized.includes("caminhao") || normalized.includes("caminhoes") || normalized.includes("frota")) {
+      return await handleFleetCompositionQuery(companyId);
+    }
+
+    if (allVehicles && allVehicles.length > 0) {
+      return await handleListAllPlates(companyId);
+    }
+
     return (
       "🤖 **CheckDrive AI - Consulta Inteligente**\n\n" +
       `Não encontrei registros diretos no banco de dados para o termo *"${rawQuery}"*.\n\n` +
       "💡 **Tente perguntar por:**\n" +
       "• Placa específica: *'Qual o histórico da placa ABC1234?'*\n" +
+      "• Liste todas as placas: *'Liste todas as placas'* ou *'Lista de veículos'*\n" +
+      "• Relatórios: *'Gere um relatório completo da frota'*\n" +
+      "• Idade da frota: *'Qual a placa do veículo mais velho?'*\n" +
       "• Nome de motorista: *'Como está o score de João Silva?'*\n" +
       "• Manutenções & Defeitos: *'Quais veículos estão com manutenção atrasada?'*\n" +
-      "• Custos: *'Quanto gastei com combustível este mês?'*\n" +
-      "• Estoque: *'Quais peças estão no estoque?'*\n" +
-      "• Documentos: *'Quais CNHs e CRLVs estão vencidos?'*"
+      "• Custos: *'Quanto gastei com combustível este mês?'*"
     );
   }
 
@@ -1360,6 +1487,57 @@ const handleUniversalSearch = async (companyId: string, rawQuery: string): Promi
    ==================================================================== */
 
 export const INTENT_REGISTRY: IntentDefinition[] = [
+  {
+    id: "list_plates",
+    name: "Lista Completa de Placas da Frota",
+    description: "Lista todas as placas e veículos cadastrados na frota.",
+    category: "VEÍCULOS",
+    keywords: ["placa", "placas", "todas as placas", "lista de placas", "listar placas", "liste as placas", "liste todas as placas", "quais sao as placas", "todas placas", "mostrar placas", "lista das placas"],
+    phrases: [
+      "liste todas as placas",
+      "lista de placas",
+      "quais sao todas as placas",
+      "mostrar todas as placas",
+      "quais as placas da frota",
+      "lista das placas",
+      "listar todas as placas",
+      "liste as placas",
+      "quais as placas"
+    ],
+    handler: handleListAllPlates,
+  },
+  {
+    id: "list_drivers",
+    name: "Lista Completa de Motoristas",
+    description: "Lista todos os motoristas cadastrados na empresa.",
+    category: "MOTORISTAS",
+    keywords: ["motoristas", "condutores", "lista de motoristas", "listar motoristas", "todos os motoristas", "relatorio de motoristas", "mostrar motoristas", "liste motoristas", "liste os motoristas"],
+    phrases: [
+      "liste todos os motoristas",
+      "lista de motoristas",
+      "quais sao os motoristas",
+      "relatorio de motoristas",
+      "listar motoristas",
+      "liste os motoristas"
+    ],
+    handler: handleListAllDrivers,
+  },
+  {
+    id: "general_report",
+    name: "Relatório Geral e Balanço Operacional",
+    description: "Gera um relatório executivo consolidado com estatísticas de toda a frota.",
+    category: "RELATÓRIOS",
+    keywords: ["relatorio", "relatorios", "relatorio geral", "gerar relatorio", "relatorio completo", "balanco geral", "relatorio operacional", "relatorio de frota", "gerar relatorio de frota"],
+    phrases: [
+      "gerar relatorio completo",
+      "relatorio geral da frota",
+      "gerar relatorio",
+      "relatorio da empresa",
+      "gerar relatorio de frota",
+      "relatorio de frota"
+    ],
+    handler: handleGeneralReportQuery,
+  },
   {
     id: "today_summary",
     name: "Resumo da Operação de Hoje",
