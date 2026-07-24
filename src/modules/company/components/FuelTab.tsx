@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import AddressFromCoordinates from "@/src/components/common/AddressFromCoordinates";
-import { Edit2, Save, X, History, Clock } from 'lucide-react';
+import { Edit2, Save, X, History, Clock, Filter, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 
@@ -15,6 +15,36 @@ export default function FuelTab() {
   const [editFormData, setEditFormData] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [historySub, setHistorySub] = useState<any>(null);
+
+  const [filterPlate, setFilterPlate] = useState("");
+  const [filterDriver, setFilterDriver] = useState("");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((sub) => {
+      const plate = sub.vehicles?.plate || "";
+      const driver = sub.profiles?.full_name || sub.driver_profiles?.full_name || "";
+      const date = new Date(sub.created_at);
+      
+      const matchesPlate = plate.toLowerCase().includes(filterPlate.toLowerCase());
+      const matchesDriver = driver.toLowerCase().includes(filterDriver.toLowerCase());
+      
+      let matchesStart = true;
+      let matchesEnd = true;
+      if (filterStartDate) {
+        const start = new Date(filterStartDate + 'T00:00:00');
+        matchesStart = date >= start;
+      }
+      if (filterEndDate) {
+        const end = new Date(filterEndDate + 'T23:59:59');
+        matchesEnd = date <= end;
+      }
+
+      return matchesPlate && matchesDriver && matchesStart && matchesEnd;
+    });
+  }, [submissions, filterPlate, filterDriver, filterStartDate, filterEndDate]);
+
 
   useEffect(() => {
     fetchFuelSubmissions();
@@ -195,10 +225,65 @@ export default function FuelTab() {
     <div className="space-y-6">
       {renderEditModal()}
       {renderHistoryModal()}
+      <div className="bento-card p-5 mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+          <div className="flex items-center gap-2">
+            <Filter size={18} className="text-primary" />
+            <span className="text-sm font-black text-text-main uppercase tracking-wider">Filtros</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1">Placa</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
+              <input
+                type="text"
+                value={filterPlate}
+                onChange={(e) => setFilterPlate(e.target.value)}
+                placeholder="Buscar placa..."
+                className="w-full pl-9 pr-4 py-2 bg-app-bg border border-app-border rounded-xl text-xs font-medium text-text-main focus:border-primary outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1">Motorista</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
+              <input
+                type="text"
+                value={filterDriver}
+                onChange={(e) => setFilterDriver(e.target.value)}
+                placeholder="Buscar motorista..."
+                className="w-full pl-9 pr-4 py-2 bg-app-bg border border-app-border rounded-xl text-xs font-medium text-text-main focus:border-primary outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1">Data Início</label>
+            <input
+              type="date"
+              value={filterStartDate}
+              onChange={(e) => setFilterStartDate(e.target.value)}
+              className="w-full px-4 py-2 bg-app-bg border border-app-border rounded-xl text-xs font-medium text-text-main focus:border-primary outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1">Data Fim</label>
+            <input
+              type="date"
+              value={filterEndDate}
+              onChange={(e) => setFilterEndDate(e.target.value)}
+              className="w-full px-4 py-2 bg-app-bg border border-app-border rounded-xl text-xs font-medium text-text-main focus:border-primary outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="bento-card !p-0 overflow-hidden">
-        <div className="p-5 border-b border-app-border">
+        <div className="p-5 border-b border-app-border flex justify-between items-center">
           <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
-            Histórico de Abastecimentos
+            Histórico de Abastecimentos ({filteredSubmissions.length})
           </span>
         </div>
         
@@ -206,8 +291,8 @@ export default function FuelTab() {
         <div className="grid grid-cols-1 gap-4 md:hidden p-4">
           {loading ? (
             <div className="text-center text-xs text-text-muted italic py-10">Carregando...</div>
-          ) : submissions.length > 0 ? (
-            submissions.map((sub: any) => (
+          ) : filteredSubmissions.length > 0 ? (
+            filteredSubmissions.map((sub: any) => (
               <div key={sub.id} className="bg-white p-4 rounded-xl border border-app-border flex flex-col gap-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-text-muted">{new Date(sub.created_at).toLocaleString("pt-BR")}</span>
@@ -267,8 +352,8 @@ export default function FuelTab() {
                     Carregando...
                   </td>
                 </tr>
-              ) : submissions.length > 0 ? (
-                submissions.map((sub) => (
+              ) : filteredSubmissions.length > 0 ? (
+                filteredSubmissions.map((sub) => (
                   <tr key={sub.id}>
                     <td className="px-5 py-4 text-[10px] font-medium text-text-muted">
                       {new Date(sub.created_at).toLocaleDateString()}
