@@ -137,10 +137,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           );
 
           // 🔥 Roda rotina automática de fechamento em background
-          supabase.rpc("run_auto_score_closing").then(({ error }) => {
-            if (error)
-              console.error("Erro na rotina de fechamento automático:", error);
-          });
+          Promise.resolve(supabase.rpc("run_auto_score_closing")).catch(() => {});
         } else {
           if (mounted) setUser(null);
         }

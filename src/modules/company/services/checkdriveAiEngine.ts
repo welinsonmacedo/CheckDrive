@@ -1,4 +1,5 @@
 import { supabase } from "@/src/lib/supabase";
+import { GoogleGenAI } from "@google/genai";
 
 export interface IntentDefinition {
   id: string;
@@ -51,6 +52,20 @@ const normalizeText = (text: string): string => {
     .replace(/[^\w\s]/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
+};
+
+const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Strict Word-Boundary Keyword Matcher
+const matchesWord = (text: string, keyword: string): boolean => {
+  const normText = normalizeText(text);
+  const normKw = normalizeText(keyword);
+  if (!normKw || !normText) return false;
+  if (!normKw.includes(" ")) {
+    const regex = new RegExp(`(?:^|\\s|\\b)${escapeRegExp(normKw)}(?:$|\\s|\\b)`, "i");
+    return regex.test(normText);
+  }
+  return normText.includes(normKw);
 };
 
 const getVehicleObj = (v: any) => {
@@ -967,6 +982,224 @@ const handleSpecificDriverQuery = async (companyId: string, query: string): Prom
   return response;
 };
 
+// 18. Idade e Ano dos Veículos da Frota
+const handleVehicleAgeQuery = async (companyId: string): Promise<string> => {
+  const { data: vehicles } = await supabase
+    .from("vehicles")
+    .select("id, plate, model, type, manufacture_year, model_year, odometer, created_at, active")
+    .eq("company_id", companyId);
+
+  if (!vehicles || vehicles.length === 0) {
+    return "🚚 Nenhum veículo encontrado na frota da empresa.";
+  }
+
+  const currentYear = new Date().getFullYear();
+
+  const getYear = (v: any) => {
+    return v.manufacture_year || v.model_year || (v.created_at ? new Date(v.created_at).getFullYear() : null);
+  };
+
+  const vehiclesWithYear = vehicles.map((v) => ({
+    ...v,
+    year: getYear(v),
+  })).sort((a, b) => {
+    if (a.year === null && b.year === null) return 0;
+    if (a.year === null) return 1;
+    if (b.year === null) return -1;
+    return a.year - b.year;
+  });
+
+  const oldest = vehiclesWithYear.filter((v) => v.year !== null).slice(0, 5);
+  const newest = [...vehiclesWithYear].filter((v) => v.year !== null).reverse().slice(0, 5);
+
+  let response = `🚚 **Análise de Idade e Anos da Frota (${vehicles.length} Veículos Total)**\n\n`;
+
+  if (oldest.length > 0) {
+    response += `👴 **Veículo(s) Mais Antigo(s) / Velho(s) da Frota:**\n`;
+    oldest.forEach((v, idx) => {
+      const ageStr = v.year ? `(${currentYear - v.year} anos de uso)` : "";
+      const fabMod = v.manufacture_year && v.model_year ? `${v.manufacture_year}/${v.model_year}` : (v.year || "Ano N/I");
+      const statusStr = v.active !== false ? "🟢 Ativo" : "🔴 Inativo";
+      response += `${idx + 1}. **${v.model || "Caminhão"}** (Placa: **${v.plate}**) - Ano: **${fabMod}** ${ageStr} - [${statusStr}]\n`;
+    });
+    response += "\n";
+  }
+
+  if (newest.length > 0) {
+    response += `👶 **Veículo(s) Mais Novo(s) da Frota:**\n`;
+    newest.forEach((v, idx) => {
+      const fabMod = v.manufacture_year && v.model_year ? `${v.manufacture_year}/${v.model_year}` : (v.year || "Ano N/I");
+      response += `${idx + 1}. **${v.model || "Caminhão"}** (Placa: **${v.plate}**) - Ano: **${fabMod}**\n`;
+    });
+    response += "\n";
+  }
+
+  const validYears = vehiclesWithYear.map((v) => v.year).filter((y): y is number => y !== null);
+  if (validYears.length > 0) {
+    const avgYear = Math.round(validYears.reduce((acc, curr) => acc + curr, 0) / validYears.length);
+    response += `📊 **Média de Idade da Frota:** Ano médio de fabricação **${avgYear}** (~${currentYear - avgYear} anos de uso).\n`;
+  }
+
+  return response;
+};
+
+// 19. Quilometragem e Odômetro
+const handleOdometerQuery = async (companyId: string): Promise<string> => {
+  const { data: vehicles } = await supabase
+    .from("vehicles")
+    .select("id, plate, model, type, odometer, current_km")
+    .eq("company_id", companyId);
+
+  if (!vehicles || vehicles.length === 0) {
+    return "🚚 Nenhum veículo cadastrado na frota.";
+  }
+
+  const getKm = (v: any) => Number(v.odometer) || Number(v.current_km) || 0;
+
+  const sorted = [...vehicles].sort((a, b) => getKm(b) - getKm(a));
+  const mostDriven = sorted.slice(0, 5);
+  const leastDriven = [...sorted].reverse().slice(0, 5);
+
+  let response = `km **Análise de Quilometragem e Uso da Frota**\n\n`;
+
+  response += `📈 **Veículos Mais Rodados (Maior Quilometragem):**\n`;
+  mostDriven.forEach((v, idx) => {
+    response += `${idx + 1}. **${v.model || "Veículo"}** (${v.plate}) - **${getKm(v).toLocaleString("pt-BR")} km**\n`;
+  });
+
+  response += `\n📉 **Veículos Menos Rodados (Menor Quilometragem):**\n`;
+  leastDriven.forEach((v, idx) => {
+    response += `${idx + 1}. **${v.model || "Veículo"}** (${v.plate}) - **${getKm(v).toLocaleString("pt-BR")} km**\n`;
+  });
+
+  return response;
+};
+
+// 20. Composição e Modelos da Frota
+const handleFleetCompositionQuery = async (companyId: string): Promise<string> => {
+  const { data: vehicles } = await supabase
+    .from("vehicles")
+    .select("id, plate, model, type, active, manual_status, vehicle_modalities(name)")
+    .eq("company_id", companyId);
+
+  if (!vehicles || vehicles.length === 0) {
+    return "🚚 Nenhum veículo cadastrado na frota da empresa.";
+  }
+
+  const total = vehicles.length;
+  const active = vehicles.filter((v) => v.active !== false).length;
+  const inactive = total - active;
+
+  // Group by model
+  const modelsMap: Record<string, number> = {};
+  vehicles.forEach((v) => {
+    const m = v.model || "Modelo Não Especificado";
+    modelsMap[m] = (modelsMap[m] || 0) + 1;
+  });
+
+  const sortedModels = Object.entries(modelsMap).sort((a, b) => b[1] - a[1]);
+
+  let response =
+    `🚚 **Visão Geral e Composição da Frota**\n\n` +
+    `- **Total de Veículos:** ${total} unidades (${active} ativos | ${inactive} inativos)\n\n` +
+    `📊 **Modelos Mais Presentes na Frota:**\n`;
+
+  sortedModels.forEach(([model, count]) => {
+    const pct = Math.round((count / total) * 100);
+    response += `- **${model}**: ${count} unidade(s) (${pct}% da frota)\n`;
+  });
+
+  return response;
+};
+
+// 21. Gemini AI Intelligent Context Engine
+async function queryGeminiAi(companyId: string, rawQuery: string): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
+
+    const [
+      vehiclesRes,
+      driversRes,
+      issuesRes,
+      submissionsRes,
+      fuelRes,
+      schedulesRes,
+      infractionsRes,
+      inventoryRes,
+      insurancesRes,
+      companyRes,
+    ] = await Promise.all([
+      supabase.from("vehicles").select("plate, model, type, manufacture_year, model_year, odometer, current_km, active, manual_status, manual_location, crlv_expiration, antt_expiration").eq("company_id", companyId),
+      supabase.from("profiles").select("full_name, role, active, cnh_expiration").eq("company_id", companyId).eq("role", "driver"),
+      supabase.from("checklist_issues").select("item_title, priority, status, created_at, vehicles(plate)").eq("company_id", companyId).in("status", ["pending", "open", "in_progress"]),
+      supabase.from("checklist_submissions").select("type, created_at, odometer, vehicles(plate)").eq("company_id", companyId).order("created_at", { ascending: false }).limit(10),
+      supabase.from("vehicle_averages").select("average, distance, liters, vehicles(plate)").eq("company_id", companyId).limit(10),
+      supabase.from("schedules").select("start_at, end_at, vehicles(plate), profiles(full_name), routes(origin, destination)").eq("company_id", companyId).limit(10),
+      supabase.from("traffic_infractions").select("fine_amount, points, infraction_date, vehicles(plate), profiles(full_name)").eq("company_id", companyId).limit(10),
+      supabase.from("inventory_items").select("name, sku, current_quantity, min_quantity").eq("company_id", companyId).limit(15),
+      supabase.from("insurances").select("name, claims_phone, support_phone").eq("company_id", companyId),
+      supabase.from("companies").select("name, plan_name, max_vehicles, max_users").eq("id", companyId).maybeSingle(),
+    ]);
+
+    const contextData = {
+      empresa: companyRes.data?.name || "Empresa",
+      plano: companyRes.data?.plan_name || "Básico",
+      veiculos: vehiclesRes.data || [],
+      motoristas: driversRes.data || [],
+      ocorrencias_manutencao_pendentes: issuesRes.data || [],
+      ultimos_checklists: submissionsRes.data || [],
+      medias_combustivel: fuelRes.data || [],
+      escalas_viagens: schedulesRes.data || [],
+      multas_transito: infractionsRes.data || [],
+      estoque_pecas: inventoryRes.data || [],
+      seguradoras: insurancesRes.data || [],
+    };
+
+    const prompt = `Você é o CheckDrive AI, assistente virtual inteligente especialista em gestão de frotas e logística.
+Abaixo estão os DADOS REAIS ATUALIZADOS do banco de dados da empresa:
+
+--- BANCO DE DADOS DA EMPRESA EM TEMPO REAL ---
+${JSON.stringify(contextData, null, 2)}
+----------------------------------------------
+
+Pergunta do Gestor/Usuário: "${rawQuery}"
+
+Instruções Importantes:
+1. Analise cuidadosamente a pergunta e os dados fornecidos no JSON.
+2. Se a pergunta for sobre qual veículo é o mais velho, mais antigo, mais novo, mais rodado, modelo mais presente, motorista com mais multas ou checklists, busque os dados no JSON e responda diretamente com placas, modelos, anos e números exatos.
+3. Responda em Português do Brasil de forma clara, amigável, direta e profissional.
+4. Utilize formatação Markdown com negritos, tópicos e emojis.
+5. Seja 100% fiel aos dados. Não invente veículos ou números que não estejam nos dados.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: prompt,
+      config: {
+        systemInstruction: "Você é um assistente especialista em gestão de frotas. Forneça respostas precisas, diretas e úteis baseadas estritamente nos dados da empresa.",
+        temperature: 0.1,
+      },
+    });
+
+    if (response && response.text) {
+      return response.text.trim();
+    }
+  } catch (err) {
+    console.warn("CheckDrive AI - Gemini API fallback trigger:", err);
+  }
+
+  return null;
+}
+
 // 17. Universal Full Database Search Engine Fallback
 const handleUniversalSearch = async (companyId: string, rawQuery: string): Promise<string> => {
   const normalized = normalizeText(rawQuery);
@@ -1269,6 +1502,50 @@ export const INTENT_REGISTRY: IntentDefinition[] = [
       "quantos veiculos posso cadastrar"
     ],
     handler: handleCompanyPlanQuery,
+  },
+  {
+    id: "vehicle_age",
+    name: "Idade e Anos dos Veículos da Frota",
+    description: "Identifica veículos mais velhos, mais novos e a idade média da frota.",
+    category: "VEÍCULOS",
+    keywords: ["velho", "antigo", "novo", "idade", "ano", "fabricacao", "modelo ano", "mais velho", "mais antigo", "mais novo"],
+    phrases: [
+      "qual modelo de veiculo e mais velho da frota",
+      "qual o veiculo mais velho da frota",
+      "qual o veiculo mais antigo",
+      "qual o veiculo mais novo",
+      "qual e a idade da frota",
+      "quais os anos dos veiculos"
+    ],
+    handler: handleVehicleAgeQuery,
+  },
+  {
+    id: "vehicle_odometer",
+    name: "Quilometragem e Odômetro da Frota",
+    description: "Identifica os veículos mais rodados e menos rodados da frota.",
+    category: "VEÍCULOS",
+    keywords: ["quilometragem", "odometro", "rodado", "mais rodado", "menos rodado", "maior km", "menor km"],
+    phrases: [
+      "qual veiculo e mais rodado",
+      "qual veiculo tem maior quilometragem",
+      "qual veiculo tem menor quilometragem",
+      "quais veiculos sao mais rodados"
+    ],
+    handler: handleOdometerQuery,
+  },
+  {
+    id: "fleet_composition",
+    name: "Composição e Modelos da Frota",
+    description: "Apresenta os modelos de veículos existentes e distribuição da frota.",
+    category: "VEÍCULOS",
+    keywords: ["composicao", "modelos", "modelos da frota", "quantos veiculos", "tipos de veiculos"],
+    phrases: [
+      "quais sao os modelos da frota",
+      "quantos veiculos temos",
+      "composicao da frota",
+      "quais os tipos de veiculos"
+    ],
+    handler: handleFleetCompositionQuery,
   }
 ];
 
@@ -1296,6 +1573,7 @@ export async function processCheckDriveAiQuery(
       confidence: 0,
       responseText:
         "👋 **Olá! Sou o CheckDrive AI.**\n\nPor favor, faça uma pergunta em linguagem natural sobre a sua frota, como por exemplo:\n\n" +
+        "• *Qual modelo de veículo é o mais velho da frota?*\n" +
         "• *Quais veículos estão com manutenção atrasada?*\n" +
         "• *Gere um resumo da operação de hoje.*\n" +
         "• *Quanto gastei com combustível este mês?*\n" +
@@ -1305,9 +1583,20 @@ export async function processCheckDriveAiQuery(
     };
   }
 
-  // 1. Check if user is searching for a specific vehicle plate
+  // 1. First Layer: Try Gemini AI Engine with full live database context
+  const geminiResult = await queryGeminiAi(companyId, rawQuery);
+  if (geminiResult) {
+    return {
+      intentId: "gemini_ai",
+      intentName: "Análise Inteligente CheckDrive AI",
+      confidence: 0.98,
+      responseText: geminiResult,
+    };
+  }
+
+  // 2. Second Layer: Check if user is searching for a specific vehicle plate
   const extractedPlate = extractPlate(rawQuery);
-  if (extractedPlate || normalized.includes("placa") || normalized.includes("caminhao") || normalized.includes("carreta")) {
+  if (extractedPlate) {
     const specificResp = await handleSpecificVehicleQuery(companyId, rawQuery);
     if (!specificResp.startsWith("🔍")) {
       return {
@@ -1319,8 +1608,8 @@ export async function processCheckDriveAiQuery(
     }
   }
 
-  // 2. Check if user is searching for a specific driver by name or keywords
-  if (normalized.includes("motorista") || normalized.includes("condutor") || normalized.includes("score do") || normalized.includes("ficha do")) {
+  // 3. Third Layer: Check if user is searching for a specific driver by name
+  if (normalized.includes("score do") || normalized.includes("ficha do") || normalized.includes("historico do motorista")) {
     const driverResp = await handleSpecificDriverQuery(companyId, rawQuery);
     if (!driverResp.startsWith("🔍") && !driverResp.startsWith("👨‍✈️ Nenhum motorista")) {
       return {
@@ -1332,7 +1621,7 @@ export async function processCheckDriveAiQuery(
     }
   }
 
-  // 3. Match against Registered Intents
+  // 4. Fourth Layer: Match against Registered Intents using strict word boundaries
   let bestIntent: IntentDefinition | null = null;
   let highestScore = 0;
 
@@ -1351,9 +1640,8 @@ export async function processCheckDriveAiQuery(
     }
 
     for (const kw of intent.keywords) {
-      const normKw = normalizeText(kw);
-      if (normalized.includes(normKw)) {
-        score += 15;
+      if (matchesWord(normalized, kw)) {
+        score += 20;
       }
     }
 
@@ -1383,7 +1671,7 @@ export async function processCheckDriveAiQuery(
     }
   }
 
-  // 4. Universal Fallback Search across ALL database tables
+  // 5. Universal Fallback Search across ALL database tables
   const universalSearchResp = await handleUniversalSearch(companyId, rawQuery);
   return {
     intentId: "universal_search",

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import { DriverGuard, CompanyGuard, SuperAdminGuard } from '@/src/modules/shared/components/auth/Guards';
 import { ProtectedRoute } from '@/src/modules/shared/components/auth/ProtectedRoute';
@@ -89,7 +89,6 @@ export default function AppRoutes() {
 }
 
 // Internal helper for resolving legacy /checklist/:type 
-import { useParams } from 'react-router-dom';
 function ChecklistRedirector() {
   const { type } = useParams();
   // Keep the url search params too

@@ -28,9 +28,11 @@ interface Message {
 }
 
 const EXAMPLE_PROMPTS = [
+  "Qual modelo de veículo é o mais velho da frota?",
   "Gere um resumo da operação de hoje.",
   "Quais veículos estão com manutenção atrasada?",
   "Quanto gastei com combustível este mês?",
+  "Qual veículo tem a maior quilometragem?",
   "Quais peças estão no estoque?",
   "Quais motoristas estão em viagem?",
   "Quais multas foram registradas?",
