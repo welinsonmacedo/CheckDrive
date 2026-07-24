@@ -72,8 +72,8 @@ export default function SchedulesTab({ onViewChecklist }: SchedulesTabProps) {
 
       const { data } = await supabase.from("schedules").select("*, profiles(*), vehicles(plate, type), trailers(plate), routes(origin, destination, stops), bait1:baits!schedules_bait1_id_fkey(name), bait2:baits!schedules_bait2_id_fkey(name), bait3:baits!schedules_bait3_id_fkey(name)")
         .eq("company_id", user?.company_id)
+        .gte("start_at", localStart.toISOString())
         .lte("start_at", localEnd.toISOString())
-        .gte("end_at", localStart.toISOString())
         .order("start_at", { ascending: false });
       setSchedules(data || []);
 
@@ -185,9 +185,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
         .lt("start_at", dataToInsert.end_at)
         .gt("end_at", dataToInsert.start_at);
 
-      if (dataToInsert.trailer_id) {
-        conflictQuery = conflictQuery.eq("trailer_id", dataToInsert.trailer_id);
-      }
+
 
       const { data: conflicts, error: conflictError } = await conflictQuery;
 

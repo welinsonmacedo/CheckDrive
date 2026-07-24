@@ -505,19 +505,19 @@ export default function VehiclesTab() {
                 <h3 className="text-[12px] font-bold text-text-main">Fotos (Opcional)</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Frontal</label>
+                    <div className="flex justify-between items-center"><label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Frontal</label>{itemForm.photo_front_url && <a href={itemForm.photo_front_url} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-md hover:bg-emerald-100 transition-colors">Ver Atual</a>}</div>
                     <input type="file" accept="image/*" onChange={(e) => setPhotoFrontFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Lateral Direita</label>
+                    <div className="flex justify-between items-center"><label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Lateral Direita</label>{itemForm.photo_right_url && <a href={itemForm.photo_right_url} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-md hover:bg-emerald-100 transition-colors">Ver Atual</a>}</div>
                     <input type="file" accept="image/*" onChange={(e) => setPhotoRightFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Lateral Esquerda</label>
+                    <div className="flex justify-between items-center"><label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Lateral Esquerda</label>{itemForm.photo_left_url && <a href={itemForm.photo_left_url} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-md hover:bg-emerald-100 transition-colors">Ver Atual</a>}</div>
                     <input type="file" accept="image/*" onChange={(e) => setPhotoLeftFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Traseira</label>
+                    <div className="flex justify-between items-center"><label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Traseira</label>{itemForm.photo_rear_url && <a href={itemForm.photo_rear_url} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-md hover:bg-emerald-100 transition-colors">Ver Atual</a>}</div>
                     <input type="file" accept="image/*" onChange={(e) => setPhotoRearFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
                   </div>
                 </div>
@@ -527,15 +527,15 @@ export default function VehiclesTab() {
                 <h3 className="text-[12px] font-bold text-text-main">Documentos (PDF/Opcional)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Documento CRLV</label>
+                    <div className="flex justify-between items-center"><label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Documento CRLV</label>{itemForm.doc_crlv_url && <a href={itemForm.doc_crlv_url} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-md hover:bg-emerald-100 transition-colors">Ver Atual</a>}</div>
                     <input type="file" accept=".pdf,image/*" onChange={(e) => setDocCrlvFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Documento ANTT</label>
+                    <div className="flex justify-between items-center"><label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Documento ANTT</label>{itemForm.doc_antt_url && <a href={itemForm.doc_antt_url} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-md hover:bg-emerald-100 transition-colors">Ver Atual</a>}</div>
                     <input type="file" accept=".pdf,image/*" onChange={(e) => setDocAnttFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Apólice Seguro</label>
+                    <div className="flex justify-between items-center"><label className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Apólice Seguro</label>{itemForm.doc_insurance_url && <a href={itemForm.doc_insurance_url} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-1.5 py-0.5 rounded-md hover:bg-emerald-100 transition-colors">Ver Atual</a>}</div>
                     <input type="file" accept=".pdf,image/*" onChange={(e) => setDocInsuranceFile(e.target.files?.[0] || null)} className="w-full text-[10px]"/>
                   </div>
                 </div>

@@ -61,14 +61,23 @@ export default function AttachmentViewModal({
           </div>
 
           <div className="p-4 border-t border-zinc-100 bg-white flex justify-end">
-            <a
-              href={attachmentUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors"
-            >
-              Abrir Original em Nova Guia
-            </a>
+            <div className="flex gap-2">
+              <a
+                href={attachmentUrl}
+                download
+                className="px-6 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors flex items-center gap-2"
+              >
+                📥 Download
+              </a>
+              <a
+                href={attachmentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2"
+              >
+                Abrir Original em Nova Guia
+              </a>
+            </div>
           </div>
         </motion.div>
       </motion.div>

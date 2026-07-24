@@ -44,10 +44,11 @@ export default function VehicleDetailsModal({
     return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
   });
   const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
-  const [insuranceName, setInsuranceName] = useState<string | null>(null);
+  const [insurance, setInsurance] = useState<any>(null);
 
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [issues, setIssues] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
 
   
 
@@ -61,13 +62,24 @@ export default function VehicleDetailsModal({
       const startOfMonth = new Date(`${startDate}T00:00:00Z`).toISOString();
       const endOfMonth = new Date(`${endDate}T23:59:59Z`).toISOString();
 
-      // Fetch Insurance Name
+      // Fetch Insurance Details
       if (vehicle.insurance_id) {
-        const { data: insData } = await supabase.from("insurances").select("name").eq("id", vehicle.insurance_id).single();
+        const { data: insData } = await supabase.from("insurances").select("*").eq("id", vehicle.insurance_id).single();
         if (insData) {
-          setInsuranceName(insData.name);
+          setInsurance(insData);
         }
       }
+
+      // Fetch Alerts
+      const { data: alertsData } = await supabase
+        .from("auto_alerts")
+        .select("*")
+        .eq("company_id", user?.company_id)
+        .eq("target_type", "vehicle")
+        .eq("target_vehicle_id", vehicle.id)
+        .order("created_at", { ascending: false });
+      
+      setAlerts(alertsData || []);
 
       // Fetch Submissions
       const { data: subs } = await supabase.from("checklist_submissions").select("*, profiles!checklist_submissions_driver_id_fkey(full_name), routes(origin, destination), schedules_start:schedules!schedules_start_checklist_id_fkey(routes(origin, destination)), schedules_end:schedules!schedules_end_checklist_id_fkey(routes(origin, destination)), schedules_fuel:schedules!schedules_fuel_checklist_id_fkey(routes(origin, destination))")
@@ -258,7 +270,26 @@ export default function VehicleDetailsModal({
                   </div>
                   <div className="col-span-2">
                     <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Seguradora</span>
-                    <span className="text-xs font-semibold text-slate-700">{insuranceName || (vehicle.insurance_id ? 'Vínculo Ativo' : 'Não informado')}</span>
+                    <span className="text-xs font-semibold text-slate-700">{insurance?.name || (vehicle.insurance_id ? 'Vínculo Ativo' : 'Não informado')}</span>
+                    {insurance && (
+                      <div className="mt-2 space-y-1">
+                        {insurance.claims_phone && (
+                          <div className="flex items-center gap-2 text-[10px] text-slate-600">
+                            <span className="font-bold">Sinistro:</span> {insurance.claims_phone}
+                          </div>
+                        )}
+                        {insurance.support_phone && (
+                          <div className="flex items-center gap-2 text-[10px] text-slate-600">
+                            <span className="font-bold">Assistência:</span> {insurance.support_phone}
+                          </div>
+                        )}
+                        {insurance.broker_phone && (
+                          <div className="flex items-center gap-2 text-[10px] text-slate-600">
+                            <span className="font-bold">Corretor:</span> {insurance.broker_phone}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -266,13 +297,13 @@ export default function VehicleDetailsModal({
                   <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-wider mb-3">Documentos Anexados (PDF/Fotos)</h4>
                   <div className="flex flex-wrap gap-2">
                     {vehicle.doc_crlv_url && (
-                      <a href={((vehicle.doc_crlv_url)?.startsWith('http') ? (vehicle.doc_crlv_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.doc_crlv_url).data.publicUrl)} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-colors">📄 CRLV</a>
+                      <button onClick={() => setSelectedAttachment(((vehicle.doc_crlv_url)?.startsWith('http') ? (vehicle.doc_crlv_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.doc_crlv_url).data.publicUrl))} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-colors">📄 CRLV</button>
                     )}
                     {vehicle.doc_antt_url && (
-                      <a href={((vehicle.doc_antt_url)?.startsWith('http') ? (vehicle.doc_antt_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.doc_antt_url).data.publicUrl)} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-colors">📄 ANTT</a>
+                      <button onClick={() => setSelectedAttachment(((vehicle.doc_antt_url)?.startsWith('http') ? (vehicle.doc_antt_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.doc_antt_url).data.publicUrl))} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-colors">📄 ANTT</button>
                     )}
                     {vehicle.doc_insurance_url && (
-                      <a href={((vehicle.doc_insurance_url)?.startsWith('http') ? (vehicle.doc_insurance_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.doc_insurance_url).data.publicUrl)} target="_blank" rel="noreferrer" className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-colors">📄 Apólice Seguro</a>
+                      <button onClick={() => setSelectedAttachment(((vehicle.doc_insurance_url)?.startsWith('http') ? (vehicle.doc_insurance_url) : supabase.storage.from('vehicles-docs').getPublicUrl(vehicle.doc_insurance_url).data.publicUrl))} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-colors">📄 Apólice Seguro</button>
                     )}
                     {!vehicle.doc_crlv_url && !vehicle.doc_antt_url && !vehicle.doc_insurance_url && (
                       <span className="text-[10px] text-slate-400 italic">Nenhum documento anexado</span>
@@ -407,6 +438,73 @@ export default function VehicleDetailsModal({
                   </div>
                 </div>
               </div>
+
+              {/* Alerts Block */}
+              {alerts.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-100 mb-4">
+                    <h3 className="text-xs font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                      <AlertTriangle size={14} className="text-orange-500 mt-[-2px] animate-pulse" />
+                      Próximos Alertas
+                    </h3>
+                    <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-md font-bold">
+                      {alerts.length} {alerts.length === 1 ? "alerta" : "alertas"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {alerts.map((alert) => (
+                      <div key={alert.id} className="bg-white border border-slate-200/60 rounded-2xl p-4 flex flex-col hover:border-orange-200 transition-all shadow-sm">
+                        <h4 className="text-sm font-black text-slate-800 mb-3 truncate" title={alert.title}>
+                          {alert.title}
+                        </h4>
+                        
+                        <div className="mt-auto flex flex-col gap-2">
+                          {alert.trigger_type === "km" && (
+                            <div className="flex flex-col text-[10px] text-slate-500 space-y-1">
+                              <div className="flex justify-between items-center">
+                                <span>Última Execução/KM:</span>
+                                <span className="font-mono font-medium text-slate-700">
+                                  {Number(alert.last_km).toLocaleString("pt-BR")}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span>Intervalo:</span>
+                                <span className="font-mono font-medium text-slate-700">
+                                  a cada {Number(alert.interval_km).toLocaleString("pt-BR")}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center bg-orange-50/50 p-1.5 rounded-lg text-orange-700 mt-1">
+                                <span className="font-bold">Aviso próximo de:</span>
+                                <span className="font-mono font-black">
+                                  {Number(alert.last_km + alert.interval_km - alert.warning_km).toLocaleString("pt-BR")}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {alert.trigger_type === "date" && (
+                            <div className="flex flex-col text-[10px] text-slate-500 space-y-1">
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium">Data Alvo/Vencimento:</span>
+                                <span className="font-mono font-black text-orange-600">
+                                  {alert.trigger_date.split("-").reverse().join("/")}
+                                </span>
+                              </div>
+                              {alert.warning_days && (
+                                <div className="flex justify-between items-center bg-orange-50/50 p-1.5 rounded-lg text-orange-700 mt-1">
+                                  <span className="font-bold">Avisar com antecedência de:</span>
+                                  <span className="font-mono">
+                                    {alert.warning_days} dias
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Grid split for Issues and Submissions */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start print:block">
