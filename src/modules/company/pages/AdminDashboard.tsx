@@ -31,7 +31,9 @@ import {
   HardDrive,
   MessageSquare,
   PackageSearch, Menu,
+  Bot,
 } from "lucide-react";
+import CheckDriveAiTab from "../components/CheckDriveAiTab";
 import { supabase } from "@/src/lib/supabase";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import SchedulesTab from "@/src/modules/company/components/SchedulesTab";
@@ -349,6 +351,12 @@ export default function AdminDashboard() {
       icon: LayoutDashboard,
       label: "Painel",
       color: "from-blue-500 to-cyan-500",
+    },
+    {
+      id: "checkdrive_ai",
+      icon: Bot,
+      label: "🤖 CheckDrive AI",
+      color: "from-blue-600 via-indigo-600 to-purple-600",
     },
     {
       id: "tracking",
@@ -822,6 +830,9 @@ export default function AdminDashboard() {
           {/* Tab Content */}
           {/* Tab Content */}
           <div className="w-full h-full relative">
+            <div className={activeTab === "checkdrive_ai" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("checkdrive_ai") && <CheckDriveAiTab />}
+            </div>
             <div className={activeTab === "overview" ? "block h-full animate-fadeIn" : "hidden"}>
               {visitedTabs.has("overview") && <OverviewTab setActiveTab={setActiveTab} appSettings={appSettings} />}
             </div>

@@ -112,7 +112,7 @@ export default function FuelTab() {
         const historyEntry = {
           timestamp: new Date().toISOString(),
           user_id: user?.id,
-          user_name: user?.user_metadata?.full_name || user?.email || 'Usuário',
+          user_name: (user as any)?.full_name || (user as any)?.user_metadata?.full_name || user?.email || 'Usuário',
           changes
         };
         newDetails.editHistory = [...(newDetails.editHistory || []), historyEntry];
