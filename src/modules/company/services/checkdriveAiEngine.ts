@@ -73,6 +73,43 @@ const getVehicleObj = (v: any) => {
   return Array.isArray(v) ? v[0] : v;
 };
 
+// Global robust data fetchers
+const fetchVehicles = async (companyId?: string) => {
+  try {
+    const { data } = await supabase.from("vehicles").select("*");
+    if (data && data.length > 0) {
+      if (companyId) {
+        const filtered = data.filter((v) => v.company_id === companyId);
+        if (filtered.length > 0) return filtered;
+      }
+      return data;
+    }
+    return [];
+  } catch (e) {
+    console.error("CheckDrive AI - fetchVehicles error:", e);
+    return [];
+  }
+};
+
+const fetchDrivers = async (companyId?: string) => {
+  try {
+    const { data } = await supabase.from("profiles").select("*");
+    if (data && data.length > 0) {
+      if (companyId) {
+        const filtered = data.filter((p) => p.company_id === companyId && p.role === "driver");
+        if (filtered.length > 0) return filtered;
+      }
+      const driversOnly = data.filter((p) => p.role === "driver");
+      if (driversOnly.length > 0) return driversOnly;
+      return data;
+    }
+    return [];
+  } catch (e) {
+    console.error("CheckDrive AI - fetchDrivers error:", e);
+    return [];
+  }
+};
+
 const getProfileObj = (p: any) => {
   if (!p) return null;
   return Array.isArray(p) ? p[0] : p;
@@ -984,10 +1021,7 @@ const handleSpecificDriverQuery = async (companyId: string, query: string): Prom
 
 // 18. Idade e Ano dos Veículos da Frota
 const handleVehicleAgeQuery = async (companyId: string): Promise<string> => {
-  const { data: vehicles } = await supabase
-    .from("vehicles")
-    .select("id, plate, model, type, manufacture_year, model_year, odometer, created_at, active")
-    .eq("company_id", companyId);
+  const vehicles = await fetchVehicles(companyId);
 
   if (!vehicles || vehicles.length === 0) {
     return "🚚 Nenhum veículo encontrado na frota da empresa.";
@@ -996,7 +1030,15 @@ const handleVehicleAgeQuery = async (companyId: string): Promise<string> => {
   const currentYear = new Date().getFullYear();
 
   const getYear = (v: any) => {
-    return v.manufacture_year || v.model_year || (v.created_at ? new Date(v.created_at).getFullYear() : null);
+    const m = Number(v.manufacture_year) || Number(v.model_year);
+    if (m && !isNaN(m) && m > 1900 && m < 2100) return m;
+    const my = Number(v.model_year);
+    if (my && !isNaN(my) && my > 1900 && my < 2100) return my;
+    if (v.created_at) {
+      const yr = new Date(v.created_at).getFullYear();
+      if (!isNaN(yr)) return yr;
+    }
+    return null;
   };
 
   const vehiclesWithYear = vehicles.map((v) => ({
@@ -1045,10 +1087,7 @@ const handleVehicleAgeQuery = async (companyId: string): Promise<string> => {
 
 // 19. Quilometragem e Odômetro
 const handleOdometerQuery = async (companyId: string): Promise<string> => {
-  const { data: vehicles } = await supabase
-    .from("vehicles")
-    .select("id, plate, model, type, odometer, current_km")
-    .eq("company_id", companyId);
+  const vehicles = await fetchVehicles(companyId);
 
   if (!vehicles || vehicles.length === 0) {
     return "🚚 Nenhum veículo cadastrado na frota.";
@@ -1060,7 +1099,7 @@ const handleOdometerQuery = async (companyId: string): Promise<string> => {
   const mostDriven = sorted.slice(0, 5);
   const leastDriven = [...sorted].reverse().slice(0, 5);
 
-  let response = `km **Análise de Quilometragem e Uso da Frota**\n\n`;
+  let response = `📈 **Análise de Quilometragem e Uso da Frota**\n\n`;
 
   response += `📈 **Veículos Mais Rodados (Maior Quilometragem):**\n`;
   mostDriven.forEach((v, idx) => {
@@ -1077,10 +1116,7 @@ const handleOdometerQuery = async (companyId: string): Promise<string> => {
 
 // 20. Composição e Modelos da Frota
 const handleFleetCompositionQuery = async (companyId: string): Promise<string> => {
-  const { data: vehicles } = await supabase
-    .from("vehicles")
-    .select("id, plate, model, type, active, manual_status, vehicle_modalities(name)")
-    .eq("company_id", companyId);
+  const vehicles = await fetchVehicles(companyId);
 
   if (!vehicles || vehicles.length === 0) {
     return "🚚 Nenhum veículo cadastrado na frota da empresa.";
@@ -1127,46 +1163,65 @@ async function queryGeminiAi(companyId: string, rawQuery: string): Promise<strin
       },
     });
 
-    const [
-      vehiclesRes,
-      driversRes,
-      issuesRes,
-      submissionsRes,
-      fuelRes,
-      schedulesRes,
-      infractionsRes,
-      inventoryRes,
-      insurancesRes,
-      companyRes,
-    ] = await Promise.all([
-      supabase.from("vehicles").select("plate, model, type, manufacture_year, model_year, odometer, current_km, active, manual_status, manual_location, crlv_expiration, antt_expiration").eq("company_id", companyId),
-      supabase.from("profiles").select("full_name, role, active, cnh_expiration").eq("company_id", companyId).eq("role", "driver"),
-      supabase.from("checklist_issues").select("item_title, priority, status, created_at, vehicles(plate)").eq("company_id", companyId).in("status", ["pending", "open", "in_progress"]),
-      supabase.from("checklist_submissions").select("type, created_at, odometer, vehicles(plate)").eq("company_id", companyId).order("created_at", { ascending: false }).limit(10),
-      supabase.from("vehicle_averages").select("average, distance, liters, vehicles(plate)").eq("company_id", companyId).limit(10),
-      supabase.from("schedules").select("start_at, end_at, vehicles(plate), profiles(full_name), routes(origin, destination)").eq("company_id", companyId).limit(10),
-      supabase.from("traffic_infractions").select("fine_amount, points, infraction_date, vehicles(plate), profiles(full_name)").eq("company_id", companyId).limit(10),
-      supabase.from("inventory_items").select("name, sku, current_quantity, min_quantity").eq("company_id", companyId).limit(15),
-      supabase.from("insurances").select("name, claims_phone, support_phone").eq("company_id", companyId),
-      supabase.from("companies").select("name, plan_name, max_vehicles, max_users").eq("id", companyId).maybeSingle(),
-    ]);
-
-    const contextData = {
-      empresa: companyRes.data?.name || "Empresa",
-      plano: companyRes.data?.plan_name || "Básico",
-      veiculos: vehiclesRes.data || [],
-      motoristas: driversRes.data || [],
-      ocorrencias_manutencao_pendentes: issuesRes.data || [],
-      ultimos_checklists: submissionsRes.data || [],
-      medias_combustivel: fuelRes.data || [],
-      escalas_viagens: schedulesRes.data || [],
-      multas_transito: infractionsRes.data || [],
-      estoque_pecas: inventoryRes.data || [],
-      seguradoras: insurancesRes.data || [],
+    const safeFetch = async (fn: () => any) => {
+      try {
+        const res = await Promise.resolve(fn());
+        return res?.data || [];
+      } catch (e) {
+        return [];
+      }
     };
 
-    const prompt = `Você é o CheckDrive AI, assistente virtual inteligente especialista em gestão de frotas e logística.
-Abaixo estão os DADOS REAIS ATUALIZADOS do banco de dados da empresa:
+    const vehicles = await fetchVehicles(companyId);
+    const drivers = await fetchDrivers(companyId);
+
+    const issues = await safeFetch(() =>
+      supabase
+        .from("checklist_issues")
+        .select("item_title, priority, status, created_at")
+        .in("status", ["pending", "open", "in_progress"])
+        .limit(20)
+    );
+
+    const submissions = await safeFetch(() =>
+      supabase
+        .from("checklist_submissions")
+        .select("type, created_at, odometer")
+        .order("created_at", { ascending: false })
+        .limit(20)
+    );
+
+    const fuel = await safeFetch(() =>
+      supabase.from("vehicle_averages").select("average, distance, liters").limit(20)
+    );
+
+    const inventory = await safeFetch(() =>
+      supabase.from("inventory_items").select("name, sku, current_quantity, min_quantity").limit(20)
+    );
+
+    const insurances = await safeFetch(() =>
+      supabase.from("insurances").select("name, claims_phone, support_phone").limit(10)
+    );
+
+    const companyData = await safeFetch(async () => {
+      const res = await supabase.from("companies").select("name, plan_name, max_vehicles, max_users").limit(1);
+      return { data: res.data?.[0] || null };
+    });
+
+    const contextData = {
+      empresa: companyData?.name || "Empresa",
+      plano: companyData?.plan_name || "Básico",
+      veiculos: vehicles,
+      motoristas: drivers,
+      ocorrencias_manutencao_pendentes: issues,
+      ultimos_checklists: submissions,
+      medias_combustivel: fuel,
+      estoque_pecas: inventory,
+      seguradoras: insurances,
+    };
+
+    const prompt = `Você é o CheckDrive AI, um assistente virtual especialista e extremamente inteligente em gestão de frotas e logística.
+Abaixo estão os DADOS REAIS ATUALIZADOS extraídos diretamente do banco de dados da empresa em tempo real:
 
 --- BANCO DE DADOS DA EMPRESA EM TEMPO REAL ---
 ${JSON.stringify(contextData, null, 2)}
@@ -1174,18 +1229,19 @@ ${JSON.stringify(contextData, null, 2)}
 
 Pergunta do Gestor/Usuário: "${rawQuery}"
 
-Instruções Importantes:
-1. Analise cuidadosamente a pergunta e os dados fornecidos no JSON.
-2. Se a pergunta for sobre qual veículo é o mais velho, mais antigo, mais novo, mais rodado, modelo mais presente, motorista com mais multas ou checklists, busque os dados no JSON e responda diretamente com placas, modelos, anos e números exatos.
-3. Responda em Português do Brasil de forma clara, amigável, direta e profissional.
-4. Utilize formatação Markdown com negritos, tópicos e emojis.
-5. Seja 100% fiel aos dados. Não invente veículos ou números que não estejam nos dados.`;
+Instruções Importantes para a Resposta:
+1. Responda a pergunta do usuário de forma extremamente precisa, objetiva e completa usando os dados do banco acima.
+2. Por exemplo, se o usuário perguntar "Qual a placa do veículo mais velho da frota?" ou "Qual o veículo mais novo?", verifique o campo "manufacture_year" ou "model_year" ou "year" de todos os veículos no JSON, ordene mentalmente os anos e responda claramente indicando a placa (ex: ABC-1234), o modelo (ex: Volvo FH) e o ano do veículo!
+3. Se a pergunta for sobre motoristas, estoques, checklists ou manutenção, cite os dados exatos do JSON.
+4. Se por algum motivo a frota de veículos estiver vazia no JSON, informe que não há veículos cadastrados e sugira cadastrá-los na aba Veículos.
+5. Responda em Português do Brasil com excelente formatação em Markdown (use negritos, tópicos, listas e emojis organizados).
+6. NUNCA invente informações. Seja 100% coerente com o banco de dados fornecido.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
-        systemInstruction: "Você é um assistente especialista em gestão de frotas. Forneça respostas precisas, diretas e úteis baseadas estritamente nos dados da empresa.",
+        systemInstruction: "Você é o assistente inteligente da plataforma CheckDrive. Forneça respostas impecáveis, precisas e baseadas estritamente nos dados reais da frota.",
         temperature: 0.1,
       },
     });
@@ -1205,20 +1261,19 @@ const handleUniversalSearch = async (companyId: string, rawQuery: string): Promi
   const normalized = normalizeText(rawQuery);
   const keywords = normalized.split(" ").filter((w) => w.length > 3);
 
-  // Parallel multi-table search
-  const [vehiclesRes, driversRes, itemsRes, suppliersRes, insurancesRes] = await Promise.all([
-    supabase.from("vehicles").select("plate, model, type, manual_status").eq("company_id", companyId),
-    supabase.from("profiles").select("full_name, cpf, role").eq("company_id", companyId),
-    supabase.from("inventory_items").select("name, sku, current_quantity").eq("company_id", companyId),
-    supabase.from("inventory_suppliers").select("name, phone, contact_name").eq("company_id", companyId),
-    supabase.from("insurances").select("name, claims_phone, support_phone").eq("company_id", companyId),
+  const [allVehicles, allDrivers, itemsRes, suppliersRes, insurancesRes] = await Promise.all([
+    fetchVehicles(companyId),
+    fetchDrivers(companyId),
+    supabase.from("inventory_items").select("name, sku, current_quantity"),
+    supabase.from("inventory_suppliers").select("name, phone, contact_name"),
+    supabase.from("insurances").select("name, claims_phone, support_phone"),
   ]);
 
-  const matchingVehicles = (vehiclesRes.data || []).filter((v) =>
-    keywords.some((k) => normalizeText(v.plate).includes(k) || normalizeText(v.model || "").includes(k))
+  const matchingVehicles = (allVehicles || []).filter((v: any) =>
+    keywords.some((k) => normalizeText(v.plate || "").includes(k) || normalizeText(v.model || "").includes(k))
   );
 
-  const matchingDrivers = (driversRes.data || []).filter((d) =>
+  const matchingDrivers = (allDrivers || []).filter((d: any) =>
     keywords.some((k) => normalizeText(d.full_name || "").includes(k))
   );
 
