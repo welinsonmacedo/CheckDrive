@@ -1,725 +1,114 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/src/lib/supabase';
-import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
-import { 
-  Search, 
-  MapPin, 
-  Truck, 
-  AlertTriangle, 
-  User, 
-  Navigation, 
-  Edit2, 
-  X, 
-  RefreshCw, 
-  Eye,
-  Compass,
-  Activity,
-  Calendar,
-  Lock,
-  ChevronRight,
-  ShieldAlert,
-  Info,
-  Clock,
-  CheckCircle2,
-  ListFilter
-} from 'lucide-react';
-import { motion } from 'framer-motion';
-import VehicleDetailsModal from '@/src/modules/company/components/VehicleDetailsModal';
-import DriverRankingDetailsModal from '@/src/modules/company/components/DriverRankingDetailsModal';
-import { usePersistentState } from '@/src/hooks/usePersistentState';
+import React from "react";
+import { useTracking } from "../monitoring/hooks/useTracking";
+import { MonitoringMap } from "../monitoring/components/MonitoringMap";
+import { DriverSidebar } from "../monitoring/components/DriverSidebar";
+import { TrackingDashboard } from "../monitoring/components/TrackingDashboard";
+import { RefreshCw, Radio } from "lucide-react";
 
 export default function TrackingTab() {
-  const { user } = useAuth();
+  const {
+    loading,
+    driverStates,
+    selectedDriverId,
+    setSelectedDriverId,
+    selectedDriverState,
+    selectedTripMetrics,
+    loadingTrip,
+    isPlaybackPlaying,
+    setIsPlaybackPlaying,
+    playbackIndex,
+    setPlaybackIndex,
+    playbackSpeed,
+    setPlaybackSpeed,
+    showHeatmap,
+    setShowHeatmap,
+    showClusters,
+    setShowClusters,
+    filters,
+    setFilters,
+    alerts,
+    setAlerts,
+    dashboardMetrics,
+    refetch,
+  } = useTracking();
 
-  const [vehicles, setVehicles] = useState<any[]>([]);
-  const [drivers, setDrivers] = useState<any[]>([]);
-  const [baits, setBaits] = useState<any[]>([]);
-  const [issuesCount, setIssuesCount] = useState<Record<string, number>>({});
-  const [schedulesMap, setSchedulesMap] = useState<Record<string, any>>({});
-  const [latestOdometer, setLatestOdometer] = useState<Record<string, number>>({});
-  
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = usePersistentState('tracking_searchTerm', '');
-  const [vehicleTypeFilter, setVehicleTypeFilter] = usePersistentState('tracking_vehicleTypeFilter', '');
-  const [activeTab, setActiveTab] = usePersistentState<'vehicles' | 'drivers' | 'baits'>('tracking_activeTab', 'vehicles');
-  
-  const [editingVehicle, setEditingVehicle] = useState<any>(null);
-  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
-  const [selectedDriver, setSelectedDriver] = useState<any>(null);
-  const [closings, setClosings] = useState<any[]>([]);
-  const [appSettings, setAppSettings] = useState<any>(null);
-  const [editForm, setEditForm] = useState({ manual_location: '', manual_status: '' });
-  const [saving, setSaving] = useState(false);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // Fetch closings and settings for modal
-      const { data: cData } = await supabase.from('score_closings').select('*').eq("company_id", user?.company_id).order('created_at', { ascending: false });
-      if (cData) setClosings(cData);
-
-      const { data: settingsData } = await supabase.from('app_settings').select('*').single();
-      if (settingsData) setAppSettings(settingsData);
-
-      // Fetch vehicles, drivers, baits
-      const [vRes, dRes, bRes] = await Promise.all([
-        supabase.from('vehicles').select('*').eq("company_id", user?.company_id).eq('active', true).order('plate'),
-        supabase.from('profiles').select('*').eq("company_id", user?.company_id).eq('role', 'driver').order('full_name'),
-        supabase.from('baits').select('*').eq("company_id", user?.company_id).eq('active', true).order('name')
-      ]);
-      
-      const vData = vRes.data || [];
-      const dData = dRes.data || [];
-      const bData = bRes.data || [];
-      
-      // Fetch issues
-      const { data: iData } = await supabase.from('checklist_issues').select('vehicle_id').eq("company_id", user?.company_id).eq('status', 'pending');
-      const iCount: Record<string, number> = {};
-      iData?.forEach(i => {
-        iCount[i.vehicle_id] = (iCount[i.vehicle_id] || 0) + 1;
-      });
-      setIssuesCount(iCount);
-
-      // Fetch latest odometer for vehicles
-      const odometerMap: Record<string, number> = {};
-      const odoPromises = vData.map(async (v: any) => {
-         const { data } = await supabase.from('checklist_submissions').select('odometer').eq("company_id", user?.company_id)
-           .eq('vehicle_id', v.id)
-           .not('odometer', 'is', null)
-           .order('created_at', { ascending: false })
-           .limit(1)
-           .maybeSingle();
-         if (data && data.odometer) {
-             odometerMap[v.id] = data.odometer;
-         }
-      });
-      await Promise.all(odoPromises);
-      setLatestOdometer(odometerMap);
-
-      // Fetch upcoming/recent schedules to determine automatic state
-      const lastWeek = new Date();
-      lastWeek.setDate(lastWeek.getDate() - 7);
-      
-      const { data: sData } = await supabase.from('schedules').select(`
-          *,
-          profiles:driver_id (full_name),
-          vehicles:vehicle_id (plate),
-          routes:route_id (origin, destination),
-          bait1:baits!schedules_bait1_id_fkey(name),
-          bait2:baits!schedules_bait2_id_fkey(name),
-          bait3:baits!schedules_bait3_id_fkey(name)
-        `).eq("company_id", user?.company_id)
-        .gte('start_at', lastWeek.toISOString())
-        .order('start_at', { ascending: false });
-
-      // Map latest schedule to each entity
-      const sMap: Record<string, any> = {};
-      if (sData) {
-        const findCurrentSchedule = (schedulesList: any[]) => {
-          if (schedulesList.length === 0) return null;
-          const now = new Date().getTime();
-          let chosen = schedulesList.find(s => new Date(s.start_at).getTime() <= now && new Date(s.end_at).getTime() >= now);
-          if (!chosen) {
-            const upcoming = schedulesList.filter(s => new Date(s.start_at).getTime() > now).sort((a,b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
-            if (upcoming.length > 0) chosen = upcoming[0];
-          }
-          if (!chosen) {
-            const past = schedulesList.filter(s => new Date(s.end_at).getTime() < now).sort((a,b) => new Date(b.end_at).getTime() - new Date(a.end_at).getTime());
-            if (past.length > 0) chosen = past[0];
-          }
-          return chosen;
-        };
-
-        vData.forEach(v => {
-          const vSchedules = sData.filter(s => s.vehicle_id === v.id);
-          sMap[`v_${v.id}`] = findCurrentSchedule(vSchedules);
-        });
-
-        dData.forEach(d => {
-          const dSchedules = sData.filter(s => s.driver_id === d.id);
-          sMap[`d_${d.id}`] = findCurrentSchedule(dSchedules);
-        });
-
-        bData.forEach(b => {
-          const bSchedules = sData.filter(s => s.bait1_id === b.id || s.bait2_id === b.id || s.bait3_id === b.id);
-          sMap[`b_${b.id}`] = findCurrentSchedule(bSchedules);
-        });
-      }
-      
-      setSchedulesMap(sMap);
-      setVehicles(vData);
-      setDrivers(dData);
-      setBaits(bData);
-    } catch (error) {
-      console.error('Error fetching tracking data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleManualSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingVehicle) return;
-    
-    setSaving(true);
-    try {
-      const { error } = await supabase.from('vehicles').update({
-        manual_location: editForm.manual_location || null,
-        manual_status: editForm.manual_status || null,
-        last_status_update: new Date().toISOString()
-      }).eq('id', editingVehicle.id);
-      
-      if (error) throw error;
-      setEditingVehicle(null);
-      fetchData();
-    } catch (error: any) {
-      alert('Erro: ' + error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const getComputedState = (item: any, schedule: any, isVehicle: boolean = false) => {
-    if (isVehicle && (item.manual_status || item.manual_location)) {
-      return {
-        status: item.manual_status || 'Modificado Manualmente',
-        location: item.manual_location || 'Desconhecida',
-        isManual: true
-      };
-    }
-    
-    if (!schedule) {
-      return { status: 'Sem viagem', location: 'Pátio', isManual: false };
-    }
-    
-    const now = new Date().getTime();
-    const start = new Date(schedule.start_at).getTime();
-    const end = new Date(schedule.end_at).getTime();
-    const route = schedule.routes;
-    
-    if (now > end) {
-      return { status: 'Viagem Concluída', location: route?.destination || 'Destino', isManual: false };
-    }
-    if (now < start) {
-      return { status: 'Aguardando Início', location: route?.origin || 'Origem', isManual: false };
-    }
-    
-    return { status: 'Em trânsito', location: `Para ${route?.destination || 'Destino'}`, isManual: false };
-  };
-
-  const getStatusColor = (status: string) => {
-    if (status === 'Em trânsito') return 'bg-indigo-50 text-indigo-700 border-indigo-150';
-    if (status === 'Viagem Concluída') return 'bg-emerald-50 text-emerald-700 border-emerald-150';
-    if (status === 'Aguardando Início') return 'bg-amber-50 text-amber-700 border-amber-150';
-    if (status === 'Sem viagem') return 'bg-gray-50 text-gray-600 border-gray-150';
-    return 'bg-purple-50 text-purple-700 border-purple-150'; 
-  };
-
-  const getSortOrder = (item: any, type: 'vehicle' | 'driver' | 'bait') => {
-    const key = type === 'vehicle' ? 'v_' : type === 'driver' ? 'd_' : 'b_';
-    const schedule = schedulesMap[`${key}${item.id}`];
-    const state = getComputedState(item, schedule, type === 'vehicle');
-    
-    if (state.status === 'Em trânsito') return 0;
-    if (state.status === 'Aguardando Início') return 1;
-    if (state.isManual) return 2;
-    if (state.status === 'Viagem Concluída') return 3;
-    return 4; // Sem viagem
-  };
-
-  const filteredVehicles = vehicles
-    .filter(v => 
-      (vehicleTypeFilter === '' || v.type === vehicleTypeFilter) &&
-      (v.plate?.toLowerCase().includes(searchTerm.toLowerCase()) || schedulesMap[`v_${v.id}`]?.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()))
-    )
-    .sort((a, b) => getSortOrder(a, 'vehicle') - getSortOrder(b, 'vehicle'));
-
-  const filteredDrivers = drivers
-    .filter(d => 
-      d.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || schedulesMap[`d_${d.id}`]?.vehicles?.plate?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => getSortOrder(a, 'driver') - getSortOrder(b, 'driver'));
-
-  const filteredBaits = baits
-    .filter(b => 
-      b.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => getSortOrder(a, 'bait') - getSortOrder(b, 'bait'));
-
-  const vehicleTypes = Array.from(new Set(vehicles.map(v => v.type).filter(Boolean)));
-
-  // Live Statistics Calculations
-  const statsTotalVehicles = vehicles.length;
-  const statsInTransit = vehicles.filter(v => {
-    const s = schedulesMap[`v_${v.id}`];
-    return getComputedState(v, s, true).status === 'Em trânsito';
-  }).length;
-  const statsWaiting = vehicles.filter(v => {
-    const s = schedulesMap[`v_${v.id}`];
-    return getComputedState(v, s, true).status === 'Aguardando Início';
-  }).length;
-  const statsPendingIssues = Object.values(issuesCount).reduce((acc, current) => acc + current, 0);
-
-  const renderCard = (type: 'vehicle' | 'driver' | 'bait', item: any) => {
-    const key = type === 'vehicle' ? 'v_' : type === 'driver' ? 'd_' : 'b_';
-    const schedule = schedulesMap[`${key}${item.id}`];
-    const state = getComputedState(item, schedule, type === 'vehicle');
-    const statusColor = getStatusColor(state.status);
-    
-    let title = '';
-    let subtitle = '';
-    let icon = null;
-    let issues = 0;
-    
-    if (type === 'vehicle') {
-      title = item.plate;
-      subtitle = item.type || 'Veículo';
-      icon = <Truck size={18} className="text-indigo-600" />;
-      issues = issuesCount[item.id] || 0;
-    } else if (type === 'driver') {
-      title = item.full_name;
-      subtitle = 'Motorista Comercial';
-      icon = <User size={18} className="text-sky-500" />;
-    } else {
-      title = item.name;
-      subtitle = 'Dispositivo de Segurança';
-      icon = <MapPin size={18} className="text-fuchsia-500" />;
-    }
-
-    const baitsStr = [schedule?.bait1?.name, schedule?.bait2?.name, schedule?.bait3?.name].filter(Boolean).join(', ');
-
+  if (loading) {
     return (
-      <motion.div 
-        key={item.id} 
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="bg-white border border-gray-200/80 rounded-2xl p-5 hover:shadow-lg hover:border-gray-300 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between min-h-[250px]"
-      >
-        {/* Top Accent Line */}
-        <div className={`absolute top-0 left-0 right-0 h-[3px] ${
-          state.status === 'Em trânsito' ? 'bg-indigo-500' : 
-          state.status === 'Viagem Concluída' ? 'bg-emerald-500' : 
-          state.isManual ? 'bg-purple-500' : 'bg-gray-300'
-        }`} />
-        
-        <div>
-          {/* Header section */}
-          <div className="flex justify-between items-start gap-3 mb-4">
-            <div className="min-w-0">
-              <h3 className="text-base font-black text-gray-800 flex items-center gap-2 truncate">
-                <span className="p-1.5 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-center">
-                  {icon}
-                </span>
-                <span className="tracking-tight">{title}</span>
-              </h3>
-              <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mt-1.5">{subtitle}</p>
-            </div>
-            
-            <div className="flex flex-col items-end gap-1.5 shrink-0">
-              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5 ${statusColor}`}>
-                {state.status === 'Em trânsito' && (
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                  </span>
-                )}
-                {state.status}
-              </span>
-              
-              {issues > 0 && (
-                <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100/60">
-                  <AlertTriangle size={11} />
-                  {issues} {issues === 1 ? 'pendência' : 'pendências'}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Location and Info block */}
-          <div className="space-y-3">
-            <div className="p-3 bg-gray-50/70 border border-gray-100 rounded-xl relative overflow-hidden group-hover:bg-gray-50 transition-colors">
-              <div className="flex items-start gap-2.5">
-                <Navigation size={14} className="text-gray-400 shrink-0 mt-1 spin-hover" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-black text-gray-450 uppercase tracking-widest leading-none mb-1">Localização e Destino</p>
-                  <p className="text-xs font-bold text-gray-700 truncate leading-snug">{state.location}</p>
-                  
-                  {type === 'vehicle' && latestOdometer[item.id] !== undefined && (
-                    <div className="mt-2 text-[10px] font-bold text-gray-505 flex items-center gap-1">
-                      <span>KM Sincronizado:</span>
-                      <span className="font-semibold text-gray-800 bg-gray-150 px-1.5 py-0.2 rounded font-mono">{latestOdometer[item.id]} km</span>
-                    </div>
-                  )}
-
-                  {state.isManual && (
-                    <p className="text-[9px] font-black text-purple-700 bg-purple-50 border border-purple-100/60 inline-flex items-center gap-1 mt-2.5 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      <span className="w-1 h-1 rounded-full bg-purple-500 animate-pulse" />
-                      Sobrescrito Manual
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Travel / Schedule info */}
-            {schedule ? (
-              <div className="py-2.5 border-t border-gray-100 space-y-2 mt-1">
-                {type !== 'driver' && (
-                  <div className="flex items-center gap-2 text-xs text-gray-655 font-bold">
-                    <User size={13} className="text-gray-400 shrink-0" />
-                    <span className="truncate">{schedule.profiles?.full_name}</span>
-                  </div>
-                )}
-                {type !== 'vehicle' && schedule.vehicles && (
-                  <div className="flex items-center gap-2 text-xs text-gray-655 font-bold">
-                    <Truck size={13} className="text-gray-400 shrink-0" />
-                    <span className="truncate font-mono">{schedule.vehicles.plate}</span>
-                  </div>
-                )}
-                {type !== 'bait' && baitsStr && (
-                  <div className="flex items-start gap-2 text-[11px] text-fuchsia-700 font-bold bg-fuchsia-50/50 p-2 rounded-lg border border-fuchsia-100/50">
-                    <MapPin size={13} className="text-fuchsia-500 shrink-0 mt-0.5" />
-                    <span className="truncate">Dispositivos: <strong className="text-fuchsia-800">{baitsStr}</strong></span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="pt-2 text-center">
-                <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider flex items-center justify-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                  Sem Programação Ativa
-                </span>
-              </div>
-            )}
-          </div>
+      <div className="w-full h-[calc(100vh-100px)] bg-slate-950 flex flex-col items-center justify-center text-white rounded-3xl border border-slate-800 p-8">
+        <div className="w-12 h-12 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/40 flex items-center justify-center mb-4 animate-bounce">
+          <Radio size={24} className="animate-pulse" />
         </div>
-
-        {/* Floating Quick Action Overlay */}
-        <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
-          {type === 'vehicle' && (
-            <>
-              <button 
-                onClick={() => setSelectedVehicle(item)}
-                className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 hover:border-indigo-500 hover:bg-indigo-50/20 text-gray-500 hover:text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-150 flex items-center gap-1"
-                title="Resumo do Veículo"
-              >
-                <Eye size={12} />
-                <span>Resumo</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setEditingVehicle(item);
-                  setEditForm({
-                    manual_location: item.manual_location || state.location,
-                    manual_status: item.manual_status || state.status
-                  });
-                }}
-                className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 hover:border-purple-500 hover:bg-purple-50/20 text-gray-500 hover:text-purple-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-150 flex items-center gap-1"
-                title="Ajuste Manual"
-              >
-                <Edit2 size={12} />
-                <span>Ajustar</span>
-              </button>
-            </>
-          )}
-
-          {type === 'driver' && (
-            <button 
-              onClick={() => setSelectedDriver(item)}
-              className="px-3 py-1.5 bg-gray-50 border border-gray-200 hover:border-indigo-500 hover:bg-indigo-50/20 text-gray-500 hover:text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-150 flex items-center gap-1"
-              title="Resumo do Motorista"
-            >
-              <Eye size={12} />
-              <span>Ver Perfil</span>
-            </button>
-          )}
-        </div>
-      </motion.div>
+        <h2 className="text-lg font-black tracking-wide">Conectando ao Supabase Realtime...</h2>
+        <p className="text-xs text-slate-400 mt-1 max-w-sm text-center">
+          Carregando posições GPS e frota da empresa em tempo real.
+        </p>
+      </div>
     );
-  };
+  }
 
   return (
-    <div className="space-y-6">
-      
-      {/* 1. Live Stats Summary Ribbon */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { 
-            label: 'Frota Rastreada', 
-            value: statsTotalVehicles, 
-            caption: 'Dispositivos ativos', 
-            icon: Compass, 
-            bg: 'from-blue-50/30 to-indigo-50/10 hover:border-blue-200',
-            border: 'border-blue-100',
-            text: 'text-indigo-600'
-          },
-          { 
-            label: 'Em Trânsito', 
-            value: statsInTransit, 
-            caption: 'Viagens em andamento', 
-            icon: Activity, 
-            bg: 'from-emerald-50/30 to-teal-50/10 hover:border-emerald-200',
-            border: 'border-emerald-100',
-            text: 'text-emerald-600',
-            pulse: true
-          },
-          { 
-            label: 'Aguardando Viagem', 
-            value: statsWaiting, 
-            caption: 'Programado na escala', 
-            icon: Calendar, 
-            bg: 'from-amber-50/30 to-yellow-50/10 hover:border-amber-200',
-            border: 'border-amber-100',
-            text: 'text-amber-600'
-          },
-          { 
-            label: 'Total de Pendências', 
-            value: statsPendingIssues, 
-            caption: 'Checklist com falhas', 
-            icon: ShieldAlert, 
-            bg: 'from-rose-50/30 to-red-50/10 hover:border-rose-200',
-            border: 'border-rose-100',
-            text: 'text-rose-600'
-          }
-        ].map((block, idx) => {
-          const Icon = block.icon;
-          return (
-            <div key={idx} className={`bg-white border ${block.border} rounded-2xl p-4 bg-gradient-to-br ${block.bg} transition-all duration-200 shadow-sm relative group`}>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider">
-                  {block.label}
-                </span>
-                <span className={`p-1.5 rounded-lg bg-white border border-gray-100 ${block.text} group-hover:scale-110 transition-transform`}>
-                  <Icon size={14} />
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-black text-gray-800 tracking-tight">{block.value}</span>
-                {block.pulse && (
-                  <span className="relative flex h-2 w-2 self-center mb-1">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                )}
-              </div>
-              <p className="text-[9px] text-gray-500 font-bold mt-1 uppercase tracking-normal">{block.caption}</p>
-            </div>
-          );
-        })}
-      </div>
+    <div className="relative w-full h-[calc(100vh-90px)] min-h-[600px] bg-slate-950 rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl flex flex-col md:flex-row">
+      {/* LEFT FLOATING SIDEBAR */}
+      <DriverSidebar
+        driverStates={driverStates}
+        selectedDriverId={selectedDriverId}
+        selectedDriverState={selectedDriverState}
+        selectedTripMetrics={selectedTripMetrics}
+        loadingTrip={loadingTrip}
+        onSelectDriver={(id) => setSelectedDriverId(id)}
+        filters={filters}
+        onFilterChange={setFilters}
+        isPlaybackPlaying={isPlaybackPlaying}
+        onTogglePlay={() => setIsPlaybackPlaying(!isPlaybackPlaying)}
+        playbackIndex={playbackIndex}
+        onSeek={setPlaybackIndex}
+        playbackSpeed={playbackSpeed}
+        onChangeSpeed={setPlaybackSpeed}
+        onResetPlayback={() => {
+          setIsPlaybackPlaying(false);
+          setPlaybackIndex(0);
+        }}
+      />
 
-      {/* 2. Page Controls & Tabs */}
-      <div className="bg-white border border-gray-250/60 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 shadow-sm">
-        
-        {/* Rounded Pill Tabs */}
-        <div className="flex p-1 bg-gray-50/80 border border-gray-200/80 rounded-xl space-x-1 shrink-0 w-fit">
-          {[
-            { id: 'vehicles', label: 'Veículos' },
-            { id: 'drivers', label: 'Motoristas' },
-            { id: 'baits', label: 'Iscas de Segurança' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id as any);
-                setSearchTerm('');
-              }}
-              className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
-                activeTab === tab.id 
-                  ? 'bg-white text-indigo-600 shadow-sm border border-gray-200/40' 
-                  : 'text-gray-550 hover:text-gray-800 hover:bg-gray-100/50'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {/* RIGHT MAIN MAP AREA */}
+      <div className="relative flex-1 h-full w-full overflow-hidden">
+        {/* TOP FLOATING DASHBOARD & ALERTS BAR */}
+        <div className="absolute top-3 left-3 right-3 z-20 pointer-events-auto max-w-7xl mx-auto">
+          <TrackingDashboard
+            metrics={dashboardMetrics}
+            alerts={alerts}
+            showHeatmap={showHeatmap}
+            onToggleHeatmap={() => setShowHeatmap(!showHeatmap)}
+            showClusters={showClusters}
+            onToggleClusters={() => setShowClusters(!showClusters)}
+            onDismissAlert={(id) => setAlerts((prev) => prev.filter((a) => a.id !== id))}
+          />
         </div>
 
-        {/* Inputs & Operations */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 text-gray-800">
-          
-          {/* Vehicle Type Filter */}
-          {activeTab === 'vehicles' && vehicleTypes.length > 0 && (
-            <div className="relative w-full sm:w-auto">
-              <select
-                className="h-10 pl-3 pr-8 bg-white rounded-xl text-xs font-black uppercase tracking-wide outline-none border border-gray-200 hover:border-gray-300 focus:ring-1 focus:ring-indigo-500 w-full sm:w-44 text-gray-600 cursor-pointer appearance-none shadow-sm"
-                value={vehicleTypeFilter}
-                onChange={e => setVehicleTypeFilter(e.target.value)}
-              >
-                <option value="">Filtro: Todos</option>
-                {vehicleTypes.map((t: any) => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <ListFilter size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-          )}
-
-          {/* Search Field */}
-          <div className="relative w-full sm:w-auto">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder={`Filtrar ${activeTab === 'vehicles' ? 'veículos...' : activeTab === 'drivers' ? 'motoristas...' : 'iscas...'}`}
-              className="h-10 pl-9 pr-4 bg-white rounded-xl text-xs font-semibold outline-none border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 w-full sm:w-60 shadow-sm placeholder:text-gray-400"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          {/* Sync Button */}
-          <button 
-            onClick={fetchData} 
-            className="h-10 w-10 bg-white border border-gray-200 hover:border-gray-300 rounded-xl hover:bg-gray-50 flex items-center justify-center transition-colors shadow-sm text-gray-500 hover:text-indigo-600 active:scale-95 shrink-0"
-            title="Sincronizar Dados"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
-
-        </div>
-      </div>
-
-      {/* 3. Cards Grid */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-3">
-          <div className="w-9 h-9 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
-          <p className="text-[10px] uppercase font-black tracking-widest text-gray-400 animate-pulse">Consultando Sinais de Satélite...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {activeTab === 'vehicles' && filteredVehicles.map(v => renderCard('vehicle', v))}
-          {activeTab === 'drivers' && filteredDrivers.map(d => renderCard('driver', d))}
-          {activeTab === 'baits' && filteredBaits.map(b => renderCard('bait', b))}
-          
-          {/* Empty States */}
-          {activeTab === 'vehicles' && filteredVehicles.length === 0 && (
-            <div className="col-span-full py-16 text-center bg-white border border-gray-200/70 rounded-2xl shadow-sm">
-              <div className="max-w-xs mx-auto space-y-2">
-                <Truck size={28} className="mx-auto text-gray-300" />
-                <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider">Frota Não Localizada</h4>
-                <p className="text-xs text-gray-400 font-semibold">Nenhum veículo corresponde à sua busca ou filtro aplicados.</p>
-              </div>
-            </div>
-          )}
-          {activeTab === 'drivers' && filteredDrivers.length === 0 && (
-            <div className="col-span-full py-16 text-center bg-white border border-gray-200/70 rounded-2xl shadow-sm">
-              <div className="max-w-xs mx-auto space-y-2">
-                <User size={28} className="mx-auto text-gray-300" />
-                <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider">Nenhum Motorista Encontrado</h4>
-                <p className="text-xs text-gray-400 font-semibold">Considere pesquisar por outros termos ou nomes.</p>
-              </div>
-            </div>
-          )}
-          {activeTab === 'baits' && filteredBaits.length === 0 && (
-            <div className="col-span-full py-16 text-center bg-white border border-gray-200/70 rounded-2xl shadow-sm">
-              <div className="max-w-xs mx-auto space-y-2">
-                <MapPin size={28} className="mx-auto text-gray-300" />
-                <h4 className="text-xs font-black text-gray-700 uppercase tracking-wider">Iscas Indisponíveis</h4>
-                <p className="text-xs text-gray-400 font-semibold">Nenhum localizador de carga registrado ou ativo no momento.</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Detail Modals */}
-      {selectedVehicle && (
-        <VehicleDetailsModal vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} />
-      )}
-
-      {selectedDriver && appSettings && (
-        <DriverRankingDetailsModal
-          driver={selectedDriver}
-          initialPeriodId="current"
-          closings={closings}
-          appSettings={appSettings}
-          onClose={() => setSelectedDriver(null)}
+        {/* MAP COMPONENT */}
+        <MonitoringMap
+          driverStates={driverStates}
+          selectedDriverId={selectedDriverId}
+          onSelectDriver={(id) => setSelectedDriverId(id)}
+          selectedTripMetrics={selectedTripMetrics}
+          isPlaybackPlaying={isPlaybackPlaying}
+          playbackIndex={playbackIndex}
+          showHeatmap={showHeatmap}
+          showClusters={showClusters}
         />
-      )}
 
-      {/* Manual Override Dialog */}
-      {editingVehicle && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100"
+        {/* BOTTOM RIGHT REFRESH BUTTON */}
+        <div className="absolute bottom-4 right-16 z-20">
+          <button
+            onClick={() => refetch()}
+            className="p-3 rounded-2xl bg-slate-900/90 text-slate-300 hover:text-white border border-slate-700/80 shadow-xl backdrop-blur-md transition hover:scale-105 active:scale-95 flex items-center gap-2 text-xs font-bold"
+            title="Recarregar dados"
           >
-            <div className="p-5 border-b border-gray-150 flex items-center justify-between bg-gray-50/50">
-              <h3 className="text-sm font-black text-gray-800 flex items-center gap-2 uppercase tracking-wider">
-                <Edit2 size={16} className="text-indigo-600" />
-                Ajuste Manual de Coordenadas
-              </h3>
-              <button 
-                onClick={() => setEditingVehicle(null)}
-                className="p-1.5 hover:bg-gray-150 rounded-full text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleManualSave} className="p-5 space-y-4">
-              <div className="bg-amber-50 border border-amber-200/80 p-3.5 rounded-xl text-amber-800 text-[11px] font-bold flex gap-2">
-                <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
-                <p>
-                  <strong>Ajuste Forçado:</strong> Modificar estas variáveis temporariamente suspenderá as atualizações coordenadas automáticas para a placa <strong>{editingVehicle.plate}</strong>.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Status de Operação</label>
-                <select 
-                  className="w-full h-11 px-3 rounded-xl border border-gray-250 bg-white text-xs font-bold outline-none focus:border-indigo-500 transition-all text-gray-800 cursor-pointer shadow-sm"
-                  value={editForm.manual_status}
-                  onChange={e => setEditForm({...editForm, manual_status: e.target.value})}
-                >
-                  <option value="">(Usar modo automático)</option>
-                  <option value="Em trânsito">Em trânsito</option>
-                  <option value="Viagem Concluída">Viagem Concluída</option>
-                  <option value="Aguardando Início">Aguardando Início</option>
-                  <option value="Em manutenção">Em manutenção</option>
-                  <option value="Disponível">Disponível</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Localização Declarada</label>
-                <input 
-                  type="text" 
-                  placeholder="Ex: Pátio Principal, SP ou Rota Br-116"
-                  className="w-full h-11 px-3.5 rounded-xl border border-gray-250 bg-white text-xs font-bold text-gray-800 outline-none focus:border-indigo-500 transition-all shadow-sm"
-                  value={editForm.manual_location}
-                  onChange={e => setEditForm({...editForm, manual_location: e.target.value})}
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditForm({ manual_location: '', manual_status: '' });
-                  }}
-                  className="flex-1 py-3 text-[10px] font-black text-gray-500 hover:text-gray-700 uppercase tracking-wider border border-gray-200 hover:bg-gray-50 rounded-xl transition-colors"
-                >
-                  Reverter Auto
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 py-3 text-[10px] font-black text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] rounded-xl uppercase tracking-widest shadow-md hover:shadow-lg transition-all flex justify-center items-center gap-1.5"
-                >
-                  {saving && <RefreshCw size={13} className="animate-spin" />}
-                  Confirmar
-                </button>
-              </div>
-            </form>
-          </motion.div>
+            <RefreshCw size={15} />
+            <span className="hidden sm:inline">Atualizar</span>
+          </button>
         </div>
-      )}
-
+      </div>
     </div>
   );
 }
