@@ -174,7 +174,21 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
 
     mapRef.current = map;
 
+    // ResizeObserver to handle map resize dynamically (essential for mobile drawers & sidebar toggles)
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    });
+    if (mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
     return () => {
+      if (mapContainerRef.current) {
+        resizeObserver.unobserve(mapContainerRef.current);
+      }
+      resizeObserver.disconnect();
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;

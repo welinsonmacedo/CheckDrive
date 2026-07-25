@@ -9,6 +9,8 @@ import {
   Navigation,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Filter,
   CheckCircle2,
   Calendar,
@@ -74,26 +76,64 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
   onResetPlayback,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
+
+  // Auto-expand mobile drawer if a driver is selected from the map
+  React.useEffect(() => {
+    if (selectedDriverId) {
+      setIsMobileExpanded(true);
+    }
+  }, [selectedDriverId]);
 
   return (
     <div
-      className={`relative h-full transition-all duration-300 ease-in-out z-10 flex flex-col bg-slate-900/95 backdrop-blur-2xl border-r border-slate-800 text-white shadow-2xl ${
-        isCollapsed ? "w-14" : "w-full md:w-96"
-      }`}
+      className={`fixed inset-x-0 bottom-0 z-30 md:relative md:inset-auto md:z-10 flex flex-col bg-slate-900/95 backdrop-blur-2xl border-t md:border-t-0 md:border-r border-slate-800 text-white shadow-2xl transition-all duration-300 rounded-t-3xl md:rounded-none overflow-hidden ${
+        // Desktop sizing
+        isCollapsed ? "md:w-14" : "md:w-96"
+      } ${
+        // Mobile sizing
+        isMobileExpanded ? "h-[80vh] md:h-full" : "h-16 md:h-full"
+      } w-full`}
     >
-      {/* Toggle Collapse Button */}
+      {/* Mobile Drag Handle */}
+      <div
+        onClick={() => setIsMobileExpanded(!isMobileExpanded)}
+        className="md:hidden w-full pt-2 pb-1 px-4 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800/40 shrink-0 select-none"
+      >
+        <div className="w-12 h-1.5 bg-slate-700 rounded-full mb-1" />
+        {!isMobileExpanded && (
+          <div className="w-full flex items-center justify-between text-xs py-0.5">
+            <div className="flex items-center gap-2 truncate">
+              <Users size={15} className="text-blue-400 shrink-0" />
+              <span className="font-bold text-white text-xs truncate">
+                Motoristas ({driverStates.length})
+              </span>
+              {selectedDriverState && (
+                <span className="text-[10px] bg-blue-600/30 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold truncate">
+                  {selectedDriverState.driver?.full_name || "Motorista"}
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] font-bold text-blue-400 flex items-center gap-1 shrink-0">
+              Ver Painel ▲
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Toggle Collapse Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3.5 top-6 z-50 w-7 h-7 rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white flex items-center justify-center shadow-lg transition"
+        className="hidden md:flex absolute -right-3.5 top-6 z-50 w-7 h-7 rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white items-center justify-center shadow-lg transition"
         title={isCollapsed ? "Expandir painel" : "Recolher painel"}
       >
         {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
 
-      {/* Collapsed view icon column */}
+      {/* Desktop Collapsed view icon column */}
       {isCollapsed ? (
-        <div className="flex flex-col items-center py-6 gap-6 text-slate-400">
+        <div className="hidden md:flex flex-col items-center py-6 gap-6 text-slate-400">
           <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center font-bold">
             <Radio size={20} className="animate-pulse" />
           </div>
@@ -105,30 +145,46 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
           </button>
         </div>
       ) : (
-        /* Expanded full panel */
-        <div className="flex flex-col h-full overflow-hidden">
+        /* Expanded full panel (Always visible on desktop when not collapsed, visible on mobile when expanded) */
+        <div className={`flex flex-col h-full overflow-hidden ${!isMobileExpanded ? "hidden md:flex" : "flex"}`}>
           {/* Header */}
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div className="p-3 sm:p-4 border-b border-slate-800 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+              <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30 shrink-0">
                 <Radio size={18} className="animate-pulse" />
               </div>
               <div>
-                <h1 className="text-sm font-black text-white tracking-wide">Monitoramento Vivo</h1>
-                <p className="text-[11px] text-slate-400 font-medium">Frota e Motoristas em Tempo Real</p>
+                <h1 className="text-sm font-black text-white tracking-wide leading-tight">
+                  Monitoramento Vivo
+                </h1>
+                <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium">
+                  Frota e Motoristas em Tempo Real
+                </p>
               </div>
             </div>
 
-            <button
-              onClick={() => setShowFiltersModal(!showFiltersModal)}
-              className={`p-2 rounded-xl border text-xs flex items-center gap-1.5 transition ${
-                filters.status !== "all" || filters.date !== new Date().toISOString().split("T")[0]
-                  ? "bg-blue-600/20 border-blue-500/50 text-blue-300 font-bold"
-                  : "bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
-              }`}
-            >
-              <SlidersHorizontal size={14} />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setShowFiltersModal(!showFiltersModal)}
+                className={`p-2 rounded-xl border text-xs flex items-center gap-1.5 transition ${
+                  filters.status !== "all" || filters.date !== new Date().toISOString().split("T")[0]
+                    ? "bg-blue-600/20 border-blue-500/50 text-blue-300 font-bold"
+                    : "bg-slate-800 border-slate-700 text-slate-400 hover:text-white"
+                }`}
+                title="Filtros"
+              >
+                <SlidersHorizontal size={14} />
+              </button>
+
+              {/* Mobile collapse button */}
+              <button
+                onClick={() => setIsMobileExpanded(false)}
+                className="md:hidden p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-white"
+                title="Fechar painel"
+              >
+                <ChevronDown size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Search & Quick Status Filters */}

@@ -47,8 +47,8 @@ export default function TrackingTab() {
   }
 
   return (
-    <div className="relative w-full h-[calc(100vh-90px)] min-h-[600px] bg-slate-950 rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl flex flex-col md:flex-row">
-      {/* LEFT FLOATING SIDEBAR */}
+    <div className="relative w-full h-[calc(100vh-110px)] sm:h-[calc(100vh-90px)] min-h-[500px] sm:min-h-[600px] bg-slate-950 rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl flex flex-col md:flex-row">
+      {/* LEFT FLOATING SIDEBAR / MOBILE BOTTOM SHEET */}
       <DriverSidebar
         driverStates={driverStates}
         selectedDriverId={selectedDriverId}
@@ -73,7 +73,7 @@ export default function TrackingTab() {
       {/* RIGHT MAIN MAP AREA */}
       <div className="relative flex-1 h-full w-full overflow-hidden">
         {/* TOP FLOATING DASHBOARD & ALERTS BAR */}
-        <div className="absolute top-3 left-3 right-3 z-20 pointer-events-auto max-w-7xl mx-auto">
+        <div className="absolute top-2 sm:top-3 left-2 sm:left-3 right-2 sm:right-3 z-20 pointer-events-auto max-w-7xl mx-auto">
           <TrackingDashboard
             metrics={dashboardMetrics}
             alerts={alerts}
@@ -97,14 +97,14 @@ export default function TrackingTab() {
           showClusters={showClusters}
         />
 
-        {/* BOTTOM RIGHT REFRESH BUTTON */}
-        <div className="absolute bottom-4 right-16 z-20">
+        {/* REFRESH BUTTON - Positioned safely above mobile drawer bar */}
+        <div className="absolute bottom-20 md:bottom-4 right-3 md:right-16 z-20">
           <button
             onClick={() => refetch()}
-            className="p-3 rounded-2xl bg-slate-900/90 text-slate-300 hover:text-white border border-slate-700/80 shadow-xl backdrop-blur-md transition hover:scale-105 active:scale-95 flex items-center gap-2 text-xs font-bold"
+            className="p-2.5 sm:p-3 rounded-2xl bg-slate-900/90 text-slate-300 hover:text-white border border-slate-700/80 shadow-xl backdrop-blur-md transition hover:scale-105 active:scale-95 flex items-center gap-2 text-xs font-bold"
             title="Recarregar dados"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={14} className="shrink-0" />
             <span className="hidden sm:inline">Atualizar</span>
           </button>
         </div>
