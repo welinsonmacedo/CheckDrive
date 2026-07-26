@@ -106,8 +106,8 @@ export default function LandingPage() {
       answer: "O CheckDrive é um ecossistema modular: O Painel Admin é voltado para gestores (frotas, relatórios, custos e IA). O Aplicativo Motorista e Pátio é utilizado no dia a dia pelos condutores e vistoriadores para realizar checklists, registrar avarias e controlar odômetro/horímetro. O Aplicativo Reserva é exclusivo para colaboradores agendarem e solicitarem uso de veículos da frota corporativa.",
     },
     {
-      question: "Como funciona a tecnologia PWA (Offline-First)?",
-      answer: "PWA (Progressive Web App) permite que os aplicativos sejam instalados diretamente em smartphones Android e iOS sem depender de lojas de aplicativos. Toda a operação funciona 100% offline: inspeções, fotos e leituras de KM/Horímetro são salvas no aparelho e sincronizadas automaticamente com a nuvem assim que houver sinal de internet.",
+      question: "Como funciona a tecnologia PWA e a contingência quando o app APK não funciona?",
+      answer: "O PWA (Progressive Web App) do CheckDrive funciona como uma aplicação web instalável e de contingência imediata: se o aplicativo nativo (APK) apresentar falhas, incompatibilidade ou não estiver instalado no smartphone do motorista ou colaborador, basta acessar o link web no navegador para abrir o App Reserva/Checklist instantaneamente. Toda a operação funciona 100% offline, salvando dados localmente até que haja conexão.",
     },
     {
       question: "O CheckDrive suporta máquinas pesadas e equipamentos industriais?",
@@ -249,7 +249,7 @@ export default function LandingPage() {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="mt-6 text-base sm:text-lg text-zinc-300 max-w-3xl mx-auto leading-relaxed font-normal"
             >
-              Integração completa em um único lugar: **Painel Admin**, **Aplicativo Motorista e Pátio**, **Aplicativo Reserva** e tecnologia **PWA Offline-First** com Inteligência Artificial para controle de Veículos, Máquinas e Equipamentos.
+              Integração completa em um único lugar: **Painel Admin**, **Aplicativo Motorista e Pátio**, **Aplicativo Reserva** e **App PWA de Reserva/Contingência** (para uso imediato via navegador sempre que o app APK nativo não funcionar ou estiver indisponível).
             </motion.p>
 
             {/* CTAs */}
@@ -603,28 +603,28 @@ export default function LandingPage() {
               >
                 <div className="space-y-4">
                   <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider inline-block">
-                    Tecnologia PWA (Offline-First)
+                    Contingência & Acesso Web Imediato
                   </span>
-                  <h4 className="text-2xl font-black text-white">Instalação Fácil & Funcionamento Offline</h4>
+                  <h4 className="text-2xl font-black text-white">App PWA Reserva & Backup do APK</h4>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Com tecnologia PWA (Progressive Web App), o motorista ou operador pode instalar o aplicativo direto no celular sem precisar acessar a Google Play Store ou Apple App Store. Funciona sem internet em fazendas, minas e rodovias sem sinal.
+                    Desenvolvido com tecnologia PWA (Progressive Web App) para servir de suporte instantâneo: caso o aplicativo nativo (APK) não funcione, trave ou não esteja instalado no celular do motorista/operador, ele pode abrir o PWA Reserva via navegador para realizar solicitações e checklists sem paralisação da operação.
                   </p>
                   <ul className="space-y-2 text-xs text-zinc-300">
-                    <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-amber-400" /> Zero dependência de sinal de internet no campo</li>
-                    <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-amber-400" /> Instalação instantânea com 1 clique no navegador</li>
-                    <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-amber-400" /> Sincronização automática em background</li>
+                    <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-amber-400" /> Contingência imediata quando o aplicativo APK falhar</li>
+                    <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-amber-400" /> Acesso instantâneo no navegador sem precisar baixar APK</li>
+                    <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-amber-400" /> Sincronização offline e salvamento automático local</li>
                   </ul>
                 </div>
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 space-y-3 font-mono text-xs">
                   <div className="text-amber-400 font-bold border-b border-zinc-800 pb-2 flex justify-between">
-                    <span>MODO OFFLINE PWA</span>
-                    <span className="text-amber-400">SEM SINAL</span>
+                    <span>APP PWA CONTINGÊNCIA</span>
+                    <span className="text-emerald-400">PRONTO PARA USO</span>
                   </div>
                   <div className="text-zinc-300 py-1">
-                    [PWA Storage] 4 Checklists salvos localmente
+                    [Status APK] Instabilidade detectada ou dispositivo incompatível
                   </div>
-                  <div className="text-emerald-400 py-1 font-bold">
-                    ✓ Sinal Detectado: Sincronizando dados com o servidor...
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 font-sans text-xs">
+                    ⚡ <strong>Modo PWA Reserva Ativado:</strong> Vistoria e Agendamento concluídos com sucesso via Web PWA!
                   </div>
                 </div>
               </motion.div>
