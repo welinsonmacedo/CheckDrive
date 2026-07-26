@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
+import { logSystemAudit } from "@/src/lib/systemAuditService";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -98,6 +99,12 @@ export default function Login() {
       if (newAttempts >= 5) {
         setLockedUntil(Date.now() + 60000); // lock for 1 minute
         setError("Muitas tentativas falsas. Acesso bloqueado por 1 minuto.");
+        logSystemAudit({
+          module: "Autenticação",
+          action: "BLOQUEAR",
+          user_email: authEmail,
+          reason: `Acesso bloqueado por 1 minuto devido a 5 tentativas incorretas de login para [${authEmail}].`,
+        });
       } else {
         setError("E-mail ou senha inválidos.");
       }
@@ -108,6 +115,13 @@ export default function Login() {
     } else {
       setLoginAttempts(0);
       setLockedUntil(null);
+      logSystemAudit({
+        user_id: data.user.id,
+        user_email: data.user.email || authEmail,
+        module: "Autenticação",
+        action: "LOGIN",
+        reason: `Usuário [${data.user.email || authEmail}] realizou login no sistema.`,
+      });
     }
   };
 

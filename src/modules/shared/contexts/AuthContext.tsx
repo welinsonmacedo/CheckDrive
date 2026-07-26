@@ -1,6 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { User, Role } from "@/src/modules/shared/types";
+import { logSystemAudit } from "@/src/lib/systemAuditService";
 
 export interface AuthContextType {
   user: User | null;
@@ -235,6 +236,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user?.id, user?.name, user?.role]);
 
   const logout = async () => {
+    logSystemAudit({
+      company_id: user?.company_id,
+      module: "Autenticação",
+      action: "LOGOUT",
+      reason: `Sessão encerrada pelo usuário [${user?.name || user?.email}].`,
+    });
     await supabase.auth.signOut().catch(() => {});
     setUser(null);
     localStorage.removeItem("checkdrive_last_visited_path");

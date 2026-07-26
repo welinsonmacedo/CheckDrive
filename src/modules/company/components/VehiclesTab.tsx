@@ -4,6 +4,7 @@ import { CheckCircle2, Search, X, Eye, Plus, ChevronLeft, ChevronRight, Edit2, F
 import VehicleDetailsModal from "@/src/modules/company/components/VehicleDetailsModal";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import { exportVehiclesToExcel, exportVehiclesToPDF } from "@/src/utils/exportVehicleCatalog";
+import { logSystemAudit } from "@/src/lib/systemAuditService";
 
 export default function VehiclesTab() {
   const { user } = useAuth();
@@ -139,9 +140,27 @@ export default function VehiclesTab() {
       if (itemForm.id) {
         const { error } = await supabase.from(formType === "trailer" ? "trailers" : "vehicles").update(payload).eq("id", itemForm.id);
         if (error) throw error;
+        logSystemAudit({
+          company_id: user?.company_id,
+          module: "Ativos",
+          entity: formType === "trailer" ? "trailers" : "vehicles",
+          entity_id: itemForm.id,
+          action: "EDITAR",
+          new_value: payload,
+          reason: `Ativo/Veículo [${payload.plate}] editado.`,
+        });
       } else {
-        const { error } = await supabase.from(formType === "trailer" ? "trailers" : "vehicles").insert([payload]);
+        const { data: inserted, error } = await supabase.from(formType === "trailer" ? "trailers" : "vehicles").insert([payload]).select("id").maybeSingle();
         if (error) throw error;
+        logSystemAudit({
+          company_id: user?.company_id,
+          module: "Ativos",
+          entity: formType === "trailer" ? "trailers" : "vehicles",
+          entity_id: inserted?.id,
+          action: "CRIAR",
+          new_value: payload,
+          reason: `Novo Ativo/Veículo [${payload.plate}] cadastrado.`,
+        });
       }
 
       setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" });
@@ -170,6 +189,16 @@ export default function VehiclesTab() {
       }
       const { error } = await supabase.from(table).update({ active: !currentStatus }).eq("id", id);
       if (error) throw error;
+      logSystemAudit({
+        company_id: user?.company_id,
+        module: "Ativos",
+        entity: table,
+        entity_id: id,
+        action: currentStatus ? "EXCLUIR" : "RESTAURAR",
+        old_value: { active: currentStatus },
+        new_value: { active: !currentStatus },
+        reason: `Ativo ID [${id}] na tabela [${table}] foi ${currentStatus ? "desabilitado (excluído)" : "reativado (restaurado)"}.`,
+      });
       fetchData();
     } catch (error: any) {
       alert("Erro ao alterar status: " + error.message);

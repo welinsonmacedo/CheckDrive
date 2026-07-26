@@ -3,6 +3,7 @@ import { supabase } from "@/src/lib/supabase";
 import { createClient } from "@supabase/supabase-js";
 import { CheckCircle2, Search, X, Plus, Key, ChevronLeft, ChevronRight, Edit2, User } from "lucide-react";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
+import { logSystemAudit } from "@/src/lib/systemAuditService";
 
 export default function DriversTab() {
   const { user } = useAuth();
@@ -144,7 +145,6 @@ export default function DriversTab() {
 
         if (error) {
           console.error("Update Error in DriversTab:", error);
-          // fallback if CNH/photo columns don't exist yet
           const { error: fallbackError } = await supabase
             .from("profiles")
             .update({
@@ -163,6 +163,16 @@ export default function DriversTab() {
              throw fallbackError;
           }
         }
+
+        logSystemAudit({
+          company_id: user?.company_id,
+          module: "Motoristas",
+          entity: "profiles",
+          entity_id: userForm.id,
+          action: "EDITAR",
+          new_value: updatePayload,
+          reason: `Motorista [${parsedName}] teve seu cadastro atualizado.`,
+        });
       } else {
         const isAllowed = await checkUserLimit();
         if (!isAllowed) {
@@ -170,7 +180,6 @@ export default function DriversTab() {
           return;
         }
 
-        // Use a temporary client to avoid logging out the current user
         const tempClient = createClient(
           import.meta.env.VITE_SUPABASE_URL,
           import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -214,32 +223,20 @@ export default function DriversTab() {
                 company_id: user?.company_id || null,
                 ...updatePayload,
               },
-              { onConflict: "id" },
+              { onConflict: "id" }
             );
 
           if (profileError) {
-            console.warn(
-              "Could not upsert profile directly (possibly RLS or missing columns)",
-              profileError,
-            );
-
-            const { error: fallbackError } = await supabase
-              .from("profiles")
-              .update({
-                full_name: parsedName,
-                cpf: userForm.cpf || null,
-                role: userForm.role,
-                driver_type: userForm.driverType,
-                participates_in_ranking: userForm.participatesInRanking,
-                modality_ids: userForm.modalityIds,
-                score_profile_id: userForm.scoreProfileId || null,
-              })
-              .eq("id", data.user.id);
-              
-            if (fallbackError) {
-               console.error("Fallback Insert Error:", fallbackError);
-               throw fallbackError;
-            }
+            console.warn("Could not upsert profile directly, trying fallback:", profileError);
+            await supabase.from("profiles").update({
+              full_name: parsedName,
+              cpf: userForm.cpf || null,
+              role: userForm.role,
+              driver_type: userForm.driverType,
+              participates_in_ranking: userForm.participatesInRanking,
+              modality_ids: userForm.modalityIds,
+              score_profile_id: userForm.scoreProfileId || null,
+            }).eq("id", data.user.id);
           }
 
           if (userForm.role === "driver" && userForm.participatesInRanking) {
@@ -247,9 +244,19 @@ export default function DriversTab() {
               .from("driver_performance")
               .upsert(
                 { driver_id: data.user.id, score: 1000 },
-                { onConflict: "driver_id" },
+                { onConflict: "driver_id" }
               );
           }
+
+          logSystemAudit({
+            company_id: user?.company_id,
+            module: "Motoristas",
+            entity: "profiles",
+            entity_id: data.user.id,
+            action: "CRIAR",
+            new_value: { email: emailToUse, name: parsedName, ...updatePayload },
+            reason: `Novo motorista [${parsedName}] foi cadastrado.`,
+          });
         }
       }
 
@@ -307,6 +314,13 @@ export default function DriversTab() {
         redirectTo: window.location.origin + "/reset-password",
       });
       if (error) throw error;
+      logSystemAudit({
+        company_id: user?.company_id,
+        module: "Motoristas",
+        entity: "profiles",
+        action: "RESET_SENHA",
+        reason: `Solicitada redefinição de senha para o e-mail [${email}].`,
+      });
       alert(`E-mail de redefinição enviado para ${email}.`);
     } catch (error: any) {
       console.error("Reset password error:", error);
@@ -377,6 +391,17 @@ export default function DriversTab() {
         .eq("id", id);
 
       if (error) throw error;
+
+      logSystemAudit({
+        company_id: user?.company_id,
+        module: "Motoristas",
+        entity: "profiles",
+        entity_id: id,
+        action: currentStatus ? "EXCLUIR" : "RESTAURAR",
+        old_value: { active: currentStatus },
+        new_value: { active: !currentStatus },
+        reason: `Motorista ID [${id}] foi ${currentStatus ? "desabilitado (excluído)" : "reativado (restaurado)"}.`,
+      });
 
       fetchUsers();
     } catch (error: any) {

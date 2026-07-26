@@ -437,12 +437,12 @@ export default function AdminDashboard() {
       label: "Relatório Gerencial",
       color: "from-indigo-600 to-blue-600",
     },
-    ...(user?.role === "admin"
+    ...(user?.role === "admin" || (user as any)?.permissions?.includes("AUDIT_VIEW") || (user as any)?.permissions?.includes("audit_view")
       ? [
           {
             id: "audit",
             icon: History,
-            label: "Auditoria",
+            label: "Auditoria Alterações Sistema",
             color: "from-slate-500 to-gray-500",
           },
         ]
@@ -913,7 +913,7 @@ export default function AdminDashboard() {
               )}
             </div>
             <div className={activeTab === "audit" ? "block h-full animate-fadeIn" : "hidden"}>
-              {visitedTabs.has("audit") && user?.role === "admin" && <AuditTab appSettings={appSettings} />}
+              {visitedTabs.has("audit") && (user?.role === "admin" || (user as any)?.permissions?.includes("AUDIT_VIEW") || (user as any)?.permissions?.includes("audit_view")) && <AuditTab appSettings={appSettings} />}
             </div>
             <div className={activeTab === "feedback" ? "block h-full animate-fadeIn" : "hidden"}>
               {visitedTabs.has("feedback") && user?.role === "admin" && <FeedbackTab />}

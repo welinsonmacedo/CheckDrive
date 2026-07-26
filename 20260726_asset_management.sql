@@ -90,4 +90,42 @@ BEGIN
         END IF;
     END IF;
 
+    -- 6. Suporte a tabela dedicada de Auditoria de Sistema (system_audit_logs)
+    -- Mantém a tabela audit_logs intacta para uso exclusivo de pontuação/penalidades de motoristas
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='system_audit_logs') THEN
+        CREATE TABLE public.system_audit_logs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_id UUID,
+            user_id UUID,
+            user_name TEXT,
+            user_email TEXT,
+            user_role TEXT,
+            module TEXT,
+            entity TEXT,
+            entity_id TEXT,
+            action TEXT,
+            field_changed TEXT,
+            old_value JSONB,
+            new_value JSONB,
+            ip_address TEXT,
+            user_agent TEXT,
+            type TEXT DEFAULT 'system_action',
+            reason TEXT,
+            created_at TIMESTAMPTZ DEFAULT now()
+        );
+
+        -- Habilitar RLS em system_audit_logs
+        ALTER TABLE public.system_audit_logs ENABLE ROW LEVEL SECURITY;
+
+        CREATE POLICY "Permitir leitura de auditoria por empresa" ON public.system_audit_logs
+            FOR SELECT USING (
+                auth.uid() IS NOT NULL
+            );
+
+        CREATE POLICY "Permitir inserção de auditoria" ON public.system_audit_logs
+            FOR INSERT WITH CHECK (
+                auth.uid() IS NOT NULL
+            );
+    END IF;
+
 END $$;
