@@ -68,13 +68,22 @@ BEGIN
         END IF;
     END IF;
 
-    -- 5. Suporte a vinculação de tipo de veículo em itens de checklist
+    -- 5. Suporte a vinculação de tipo de veículo em itens de checklist e limites em app_settings
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='checklist_items') THEN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='checklist_items' AND column_name='vehicle_type') THEN
             ALTER TABLE public.checklist_items ADD COLUMN vehicle_type TEXT DEFAULT 'ALL';
         END IF;
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='checklist_items' AND column_name='vehicle_type_id') THEN
             ALTER TABLE public.checklist_items ADD COLUMN vehicle_type_id UUID DEFAULT NULL;
+        END IF;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='app_settings') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='app_settings' AND column_name='max_hours') THEN
+            ALTER TABLE public.app_settings ADD COLUMN max_hours NUMERIC DEFAULT 100;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='app_settings' AND column_name='hours_limit_enabled') THEN
+            ALTER TABLE public.app_settings ADD COLUMN hours_limit_enabled BOOLEAN DEFAULT false;
         END IF;
     END IF;
 

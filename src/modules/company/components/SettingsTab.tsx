@@ -38,7 +38,7 @@ export default function SettingsTab({
 }: SettingsTabProps) {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = usePersistentState<
-    "global" | "profiles" | "vehicles" | "manual_penalties" | "integrations" | "company"
+    "global" | "app" | "profiles" | "vehicles" | "manual_penalties" | "integrations" | "company"
   >("settings_activeTab", "global");
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
 
@@ -59,6 +59,8 @@ export default function SettingsTab({
            require_location: appSettings.require_location,
            km_limit_enabled: appSettings.km_limit_enabled,
            max_km_limit: appSettings.max_km_limit,
+           hours_limit_enabled: appSettings.hours_limit_enabled,
+           max_hours: appSettings.max_hours,
            manual_checklist_activate: appSettings.manual_checklist_activate ?? true,
         })
         .eq("id", appSettings.id);
@@ -94,6 +96,12 @@ export default function SettingsTab({
       label: "Sistema & Global",
       icon: Settings,
       desc: "Preferências do aplicativo",
+    },
+    {
+      id: "app",
+      label: "APP",
+      icon: Smartphone,
+      desc: "Regras do Checklist no App",
     },
     {
       id: "profiles",
@@ -209,26 +217,10 @@ export default function SettingsTab({
             </div>
 
             <form onSubmit={handleSaveSettings} className="space-y-8">
-              {sqlError && (
-                <div className="bg-white p-6 rounded-3xl border border-app-border shadow-sm mb-4">
-                   <h3 className="text-sm font-black text-danger uppercase tracking-tight mb-2">Atenção!</h3>
-                   <p className="text-sm text-zinc-600 mb-4">Para poder salvar as configurações, precisamos adicionar as colunas necessárias no Supabase. Copie o SQL abaixo e cole no painel do Supabase:</p>
-                   <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl overflow-x-auto text-xs font-mono text-zinc-600">
-                     <pre>
-{`ALTER TABLE public.app_settings 
-ADD COLUMN IF NOT EXISTS km_limit_enabled BOOLEAN DEFAULT false,
-ADD COLUMN IF NOT EXISTS max_km_limit NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS manual_checklist_activate BOOLEAN DEFAULT true;`}
-                     </pre>
-                   </div>
-                   <button type="button" onClick={() => setSqlError(null)} className="mt-4 px-4 py-2 bg-zinc-200 text-zinc-700 rounded-lg text-sm font-bold">Voltar</button>
-                </div>
-              )}
-
               {/* Geral Card */}
               <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm">
                 <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 border-b border-zinc-100 pb-4 mb-6 flex items-center gap-2">
-                  <Smartphone size={16} className="text-primary" />
+                  <Settings size={16} className="text-primary" />
                   Comportamento
                 </h3>
 
@@ -271,11 +263,54 @@ ADD COLUMN IF NOT EXISTS manual_checklist_activate BOOLEAN DEFAULT true;`}
                 </div>
               </div>
 
+              <div className="pt-4 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="w-full sm:w-auto px-8 h-12 bg-primary text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-xl shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Save size={16} />
+                  Salvar Preferências
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : activeTab === "app" ? (
+          <div className="space-y-6">
+            <div className="mb-6">
+              <h2 className="text-2xl font-black text-zinc-800 tracking-tight flex items-center gap-2">
+                <Smartphone className="text-primary" size={24} />
+                Regras do APP
+              </h2>
+              <p className="text-sm font-bold text-zinc-500 tracking-wider uppercase mt-1">
+                Regras e restrições de checklist no aplicativo
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveSettings} className="space-y-8">
+              {sqlError && (
+                <div className="bg-white p-6 rounded-3xl border border-app-border shadow-sm mb-4">
+                   <h3 className="text-sm font-black text-danger uppercase tracking-tight mb-2">Atenção!</h3>
+                   <p className="text-sm text-zinc-600 mb-4">Para poder salvar as configurações, precisamos adicionar as colunas necessárias no Supabase. Copie o SQL abaixo e cole no painel do Supabase:</p>
+                   <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-xl overflow-x-auto text-xs font-mono text-zinc-600">
+                     <pre>
+{`ALTER TABLE public.app_settings 
+ADD COLUMN IF NOT EXISTS km_limit_enabled BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS max_km_limit NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS hours_limit_enabled BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS max_hours NUMERIC DEFAULT 100,
+ADD COLUMN IF NOT EXISTS manual_checklist_activate BOOLEAN DEFAULT true;`}
+                     </pre>
+                   </div>
+                   <button type="button" onClick={() => setSqlError(null)} className="mt-4 px-4 py-2 bg-zinc-200 text-zinc-700 rounded-lg text-sm font-bold">Voltar</button>
+                </div>
+              )}
+
               {/* Checklists Card */}
               <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm">
                 <h3 className="text-xs font-black uppercase tracking-widest text-zinc-800 border-b border-zinc-100 pb-4 mb-6 flex items-center gap-2">
                   <CheckCircle2 size={16} className="text-primary" />
-                  Regras de Checklist
+                  Regras de Checklist no App
                 </h3>
 
                 <div className="space-y-4">
@@ -461,6 +496,69 @@ ADD COLUMN IF NOT EXISTS manual_checklist_activate BOOLEAN DEFAULT true;`}
                     )}
                   </div>
 
+                  {/* Row 4.5: Hours Limit (Horímetro) */}
+                  <div className="flex flex-col p-4 rounded-2xl bg-zinc-50 border border-zinc-100 hover:border-primary/20 transition-colors group">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 group-hover:text-primary transition-colors shrink-0">
+                          <Gauge size={18} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-zinc-800">
+                            Habilitar Limite de Horas / Horímetro (Máquinas)
+                          </h4>
+                          <p className="text-[11px] text-zinc-500 mt-1 max-w-sm leading-relaxed">
+                            Restringir o intervalo máximo de horas/horímetro informado em máquinas e equipamentos em relação ao registro anterior.
+                          </p>
+                        </div>
+                      </div>
+                      <label className="flex items-center cursor-pointer shrink-0">
+                        <div className="relative">
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={appSettings?.hours_limit_enabled ?? false}
+                            onChange={(e) =>
+                              setAppSettings({
+                                ...appSettings,
+                                hours_limit_enabled: e.target.checked,
+                              })
+                            }
+                          />
+                          <div
+                            className={`block w-12 h-7 rounded-full shadow-inner transition-colors ${appSettings?.hours_limit_enabled ? "bg-primary" : "bg-zinc-300"}`}
+                          ></div>
+                          <div
+                            className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${appSettings?.hours_limit_enabled ? "transform translate-x-5" : ""}`}
+                          ></div>
+                        </div>
+                      </label>
+                    </div>
+
+                    {appSettings?.hours_limit_enabled && (
+                      <div className="mt-4 pt-4 border-t border-zinc-200 ml-14">
+                        <label className="block text-xs font-bold text-zinc-700 uppercase tracking-widest mb-2">
+                          Limite em Horas (Intervalo Máximo de Horímetro)
+                        </label>
+                        <input
+                          type="number"
+                          className="w-full sm:w-1/2 p-3 bg-white border border-zinc-200 rounded-xl focus:ring-1 focus:ring-primary focus:border-primary text-sm"
+                          placeholder="Ex: 100"
+                          value={appSettings?.max_hours || ""}
+                          onChange={(e) =>
+                            setAppSettings({
+                              ...appSettings,
+                              max_hours: parseInt(e.target.value) || 0,
+                            })
+                          }
+                        />
+                        <p className="text-[10px] text-zinc-500 mt-2">
+                          O operador não poderá registrar um horímetro maior que (Horímetro Anterior + Limite).
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Row 5: Checklist Manual */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-2xl bg-zinc-50 border border-zinc-100 hover:border-primary/20 transition-colors group">
                     <div className="flex items-center gap-4 mb-4 sm:mb-0">
@@ -508,7 +606,7 @@ ADD COLUMN IF NOT EXISTS manual_checklist_activate BOOLEAN DEFAULT true;`}
                   className="w-full sm:w-auto px-8 h-12 bg-primary text-white font-black text-[11px] uppercase tracking-[0.2em] rounded-xl shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <Save size={16} />
-                  Salvar Preferências
+                  Salvar Regras do APP
                 </button>
               </div>
             </form>

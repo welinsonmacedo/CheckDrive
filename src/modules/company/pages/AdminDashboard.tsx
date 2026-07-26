@@ -256,6 +256,8 @@ export default function AdminDashboard() {
            require_location: false,
            km_limit_enabled: false,
            max_km_limit: 500,
+           hours_limit_enabled: false,
+           max_hours: 100,
            manual_checklist_activate: true
          }).select().single();
          settings = newSettings;

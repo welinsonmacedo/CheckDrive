@@ -88,6 +88,10 @@ export default function ChecklistFlow() {
     enabled: false,
     maxDistance: 0,
   });
+  const [hoursLimitSettings, setHoursLimitSettings] = useState({
+    enabled: false,
+    maxHours: 100,
+  });
 
   const [dataRestored, setDataRestored] = useState(false);
 
@@ -457,6 +461,12 @@ export default function ChecklistFlow() {
           maxDistance: settingsRes.data.max_km_limit
             ? Number(settingsRes.data.max_km_limit)
             : 0,
+        });
+        setHoursLimitSettings({
+          enabled: settingsRes.data.hours_limit_enabled === true,
+          maxHours: settingsRes.data.max_hours
+            ? Number(settingsRes.data.max_hours)
+            : 100,
         });
       }
 
