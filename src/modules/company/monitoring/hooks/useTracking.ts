@@ -11,6 +11,7 @@ import {
 import {
   fetchInitialData,
   fetchTripHistory,
+  fetchDriverProfile,
   parseSpeedKmh,
   determineDriverStatus,
   formatRelativeTime,
@@ -84,7 +85,24 @@ export function useTracking() {
         const driverId = newLoc.driver_id;
         if (!driverId) return prevStates;
 
-        const driverInfo = driversMapRef.current.get(driverId);
+        let driverKey = driverId.trim().toLowerCase();
+        let driverInfo = driversMapRef.current.get(driverKey) || driversMapRef.current.get(driverId);
+        if (!driverInfo || !driverInfo.full_name || driverInfo.full_name === "Motorista") {
+          fetchDriverProfile(driverId).then((dp) => {
+            if (dp) {
+              driversMapRef.current.set(driverKey, dp);
+              setDriverStates((prev) =>
+                prev.map((s) => (s.driver_id.trim().toLowerCase() === driverKey ? { ...s, driver: dp } : s))
+              );
+            }
+          });
+          if (!driverInfo) {
+            driverInfo = {
+              id: driverId,
+              full_name: "Motorista",
+            };
+          }
+        }
         const vehicleInfo = newLoc.vehicle_id
           ? vehiclesMapRef.current.get(newLoc.vehicle_id)
           : undefined;

@@ -10,6 +10,28 @@ import {
 
 export const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
+export function formatDriverName(rawName?: string | null, email?: string | null): string {
+  if (rawName && typeof rawName === "string") {
+    const trimmed = rawName.trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+    const isIdFallback = /^Motorista\s*\([0-9a-fA-Z-]+\)$/i.test(trimmed);
+
+    if (!isUuid && !isIdFallback && trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+
+  if (email && typeof email === "string" && email.includes("@")) {
+    const prefix = email.split("@")[0].replace(/[._-]/g, " ");
+    const words = prefix.split(" ").filter(Boolean);
+    if (words.length > 0) {
+      return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    }
+  }
+
+  return "Motorista";
+}
+
 export function parseSpeedKmh(rawSpeed: number | null | undefined): number {
   if (rawSpeed == null || isNaN(rawSpeed) || rawSpeed <= 0) return 0;
   // If speed is likely in m/s (Android Location.getSpeed() returns meters/second)
@@ -54,40 +76,213 @@ export function formatRelativeTime(createdAtIso: string): string {
   return `há ${diffDays} d`;
 }
 
-export async function fetchInitialData(companyId: string) {
+export async function fetchDriverProfile(driverId: string): Promise<DriverInfo | null> {
   try {
-    // 1. Fetch drivers & vehicles for mapping
-    const [driversRes, vehiclesRes] = await Promise.all([
+    const cleanId = driverId.trim().toLowerCase();
+    const [profRes, driverRes] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, full_name, avatar_url, cpf, phone, company_id")
-        .eq("company_id", companyId)
-        .eq("role", "driver"),
+        .select("*")
+        .eq("id", driverId)
+        .maybeSingle(),
       supabase
-        .from("vehicles")
-        .select("id, plate, model, type, company_id")
-        .eq("company_id", companyId),
+        .from("drivers")
+        .select("*")
+        .eq("id", driverId)
+        .maybeSingle(),
     ]);
 
+    const pData = profRes.data;
+    const dData = driverRes.data;
+
+    const rawName = pData?.full_name || (pData as any)?.name || dData?.name || (dData as any)?.full_name;
+    const email = pData?.email || dData?.email;
+    const name = formatDriverName(rawName, email);
+
+    return {
+      id: driverId,
+      full_name: name,
+      avatar_url: pData?.photo_url || pData?.avatar_url || dData?.photo_url,
+      cpf: pData?.cpf || dData?.cpf,
+      phone: pData?.phone || dData?.phone,
+      company_id: pData?.company_id || dData?.company_id,
+    };
+  } catch (e) {
+    console.error("fetchDriverProfile error:", e);
+  }
+  return null;
+}
+
+export async function fetchInitialData(companyId: string) {
+  try {
+    // 1. Fetch drivers from profiles & drivers tables as well as vehicles
+    const [profilesRes, driversTableRes, vehiclesRes] = await Promise.all([
+      companyId
+        ? supabase
+            .from("profiles")
+            .select("*")
+            .or(`company_id.eq.${companyId},role.eq.driver`)
+        : supabase
+            .from("profiles")
+            .select("*"),
+      companyId
+        ? supabase
+            .from("drivers")
+            .select("*")
+            .eq("company_id", companyId)
+        : supabase
+            .from("drivers")
+            .select("*"),
+      companyId
+        ? supabase
+            .from("vehicles")
+            .select("*")
+            .eq("company_id", companyId)
+        : supabase
+            .from("vehicles")
+            .select("*"),
+    ]);
+
+    let profilesList = profilesRes.data || [];
+    if (profilesList.length === 0) {
+      const fallbackProfiles = await supabase.from("profiles").select("*");
+      profilesList = fallbackProfiles.data || [];
+    }
+
+    let driversList = driversTableRes.data || [];
+    if (driversList.length === 0) {
+      const fallbackDrivers = await supabase.from("drivers").select("*");
+      driversList = fallbackDrivers.data || [];
+    }
+
     const driversMap = new Map<string, DriverInfo>();
-    (driversRes.data || []).forEach((d) => driversMap.set(d.id, d));
+
+    profilesList.forEach((d: any) => {
+      if (!d.id) return;
+      const key = d.id.trim().toLowerCase();
+      const rawName = d.full_name || d.name;
+      const name = formatDriverName(rawName, d.email);
+      driversMap.set(key, {
+        id: d.id,
+        full_name: name,
+        avatar_url: d.photo_url || d.avatar_url,
+        cpf: d.cpf,
+        phone: d.phone,
+        company_id: d.company_id,
+      });
+    });
+
+    driversList.forEach((d: any) => {
+      if (!d.id) return;
+      const key = d.id.trim().toLowerCase();
+      const existing = driversMap.get(key);
+      const rawName = d.name || d.full_name;
+      const name = formatDriverName(rawName, d.email);
+      if (!existing || existing.full_name === "Motorista") {
+        driversMap.set(key, {
+          id: d.id,
+          full_name: name,
+          avatar_url: d.photo_url || d.avatar_url || existing?.avatar_url,
+          cpf: d.cpf || existing?.cpf,
+          phone: d.phone || existing?.phone,
+          company_id: d.company_id || existing?.company_id,
+        });
+      }
+    });
 
     const vehiclesMap = new Map<string, VehicleInfo>();
     (vehiclesRes.data || []).forEach((v) => vehiclesMap.set(v.id, v));
 
-    // 2. Fetch recent driver locations (last 24 hours to 48 hours to find latest for each driver)
+    // 2. Fetch recent driver locations (last 48 hours to find latest for each driver)
     const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
-    const { data: locations, error } = await supabase
-      .from("driver_locations")
-      .select("*")
-      .eq("company_id", companyId)
-      .gte("created_at", twoDaysAgo)
-      .order("created_at", { ascending: false })
-      .limit(1000);
+    let { data: locations, error } = companyId
+      ? await supabase
+          .from("driver_locations")
+          .select("*")
+          .eq("company_id", companyId)
+          .gte("created_at", twoDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(1000)
+      : await supabase
+          .from("driver_locations")
+          .select("*")
+          .gte("created_at", twoDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(1000);
+
+    if ((!locations || locations.length === 0) && companyId) {
+      const fallbackLocs = await supabase
+        .from("driver_locations")
+        .select("*")
+        .gte("created_at", twoDaysAgo)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      locations = fallbackLocs.data || [];
+    }
 
     if (error) {
       console.warn("Error fetching driver_locations:", error);
+    }
+
+    // Identify missing driver_ids present in locations but missing from driversMap or with fallback name
+    const missingDriverIds = new Set<string>();
+    (locations || []).forEach((loc) => {
+      if (loc.driver_id) {
+        const k = loc.driver_id.trim().toLowerCase();
+        const existing = driversMap.get(k);
+        if (!existing || !existing.full_name || existing.full_name === "Motorista") {
+          missingDriverIds.add(loc.driver_id);
+        }
+      }
+    });
+
+    // Fetch missing driver profiles directly by ID from profiles and drivers tables
+    if (missingDriverIds.size > 0) {
+      const idsList = Array.from(missingDriverIds);
+      const [missingProfiles, missingDrivers] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("*")
+          .in("id", idsList),
+        supabase
+          .from("drivers")
+          .select("*")
+          .in("id", idsList),
+      ]);
+
+      (missingProfiles.data || []).forEach((d: any) => {
+        if (!d.id) return;
+        const key = d.id.trim().toLowerCase();
+        const rawName = d.full_name || d.name;
+        const name = formatDriverName(rawName, d.email);
+        driversMap.set(key, {
+          id: d.id,
+          full_name: name,
+          avatar_url: d.photo_url || d.avatar_url,
+          cpf: d.cpf,
+          phone: d.phone,
+          company_id: d.company_id,
+        });
+      });
+
+      (missingDrivers.data || []).forEach((d: any) => {
+        if (!d.id) return;
+        const key = d.id.trim().toLowerCase();
+        const existing = driversMap.get(key);
+        const rawName = d.name || d.full_name;
+        const name = formatDriverName(rawName, d.email);
+        if (!existing || existing.full_name === "Motorista") {
+          driversMap.set(key, {
+            id: d.id,
+            full_name: name,
+            avatar_url: d.photo_url || d.avatar_url || existing?.avatar_url,
+            cpf: d.cpf || existing?.cpf,
+            phone: d.phone || existing?.phone,
+            company_id: d.company_id || existing?.company_id,
+          });
+        }
+      });
     }
 
     // Map driver_id -> latest location & total locations count
@@ -95,9 +290,10 @@ export async function fetchInitialData(companyId: string) {
 
     (locations || []).forEach((loc) => {
       if (!loc.driver_id) return;
-      const existing = latestByDriver.get(loc.driver_id);
+      const key = loc.driver_id.trim().toLowerCase();
+      const existing = latestByDriver.get(key);
       if (!existing) {
-        latestByDriver.set(loc.driver_id, { latest: loc, count: 1 });
+        latestByDriver.set(key, { latest: loc, count: 1 });
       } else {
         existing.count += 1;
       }
@@ -107,9 +303,17 @@ export async function fetchInitialData(companyId: string) {
     const driverStates: DriverState[] = [];
 
     // First, process drivers that have location records
-    latestByDriver.forEach(({ latest, count }, driverId) => {
-      const driver = driversMap.get(driverId);
-      // Try vehicle from location record or driver's primary vehicle
+    latestByDriver.forEach(({ latest, count }, key) => {
+      const driverId = latest.driver_id;
+      let driver = driversMap.get(key);
+      if (!driver) {
+        driver = {
+          id: driverId,
+          full_name: "Motorista",
+        };
+        driversMap.set(key, driver);
+      }
+
       const vehicleId = latest.vehicle_id;
       const vehicle = vehicleId ? vehiclesMap.get(vehicleId) : undefined;
       const speedKmh = parseSpeedKmh(latest.speed);

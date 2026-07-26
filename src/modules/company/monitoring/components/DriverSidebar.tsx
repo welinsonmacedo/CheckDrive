@@ -28,6 +28,7 @@ import {
   DriverOnlineStatus,
 } from "../types";
 import { TrackingPlaybackControls } from "./TrackingPlaybackControls";
+import { formatDriverName } from "../services/trackingService";
 
 interface DriverSidebarProps {
   driverStates: DriverState[];
@@ -111,7 +112,7 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
               </span>
               {selectedDriverState && (
                 <span className="text-[10px] bg-blue-600/30 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-bold truncate">
-                  {selectedDriverState.driver?.full_name || "Motorista"}
+                  {formatDriverName(selectedDriverState.driver?.full_name)}
                 </span>
               )}
             </div>
@@ -298,7 +299,7 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
                       </div>
                       <div>
                         <h2 className="text-sm font-black text-white leading-tight">
-                          {selectedDriverState.driver?.full_name || "Motorista"}
+                          {formatDriverName(selectedDriverState.driver?.full_name)}
                         </h2>
                         <span className="text-xs text-slate-400 font-medium">
                           {selectedDriverState.vehicle
@@ -476,7 +477,7 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
 
                           <div className="overflow-hidden">
                             <h4 className="text-xs font-bold text-white truncate">
-                              {ds.driver?.full_name || "Motorista Sem Nome"}
+                              {formatDriverName(ds.driver?.full_name)}
                             </h4>
                             <p className="text-[11px] text-slate-400 truncate">
                               {ds.vehicle

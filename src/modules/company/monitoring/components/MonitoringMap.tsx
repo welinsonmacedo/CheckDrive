@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import L from "leaflet";
 import { DriverState, TripMetrics, DriverOnlineStatus } from "../types";
+import { formatDriverName } from "../services/trackingService";
 
 interface MonitoringMapProps {
   driverStates: DriverState[];
@@ -18,7 +19,8 @@ function createDriverIcon(
   status: DriverOnlineStatus,
   bearing: number = 0,
   speedKmh: number = 0,
-  isSelected: boolean = false
+  isSelected: boolean = false,
+  driverName: string = ""
 ): L.DivIcon {
   const statusColor =
     status === "moving"
@@ -30,55 +32,77 @@ function createDriverIcon(
   const ringColor = isSelected ? "#3b82f6" : statusColor;
   const pulseClass = status === "moving" ? "animate-pulse" : "";
 
+  const displayName = driverName.length > 22 ? driverName.substring(0, 20) + "..." : driverName;
+
   const html = `
-    <div style="position: relative; width: 44px; height: 44px; display: flex; items-center: justify-center;" class="${pulseClass}">
-      <div style="
-        position: absolute;
-        inset: 0;
-        border-radius: 9999px;
-        background-color: ${ringColor};
-        opacity: ${isSelected ? "0.35" : "0.2"};
-        transform: scale(1.1);
-      "></div>
-      <div style="
-        position: relative;
-        width: 36px;
-        height: 36px;
-        border-radius: 9999px;
-        background: #0f172a;
-        border: 2.5px solid ${ringColor};
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-      ">
+    <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      ${
+        displayName
+          ? `<div style="
+              background: rgba(15, 23, 42, 0.92);
+              color: #ffffff;
+              font-size: 10px;
+              font-weight: 800;
+              padding: 2px 7px;
+              border-radius: 8px;
+              border: 1px solid ${ringColor};
+              white-space: nowrap;
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+              margin-bottom: 3px;
+              font-family: system-ui, -apple-system, sans-serif;
+              pointer-events: none;
+            ">${displayName}</div>`
+          : ""
+      }
+      <div style="position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;" class="${pulseClass}">
         <div style="
-          transform: rotate(${bearing}deg);
-          transition: transform 0.3s ease;
+          position: absolute;
+          inset: 0;
+          border-radius: 9999px;
+          background-color: ${ringColor};
+          opacity: ${isSelected ? "0.4" : "0.25"};
+          transform: scale(1.15);
+        "></div>
+        <div style="
+          position: relative;
+          width: 34px;
+          height: 34px;
+          border-radius: 9999px;
+          background: #0f172a;
+          border: 2.5px solid ${ringColor};
           display: flex;
           align-items: center;
           justify-content: center;
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
         ">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 19 21 12 17 5 21 12 2"></polygon>
-          </svg>
+          <div style="
+            transform: rotate(${bearing}deg);
+            transition: transform 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 19 21 12 17 5 21 12 2"></polygon>
+            </svg>
+          </div>
+          ${
+            speedKmh > 0
+              ? `<div style="
+                  position: absolute;
+                  bottom: -8px;
+                  background: #0f172a;
+                  color: #ffffff;
+                  font-size: 9px;
+                  font-weight: 800;
+                  padding: 1px 4px;
+                  border-radius: 4px;
+                  border: 1px solid ${statusColor};
+                  white-space: nowrap;
+                ">${speedKmh}k</div>`
+              : ""
+          }
         </div>
-        ${
-          speedKmh > 0
-            ? `<div style="
-                position: absolute;
-                bottom: -8px;
-                background: #1e293b;
-                color: #ffffff;
-                font-size: 9px;
-                font-weight: 800;
-                padding: 1px 4px;
-                border-radius: 4px;
-                border: 1px solid ${statusColor};
-                white-space: nowrap;
-              ">${speedKmh}k</div>`
-            : ""
-        }
       </div>
     </div>
   `;
@@ -86,9 +110,9 @@ function createDriverIcon(
   return L.divIcon({
     html,
     className: "custom-driver-marker",
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
-    popupAnchor: [0, -22],
+    iconSize: [120, 65],
+    iconAnchor: [60, 45],
+    popupAnchor: [0, -45],
   });
 }
 
@@ -226,15 +250,53 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
 
       const bearing = latestLocation.bearing || 0;
       const isSelected = driver_id === selectedDriverId;
-      const icon = createDriverIcon(status, bearing, speedKmh, isSelected);
+      const driverName = formatDriverName(ds.driver?.full_name);
+      const icon = createDriverIcon(status, bearing, speedKmh, isSelected, driverName);
+
+      const vehicleInfo = ds.vehicle
+        ? `${ds.vehicle.model || "Veículo"} - ${ds.vehicle.plate}`
+        : "Sem veículo vinculado";
+      const accuracyText = latestLocation.accuracy
+        ? `${Math.round(latestLocation.accuracy)}m`
+        : "N/A";
+      const dateFormatted = new Date(latestLocation.created_at).toLocaleString("pt-BR");
+
+      const popupContent = `
+        <div style="font-family: system-ui, sans-serif; padding: 4px; color: #0f172a; min-width: 200px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div style="width: 32px; height: 32px; border-radius: 9999px; background: #2563eb; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px;">
+              ${driverName.charAt(0)}
+            </div>
+            <div>
+              <strong style="font-size: 14px; display: block; line-height: 1.2;">${driverName}</strong>
+              <span style="font-size: 11px; color: #64748b;">${vehicleInfo}</span>
+            </div>
+          </div>
+          <div style="background: #f8fafc; border-radius: 8px; padding: 8px; font-size: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border: 1px solid #e2e8f0;">
+            <div>
+              <span style="color: #64748b; display: block;">Velocidade</span>
+              <strong style="font-size: 13px; color: #0f172a;">${speedKmh} km/h</strong>
+            </div>
+            <div>
+              <span style="color: #64748b; display: block;">Precisão GPS</span>
+              <strong style="font-size: 12px; color: #0f172a;">${accuracyText}</strong>
+            </div>
+            <div style="grid-column: span 2;">
+              <span style="color: #64748b; display: block;">Última Posição</span>
+              <span style="font-weight: 600; color: #334155;">${dateFormatted} (${ds.lastUpdateAgo})</span>
+            </div>
+          </div>
+        </div>
+      `;
 
       let existingMarker = markersRef.current.get(driver_id);
 
       if (existingMarker) {
-        // SMOOTH MOVEMENT: Update existing marker lat/lng and icon without recreating
+        // SMOOTH MOVEMENT: Update existing marker lat/lng, icon, and popup without recreating
         existingMarker.setLatLng([lat, lng]);
         existingMarker.setIcon(icon);
         existingMarker.setZIndexOffset(isSelected ? 1000 : 0);
+        existingMarker.setPopupContent(popupContent);
       } else {
         // Create new marker
         const marker = L.marker([lat, lng], {
@@ -243,43 +305,6 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
         }).addTo(map);
 
         // Bind popup
-        const driverName = ds.driver?.full_name || "Motorista";
-        const vehicleInfo = ds.vehicle
-          ? `${ds.vehicle.model || "Veículo"} - ${ds.vehicle.plate}`
-          : "Sem veículo vinculado";
-        const accuracyText = latestLocation.accuracy
-          ? `${Math.round(latestLocation.accuracy)}m`
-          : "N/A";
-        const dateFormatted = new Date(latestLocation.created_at).toLocaleString("pt-BR");
-
-        const popupContent = `
-          <div style="font-family: system-ui, sans-serif; padding: 4px; color: #0f172a; min-width: 200px;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-              <div style="width: 32px; height: 32px; border-radius: 9999px; background: #2563eb; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px;">
-                ${driverName.charAt(0)}
-              </div>
-              <div>
-                <strong style="font-size: 14px; display: block; line-height: 1.2;">${driverName}</strong>
-                <span style="font-size: 11px; color: #64748b;">${vehicleInfo}</span>
-              </div>
-            </div>
-            <div style="background: #f8fafc; border-radius: 8px; padding: 8px; font-size: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border: 1px solid #e2e8f0;">
-              <div>
-                <span style="color: #64748b; display: block;">Velocidade</span>
-                <strong style="font-size: 13px; color: #0f172a;">${speedKmh} km/h</strong>
-              </div>
-              <div>
-                <span style="color: #64748b; display: block;">Precisão GPS</span>
-                <strong style="font-size: 12px; color: #0f172a;">${accuracyText}</strong>
-              </div>
-              <div style="grid-column: span 2;">
-                <span style="color: #64748b; display: block;">Última Posição</span>
-                <span style="font-weight: 600; color: #334155;">${dateFormatted} (${ds.lastUpdateAgo})</span>
-              </div>
-            </div>
-          </div>
-        `;
-
         marker.bindPopup(popupContent, {
           closeButton: true,
           className: "clean-popup",
