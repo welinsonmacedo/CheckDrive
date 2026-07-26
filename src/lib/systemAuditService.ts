@@ -54,30 +54,34 @@ export interface SystemAuditPayload {
  */
 export async function logSystemAudit(payload: SystemAuditPayload): Promise<void> {
   try {
-    // 1. Fill default user context from active Supabase session if not explicitly provided
+    // 1. Fill default user context from active Supabase session or target user ID if missing
     let userId = payload.user_id;
     let userName = payload.user_name;
     let userEmail = payload.user_email;
     let userRole = payload.user_role;
     let companyId = payload.company_id;
 
-    if (!userId || !userEmail || !companyId) {
+    if (!userId || !userEmail || !companyId || !userName) {
       const {
         data: { session },
       } = await supabase.auth.getSession();
+
       if (session?.user) {
         userId = userId || session.user.id;
         userEmail = userEmail || session.user.email;
+      }
 
-        // Try getting profile metadata if missing
+      const activeUserId = userId || session?.user?.id;
+      if (activeUserId) {
+        // Fetch profile metadata for company_id, name, role
         const { data: profile } = await supabase
           .from("profiles")
           .select("full_name, role, company_id")
-          .eq("id", session.user.id)
+          .eq("id", activeUserId)
           .maybeSingle();
 
         if (profile) {
-          userName = userName || profile.full_name || session.user.email;
+          userName = userName || profile.full_name || userEmail;
           userRole = userRole || profile.role;
           companyId = companyId || profile.company_id;
         }
@@ -91,10 +95,10 @@ export async function logSystemAudit(payload: SystemAuditPayload): Promise<void>
     }
 
     const logEntry = {
-      company_id: companyId,
-      user_id: userId,
+      company_id: companyId || null,
+      user_id: userId || null,
       user_name: userName || userEmail || "Sistema",
-      user_email: userEmail,
+      user_email: userEmail || null,
       user_role: userRole || "admin",
       module: payload.module,
       entity: payload.entity,
@@ -115,15 +119,25 @@ export async function logSystemAudit(payload: SystemAuditPayload): Promise<void>
     const { error } = await supabase.from("system_audit_logs").insert(logEntry);
 
     if (error) {
-      console.warn("Notice: Failed to insert into system_audit_logs, trying fallback to audit_logs:", error.message);
-      // Fallback insert with standard existing columns in audit_logs
-      await supabase.from("audit_logs").insert({
-        company_id: companyId,
-        driver_id: userId,
+      console.error(
+        "Erro ao salvar log na tabela 'system_audit_logs'. Por favor, certifique-se de executar o script SQL no Supabase para criar a tabela. Detalhes:",
+        error.message,
+        error
+      );
+
+      // Attempt fallback insert into audit_logs
+      const { error: fallbackErr } = await supabase.from("audit_logs").insert({
+        company_id: companyId || null,
+        driver_id: userId || null,
         type: "system_action",
+        amount: 0,
         reason: `${logEntry.module} | ${logEntry.action}: ${summary}`,
         created_at: logEntry.created_at,
       });
+
+      if (fallbackErr) {
+        console.warn("Fallback insert to audit_logs also failed:", fallbackErr.message);
+      }
     }
   } catch (err) {
     console.warn("Silent failure writing audit log:", err);
