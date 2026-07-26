@@ -51,13 +51,18 @@ import {
   Compass,
   KeyRound,
   WifiOff,
+  Menu,
 } from "lucide-react";
 
 export default function LandingPage() {
   const navigate = useNavigate();
 
   // State for Interactive Elements
-  const [activeAppTab, setActiveAppTab] = useState<"admin" | "driver_yard" | "reservation" | "pwa">("admin");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const [activeAppTab, setActiveAppTab] = useState<"admin" | "driver_yard" | "pwa">("admin");
+  const [activeGalleryTab, setActiveGalleryTab] = useState<
+    "dashboard" | "frota" | "checklist_modal" | "mapa" | "ia" | "viagens" | "manutencao" | "ranking" | "multas" | "motoristas" | "relatorios"
+  >("dashboard");
   const [activeAiQueryIndex, setActiveAiQueryIndex] = useState<number>(0);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState<boolean>(false);
@@ -75,19 +80,19 @@ export default function LandingPage() {
   const aiQueries = [
     {
       question: "Quais veículos da frota precisam de manutenção preventiva esta semana?",
-      answer: "Analisando 48 ativos... 3 veículos atingiram o limite de tolerância: O caminhão Volvo FH 540 (Placa ABC-1234) está a 150 KM da troca de óleo programada. A Scania R450 (Placa DEF-5678) possui laudo de segurança a vencer em 4 dias. Recomendo abrir Ordem de Serviço preventiva imediata.",
+      answer: "Analisando 48 ativos... 3 veículos atingiram o limite de tolerância: O caminhão Volvo FH 540 (Placa [PLACA BORRADA]) está a 150 KM da troca de óleo programada. A Scania R450 (Placa [PLACA BORRADA]) possui laudo de segurança a vencer em 4 dias. Recomendo abrir Ordem de Serviço preventiva imediata.",
       metric: "3 Alertas Críticos Identificados",
       action: "Gerar Ordens de Serviço",
     },
     {
-      question: "Quais solicitações de reserva de veículos estão aguardando aprovação?",
-      answer: "Existem 2 solicitações no Aplicativo Reserva: A vendedora Mariana solicitou o Gol (Placa GHI-9012) para amanhã às 08h. O engenheiro Marcos solicitou a Hilux (Placa JKL-3456) para vistoria em obra. Ambos os veículos estão com checklist em dia.",
-      metric: "2 Reservas Pendentes",
-      action: "Aprovar Agendamentos",
+      question: "Quais veículos possuem documentos ou laudos próximos do vencimento?",
+      answer: "Analisando prazos de licenciamento e laudos... 2 veículos possuem renovação pendente nos próximos 15 dias: O caminhão VW 11.180 (Placa [PLACA BORRADA]) vence laudo de tacógrafo em 5 dias. A Scania R450 possui licenciamento pendente. Notificações já foram geradas.",
+      metric: "2 Documentos Próximos do Vencimento",
+      action: "Ver Documentações",
     },
     {
       question: "Quais motoristas possuem pendências de checklist pré-viagem?",
-      answer: "No momento, 2 motoristas estão com checklist pendente no Aplicativo Motorista & Pátio: Carlos Silva (Scania R450) e Roberto Lima (Carreta Prancha). Notificação via WhatsApp enviada automaticamente para ambos.",
+      answer: "No momento, 2 motoristas estão com checklist pendente no Aplicativo Motorista & Pátio: Condutor #101 (Scania R450) e Condutor #102 (Carreta Prancha). Notificação via WhatsApp enviada automaticamente para ambos.",
       metric: "2 Notificações Enviadas no WhatsApp",
       action: "Reenviar Lembrete",
     },
@@ -102,12 +107,12 @@ export default function LandingPage() {
   // FAQ Accordion Items
   const faqItems = [
     {
-      question: "Como funcionam o Painel Admin, App Motorista & Pátio e App Reserva?",
-      answer: "O CheckDrive é um ecossistema modular: O Painel Admin é voltado para gestores (frotas, relatórios, custos e IA). O Aplicativo Motorista e Pátio é utilizado no dia a dia pelos condutores e vistoriadores para realizar checklists, registrar avarias e controlar odômetro/horímetro. O Aplicativo Reserva é exclusivo para colaboradores agendarem e solicitarem uso de veículos da frota corporativa.",
+      question: "Como funcionam o Painel Admin e o App Motorista & Pátio?",
+      answer: "O CheckDrive é um ecossistema modular: O Painel Admin é voltado para gestores (frotas, relatórios, custos, ordens de serviço e IA). O Aplicativo Motorista e Pátio é utilizado no dia a dia pelos condutores e vistoriadores para realizar checklists, registrar avarias e controlar odômetro/horímetro.",
     },
     {
       question: "Como funciona a tecnologia PWA e a contingência quando o app APK não funciona?",
-      answer: "O PWA (Progressive Web App) do CheckDrive funciona como uma aplicação web instalável e de contingência imediata: se o aplicativo nativo (APK) apresentar falhas, incompatibilidade ou não estiver instalado no smartphone do motorista ou colaborador, basta acessar o link web no navegador para abrir o App Reserva/Checklist instantaneamente. Toda a operação funciona 100% offline, salvando dados localmente até que haja conexão.",
+      answer: "O PWA (Progressive Web App) do CheckDrive funciona como uma aplicação web instalável e de contingência imediata: se o aplicativo nativo (APK) apresentar falhas, incompatibilidade ou não estiver instalado no smartphone do motorista, basta acessar o link web no navegador para abrir o App de Vistoria/Checklist instantaneamente. Toda a operação funciona 100% offline, salvando dados localmente até que haja conexão.",
     },
     {
       question: "O CheckDrive suporta máquinas pesadas e equipamentos industriais?",
@@ -175,6 +180,9 @@ export default function LandingPage() {
             <a href="#recursos" className="hover:text-blue-400 transition-colors">
               Recursos
             </a>
+            <a href="#galeria" className="hover:text-blue-400 transition-colors text-amber-400 font-extrabold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Telas do Sistema
+            </a>
             <a href="#aplicativos" className="hover:text-blue-400 transition-colors">
               Aplicativos
             </a>
@@ -195,8 +203,8 @@ export default function LandingPage() {
             </a>
           </nav>
 
-          {/* CTA Actions */}
-          <div className="flex items-center gap-3">
+          {/* CTA Actions & Mobile Menu Toggle */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setIsDemoModalOpen(true)}
               className="hidden sm:inline-flex px-4 py-2.5 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs font-bold transition-all items-center gap-2"
@@ -206,12 +214,118 @@ export default function LandingPage() {
             </button>
             <Link
               to="/login"
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-blue-600/25 transition-all"
+              className="px-3.5 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-[11px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 shadow-lg shadow-blue-600/25 transition-all"
             >
-              Entrar no Sistema <ArrowRight size={14} />
+              Entrar <ArrowRight size={14} className="hidden xs:inline" />
             </Link>
+
+            {/* Mobile Hamburger Toggle Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white transition-colors"
+              aria-label="Abrir menu de navegação"
+            >
+              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="lg:hidden bg-zinc-950 border-b border-zinc-800 px-4 py-5 space-y-3 overflow-hidden shadow-2xl"
+            >
+              <nav className="flex flex-col space-y-2 text-xs font-bold uppercase tracking-wider text-zinc-300">
+                <a
+                  href="#recursos"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2.5 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 hover:text-blue-400 transition-colors flex items-center justify-between"
+                >
+                  <span>Recursos</span>
+                  <ChevronRight size={14} className="text-zinc-600" />
+                </a>
+                <a
+                  href="#galeria"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 font-extrabold flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    Telas do Sistema
+                  </span>
+                  <ChevronRight size={14} className="text-amber-500" />
+                </a>
+                <a
+                  href="#aplicativos"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2.5 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 hover:text-blue-400 transition-colors flex items-center justify-between"
+                >
+                  <span>Aplicativos & Módulos</span>
+                  <ChevronRight size={14} className="text-zinc-600" />
+                </a>
+                <a
+                  href="#ia"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300 flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <Bot size={14} /> Inteligência Artificial
+                  </span>
+                  <ChevronRight size={14} className="text-purple-400" />
+                </a>
+                <a
+                  href="#beneficios"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2.5 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 hover:text-blue-400 transition-colors flex items-center justify-between"
+                >
+                  <span>Diferenciais</span>
+                  <ChevronRight size={14} className="text-zinc-600" />
+                </a>
+                <a
+                  href="#segmentos"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2.5 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 hover:text-blue-400 transition-colors flex items-center justify-between"
+                >
+                  <span>Segmentos Atendidos</span>
+                  <ChevronRight size={14} className="text-zinc-600" />
+                </a>
+                <a
+                  href="#planos"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2.5 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 hover:text-blue-400 transition-colors flex items-center justify-between"
+                >
+                  <span>Planos & Investimento</span>
+                  <ChevronRight size={14} className="text-zinc-600" />
+                </a>
+                <a
+                  href="#faq"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2.5 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 hover:text-blue-400 transition-colors flex items-center justify-between"
+                >
+                  <span>Perguntas Frequentes (FAQ)</span>
+                  <ChevronRight size={14} className="text-zinc-600" />
+                </a>
+              </nav>
+
+              <div className="pt-2 border-t border-zinc-800 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    setIsDemoModalOpen(true);
+                  }}
+                  className="w-full py-3 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-300 text-xs font-bold flex items-center justify-center gap-2"
+                >
+                  <PhoneCall size={14} className="text-blue-400" />
+                  Solicitar Demonstração
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Hero Section */}
@@ -249,7 +363,7 @@ export default function LandingPage() {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="mt-6 text-base sm:text-lg text-zinc-300 max-w-3xl mx-auto leading-relaxed font-normal"
             >
-              Integração completa em um único lugar: **Painel Admin**, **Aplicativo Motorista e Pátio**, **Aplicativo Reserva** e **App PWA de Reserva/Contingência** (para uso imediato via navegador sempre que o app APK nativo não funcionar ou estiver indisponível).
+              Integração completa em um único lugar: **Painel Admin**, **Aplicativo Motorista e Pátio** e **App PWA de Vistoria/Contingência** (para uso imediato via navegador sempre que o app APK nativo não funcionar ou estiver indisponível).
             </motion.p>
 
             {/* CTAs */}
@@ -291,25 +405,25 @@ export default function LandingPage() {
             className="mt-14 max-w-5xl mx-auto rounded-3xl border border-zinc-800 bg-zinc-900/90 shadow-2xl overflow-hidden p-2 backdrop-blur-md"
           >
             {/* Window Header */}
-            <div className="bg-zinc-950/80 px-4 py-3 rounded-2xl flex items-center justify-between border border-zinc-800/80">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-rose-500/80" />
-                <div className="w-3 h-3 rounded-full bg-amber-500/80" />
-                <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-                <span className="ml-3 text-xs font-mono text-zinc-400">
+            <div className="bg-zinc-950/80 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl flex items-center justify-between border border-zinc-800/80">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-rose-500/80 shrink-0" />
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-amber-500/80 shrink-0" />
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-emerald-500/80 shrink-0" />
+                <span className="ml-1 sm:ml-3 text-[11px] sm:text-xs font-mono text-zinc-400 truncate">
                   checkdrive.app/painel-gestor
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px]">
+              <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400 shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] sm:text-[11px]">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  Sistema Online & PWA Sincronizado
+                  <span className="hidden xs:inline">Sistema </span>Online & PWA Sincronizado
                 </span>
               </div>
             </div>
 
             {/* Mockup Dashboard Content */}
-            <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-4 bg-zinc-950/60 text-left">
+            <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 bg-zinc-950/60 text-left">
               {/* Stat Card 1 */}
               <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-4">
                 <div className="flex items-center justify-between text-zinc-400 text-[11px] font-bold uppercase tracking-wider mb-2">
@@ -337,12 +451,12 @@ export default function LandingPage() {
               {/* Stat Card 3 */}
               <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-4">
                 <div className="flex items-center justify-between text-zinc-400 text-[11px] font-bold uppercase tracking-wider mb-2">
-                  <span>App Reserva</span>
-                  <Calendar size={16} className="text-purple-400" />
+                  <span>Ordens de Serviço</span>
+                  <Wrench size={16} className="text-purple-400" />
                 </div>
-                <div className="text-xl font-black text-white">14 Reservas</div>
+                <div className="text-xl font-black text-white">14 Manutenções</div>
                 <p className="text-[11px] text-purple-400 mt-1 font-semibold flex items-center gap-1">
-                  <KeyRound size={12} /> Agendamentos do Mês
+                  <ShieldCheck size={12} /> OSs em Acompanhamento
                 </p>
               </div>
 
@@ -361,7 +475,7 @@ export default function LandingPage() {
           </motion.div>
 
           {/* Core Highlights Bar */}
-          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 text-left max-w-5xl mx-auto">
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-left max-w-5xl mx-auto">
             <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm">
               <div className="flex items-center gap-3 text-blue-400 mb-1.5">
                 <Building2 size={20} />
@@ -388,13 +502,13 @@ export default function LandingPage() {
 
             <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm">
               <div className="flex items-center gap-3 text-purple-400 mb-1.5">
-                <Calendar size={20} />
+                <Wrench size={20} />
                 <span className="text-xs font-black uppercase tracking-wider text-zinc-200">
-                  Aplicativo Reserva
+                  Ordens de Serviço
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                Agendamento e solicitação de veículos da frota corporativa por colaboradores com aprovação rápida.
+                Controle de manutenções preventivas e corretivas com lançamento de notas fiscais e custos.
               </p>
             </div>
 
@@ -428,10 +542,10 @@ export default function LandingPage() {
             </p>
 
             {/* App Tab Switcher */}
-            <div className="mt-8 inline-flex p-1.5 rounded-2xl bg-zinc-900 border border-zinc-800 max-w-full overflow-x-auto">
+            <div className="mt-8 flex flex-wrap sm:inline-flex justify-center p-1.5 rounded-2xl bg-zinc-900 border border-zinc-800 max-w-full overflow-x-auto gap-1">
               <button
                 onClick={() => setActiveAppTab("admin")}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
                   activeAppTab === "admin"
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
                     : "text-zinc-400 hover:text-white"
@@ -441,7 +555,7 @@ export default function LandingPage() {
               </button>
               <button
                 onClick={() => setActiveAppTab("driver_yard")}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
                   activeAppTab === "driver_yard"
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
                     : "text-zinc-400 hover:text-white"
@@ -450,18 +564,8 @@ export default function LandingPage() {
                 <Smartphone size={15} /> App Motorista & Pátio
               </button>
               <button
-                onClick={() => setActiveAppTab("reservation")}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                  activeAppTab === "reservation"
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
-                    : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                <Calendar size={15} /> Aplicativo Reserva
-              </button>
-              <button
                 onClick={() => setActiveAppTab("pwa")}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
                   activeAppTab === "pwa"
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
                     : "text-zinc-400 hover:text-white"
@@ -473,7 +577,7 @@ export default function LandingPage() {
           </div>
 
           {/* Tab Content Display */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 max-w-5xl mx-auto shadow-2xl">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl sm:rounded-3xl p-5 sm:p-8 max-w-5xl mx-auto shadow-2xl">
             {activeAppTab === "admin" && (
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
@@ -544,7 +648,7 @@ export default function LandingPage() {
                   <div className="space-y-2 text-xs text-zinc-300">
                     <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 flex justify-between items-center">
                       <span>Placa / Ativo</span>
-                      <strong className="text-white">ABC-1234 (Volvo FH 540)</strong>
+                      <strong className="text-white">[PLACA BORRADA] (Volvo FH)</strong>
                     </div>
                     <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 flex justify-between items-center">
                       <span>Odômetro / Horímetro</span>
@@ -554,41 +658,6 @@ export default function LandingPage() {
                       <span>Fotos de Avarias</span>
                       <strong>3 Anexadas ✓</strong>
                     </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeAppTab === "reservation" && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
-                className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center text-left"
-              >
-                <div className="space-y-4">
-                  <span className="px-3 py-1 rounded-full bg-purple-500/10 text-purple-400 text-xs font-bold uppercase tracking-wider inline-block">
-                    Para Colaboradores e Uso de Frota
-                  </span>
-                  <h4 className="text-2xl font-black text-white">Aplicativo Reserva de Veículos</h4>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    Aplicativo dedicado para que colaboradores solicitem e agendem veículos da frota corporativa. Elimina conflitos de horário, controla viagens corporativas e exige autorização prévia do gestor.
-                  </p>
-                  <ul className="space-y-2 text-xs text-zinc-300">
-                    <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-purple-400" /> Calendário interativo de disponibilidade</li>
-                    <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-purple-400" /> Solicitação com destino, data, hora e motivo</li>
-                    <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-purple-400" /> Integração imediata com o checklist de saída</li>
-                  </ul>
-                </div>
-                <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 space-y-3 font-mono text-xs">
-                  <div className="text-purple-400 font-bold border-b border-zinc-800 pb-2 flex justify-between">
-                    <span>APLICATIVO RESERVA</span>
-                    <span>AGENDAMENTOS</span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300">
-                    <strong>Reserva #204:</strong> Gol (Placa GHI-9012)
-                    <div className="text-[11px] text-zinc-400 mt-1">Solicitante: Mariana | Destino: Cliente SP</div>
-                    <div className="text-emerald-400 text-[11px] font-bold mt-1">Status: Aprovado pelo Gestor</div>
                   </div>
                 </div>
               </motion.div>
@@ -605,9 +674,9 @@ export default function LandingPage() {
                   <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 text-xs font-bold uppercase tracking-wider inline-block">
                     Contingência & Acesso Web Imediato
                   </span>
-                  <h4 className="text-2xl font-black text-white">App PWA Reserva & Backup do APK</h4>
+                  <h4 className="text-2xl font-black text-white">App PWA Vistoria & Backup do APK</h4>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Desenvolvido com tecnologia PWA (Progressive Web App) para servir de suporte instantâneo: caso o aplicativo nativo (APK) não funcione, trave ou não esteja instalado no celular do motorista/operador, ele pode abrir o PWA Reserva via navegador para realizar solicitações e checklists sem paralisação da operação.
+                    Desenvolvido com tecnologia PWA (Progressive Web App) para servir de suporte instantâneo: caso o aplicativo nativo (APK) não funcione, trave ou não esteja instalado no celular do motorista/operador, ele pode abrir o PWA via navegador para realizar vistorias e checklists sem paralisação da operação.
                   </p>
                   <ul className="space-y-2 text-xs text-zinc-300">
                     <li className="flex items-center gap-2"><CheckCircle2 size={16} className="text-amber-400" /> Contingência imediata quando o aplicativo APK falhar</li>
@@ -624,11 +693,860 @@ export default function LandingPage() {
                     [Status APK] Instabilidade detectada ou dispositivo incompatível
                   </div>
                   <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 font-sans text-xs">
-                    ⚡ <strong>Modo PWA Reserva Ativado:</strong> Vistoria e Agendamento concluídos com sucesso via Web PWA!
+                    ⚡ <strong>Modo PWA Ativado:</strong> Vistoria e Checklist concluídos com sucesso via Web PWA!
                   </div>
                 </div>
               </motion.div>
             )}
+          </div>
+        </div>
+      </section>
+
+      {/* Real System Gallery Section */}
+      <section id="galeria" className="py-20 bg-zinc-900/60 border-b border-zinc-900 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-12">
+            <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider inline-flex items-center gap-2 mb-3">
+              <Sparkles size={14} className="animate-pulse" /> Telas do Sistema em Produção
+            </span>
+            <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+              Interface Operacional do CheckDrive
+            </h2>
+            <p className="text-zinc-400 text-sm mt-3 leading-relaxed">
+              Explore o ecossistema completo em alta fidelidade: Painel Admin, controle de frotas, checklists com fotos reais, rastreamento GPS vivo, inteligência artificial e relatórios.
+            </p>
+          </div>
+
+          {/* LGPD Security & Data Blur Banner */}
+          <div className="max-w-4xl mx-auto bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 sm:p-4 mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-200 text-xs shadow-lg backdrop-blur-md">
+            <div className="flex items-start sm:items-center gap-2.5 sm:gap-3">
+              <ShieldCheck size={20} className="text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+              <span>
+                <strong>Proteção de Dados & Privacidade (LGPD):</strong> Por questões de segurança, todas as fotos do sistema possuem descaracterização/desfoque automático de placas, e dados como RENAVAM, Chassi, CPFs e e-mails foram devidamente mascarados nesta demonstração.
+              </span>
+            </div>
+            <span className="self-end sm:self-center bg-amber-400/20 text-amber-300 font-bold px-3 py-1 rounded-xl text-[10px] uppercase tracking-wider shrink-0 border border-amber-400/30">
+              Dados Borrados ✓
+            </span>
+          </div>
+
+          {/* Gallery Category Filter Pills */}
+          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mb-6 sm:mb-8 max-w-full overflow-x-auto pb-2 sm:pb-0">
+            {[
+              { id: "dashboard", label: "Dashboard Admin", icon: BarChart3 },
+              { id: "frota", label: "Frota & Caminhões", icon: Truck },
+              { id: "checklist_modal", label: "Checklist com Fotos", icon: CheckSquare },
+              { id: "mapa", label: "GPS Vivo ao Vivo", icon: MapPin },
+              { id: "ia", label: "IA Gemini Chatbot", icon: Bot },
+              { id: "viagens", label: "Histórico de Envios", icon: Clock },
+              { id: "manutencao", label: "Pendências OS", icon: Wrench },
+              { id: "ranking", label: "Ranking Motoristas", icon: Award },
+              { id: "multas", label: "Infrações & Multas", icon: ShieldCheck },
+              { id: "motoristas", label: "Cadastro Motoristas", icon: Users },
+              { id: "relatorios", label: "Relatórios & Ocorrências", icon: FileText },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveGalleryTab(tab.id as any)}
+                className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                  activeGalleryTab === tab.id
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 border border-blue-500"
+                    : "bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+                }`}
+              >
+                <tab.icon size={14} />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Interactive Screen Showcase Frame */}
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl text-left">
+            {/* Window Browser Header */}
+            <div className="bg-zinc-900 border-b border-zinc-800 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-rose-500/80 shrink-0" />
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-amber-500/80 shrink-0" />
+                <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-emerald-500/80 shrink-0" />
+                <span className="text-[10px] sm:text-[11px] font-mono text-zinc-500 ml-1 truncate max-w-[120px] sm:max-w-none">
+                  checkdrive.com.br/admin/{activeGalleryTab}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] sm:text-[11px] text-zinc-400 shrink-0">
+                <span className="flex items-center gap-1 font-bold text-white bg-zinc-800/80 px-2 sm:px-2.5 py-1 rounded-lg truncate">
+                  <Building2 size={12} className="text-blue-400 shrink-0" /> Caiapó Cargas
+                </span>
+                <span className="hidden sm:inline-block text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                  ● Online
+                </span>
+              </div>
+            </div>
+
+            {/* Screen Content Showcase Container */}
+            <div className="p-3 sm:p-6 min-h-[440px] bg-slate-50 text-zinc-900 font-sans">
+              <AnimatePresence mode="wait">
+                {/* 1. DASHBOARD ADMIN */}
+                {activeGalleryTab === "dashboard" && (
+                  <motion.div
+                    key="dashboard"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex items-center justify-between border-b pb-3">
+                      <div>
+                        <h3 className="text-xl font-black text-slate-800">Visão Geral da Frota</h3>
+                        <p className="text-xs text-slate-500">Monitoramento geral de ativos, checklists e manutenção em tempo real</p>
+                      </div>
+                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+                        Painel Executivo
+                      </span>
+                    </div>
+
+                    {/* Top KPIs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">Checklists Hoje</span>
+                        <div className="flex items-baseline justify-between mt-2">
+                          <span className="text-2xl sm:text-3xl font-black text-emerald-900">1</span>
+                          <span className="text-[11px] text-emerald-700">Enviados hoje</span>
+                        </div>
+                      </div>
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-sky-50 border border-sky-200 flex flex-col justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-sky-700">Veículos Ativos</span>
+                        <div className="flex items-baseline justify-between mt-2">
+                          <span className="text-2xl sm:text-3xl font-black text-sky-900">59</span>
+                          <span className="text-[11px] text-sky-700">Frota cadastrada</span>
+                        </div>
+                      </div>
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-rose-50 border border-rose-200 flex flex-col justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-rose-700">Defeitos Ativos</span>
+                        <div className="flex items-baseline justify-between mt-2">
+                          <span className="text-2xl sm:text-3xl font-black text-rose-900">66</span>
+                          <span className="text-[11px] text-rose-700">Pendentes correção</span>
+                        </div>
+                      </div>
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-amber-700">Média de Score</span>
+                        <div className="flex items-baseline justify-between mt-2">
+                          <span className="text-2xl sm:text-3xl font-black text-amber-900">873 <span className="text-xs font-normal">pts</span></span>
+                          <span className="text-[11px] text-amber-700">Performance geral</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Middle Section: Pendências & Top Motoristas */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-2 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <AlertTriangle size={16} className="text-rose-500" />
+                            Pendências Críticas da Frota
+                          </h4>
+                          <span className="text-[11px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded font-bold">Manutenção</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {[
+                            { model: "SCANIA G-360", plate: "PLACA •••••••", defects: 5 },
+                            { model: "VOLVO VM-270", plate: "PLACA •••••••", defects: 5 },
+                            { model: "VW 11.180-DRC", plate: "PLACA •••••••", defects: 5 },
+                          ].map((truck, i) => (
+                            <div key={i} className="p-3 rounded-xl border border-amber-200 bg-amber-50/50 space-y-2">
+                              <div className="flex justify-between items-start">
+                                <span className="text-[11px] font-bold text-slate-500">{truck.model}</span>
+                                <span className="text-xs font-black text-slate-900">{truck.plate}</span>
+                              </div>
+                              <div className="text-xs font-bold text-rose-600 flex items-center gap-1">
+                                <AlertTriangle size={12} /> {truck.defects} Defeitos Ativos
+                              </div>
+                              <button className="w-full py-1.5 rounded bg-slate-900 text-white font-bold text-[10px] hover:bg-slate-800">
+                                ENCAMINHAR MANUTENÇÃO
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Top Motoristas */}
+                      <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-3">
+                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                          <Award size={16} className="text-amber-500" /> Top Motoristas
+                        </h4>
+                        <div className="space-y-2 text-xs">
+                          {[
+                            { name: "Condutor #101 (LGPD)", score: 1000, rank: "🥇" },
+                            { name: "Condutor #102 (LGPD)", score: 1000, rank: "🥈" },
+                            { name: "Condutor #103 (LGPD)", score: 1000, rank: "🥉" },
+                          ].map((m, idx) => (
+                            <div key={idx} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span>{m.rank}</span>
+                                <span className="font-bold text-slate-800">{m.name}</span>
+                              </div>
+                              <span className="font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                {m.score} pts
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 2. FROTA & CAMINHÕES */}
+                {activeGalleryTab === "frota" && (
+                  <motion.div
+                    key="frota"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex items-center justify-between border-b pb-3">
+                      <div>
+                        <h3 className="text-xl font-black text-slate-800">Gestão de Frota & Equipamentos</h3>
+                        <p className="text-xs text-slate-500">Cadastro de veículos pesados, leves e máquinas com fotos reais da garagem (placas desfocadas por segurança)</p>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                        59 Ativos Ativos
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5">
+                      {[
+                        {
+                          plate: "PLACA •••••••",
+                          model: "Vw 10.160-DRC",
+                          color: "BRANCA",
+                          year: "2018/2017",
+                          renavam: "•••••••••••",
+                          chassi: "•••••••••••••••••",
+                          img: "https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/pzg9202.jpeg",
+                        },
+                        {
+                          plate: "PLACA •••••••",
+                          model: "Volvo VM-290",
+                          color: "BRANCA",
+                          year: "2024/2023",
+                          renavam: "•••••••••••",
+                          chassi: "•••••••••••••••••",
+                          img: "https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/qmy5j12.jpeg",
+                        },
+                        {
+                          plate: "PLACA •••••••",
+                          model: "Vw 10.160-DRC",
+                          color: "BRANCA",
+                          year: "2018/2017",
+                          renavam: "•••••••••••",
+                          chassi: "•••••••••••••••••",
+                          img: "https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/qnj0322.jpeg",
+                        },
+                      ].map((v, idx) => (
+                        <div key={idx} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                          <div className="h-44 bg-slate-900 relative overflow-hidden group">
+                            <img
+                              src={v.img}
+                              alt="Foto de Veículo Desfocada"
+                              className="w-full h-full object-cover object-center filter blur-[12px] scale-110 pointer-events-none select-none"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = "none";
+                              }}
+                            />
+                            {/* Blur overlay over license plate region */}
+                            <div className="absolute inset-x-0 bottom-0 py-2 px-3 bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent flex items-center justify-between text-white text-[10px] font-mono">
+                              <span className="flex items-center gap-1.5 text-emerald-400 font-bold bg-slate-900/90 px-2 py-0.5 rounded border border-emerald-500/40">
+                                <Lock size={10} className="text-amber-400" /> Placa Borrada (LGPD)
+                              </span>
+                              <span className="text-[9px] text-slate-300">PROTEÇÃO DE DADOS</span>
+                            </div>
+                            <div className="absolute top-3 right-3 bg-blue-600/90 backdrop-blur-md text-white font-black text-[10px] px-2.5 py-1 rounded-full uppercase">
+                              VEÍCULO
+                            </div>
+                          </div>
+                          <div className="p-4 space-y-3 text-xs">
+                            <div className="flex justify-between items-center">
+                              <h4 className="text-lg font-black text-slate-900">{v.plate}</h4>
+                              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{v.model}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 font-mono">
+                              <div><strong>MODELO:</strong> {v.model}</div>
+                              <div><strong>COR:</strong> {v.color}</div>
+                              <div><strong>ANO:</strong> {v.year}</div>
+                              <div><strong>RENAVAM:</strong> {v.renavam}</div>
+                              <div className="col-span-2"><strong>CHASSI:</strong> {v.chassi}</div>
+                            </div>
+                            <button className="w-full py-2 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5">
+                              <span>VER TUDO</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 3. CHECKLIST COM FOTOS */}
+                {activeGalleryTab === "checklist_modal" && (
+                  <motion.div
+                    key="checklist_modal"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-5"
+                  >
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-3 gap-3">
+                        <div>
+                          <span className="text-xs font-black text-purple-600 uppercase tracking-wider block">Detalhes do Checklist nº 59BAD518</span>
+                          <span className="text-[11px] text-slate-500">Realizado em 26/07/2026 às 01:37:51</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200">
+                            🖨️ IMPRIMIR
+                          </button>
+                          <button className="px-3 py-1.5 rounded-xl bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200">
+                            ⚠️ APLICAR PENALIDADE
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Details Header Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 bg-slate-50 p-3.5 rounded-xl text-xs border border-slate-200">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">MOTORISTA</span>
+                          <strong className="text-slate-800">Condutor Cadastrado (LGPD)</strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">VEÍCULO / PLACA</span>
+                          <strong className="text-slate-800">PLACA ••••••• (Volvo VM-270)</strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">STATUS / KM</span>
+                          <span className="text-rose-600 font-black bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                            PENDING 597287 KM
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">LOCALIZAÇÃO</span>
+                          <strong className="text-blue-600 underline">Ver no Mapa</strong>
+                        </div>
+                      </div>
+
+                      {/* Reported Defects */}
+                      <div className="space-y-3">
+                        <span className="text-xs font-bold text-rose-600 flex items-center gap-1">
+                          <AlertTriangle size={14} /> DEFEITOS ENCONTRADOS (2 defeitos)
+                        </span>
+
+                        <div className="p-3.5 rounded-xl bg-rose-50/60 border border-rose-200 text-xs space-y-1">
+                          <div className="flex justify-between font-bold text-rose-800">
+                            <span>Óleo</span>
+                            <span className="bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded">DEFEITO</span>
+                          </div>
+                          <p className="text-slate-600 text-[11px]">
+                            <strong>DESCRIÇÃO REPORTADA:</strong> Gerado automaticamente via Edge Function. KM Alvo atingido na vistoria (595361 km).
+                          </p>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-rose-50/60 border border-rose-200 text-xs space-y-1">
+                          <div className="flex justify-between font-bold text-rose-800">
+                            <span>Outros</span>
+                            <span className="bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded">DEFEITO</span>
+                          </div>
+                          <p className="text-slate-600 text-[11px]">
+                            <strong>DESCRIÇÃO REPORTADA:</strong> parabrisa risca; parabrisa ruim é farois; faróis com defeito | Retrovisor lateral danificado
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Vehicle Inspection Photos (4 Required Angles) */}
+                      <div className="space-y-2 pt-2 border-t">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-800">
+                          <span>FOTOS DO VEÍCULO (4 Anexadas com Placas Borradas)</span>
+                          <span className="text-emerald-600 font-bold flex items-center gap-1">
+                            <Lock size={12} /> Placas Desfocadas (LGPD)
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {[
+                            { title: "TRASEIRA", label: "Vista Baú Traseiro", img: "https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/chk_1.jpeg" },
+                            { title: "LATERAL ESQUERDA", label: "Lateral do Caminhão", img: "https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/chk_2.jpeg" },
+                            { title: "DIANTEIRA", label: "Cabine Frontal", img: "https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/chk_3.jpeg" },
+                            { title: "LATERAL DIREITA", label: "Lateral Direita", img: "https://phyodfszatjfdfjtzpmm.supabase.co/storage/v1/object/public/Enterprise/chk_4.jpeg" },
+                          ].map((photo, pIdx) => (
+                            <div key={pIdx} className="bg-slate-900 rounded-xl overflow-hidden border border-slate-200 text-center relative group">
+                              <div className="h-28 bg-slate-800 overflow-hidden relative">
+                                <img
+                                  src={photo.img}
+                                  alt="Foto de Vistoria Desfocada"
+                                  className="w-full h-full object-cover filter blur-[12px] scale-110 pointer-events-none select-none"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = "none";
+                                  }}
+                                />
+                                <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-[0.5px] flex items-center justify-center">
+                                  <span className="bg-slate-900/90 backdrop-blur-md text-amber-300 text-[9px] font-mono font-bold px-2 py-1 rounded-md border border-amber-500/30 flex items-center gap-1 shadow-md">
+                                    <Lock size={10} className="text-amber-400" /> Placa Borrada
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="p-1.5 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider flex items-center justify-between px-2">
+                                <span>{photo.title}</span>
+                                <span className="text-[9px] text-emerald-400 font-mono">LGPD ✓</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 4. MAPA GPS VIVO */}
+                {activeGalleryTab === "mapa" && (
+                  <motion.div
+                    key="mapa"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                        <div>
+                          <h4 className="text-base font-bold text-white flex items-center gap-2">
+                            <Radio size={18} className="text-emerald-400 animate-pulse" /> Monitoramento Vivo
+                          </h4>
+                          <span className="text-xs text-slate-400">Frota e Motoristas rastreados em tempo real via GPS</span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 text-[11px] sm:text-xs font-mono">
+                          <span className="px-2 sm:px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Mover: 0</span>
+                          <span className="px-2 sm:px-2.5 py-1 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">Parados: 0</span>
+                          <span className="px-2 sm:px-2.5 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">Viagens: 1</span>
+                          <span className="px-2 sm:px-2.5 py-1 rounded bg-slate-800 text-slate-300">Vel: 0 km/h</span>
+                        </div>
+                      </div>
+
+                      {/* Map Display Mockup */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-2 text-xs">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase">Motoristas Rasteados (56)</span>
+                          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                            {[
+                              { name: "Condutor #104 (LGPD)", status: "Parado • Offline" },
+                              { name: "Condutor #105 (LGPD)", status: "Parado • Nunca registrou" },
+                              { name: "Condutor #106 (LGPD)", status: "Parado • Offline" },
+                              { name: "Condutor #107 (LGPD)", status: "Parado • Offline" },
+                              { name: "Condutor #108 (LGPD)", status: "Parado • Offline" },
+                            ].map((d, dIdx) => (
+                              <div key={dIdx} className="p-2 rounded bg-slate-900 border border-slate-800 flex justify-between items-center">
+                                <span className="font-bold text-slate-200">{d.name}</span>
+                                <span className="text-[10px] text-slate-400">{d.status}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-2 bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4 flex flex-col justify-between h-64 relative overflow-hidden bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px]">
+                          <div className="flex justify-between items-start z-10">
+                            <span className="bg-slate-900/90 text-emerald-400 text-[10px] font-mono px-2.5 py-1 rounded border border-emerald-500/30">
+                              MAPA GOIÁS & MINAS GERAIS
+                            </span>
+                            <span className="bg-blue-600 text-white font-bold text-[10px] px-2.5 py-1 rounded-full shadow">
+                              📍 2 Marcadores Ativos
+                            </span>
+                          </div>
+
+                          <div className="space-y-2 z-10 my-auto text-center">
+                            <div className="inline-block bg-slate-900 border border-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xl">
+                              🚗 Condutor #109 (LGPD)
+                            </div>
+                            <div className="block" />
+                            <div className="inline-block bg-slate-900 border border-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xl ml-12">
+                              🚛 Condutor #104 (Uberlândia - MG)
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center z-10 text-[11px] text-slate-400 font-mono">
+                            <span>Goiânia • Anápolis • Jataí • Uberlândia</span>
+                            <span>Último Sinal: há 11 min</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 5. IA GEMINI CHATBOT */}
+                {activeGalleryTab === "ia" && (
+                  <motion.div
+                    key="ia"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-xl bg-purple-600/30 border border-purple-500/40 text-purple-300 flex items-center justify-center">
+                            <Bot size={18} />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-white">CheckDrive AI</h4>
+                            <span className="text-[10px] text-emerald-400">● Base de Dados Conectada • Gemini AI Engine</span>
+                          </div>
+                        </div>
+                        <button className="text-[11px] text-slate-400 hover:text-white border border-slate-700 px-2.5 py-1 rounded">
+                          🔄 Limpar Chat
+                        </button>
+                      </div>
+
+                      {/* Chat History */}
+                      <div className="space-y-3 text-xs">
+                        <div className="flex justify-end">
+                          <div className="bg-purple-600 text-white p-3 rounded-2xl rounded-tr-none max-w-md font-bold">
+                            Quais peças estão no estoque?
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-slate-200">
+                          <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px] font-bold uppercase inline-block">
+                            INTENÇÃO RECONHECIDA: ESTOQUE, ALMOXARIFADO E PEÇAS
+                          </span>
+                          <h5 className="font-bold text-white text-sm">📦 Relatório do Estoque e Almoxarifado</h5>
+                          <ul className="space-y-1 text-slate-300 text-[11px]">
+                            <li>• <strong>Total de Peças/Itens Cadastrados:</strong> 92 itens</li>
+                            <li>• <strong>Valor Total do Estoque Estimado:</strong> R$ 720,00</li>
+                            <li>• <strong>Fornecedores Cadastrados:</strong> 30</li>
+                          </ul>
+                        </div>
+                      </div>
+
+                      {/* Suggested Prompts */}
+                      <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-800 text-[11px]">
+                        {[
+                          "Quanto gastei com combustível este mês?",
+                          "Qual veículo tem a maior quilometragem?",
+                          "Quais motoristas estão em viagem?",
+                          "Gere um resumo da operação de hoje",
+                        ].map((p, pI) => (
+                          <span key={pI} className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 cursor-pointer">
+                            {p} →
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 6. HISTÓRICO DE ENVIOS */}
+                {activeGalleryTab === "viagens" && (
+                  <motion.div
+                    key="viagens"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div className="flex justify-between items-center border-b pb-3">
+                        <h4 className="text-base font-black text-slate-800">Histórico de Envios & Vistorias</h4>
+                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">
+                          Registro de Atividades
+                        </span>
+                      </div>
+
+                      <div className="overflow-x-auto -mx-1">
+                        <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+                          <thead>
+                            <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
+                              <th className="py-2.5 px-3">DATA</th>
+                              <th className="py-2.5 px-3">MOTORISTA</th>
+                              <th className="py-2.5 px-3">VEÍCULO</th>
+                              <th className="py-2.5 px-3">TIPO</th>
+                              <th className="py-2.5 px-3 text-right">AÇÕES</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {[
+                              { date: "26/07/2026 01:37", driver: "Condutor #101 (LGPD)", vehicle: "PLACA •••••••", type: "FIM DE VIAGEM" },
+                              { date: "25/07/2026 15:01", driver: "Condutor #101 (LGPD)", vehicle: "PLACA •••••••", type: "ABASTECIMENTO" },
+                              { date: "25/07/2026 14:41", driver: "Condutor #101 (LGPD)", vehicle: "PLACA •••••••", type: "INÍCIO DE VIAGEM" },
+                              { date: "25/07/2026 07:00", driver: "Condutor #101 (LGPD)", vehicle: "PLACA •••••••", type: "FIM DE VIAGEM" },
+                              { date: "25/07/2026 06:37", driver: "Condutor #103 (LGPD)", vehicle: "PLACA •••••••", type: "FIM DE VIAGEM" },
+                              { date: "25/07/2026 06:25", driver: "Condutor #110 (LGPD)", vehicle: "PLACA •••••••", type: "FIM DE VIAGEM" },
+                            ].map((row, rIdx) => (
+                              <tr key={rIdx} className="hover:bg-slate-50">
+                                <td className="py-2.5 px-3 font-bold text-slate-800">{row.date}</td>
+                                <td className="py-2.5 px-3 font-bold text-slate-900">{row.driver}</td>
+                                <td className="py-2.5 px-3 font-mono text-slate-700">{row.vehicle}</td>
+                                <td className="py-2.5 px-3">
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 border border-slate-200 text-slate-700">
+                                    {row.type}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-right">
+                                  <button className="px-2.5 py-1 bg-slate-900 text-white text-[10px] font-bold rounded">
+                                    DETALHES
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 7. PENDÊNCIAS MANUTENÇÃO */}
+                {activeGalleryTab === "manutencao" && (
+                  <motion.div
+                    key="manutencao"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      {/* Sub-tabs */}
+                      <div className="flex flex-wrap gap-2 border-b pb-3 text-xs font-bold">
+                        <span className="px-3 py-1.5 rounded-xl bg-purple-600 text-white">Pendentes (74)</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600">Aguardando (3)</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600">Aguardando NF (1)</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-800">Resolvidos (209)</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600">Acompanhamento (98)</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {[
+                          { date: "26/07/2026 01:37", vehicle: "PLACA ••••••• (Volvo VM-270)", driver: "Condutor #101 (LGPD)", item: "Óleo", desc: "KM Alvo atingido na vistoria (595361 km)", badge: "REPETIDO 3X" },
+                          { date: "26/07/2026 01:37", vehicle: "PLACA ••••••• (Volvo VM-270)", driver: "Condutor #101 (LGPD)", item: "Outros", desc: "parabrisa risca; parabrisa ruim é farois", badge: "REPETIDO 11X" },
+                          { date: "25/07/2026 06:25", vehicle: "PLACA ••••••• (Reboque)", driver: "Condutor #110 (LGPD)", item: "Lanternas e Vigias", desc: "Seta traseira inoperante", badge: "REPETIDO 16X" },
+                          { date: "25/07/2026 06:25", vehicle: "PLACA ••••••• (Mercedes Actros)", driver: "Condutor #110 (LGPD)", item: "Outros", desc: "veículo batendo direção fazer balanceamento", badge: "REPETIDO 4X" },
+                        ].map((mItem, mIdx) => (
+                          <div key={mIdx} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                <strong className="text-slate-900">{mItem.vehicle}</strong>
+                                <span className="text-[10px] text-slate-500">• {mItem.driver}</span>
+                                <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                  {mItem.badge}
+                                </span>
+                              </div>
+                              <p className="text-slate-600 text-[11px]">
+                                <strong>{mItem.item}:</strong> {mItem.desc}
+                              </p>
+                              <span className="text-[10px] text-slate-400 block">{mItem.date}</span>
+                            </div>
+                            <button className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 self-start sm:self-center">
+                              Resolver
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 8. RANKING MOTORISTAS */}
+                {activeGalleryTab === "ranking" && (
+                  <motion.div
+                    key="ranking"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div className="flex justify-between items-center border-b pb-3">
+                        <div>
+                          <h4 className="text-base font-black text-slate-800">Ranking Oficial de Desempenho</h4>
+                          <span className="text-xs text-slate-500">Desempenho dos motoristas por período base (Pontuação Gamificada)</span>
+                        </div>
+                        <span className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                          Período Atual (Em Aberto)
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {[
+                          { rank: 1, name: "Condutor #103 (LGPD)", desc: "LÍDER DA OPERAÇÃO • 35 ESCALAS", score: 1000, color: "bg-amber-50 border-amber-200" },
+                          { rank: 2, name: "Condutor #101 (LGPD)", desc: "CONSISTÊNCIA OPERACIONAL • 24 ESCALAS", score: 1000, color: "bg-slate-50 border-slate-200" },
+                          { rank: 3, name: "Condutor #110 (LGPD)", desc: "CONSISTÊNCIA OPERACIONAL • 17 ESCALAS", score: 1000, color: "bg-slate-50 border-slate-200" },
+                          { rank: 4, name: "Condutor #104 (LGPD)", desc: "CONSISTÊNCIA OPERACIONAL • 2 ESCALAS", score: 1000, color: "bg-slate-50 border-slate-200" },
+                          { rank: 5, name: "Condutor #111 (LGPD)", desc: "CONSISTÊNCIA OPERACIONAL • 6 ESCALAS", score: 960, color: "bg-slate-50 border-slate-200" },
+                        ].map((rk, rkIdx) => (
+                          <div key={rkIdx} className={`p-3.5 rounded-xl border ${rk.color} flex items-center justify-between text-xs`}>
+                            <div className="flex items-center gap-3">
+                              <span className="w-7 h-7 rounded-full bg-slate-900 text-white font-black flex items-center justify-center text-xs">
+                                {rk.rank}
+                              </span>
+                              <div>
+                                <h5 className="font-bold text-slate-900 text-sm">{rk.name}</h5>
+                                <span className="text-[10px] text-slate-500 font-bold uppercase">{rk.desc}</span>
+                              </div>
+                            </div>
+                            <span className="text-base font-black text-slate-900">
+                              {rk.score} <span className="text-xs font-normal text-slate-500">PONTOS</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 9. INFRAÇÕES & MULTAS */}
+                {activeGalleryTab === "multas" && (
+                  <motion.div
+                    key="multas"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div className="flex justify-between items-center border-b pb-3">
+                        <div>
+                          <h4 className="text-base font-black text-slate-800">Infrações de Trânsito & Multas</h4>
+                          <span className="text-xs text-slate-500">Gestão de multas e descontos de motoristas</span>
+                        </div>
+                        <button className="px-3.5 py-2 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-500">
+                          + Lançar Infração
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {[
+                          { driver: "Condutor #110 (LGPD)", date: "29/06/2026 às 00:23", loc: "SP 306 KM 015 • PLACA •••••••", code: "Cód: 7455", desc: "Transitar em velocidade superior à máxima permitida em até 20%", value: "R$ 130,16" },
+                          { driver: "Condutor #112 (LGPD)", date: "24/06/2026 às 22:35", loc: "SP 330 KM 390 • PLACA •••••••", code: "Cód: 5711", desc: "Deixar de conservar nas faixas da direita o veículo lento", value: "R$ 130,16" },
+                          { driver: "Condutor #112 (LGPD)", date: "24/06/2026 às 22:35", loc: "SP 330 KM 390 • PLACA •••••••", code: "Cód: 5843", desc: "Deixar de indicar com antecedência mediante gesto regulamentar", value: "R$ 195,23" },
+                        ].map((fine, fIdx) => (
+                          <div key={fIdx} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                            <div className="space-y-1 max-w-lg">
+                              <div className="flex items-center gap-2">
+                                <strong className="text-slate-900 text-sm">{fine.driver}</strong>
+                                <span className="text-[10px] text-slate-500">• {fine.date}</span>
+                              </div>
+                              <span className="text-[11px] font-mono text-slate-600 block">{fine.loc}</span>
+                              <p className="text-[11px] text-slate-700">
+                                <strong>{fine.code}:</strong> {fine.desc}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-base font-black text-rose-600 block">{fine.value}</span>
+                              <span className="text-[10px] text-slate-400">Parcelas/Descontos: R$ 0,00</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 10. CADASTRO MOTORISTAS */}
+                {activeGalleryTab === "motoristas" && (
+                  <motion.div
+                    key="motoristas"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div className="flex justify-between items-center border-b pb-3">
+                        <h4 className="text-base font-black text-slate-800">Meus Motoristas</h4>
+                        <span className="text-xs font-bold text-sky-700 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
+                          Cadastro de Condutores
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {[
+                          { name: "Condutor #113 (LGPD)", status: "INATIVO", tags: ["MOTORISTA", "TRANSFERÊNCIA"], email: "condutor113@•••••.local" },
+                          { name: "Condutor #110 (LGPD)", status: "ATIVO", tags: ["MOTORISTA", "TRANSFERÊNCIA"], cpf: "•••.***.***-••", email: "condutor110@•••••.local" },
+                          { name: "Condutor #112 (LGPD)", status: "ATIVO", tags: ["MOTORISTA", "TRANSFERÊNCIA"], cpf: "•••.***.***-••", email: "condutor112@•••••.local" },
+                          { name: "Condutor #111 (LGPD)", status: "ATIVO", tags: ["MOTORISTA", "TRANSFERÊNCIA"], email: "condutor111@•••••.local" },
+                          { name: "Condutor #114 (LGPD)", status: "ATIVO", tags: ["MOTORISTA", "DISTRIBUIÇÃO"], email: "condutor114@•••••.local" },
+                          { name: "Condutor #115 (LGPD)", status: "ATIVO", tags: ["MOTORISTA", "DISTRIBUIÇÃO"], cpf: "•••.***.***-••", email: "condutor115@•••••.local" },
+                        ].map((d, dIdx) => (
+                          <div key={dIdx} className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2 text-xs">
+                            <div className="flex justify-between items-start">
+                              <h5 className="font-black text-slate-900 text-xs">{d.name}</h5>
+                              {d.status === "INATIVO" && (
+                                <span className="bg-rose-100 text-rose-700 font-bold text-[9px] px-1.5 py-0.5 rounded">INATIVO</span>
+                              )}
+                            </div>
+                            <div className="flex gap-1.5">
+                              {d.tags.map((t, tI) => (
+                                <span key={tI} className="bg-slate-200 text-slate-700 font-bold text-[9px] px-1.5 py-0.5 rounded">
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="text-[10px] text-slate-500 pt-1 space-y-0.5 border-t font-mono">
+                              <div>E-MAIL: {d.email}</div>
+                              {d.cpf && <div>CPF: {d.cpf}</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* 11. RELATÓRIOS & OCORRÊNCIAS */}
+                {activeGalleryTab === "relatorios" && (
+                  <motion.div
+                    key="relatorios"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div className="flex flex-wrap gap-2 border-b pb-3 text-xs font-bold">
+                        <span className="px-3 py-1.5 rounded-xl bg-blue-600 text-white">Inspeção de Defeitos</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600">Pendências Resolvidas</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600">Relatório Quilometragem</span>
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600">Histórico Veículo</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                        <div className="p-3.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900">
+                          <span className="text-[10px] font-bold uppercase block text-purple-700">Ocorrências do Período</span>
+                          <strong className="text-2xl font-black">362</strong>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900">
+                          <span className="text-[10px] font-bold uppercase block text-rose-700">Pendentes de Resolução</span>
+                          <strong className="text-2xl font-black">207</strong>
+                        </div>
+                        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900">
+                          <span className="text-[10px] font-bold uppercase block text-emerald-700">Casos Resolvidos</span>
+                          <strong className="text-2xl font-black">153</strong>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs">
+                        <h5 className="font-bold text-slate-800">Mais Frequentes por Categoria</h5>
+                        <div className="space-y-1.5 text-[11px]">
+                          <div className="flex justify-between"><span>Ar Condicionado</span><strong className="text-purple-600">50 Ocorrências</strong></div>
+                          <div className="flex justify-between"><span>Parte Elétrica</span><strong className="text-purple-600">50 Ocorrências</strong></div>
+                          <div className="flex justify-between"><span>Outros</span><strong className="text-purple-600">46 Ocorrências</strong></div>
+                          <div className="flex justify-between"><span>Rastreador</span><strong className="text-purple-600">42 Ocorrências</strong></div>
+                          <div className="flex justify-between"><span>Lataria</span><strong className="text-purple-600">23 Ocorrências</strong></div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </section>
@@ -721,16 +1639,16 @@ export default function LandingPage() {
             <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 hover:border-purple-500/40 transition-all group flex flex-col justify-between space-y-4 text-left">
               <div>
                 <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                  <Calendar size={24} />
+                  <Receipt size={24} />
                 </div>
-                <h4 className="text-lg font-bold text-white mb-2">Aplicativo de Reserva de Veículos</h4>
+                <h4 className="text-lg font-bold text-white mb-2">Controle Financeiro & NFs</h4>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Agendamento de veículos da frota corporativa por colaboradores com fluxo de aprovação e controle de disponibilidade.
+                  Anexo de notas fiscais, registro de fornecedores e oficinas, além do controle detalhado de custos por ativo.
                 </p>
               </div>
               <ul className="space-y-2 pt-4 border-t border-zinc-800/80 text-xs text-zinc-300">
-                <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-purple-400 shrink-0" /> Gestão de solicitações e destinos</li>
-                <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-purple-400 shrink-0" /> Histórico de viagens e responsáveis</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-purple-400 shrink-0" /> Anexo de Notas Fiscais e Comprovantes</li>
+                <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-purple-400 shrink-0" /> Histórico financeiro acumulado por ativo</li>
               </ul>
             </div>
 
@@ -772,7 +1690,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4 text-center">
             {[
               { step: "01", title: "Cadastro", desc: "Veículos, Máquinas e Equipamentos" },
-              { step: "02", title: "Reserva", desc: "Solicitação e aprovação de veículos" },
+              { step: "02", title: "Atribuição", desc: "Vínculo de motoristas aos veículos" },
               { step: "03", title: "Checklist", desc: "Inspeção digital no App com fotos" },
               { step: "04", title: "Pátio & GPS", desc: "Conferência e rastreio em tempo real" },
               { step: "05", title: "Manutenção", desc: "Alertas automáticos de preventiva" },
@@ -806,7 +1724,7 @@ export default function LandingPage() {
                 Decisões de frota orientadas por Inteligência Artificial
               </h3>
               <p className="text-zinc-400 text-sm leading-relaxed">
-                Faça perguntas diretas sobre seus veículos, máquinas, reservas, motoristas e custos. O assistente analisa milhares de dados de checklists e telemetria para responder em segundos.
+                Faça perguntas diretas sobre seus veículos, máquinas, motoristas e custos. O assistente analisa milhares de dados de checklists e telemetria para responder em segundos.
               </p>
 
               <div className="space-y-3">
@@ -1007,7 +1925,7 @@ export default function LandingPage() {
                 </div>
                 <ul className="space-y-3 text-xs text-zinc-300">
                   <li className="flex items-center gap-2"><CheckCircle2 size={15} className="text-blue-400" /> Até 50 Ativos Cadastrados</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 size={15} className="text-blue-400" /> Painel Admin + App Motorista & Pátio + App Reserva</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 size={15} className="text-blue-400" /> Painel Admin + App Motorista & Pátio + PWA Offline</li>
                   <li className="flex items-center gap-2"><CheckCircle2 size={15} className="text-blue-400" /> Assistente de Inteligência Artificial</li>
                   <li className="flex items-center gap-2"><CheckCircle2 size={15} className="text-blue-400" /> Ordens de Serviço & Anexo de Nota Fiscal</li>
                   <li className="flex items-center gap-2"><CheckCircle2 size={15} className="text-blue-400" /> Notificações via WhatsApp</li>
@@ -1143,7 +2061,6 @@ export default function LandingPage() {
               <ul className="space-y-2">
                 <li><a href="#aplicativos" className="hover:text-zinc-300 transition-colors">Painel Admin</a></li>
                 <li><a href="#aplicativos" className="hover:text-zinc-300 transition-colors">App Motorista & Pátio</a></li>
-                <li><a href="#aplicativos" className="hover:text-zinc-300 transition-colors">Aplicativo Reserva</a></li>
                 <li><a href="#aplicativos" className="hover:text-zinc-300 transition-colors">Tecnologia PWA Offline</a></li>
               </ul>
             </div>

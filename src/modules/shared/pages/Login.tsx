@@ -101,6 +101,7 @@ export default function Login() {
         setError("Muitas tentativas falsas. Acesso bloqueado por 1 minuto.");
         logSystemAudit({
           module: "Autenticação",
+          entity: "auth_sessions",
           action: "BLOQUEAR",
           user_email: authEmail,
           reason: `Acesso bloqueado por 1 minuto devido a 5 tentativas incorretas de login para [${authEmail}].`,
@@ -119,6 +120,7 @@ export default function Login() {
         user_id: data.user.id,
         user_email: data.user.email || authEmail,
         module: "Autenticação",
+        entity: "auth_sessions",
         action: "LOGIN",
         reason: `Usuário [${data.user.email || authEmail}] realizou login no sistema.`,
       });

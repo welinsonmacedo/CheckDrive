@@ -239,6 +239,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     logSystemAudit({
       company_id: user?.company_id,
       module: "Autenticação",
+      entity: "auth_sessions",
       action: "LOGOUT",
       reason: `Sessão encerrada pelo usuário [${user?.name || user?.email}].`,
     });
