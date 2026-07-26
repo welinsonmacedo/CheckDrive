@@ -258,7 +258,8 @@ export default function AdminDashboard() {
            max_km_limit: 500,
            hours_limit_enabled: false,
            max_hours: 100,
-           manual_checklist_activate: true
+           manual_checklist_activate: true,
+           activate_telemetry_engine_all_the_time: false
          }).select().single();
          settings = newSettings;
       }

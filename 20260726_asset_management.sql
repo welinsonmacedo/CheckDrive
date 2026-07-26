@@ -85,6 +85,9 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='app_settings' AND column_name='hours_limit_enabled') THEN
             ALTER TABLE public.app_settings ADD COLUMN hours_limit_enabled BOOLEAN DEFAULT false;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='app_settings' AND column_name='activate_telemetry_engine_all_the_time') THEN
+            ALTER TABLE public.app_settings ADD COLUMN activate_telemetry_engine_all_the_time BOOLEAN DEFAULT false;
+        END IF;
     END IF;
 
 END $$;

@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Plug,
   Gauge,
+  Radio,
   Building2,
 } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
@@ -62,6 +63,7 @@ export default function SettingsTab({
            hours_limit_enabled: appSettings.hours_limit_enabled,
            max_hours: appSettings.max_hours,
            manual_checklist_activate: appSettings.manual_checklist_activate ?? true,
+           activate_telemetry_engine_all_the_time: appSettings.activate_telemetry_engine_all_the_time ?? false,
         })
         .eq("id", appSettings.id);
       if (error) throw error;
@@ -299,7 +301,8 @@ ADD COLUMN IF NOT EXISTS km_limit_enabled BOOLEAN DEFAULT false,
 ADD COLUMN IF NOT EXISTS max_km_limit NUMERIC DEFAULT 0,
 ADD COLUMN IF NOT EXISTS hours_limit_enabled BOOLEAN DEFAULT false,
 ADD COLUMN IF NOT EXISTS max_hours NUMERIC DEFAULT 100,
-ADD COLUMN IF NOT EXISTS manual_checklist_activate BOOLEAN DEFAULT true;`}
+ADD COLUMN IF NOT EXISTS manual_checklist_activate BOOLEAN DEFAULT true,
+ADD COLUMN IF NOT EXISTS activate_telemetry_engine_all_the_time BOOLEAN DEFAULT false;`}
                      </pre>
                    </div>
                    <button type="button" onClick={() => setSqlError(null)} className="mt-4 px-4 py-2 bg-zinc-200 text-zinc-700 rounded-lg text-sm font-bold">Voltar</button>
@@ -592,6 +595,45 @@ ADD COLUMN IF NOT EXISTS manual_checklist_activate BOOLEAN DEFAULT true;`}
                         ></div>
                         <div
                           className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${appSettings?.manual_checklist_activate !== false ? "transform translate-x-5" : ""}`}
+                        ></div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Row 6: Ativar Telemetria O Tempo Todo ou Somente em Escala */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-2xl bg-zinc-50 border border-zinc-100 hover:border-primary/20 transition-colors group">
+                    <div className="flex items-center gap-4 mb-4 sm:mb-0">
+                      <div className="w-10 h-10 rounded-xl bg-white border border-zinc-200 flex items-center justify-center text-zinc-400 group-hover:text-primary transition-colors shrink-0">
+                        <Radio size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-zinc-800">
+                          Ativar Motor de Telemetria O Tempo Todo
+                        </h4>
+                        <p className="text-[11px] text-zinc-500 mt-1 max-w-sm leading-relaxed">
+                          <strong>Ativado:</strong> O rastreamento de telemetria no app fica ativo continuamente.<br />
+                          <strong>Desativado:</strong> O rastreamento funciona exclusivamente quando o motorista estiver em escala/jornada ativa.
+                        </p>
+                      </div>
+                    </div>
+                    <label className="flex items-center cursor-pointer shrink-0 ml-14 sm:ml-0">
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={appSettings?.activate_telemetry_engine_all_the_time ?? false}
+                          onChange={(e) =>
+                            setAppSettings({
+                              ...appSettings,
+                              activate_telemetry_engine_all_the_time: e.target.checked,
+                            })
+                          }
+                        />
+                        <div
+                          className={`block w-12 h-7 rounded-full shadow-inner transition-colors ${appSettings?.activate_telemetry_engine_all_the_time ? "bg-primary" : "bg-zinc-300"}`}
+                        ></div>
+                        <div
+                          className={`absolute left-1 top-1 bg-white w-5 h-5 rounded-full shadow-sm transition-transform ${appSettings?.activate_telemetry_engine_all_the_time ? "transform translate-x-5" : ""}`}
                         ></div>
                       </div>
                     </label>

@@ -156,6 +156,104 @@ function createPlaybackIcon(bearing: number = 0): L.DivIcon {
   });
 }
 
+function createStartEndIcon(type: "start" | "end", timeLabel?: string): L.DivIcon {
+  const isStart = type === "start";
+  const bg = isStart ? "#10b981" : "#ef4444";
+  const label = isStart ? "A" : "B";
+  const title = isStart ? "Início (A)" : "Fim (B)";
+
+  const html = `
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto;">
+      <div style="
+        background: rgba(15, 23, 42, 0.92);
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 800;
+        padding: 2px 7px;
+        border-radius: 8px;
+        border: 1.5px solid ${bg};
+        white-space: nowrap;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+        margin-bottom: 3px;
+        font-family: system-ui, -apple-system, sans-serif;
+      ">
+        ${title}${timeLabel ? ` <span style="color: #94a3b8; font-weight: 500;">${timeLabel}</span>` : ""}
+      </div>
+      <div style="
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        background: ${bg};
+        border: 2.5px solid #ffffff;
+        color: #ffffff;
+        font-weight: 900;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+      ">
+        ${label}
+      </div>
+    </div>
+  `;
+
+  return L.divIcon({
+    html,
+    className: `start-end-marker-${type}`,
+    iconSize: [120, 58],
+    iconAnchor: [60, 48],
+    popupAnchor: [0, -48],
+  });
+}
+
+async function fetchRoadRouteGeometry(
+  locations: { latitude: number; longitude: number }[]
+): Promise<[number, number][] | null> {
+  if (!locations || locations.length < 2) return null;
+
+  try {
+    // Select waypoints to pass to OSRM (up to 25 waypoints for fast response)
+    let sampled: { latitude: number; longitude: number }[] = [];
+    if (locations.length <= 25) {
+      sampled = locations;
+    } else {
+      const step = (locations.length - 1) / 24;
+      for (let i = 0; i < 24; i++) {
+        sampled.push(locations[Math.floor(i * step)]);
+      }
+      sampled.push(locations[locations.length - 1]);
+    }
+
+    const coordsStr = sampled
+      .map((loc) => `${loc.longitude},${loc.latitude}`)
+      .join(";");
+
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordsStr}?overview=full&geometries=geojson`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    if (data.code === "Ok" && data.routes && data.routes[0]?.geometry?.coordinates) {
+      // OSRM GeoJSON coords are [lng, lat] -> Leaflet requires [lat, lng]
+      const streetCoords: [number, number][] = data.routes[0].geometry.coordinates.map(
+        (c: [number, number]) => [c[1], c[0]]
+      );
+      return streetCoords;
+    }
+  } catch (err) {
+    console.warn("OSRM road route fetch fallback to direct polyline:", err);
+  }
+
+  return null;
+}
+
 export const MonitoringMap: React.FC<MonitoringMapProps> = ({
   driverStates,
   selectedDriverId,
@@ -170,7 +268,10 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
 
   // Map elements refs to update smoothly without tearing down the map
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const routeOutlineRef = useRef<L.Polyline | null>(null);
   const polylineRef = useRef<L.Polyline | null>(null);
+  const startMarkerRef = useRef<L.Marker | null>(null);
+  const endMarkerRef = useRef<L.Marker | null>(null);
   const playbackMarkerRef = useRef<L.Marker | null>(null);
   const heatmapCirclesRef = useRef<L.CircleMarker[]>([]);
 
@@ -345,34 +446,83 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
     }
   }, [selectedDriverId, driverStates]);
 
-  // 4. Draw Route Polyline for Selected Trip
+  // 4. Draw Route Polyline & Start/End Markers for Selected Trip
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
+    // Cleanup previous route layers and markers
     if (polylineRef.current) {
       polylineRef.current.remove();
       polylineRef.current = null;
+    }
+    if (routeOutlineRef.current) {
+      routeOutlineRef.current.remove();
+      routeOutlineRef.current = null;
+    }
+    if (startMarkerRef.current) {
+      startMarkerRef.current.remove();
+      startMarkerRef.current = null;
+    }
+    if (endMarkerRef.current) {
+      endMarkerRef.current.remove();
+      endMarkerRef.current = null;
     }
 
     if (!selectedTripMetrics || selectedTripMetrics.locations.length < 2) {
       return;
     }
 
-    const latLngs: [number, number][] = selectedTripMetrics.locations.map((loc) => [
+    let isMounted = true;
+    const locs = selectedTripMetrics.locations;
+    const rawLatLngs: [number, number][] = locs.map((loc) => [
       loc.latitude,
       loc.longitude,
     ]);
 
-    const polyline = L.polyline(latLngs, {
-      color: "#3b82f6",
-      weight: 5,
-      opacity: 0.85,
+    // 1. Draw initial route line and dark border
+    const routeOutline = L.polyline(rawLatLngs, {
+      color: "#0f172a",
+      weight: 8,
+      opacity: 0.8,
+      lineCap: "round",
       lineJoin: "round",
-      dashArray: "1, 0",
     }).addTo(map);
 
+    const polyline = L.polyline(rawLatLngs, {
+      color: "#38bdf8",
+      weight: 5,
+      opacity: 0.9,
+      lineCap: "round",
+      lineJoin: "round",
+    }).addTo(map);
+
+    routeOutlineRef.current = routeOutline;
     polylineRef.current = polyline;
+
+    // 2. Add Start (A - Início) and End (B - Fim) markers
+    const startLoc = locs[0];
+    const endLoc = locs[locs.length - 1];
+
+    const startTime = startLoc.created_at
+      ? new Date(startLoc.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+      : "";
+    const endTime = endLoc.created_at
+      ? new Date(endLoc.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+      : "";
+
+    const startMarker = L.marker([startLoc.latitude, startLoc.longitude], {
+      icon: createStartEndIcon("start", startTime),
+      zIndexOffset: 1500,
+    }).addTo(map);
+
+    const endMarker = L.marker([endLoc.latitude, endLoc.longitude], {
+      icon: createStartEndIcon("end", endTime),
+      zIndexOffset: 1500,
+    }).addTo(map);
+
+    startMarkerRef.current = startMarker;
+    endMarkerRef.current = endMarker;
 
     // Fit route bounds
     try {
@@ -383,6 +533,29 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
     } catch (e) {
       // ignore
     }
+
+    // 3. Fetch street route geometry from OSRM to map along real roads
+    fetchRoadRouteGeometry(locs).then((streetCoords) => {
+      if (!isMounted || !streetCoords || streetCoords.length < 2) return;
+
+      if (polylineRef.current && routeOutlineRef.current) {
+        polylineRef.current.setLatLngs(streetCoords);
+        routeOutlineRef.current.setLatLngs(streetCoords);
+
+        try {
+          const bounds = polylineRef.current.getBounds();
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [60, 60] });
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedTripMetrics]);
 
   // 5. Playback Marker Animation
