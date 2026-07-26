@@ -1,4 +1,4 @@
-export function encodeItemTitle(title: string, mask: string | null, options: string[] = []): string {
+export function encodeItemTitle(title: string, mask: string | null, options: string[] = [], vtype?: string): string {
   let encoded = title;
   if (mask && mask !== 'none') {
     encoded += `::mask=${mask}`;
@@ -6,13 +6,23 @@ export function encodeItemTitle(title: string, mask: string | null, options: str
   if (options && options.length > 0) {
     encoded += `::options=${options.join('|')}`;
   }
+  if (vtype && vtype !== 'ALL') {
+    encoded += `::vtype=${vtype}`;
+  }
   return encoded;
 }
 
-export function decodeItemTitle(rawTitle: string): { title: string, mask: string | null, options: string[] } {
+export function decodeItemTitle(rawTitle: string): { title: string, mask: string | null, options: string[], vtype: string } {
   let title = rawTitle;
   let mask: string | null = null;
   let options: string[] = [];
+  let vtype = 'ALL';
+
+  const vtypeSplit = title.split('::vtype=');
+  if (vtypeSplit.length > 1) {
+    title = vtypeSplit[0];
+    vtype = vtypeSplit[1];
+  }
 
   const optionsSplit = title.split('::options=');
   if (optionsSplit.length > 1) {
@@ -26,7 +36,7 @@ export function decodeItemTitle(rawTitle: string): { title: string, mask: string
     mask = maskSplit[1];
   }
 
-  return { title, mask, options };
+  return { title, mask, options, vtype };
 }
 
 export function applyNumberMask(value: string, mask: string | null): string {

@@ -1,5 +1,9 @@
 export type Role = "driver" | "admin" | "standard" | "superadmin";
 
+export type AssetType = "VEHICLE" | "MACHINE" | "EQUIPMENT";
+export type ControlUnit = "KM" | "HOURS" | "BOTH";
+export type OperationMode = "VEHICLES" | "MACHINES" | "MIXED" | "ALL_ASSETS";
+
 export interface User {
   id: string;
   email: string;
@@ -24,6 +28,11 @@ export interface Vehicle {
   modality_id?: string;
   requires_trailer?: boolean;
   active: boolean;
+  asset_type?: AssetType;
+  control_unit?: ControlUnit;
+  hour_meter?: number;
+  hour_meter_initial?: number;
+  hour_meter_current?: number;
 }
 
 export interface Trailer {

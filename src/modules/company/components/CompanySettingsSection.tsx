@@ -27,6 +27,7 @@ export default function CompanySettingsSection() {
     address: "",
     phone: "",
     logo_url: "",
+    operation_mode: "ALL_ASSETS" as "VEHICLES" | "MACHINES" | "MIXED" | "ALL_ASSETS",
   });
 
   const fetchCompanyData = async () => {
@@ -64,6 +65,7 @@ export default function CompanySettingsSection() {
             address: data.address || "",
             phone: data.phone || "",
             logo_url: data.logo_url || "",
+            operation_mode: data.operation_mode || "ALL_ASSETS",
           });
         }
       }
@@ -140,6 +142,7 @@ export default function CompanySettingsSection() {
         address: company.address || null,
         phone: company.phone || null,
         logo_url: company.logo_url || null,
+        operation_mode: company.operation_mode || "ALL_ASSETS",
       };
 
       if (company.id) {
@@ -394,6 +397,27 @@ USING (
               onChange={(e) => setCompany((prev) => ({ ...prev, address: e.target.value }))}
               className="w-full h-12 px-4 rounded-xl border border-zinc-200 bg-zinc-50 text-sm font-bold text-zinc-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
             />
+          </div>
+
+          {/* Modo de Operação (Gestão de Ativos) */}
+          <div className="md:col-span-2 space-y-2 p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100">
+            <label className="text-[10px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-1.5">
+              <Building2 size={12} className="text-indigo-600" />
+              Modo de Operação de Ativos (Gestão da Frota)
+            </label>
+            <p className="text-xs text-indigo-700/80 mb-2">
+              Define a quais tipos de ativos a empresa opera. Permite alternar entre Veículos, Máquinas e Equipamentos com controle por KM ou Horímetro.
+            </p>
+            <select
+              value={company.operation_mode}
+              onChange={(e) => setCompany((prev) => ({ ...prev, operation_mode: e.target.value as any }))}
+              className="w-full h-12 px-4 rounded-xl border border-indigo-200 bg-white text-sm font-bold text-slate-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            >
+              <option value="VEHICLES">VEHICLES - Apenas Veículos (Caminhões, Carros, Vans)</option>
+              <option value="MACHINES">MACHINES - Apenas Máquinas (Tratores, Escavadeiras, Geradores)</option>
+              <option value="MIXED">MIXED - Misto (Veículos e Máquinas)</option>
+              <option value="ALL_ASSETS">ALL_ASSETS - Todos os Ativos (Veículos, Máquinas e Equipamentos)</option>
+            </select>
           </div>
 
           {/* URL direta do logo (opcional) */}

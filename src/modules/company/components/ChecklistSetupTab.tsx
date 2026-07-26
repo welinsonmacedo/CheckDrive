@@ -9,11 +9,13 @@ export default function ChecklistSetupTab() {
 
   const [checklistTypes, setChecklistTypes] = useState<any[]>([]);
   const [checklistItems, setChecklistItems] = useState<any[]>([]);
+  const [vehicleTypesList, setVehicleTypesList] = useState<any[]>([]);
   
   const [itemForm, setItemForm] = useState({ 
     title: '', 
     is_trailer_item: false,
     selectedTypes: [] as string[],
+    target_vehicle_type: 'ALL',
     appears_in_manual: false,
     input_type: 'boolean',
     is_required: true,
@@ -35,6 +37,10 @@ export default function ChecklistSetupTab() {
     const { data: types } = await supabase.from('checklist_types').select('*').eq("company_id", user?.company_id).order('title');
     let currentTypes = types || [];
     
+    // Fetch vehicle types for linking
+    const { data: vTypes } = await supabase.from('vehicle_types').select('*').eq("company_id", user?.company_id).order('name');
+    setVehicleTypesList(vTypes || []);
+
     // Auto-create 'Lançamento Manual' type if it doesn't exist
     const hasManualType = currentTypes.some(t => t.slug === 'manual');
     if (!hasManualType && currentTypes.length > 0) {
@@ -58,15 +64,17 @@ export default function ChecklistSetupTab() {
   };
 
   const groupedItems = checklistItems.reduce((acc, current) => {
-    const { title: decodedTitle, mask, options } = decodeItemTitle(current.title);
+    const { title: decodedTitle, mask, options, vtype } = decodeItemTitle(current.title);
+    const itemVType = current.vehicle_type || vtype || (current.is_trailer_item ? 'TRAILER' : 'ALL');
 
-    const key = `${current.title.toLowerCase().trim()}_${current.is_trailer_item}_${current.input_type || 'boolean'}_${current.order_index}`;
+    const key = `${current.title.toLowerCase().trim()}_${itemVType}_${current.is_trailer_item}_${current.input_type || 'boolean'}_${current.order_index}`;
     if (!acc[key]) {
       acc[key] = {
         title: decodedTitle,
         mask: mask || 'none',
         options: options || [],
-        is_trailer_item: current.is_trailer_item,
+        vehicle_type: itemVType,
+        is_trailer_item: current.is_trailer_item || itemVType === 'TRAILER',
         appears_in_manual: current.appears_in_manual || false,
         input_type: current.input_type || 'boolean',
         is_required: current.order_index !== 0,
@@ -88,17 +96,23 @@ export default function ChecklistSetupTab() {
       alert("Selecione pelo menos um tipo de checklist para este item.");
       return;
     }
+    if (!itemForm.target_vehicle_type) {
+      alert("Erro: É OBRIGATÓRIO vincular este item a um Tipo de Veículo ou Ativo.");
+      return;
+    }
     setSaving(true);
     try {
-      const encodedTitle = encodeItemTitle(itemForm.title, itemForm.mask, itemForm.options);
+      const encodedTitle = encodeItemTitle(itemForm.title, itemForm.mask, itemForm.options, itemForm.target_vehicle_type);
 
       const finalInputType = itemForm.is_fuel_liters ? 'fuel_liters' : itemForm.input_type;
+      const isTrailer = itemForm.target_vehicle_type === 'TRAILER' || itemForm.is_trailer_item;
 
       // Create an array of inserts
       const insertsWithLiters = itemForm.selectedTypes.map(typeId => ({
         type_id: typeId,
         title: encodedTitle,
-        is_trailer_item: itemForm.is_trailer_item,
+        vehicle_type: itemForm.target_vehicle_type,
+        is_trailer_item: isTrailer,
         appears_in_manual: itemForm.appears_in_manual,
         input_type: finalInputType,
         order_index: itemForm.is_required ? 1 : 0,
@@ -113,26 +127,25 @@ export default function ChecklistSetupTab() {
 
       const { error: err1 } = await supabase.from('checklist_items').insert(insertsWithLiters);
       if (err1) {
-        console.warn('Fallback inserting without manual...', err1.message);
+        console.warn('Fallback inserting without vehicle_type column...', err1.message);
         
         const fallbackInserts = itemForm.selectedTypes.map(typeId => ({
           type_id: typeId,
           title: encodedTitle,
-          is_trailer_item: itemForm.is_trailer_item,
+          is_trailer_item: isTrailer,
           input_type: finalInputType,
           order_index: itemForm.is_required ? 1 : 0,
           company_id: user?.company_id
         }));
         const { error: err3 } = await supabase.from('checklist_items').insert(fallbackInserts);
         if (err3) {
-            alert('Failed to insert items completely.');
+            alert('Erro ao salvar item no banco: ' + err3.message);
         }
       }
       
-      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
-                      setShowForm(false);
-      setEditingItemIds([]);
+      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], target_vehicle_type: 'ALL', appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
       setShowForm(false);
+      setEditingItemIds([]);
       fetchData();
     } catch (error: any) {
       alert('Erro: ' + error.message);
@@ -169,6 +182,7 @@ export default function ChecklistSetupTab() {
       title: item.title,
       is_trailer_item: item.is_trailer_item,
       selectedTypes: item.types,
+      target_vehicle_type: item.vehicle_type || (item.is_trailer_item ? 'TRAILER' : 'ALL'),
       appears_in_manual: item.appears_in_manual || false,
       input_type: item.input_type === 'fuel_liters' ? 'number' : (item.input_type || 'boolean'),
       is_required: item.is_required,
@@ -218,7 +232,7 @@ export default function ChecklistSetupTab() {
               </button>
             <div>
               <h3 className="text-sm font-black text-text-main uppercase tracking-tight">{editingItemIds.length > 0 ? "Editando Item" : "Novo Item"}</h3>
-              <p className="text-xs text-text-muted mt-1">{editingItemIds.length > 0 ? "Altere onde este item deve aparecer" : "Cadastre os itens e marque para qual tipo ele deve aparecer."}</p>
+              <p className="text-xs text-text-muted mt-1">{editingItemIds.length > 0 ? "Altere onde este item deve aparecer" : "Cadastre os itens, vincule obrigatoriamente ao tipo de veículo/ativo e marque onde deve aparecer."}</p>
             </div>
             <form onSubmit={handleSaveItem} className="flex flex-col gap-4 mt-6">
               <div className="flex flex-col gap-2">
@@ -232,8 +246,51 @@ export default function ChecklistSetupTab() {
                 />
               </div>
 
+              {/* MANDATORY: Linkage to Vehicle / Asset Type */}
+              <div className="flex flex-col gap-2 p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-xl">
+                 <div className="flex items-center justify-between">
+                   <span className="text-[10px] font-black text-indigo-950 uppercase tracking-widest flex items-center gap-1.5">
+                     📌 Vincular ao Tipo de Veículo / Ativo (Obrigatório) *
+                   </span>
+                   <span className="text-[9px] font-black text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200 uppercase tracking-wider">Campo Obrigatório</span>
+                 </div>
+                 <p className="text-[11px] text-indigo-900/80 mb-1">
+                   O item só será exibido no checklist para o tipo de ativo selecionado:
+                 </p>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                   <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs cursor-pointer font-bold transition-all ${itemForm.target_vehicle_type === 'ALL' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white border-indigo-200 text-slate-700 hover:bg-indigo-50'}`}>
+                     <input type="radio" name="vtype" value="ALL" checked={itemForm.target_vehicle_type === 'ALL'} onChange={() => setItemForm({...itemForm, target_vehicle_type: 'ALL', is_trailer_item: false})} className="hidden" />
+                     🌐 Todos os Tipos de Veículos e Ativos
+                   </label>
+                   <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs cursor-pointer font-bold transition-all ${itemForm.target_vehicle_type === 'VEHICLE' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white border-indigo-200 text-slate-700 hover:bg-indigo-50'}`}>
+                     <input type="radio" name="vtype" value="VEHICLE" checked={itemForm.target_vehicle_type === 'VEHICLE'} onChange={() => setItemForm({...itemForm, target_vehicle_type: 'VEHICLE', is_trailer_item: false})} className="hidden" />
+                     🚚 Apenas Veículos (Caminhão, Van, etc.)
+                   </label>
+                   <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs cursor-pointer font-bold transition-all ${itemForm.target_vehicle_type === 'MACHINE' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white border-indigo-200 text-slate-700 hover:bg-indigo-50'}`}>
+                     <input type="radio" name="vtype" value="MACHINE" checked={itemForm.target_vehicle_type === 'MACHINE'} onChange={() => setItemForm({...itemForm, target_vehicle_type: 'MACHINE', is_trailer_item: false})} className="hidden" />
+                     🚜 Apenas Máquinas (Agrícola / Amarela)
+                   </label>
+                   <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs cursor-pointer font-bold transition-all ${itemForm.target_vehicle_type === 'EQUIPMENT' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white border-indigo-200 text-slate-700 hover:bg-indigo-50'}`}>
+                     <input type="radio" name="vtype" value="EQUIPMENT" checked={itemForm.target_vehicle_type === 'EQUIPMENT'} onChange={() => setItemForm({...itemForm, target_vehicle_type: 'EQUIPMENT', is_trailer_item: false})} className="hidden" />
+                     ⚙️ Apenas Equipamentos
+                   </label>
+                   <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs cursor-pointer font-bold transition-all ${itemForm.target_vehicle_type === 'TRAILER' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white border-indigo-200 text-slate-700 hover:bg-indigo-50'}`}>
+                     <input type="radio" name="vtype" value="TRAILER" checked={itemForm.target_vehicle_type === 'TRAILER'} onChange={() => setItemForm({...itemForm, target_vehicle_type: 'TRAILER', is_trailer_item: true})} className="hidden" />
+                     🚛 Apenas Reboques / Carretas
+                   </label>
+
+                   {/* Registered vehicle types from database */}
+                   {vehicleTypesList.map((vt) => (
+                     <label key={vt.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs cursor-pointer font-bold transition-all ${itemForm.target_vehicle_type === vt.name ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white border-indigo-200 text-slate-700 hover:bg-indigo-50'}`}>
+                       <input type="radio" name="vtype" value={vt.name} checked={itemForm.target_vehicle_type === vt.name} onChange={() => setItemForm({...itemForm, target_vehicle_type: vt.name, is_trailer_item: false})} className="hidden" />
+                       📋 Tipo Específico: {vt.name}
+                     </label>
+                   ))}
+                 </div>
+              </div>
+
               <div className="flex flex-col gap-2 p-3 bg-zinc-50 border border-app-border rounded-xl">
-                 <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">Aparecer nos tipos:</span>
+                 <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">Aparecer nos tipos de checklist:</span>
                  <div className="flex flex-wrap gap-2">
                    {checklistTypes.map(t => (
                      <label key={t.id} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${itemForm.selectedTypes.includes(t.id) ? 'bg-primary/10 border-primary text-primary font-bold' : 'bg-white border-app-border text-text-muted'}`}>
@@ -336,17 +393,6 @@ export default function ChecklistSetupTab() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input 
                     type="checkbox" 
-                    disabled={editingItemIds.length > 0}
-                    className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary disabled:opacity-50"
-                    checked={itemForm.is_trailer_item}
-                    onChange={e => setItemForm({...itemForm, is_trailer_item: e.target.checked})}
-                  />
-                  <span className="text-xs font-black text-text-main uppercase tracking-widest">Item para Reboque</span>
-                </label>
-                
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                    type="checkbox" 
                     className="w-4 h-4 rounded border-app-border text-primary focus:ring-primary"
                     checked={itemForm.appears_in_manual}
                     onChange={e => setItemForm({...itemForm, appears_in_manual: e.target.checked})}
@@ -381,9 +427,8 @@ export default function ChecklistSetupTab() {
                     type="button"
                     onClick={() => {
                       setEditingItemIds([]);
-      setShowForm(false);
-                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
                       setShowForm(false);
+                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], target_vehicle_type: 'ALL', appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
                     }}
                     className="h-10 px-4 bg-zinc-200 text-zinc-700 flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:bg-zinc-300 transition-colors"
                   >
@@ -411,7 +456,7 @@ export default function ChecklistSetupTab() {
             </span>
             <button
               onClick={() => {
-                setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
+                setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], target_vehicle_type: 'ALL', appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
                 setEditingItemIds([]);
                 setShowForm(true);
               }}
@@ -425,7 +470,7 @@ export default function ChecklistSetupTab() {
               <thead className="bg-app-bg/50">
                 <tr>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Item / Pergunta</th>
-                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Tipo de Equip.</th>
+                  <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Tipo de Veículo / Ativo</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Resposta</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Aparece em</th>
                   <th className="px-5 py-3 text-[10px] font-bold text-text-muted uppercase tracking-widest border-y border-app-border">Pendência Manual?</th>
@@ -439,8 +484,19 @@ export default function ChecklistSetupTab() {
                   <tr key={i} className="hover:bg-app-bg/30">
                     <td className="px-5 py-4 text-sm font-bold text-text-main">{item.title}</td>
                     <td className="px-5 py-4">
-                      <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${item.is_trailer_item ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-primary'}`}>
-                        {item.is_trailer_item ? 'Reboque' : 'Veículo'}
+                      <span className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider border ${
+                        item.vehicle_type === 'MACHINE' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                        item.vehicle_type === 'EQUIPMENT' ? 'bg-purple-100 text-purple-800 border-purple-200' :
+                        item.vehicle_type === 'VEHICLE' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                        item.vehicle_type === 'TRAILER' || item.is_trailer_item ? 'bg-orange-100 text-orange-800 border-orange-200' :
+                        'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      }`}>
+                        {item.vehicle_type === 'MACHINE' ? '🚜 Máquina' :
+                         item.vehicle_type === 'EQUIPMENT' ? '⚙️ Equipamento' :
+                         item.vehicle_type === 'VEHICLE' ? '🚚 Veículo' :
+                         item.vehicle_type === 'TRAILER' || item.is_trailer_item ? '🚛 Reboque' :
+                         item.vehicle_type === 'ALL' || !item.vehicle_type ? '🌐 Todos os Ativos' :
+                         `📋 ${item.vehicle_type}`}
                       </span>
                     </td>
                     <td className="px-5 py-4">
@@ -488,7 +544,7 @@ export default function ChecklistSetupTab() {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-text-muted italic">Nenhum item cadastrado ainda.</td></tr>
+                  <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-text-muted italic">Nenhum item cadastrado ainda.</td></tr>
                 )}
               </tbody>
             </table>

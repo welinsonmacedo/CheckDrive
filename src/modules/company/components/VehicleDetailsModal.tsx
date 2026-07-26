@@ -241,6 +241,26 @@ export default function VehicleDetailsModal({
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
+                    <span className="block text-[9px] uppercase tracking-wider text-indigo-500 font-bold mb-1">Tipo de Ativo</span>
+                    <span className="text-xs font-black text-indigo-900 bg-indigo-100/60 px-2 py-0.5 rounded-md inline-block">
+                      {vehicle.asset_type === 'MACHINE' ? '🚜 Máquina' : vehicle.asset_type === 'EQUIPMENT' ? '⚙️ Equipamento' : '🚚 Veículo'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] uppercase tracking-wider text-indigo-500 font-bold mb-1">Unidade Controle</span>
+                    <span className="text-xs font-bold text-slate-700">
+                      {vehicle.control_unit === 'HOURS' ? 'Horímetro (Horas)' : vehicle.control_unit === 'BOTH' ? 'KM e Horímetro' : 'Quilometragem (KM)'}
+                    </span>
+                  </div>
+                  {(vehicle.control_unit === 'HOURS' || vehicle.control_unit === 'BOTH' || (vehicle.hour_meter || 0) > 0) && (
+                    <div>
+                      <span className="block text-[9px] uppercase tracking-wider text-indigo-500 font-bold mb-1">Horímetro Atual</span>
+                      <span className="text-xs font-black text-slate-800 font-mono">
+                        {Number(vehicle.hour_meter_current || vehicle.hour_meter || 0).toLocaleString("pt-BR")} hrs
+                      </span>
+                    </div>
+                  )}
+                  <div>
                     <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Renavam</span>
                     <span className="text-xs font-semibold text-slate-700">{vehicle.renavam || 'Não informado'}</span>
                   </div>

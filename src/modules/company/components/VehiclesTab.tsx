@@ -22,8 +22,11 @@ export default function VehiclesTab() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isTrailerFormOpen, setIsTrailerFormOpen] = useState(false);
 
+  const [assetTypeFilter, setAssetTypeFilter] = useState<string>("all");
+
   const [itemForm, setItemForm] = useState<any>({
     id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "",
+    asset_type: "VEHICLE", control_unit: "KM", hour_meter_initial: 0, hour_meter_current: 0,
     renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "",
     photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "",
     doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "",
@@ -118,6 +121,11 @@ export default function VehiclesTab() {
         modality_id: itemForm.modality_id || null, renavam: itemForm.renavam || null, chassi: itemForm.chassi || null, manufacture_year: itemForm.manufacture_year || null,
         model_year: itemForm.model_year || null, crv_number: itemForm.crv_number || null, fuel_type: itemForm.fuel_type || null,
         color: itemForm.color || null, antt: itemForm.antt || null, insurance_id: itemForm.insurance_id || null,
+        asset_type: itemForm.asset_type || "VEHICLE",
+        control_unit: itemForm.control_unit || "KM",
+        hour_meter_initial: Number(itemForm.hour_meter_initial || 0),
+        hour_meter_current: Number(itemForm.hour_meter_current || itemForm.hour_meter_initial || 0),
+        hour_meter: Number(itemForm.hour_meter_current || itemForm.hour_meter_initial || 0),
         company_id: user?.company_id,
         photo_front_url: await uploadFile(photoFrontFile, itemForm.photo_front_url),
         photo_right_url: await uploadFile(photoRightFile, itemForm.photo_right_url),
@@ -178,11 +186,19 @@ export default function VehiclesTab() {
     ...trailers.map(t => ({ ...t, itemType: 'trailer' }))
   ];
 
-  const filteredItems = combinedItems.filter((item) => 
-    item.plate?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    item.chassi?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.itemType === 'vehicle' && item.model?.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredItems = combinedItems.filter((item) => {
+    const matchesSearch = 
+      item.plate?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      item.chassi?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.itemType === 'vehicle' && item.model?.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    if (!matchesSearch) return false;
+    if (assetTypeFilter !== "all") {
+      const type = item.asset_type || "VEHICLE";
+      if (type !== assetTypeFilter) return false;
+    }
+    return true;
+  });
 
   const currentItem = filteredItems[currentVehicleIndex] || null;
 
@@ -190,9 +206,21 @@ export default function VehiclesTab() {
     <>
       <div className={`flex flex-col gap-6 ${selectedVehicle ? 'print:hidden' : ''}`}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="relative w-full sm:w-auto">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"/>
-            <input type="text" placeholder="Filtrar placa, modelo ou chassi..." className="h-10 pl-9 pr-4 bg-app-bg rounded-xl text-[11px] font-bold text-text-main outline-none focus:ring-1 focus:ring-primary w-full sm:w-64 border border-app-border" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentVehicleIndex(0); }}/>
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-none">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"/>
+              <input type="text" placeholder="Filtrar placa, modelo ou chassi..." className="h-10 pl-9 pr-4 bg-app-bg rounded-xl text-[11px] font-bold text-text-main outline-none focus:ring-1 focus:ring-primary w-full sm:w-56 border border-app-border" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentVehicleIndex(0); }}/>
+            </div>
+            <select
+              value={assetTypeFilter}
+              onChange={(e) => { setAssetTypeFilter(e.target.value); setCurrentVehicleIndex(0); }}
+              className="h-10 px-3 bg-app-bg rounded-xl text-[11px] font-bold text-text-main border border-app-border focus:ring-1 focus:ring-primary outline-none"
+            >
+              <option value="all">Todos os Ativos</option>
+              <option value="VEHICLE">🚚 Veículos</option>
+              <option value="MACHINE">🚜 Máquinas</option>
+              <option value="EQUIPMENT">⚙️ Equipamentos</option>
+            </select>
           </div>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <button
@@ -211,10 +239,10 @@ export default function VehiclesTab() {
             >
               <FileText size={14} /> PDF
             </button>
-            <button onClick={() => { setFormType("vehicle"); setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" }); setIsFormOpen(true); }} className="flex-1 sm:flex-none px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all shadow-sm">
-              <Plus size={14}/> Veículo
+            <button onClick={() => { setFormType("vehicle"); setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", asset_type: "VEHICLE", control_unit: "KM", hour_meter_initial: 0, hour_meter_current: 0, renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" }); setIsFormOpen(true); }} className="flex-1 sm:flex-none px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all shadow-sm">
+              <Plus size={14}/> Novo Ativo / Veículo
             </button>
-            <button onClick={() => { setFormType("trailer"); setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" }); setIsFormOpen(true); }} className="flex-1 sm:flex-none px-4 py-2 bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:bg-slate-200 transition-all shadow-sm">
+            <button onClick={() => { setFormType("trailer"); setItemForm({ id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", asset_type: "VEHICLE", control_unit: "KM", hour_meter_initial: 0, hour_meter_current: 0, renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "", photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "", doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "" }); setIsFormOpen(true); }} className="flex-1 sm:flex-none px-4 py-2 bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:bg-slate-200 transition-all shadow-sm">
               <Plus size={14}/> Reboque
             </button>
           </div>
@@ -271,14 +299,19 @@ export default function VehiclesTab() {
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-4xl font-black text-text-main font-mono tracking-tight mb-2">{currentItem.plate}</h2>
-                    {currentItem.itemType === 'trailer' && (
-                      <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black uppercase tracking-widest mr-2 border border-slate-200">
-                        Reboque
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-200">
+                        {currentItem.asset_type === 'MACHINE' ? '🚜 Máquina' : currentItem.asset_type === 'EQUIPMENT' ? '⚙️ Equipamento' : '🚚 Veículo'}
                       </span>
-                    )}
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentItem.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {currentItem.active !== false ? 'Ativo' : 'Inativo'}
-                    </span>
+                      {currentItem.itemType === 'trailer' && (
+                        <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-black uppercase tracking-widest border border-slate-200">
+                          Reboque
+                        </span>
+                      )}
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentItem.active !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {currentItem.active !== false ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-app-border">
@@ -286,6 +319,16 @@ export default function VehiclesTab() {
                         <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Modelo</span>
                         <span className="text-sm font-black text-text-main uppercase">{currentItem.model || "N/I"}</span>
                       </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Unidade Controle</span>
+                        <span className="text-sm font-black text-indigo-700 uppercase">{currentItem.control_unit === 'HOURS' ? 'Horímetro (Horas)' : currentItem.control_unit === 'BOTH' ? 'KM & Horímetro' : 'Quilometragem (KM)'}</span>
+                      </div>
+                      {(currentItem.control_unit === 'HOURS' || currentItem.control_unit === 'BOTH' || Number(currentItem.hour_meter_current || currentItem.hour_meter || 0) > 0) && (
+                        <div>
+                          <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Horímetro Atual</span>
+                          <span className="text-sm font-black text-indigo-900 font-mono">{Number(currentItem.hour_meter_current || currentItem.hour_meter || 0).toLocaleString("pt-BR")} hrs</span>
+                        </div>
+                      )}
                       <div>
                         <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Ano Mod/Fab</span>
                         <span className="text-sm font-black text-text-main uppercase">{currentItem.model_year || "-"} / {currentItem.manufacture_year || "-"}</span>
@@ -434,6 +477,66 @@ export default function VehiclesTab() {
                   <input required className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" placeholder="Ex: Scania R450" value={itemForm.model} onChange={(e) => setItemForm({ ...itemForm, model: e.target.value })}/>
                 </div>
               </div>
+
+              {formType === "vehicle" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-1.5">
+                      Tipo de Ativo (Classificação)
+                    </label>
+                    <select
+                      className="w-full h-11 px-4 rounded-xl border border-indigo-200 bg-white text-[11px] font-bold outline-none focus:border-primary text-slate-800"
+                      value={itemForm.asset_type || "VEHICLE"}
+                      onChange={(e) => setItemForm({ ...itemForm, asset_type: e.target.value })}
+                    >
+                      <option value="VEHICLE">🚚 VEHICLE - Veículo (Rodoviário / Urbano)</option>
+                      <option value="MACHINE">🚜 MACHINE - Máquina (Trator, Escavadeira, Pá Carregadeira)</option>
+                      <option value="EQUIPMENT">⚙️ EQUIPMENT - Equipamento (Gerador, Empilhadeira, Compressores)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-1.5">
+                      Unidade de Controle Principal
+                    </label>
+                    <select
+                      className="w-full h-11 px-4 rounded-xl border border-indigo-200 bg-white text-[11px] font-bold outline-none focus:border-primary text-slate-800"
+                      value={itemForm.control_unit || "KM"}
+                      onChange={(e) => setItemForm({ ...itemForm, control_unit: e.target.value })}
+                    >
+                      <option value="KM">KM - Quilometragem</option>
+                      <option value="HOURS">HOURS - Horímetro (Horas de Uso)</option>
+                      <option value="BOTH">BOTH - Ambos (Quilometragem e Horímetro)</option>
+                    </select>
+                  </div>
+
+                  {(itemForm.control_unit === "HOURS" || itemForm.control_unit === "BOTH" || itemForm.asset_type === "MACHINE" || itemForm.asset_type === "EQUIPMENT") && (
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider">Horímetro Inicial (Horas)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          className="w-full h-11 px-4 rounded-xl border border-indigo-200 bg-white text-[11px] font-bold outline-none focus:border-primary font-mono text-slate-800"
+                          value={itemForm.hour_meter_initial || 0}
+                          onChange={(e) => setItemForm({ ...itemForm, hour_meter_initial: parseFloat(e.target.value) || 0 })}
+                          placeholder="Ex: 0"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider">Horímetro Atual (Horas)</label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          className="w-full h-11 px-4 rounded-xl border border-indigo-200 bg-white text-[11px] font-bold outline-none focus:border-primary font-mono text-slate-800"
+                          value={itemForm.hour_meter_current || itemForm.hour_meter || itemForm.hour_meter_initial || 0}
+                          onChange={(e) => setItemForm({ ...itemForm, hour_meter_current: parseFloat(e.target.value) || 0 })}
+                          placeholder="Ex: 1200"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">

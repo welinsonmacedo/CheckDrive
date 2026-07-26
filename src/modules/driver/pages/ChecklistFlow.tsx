@@ -540,8 +540,8 @@ export default function ChecklistFlow() {
       let checklistItems: any[] = [];
       if (typeData) {
         checklistItems = (itemsData || []).map((item: any) => {
-          const { title, mask, options } = decodeItemTitle(item.title);
-          return { ...item, title, mask, options };
+          const { title, mask, options, vtype } = decodeItemTitle(item.title);
+          return { ...item, title, mask, options, vehicle_type: item.vehicle_type || vtype || (item.is_trailer_item ? 'TRAILER' : 'ALL') };
         });
       }
 
@@ -1469,6 +1469,17 @@ export default function ChecklistFlow() {
                 <div className="space-y-4">
                   {options.items
                     .filter((item: any) => !item.is_trailer_item)
+                    .filter((item: any) => {
+                      if (!item.vehicle_type || item.vehicle_type === 'ALL') return true;
+                      const selectedVeh = options.vehicles?.find((v: any) => v.id === formData.vehicleId);
+                      if (selectedVeh) {
+                        if (item.vehicle_type === selectedVeh.asset_type) return true;
+                        if (item.vehicle_type === selectedVeh.vehicle_type) return true;
+                        if (selectedVeh.vehicle_types?.name && item.vehicle_type === selectedVeh.vehicle_types.name) return true;
+                        return false;
+                      }
+                      return true;
+                    })
                     .map((item: any) => (
                       <React.Fragment key={item.id}>
                         <motion.div
