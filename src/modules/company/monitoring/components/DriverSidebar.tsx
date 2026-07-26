@@ -20,15 +20,19 @@ import {
   X,
   Radio,
   SlidersHorizontal,
+  AlertTriangle,
+  AlertCircle,
+  ShieldAlert,
 } from "lucide-react";
 import {
   DriverState,
   TripMetrics,
   FilterOptions,
   DriverOnlineStatus,
+  AlertItem,
 } from "../types";
 import { TrackingPlaybackControls } from "./TrackingPlaybackControls";
-import { formatDriverName } from "../services/trackingService";
+import { formatDriverName, formatRelativeTime } from "../services/trackingService";
 
 interface DriverSidebarProps {
   driverStates: DriverState[];
@@ -39,6 +43,10 @@ interface DriverSidebarProps {
   onSelectDriver: (driverId: string | null) => void;
   filters: FilterOptions;
   onFilterChange: (filters: FilterOptions) => void;
+  alerts?: AlertItem[];
+  onDismissAlert?: (id: string) => void;
+  activeSidebarTab?: "drivers" | "events";
+  onSidebarTabChange?: (tab: "drivers" | "events") => void;
 
   // Playback props
   isPlaybackPlaying: boolean;
@@ -68,6 +76,10 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
   onSelectDriver,
   filters,
   onFilterChange,
+  alerts = [],
+  onDismissAlert,
+  activeSidebarTab = "drivers",
+  onSidebarTabChange,
   isPlaybackPlaying,
   onTogglePlay,
   playbackIndex,
@@ -79,6 +91,15 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
+  const [internalTab, setInternalTab] = useState<"drivers" | "events">("drivers");
+  const [eventsSearchTerm, setEventsSearchTerm] = useState("");
+  const [eventsFilterType, setEventsFilterType] = useState<"all" | "speed" | "other">("all");
+
+  const currentTab = onSidebarTabChange ? activeSidebarTab : internalTab;
+  const setTab = (t: "drivers" | "events") => {
+    if (onSidebarTabChange) onSidebarTabChange(t);
+    setInternalTab(t);
+  };
 
   // Auto-expand mobile drawer if a driver is selected from the map
   React.useEffect(() => {
@@ -86,6 +107,20 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
       setIsMobileExpanded(true);
     }
   }, [selectedDriverId]);
+
+  // Filter alerts for the events tab
+  const filteredEvents = alerts.filter((al) => {
+    if (eventsFilterType === "speed" && al.type !== "high_speed") return false;
+    if (eventsFilterType === "other" && al.type === "high_speed") return false;
+    if (eventsSearchTerm) {
+      const term = eventsSearchTerm.toLowerCase();
+      const matchName = al.driverName?.toLowerCase().includes(term);
+      const matchPlate = al.vehiclePlate?.toLowerCase().includes(term);
+      const matchType = al.vehicleType?.toLowerCase().includes(term);
+      return matchName || matchPlate || matchType;
+    }
+    return true;
+  });
 
   return (
     <div
@@ -139,10 +174,29 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
             <Radio size={20} className="animate-pulse" />
           </div>
           <button
-            onClick={() => setIsCollapsed(false)}
+            onClick={() => {
+              setTab("drivers");
+              setIsCollapsed(false);
+            }}
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white"
+            title="Motoristas"
           >
             <Users size={18} />
+          </button>
+          <button
+            onClick={() => {
+              setTab("events");
+              setIsCollapsed(false);
+            }}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white relative"
+            title="Eventos e Alertas"
+          >
+            <AlertTriangle size={18} className={alerts.length > 0 ? "text-rose-400" : ""} />
+            {alerts.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                {alerts.length}
+              </span>
+            )}
           </button>
         </div>
       ) : (
@@ -188,50 +242,87 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
             </div>
           </div>
 
-          {/* Search & Quick Status Filters */}
-          <div className="p-3 border-b border-slate-800/80 space-y-2.5">
-            {/* Search Input */}
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={filters.searchTerm}
-                onChange={(e) => onFilterChange({ ...filters, searchTerm: e.target.value })}
-                placeholder="Buscar por motorista ou placa..."
-                className="w-full pl-9 pr-3 py-2 bg-slate-800/80 border border-slate-700/60 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 transition"
-              />
-              {filters.searchTerm && (
-                <button
-                  onClick={() => onFilterChange({ ...filters, searchTerm: "" })}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
+          {/* TAB SWITCHER: Motoristas | Eventos */}
+          <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-950/80 border-b border-slate-800 shrink-0">
+            <button
+              onClick={() => setTab("drivers")}
+              className={`py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition ${
+                currentTab === "drivers"
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20"
+                  : "bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+              }`}
+            >
+              <Users size={14} />
+              <span>Motoristas ({driverStates.length})</span>
+            </button>
 
-            {/* Status Pills */}
-            <div className="grid grid-cols-4 gap-1 bg-slate-800/60 p-1 rounded-xl border border-slate-700/50 text-[11px] font-bold">
-              {[
-                { id: "all", label: "Todos" },
-                { id: "moving", label: "🟢 Mover" },
-                { id: "stopped", label: "🔴 Parado" },
-                { id: "offline", label: "⚪ Off" },
-              ].map((st) => (
-                <button
-                  key={st.id}
-                  onClick={() => onFilterChange({ ...filters, status: st.id as any })}
-                  className={`py-1.5 rounded-lg text-center transition ${
-                    filters.status === st.id
-                      ? "bg-blue-600 text-white shadow-md"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  {st.label}
-                </button>
-              ))}
-            </div>
+            <button
+              onClick={() => setTab("events")}
+              className={`py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition relative ${
+                currentTab === "events"
+                  ? "bg-rose-600 text-white shadow-lg shadow-rose-600/20"
+                  : "bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+              }`}
+            >
+              <AlertTriangle size={14} className={alerts.length > 0 ? "text-amber-300 animate-pulse" : ""} />
+              <span>Eventos</span>
+              {alerts.length > 0 && (
+                <span className={`ml-1 px-1.5 py-0.2 text-[10px] rounded-full font-black ${
+                  currentTab === "events" ? "bg-white text-rose-700" : "bg-rose-500 text-white"
+                }`}>
+                  {alerts.length}
+                </span>
+              )}
+            </button>
           </div>
+
+          {/* RENDER CONTENT ACCORDING TO ACTIVE TAB */}
+          {currentTab === "drivers" ? (
+            <>
+              {/* Search & Quick Status Filters */}
+              <div className="p-3 border-b border-slate-800/80 space-y-2.5 shrink-0">
+                {/* Search Input */}
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={filters.searchTerm}
+                    onChange={(e) => onFilterChange({ ...filters, searchTerm: e.target.value })}
+                    placeholder="Buscar por motorista ou placa..."
+                    className="w-full pl-9 pr-3 py-2 bg-slate-800/80 border border-slate-700/60 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 transition"
+                  />
+                  {filters.searchTerm && (
+                    <button
+                      onClick={() => onFilterChange({ ...filters, searchTerm: "" })}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Status Pills */}
+                <div className="grid grid-cols-4 gap-1 bg-slate-800/60 p-1 rounded-xl border border-slate-700/50 text-[11px] font-bold">
+                  {[
+                    { id: "all", label: "Todos" },
+                    { id: "moving", label: "🟢 Mover" },
+                    { id: "stopped", label: "🔴 Parado" },
+                    { id: "offline", label: "⚪ Off" },
+                  ].map((st) => (
+                    <button
+                      key={st.id}
+                      onClick={() => onFilterChange({ ...filters, status: st.id as any })}
+                      className={`py-1.5 rounded-lg text-center transition ${
+                        filters.status === st.id
+                          ? "bg-blue-600 text-white shadow-md"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
           {/* Expanded Filters Popover */}
           {showFiltersModal && (
@@ -518,6 +609,168 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
               </div>
             )}
           </div>
+          </>
+          ) : (
+            /* TAB 2: EVENTOS E EXCESSO DE VELOCIDADE */
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {/* Speed Rules Info Box */}
+              <div className="bg-gradient-to-r from-rose-950/60 to-slate-900 border border-rose-800/40 rounded-2xl p-3 space-y-1 text-xs">
+                <div className="flex items-center gap-2 text-rose-400 font-black">
+                  <ShieldAlert size={16} />
+                  <span>Aba de Eventos e Telemetria</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Monitoramento em tempo real de infrações comparadas com o limite de velocidade cadastrado no tipo do veículo.
+                </p>
+              </div>
+
+              {/* Search & Sub-filters for Events */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={eventsSearchTerm}
+                    onChange={(e) => setEventsSearchTerm(e.target.value)}
+                    placeholder="Buscar motorista, placa ou tipo..."
+                    className="w-full pl-9 pr-3 py-2 bg-slate-800/80 border border-slate-700/60 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-rose-500 transition"
+                  />
+                  {eventsSearchTerm && (
+                    <button
+                      onClick={() => setEventsSearchTerm("")}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-1 bg-slate-800/60 p-1 rounded-xl border border-slate-700/50 text-[11px] font-bold">
+                  <button
+                    onClick={() => setEventsFilterType("all")}
+                    className={`py-1.5 rounded-lg text-center transition ${
+                      eventsFilterType === "all" ? "bg-rose-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    Todos ({alerts.length})
+                  </button>
+                  <button
+                    onClick={() => setEventsFilterType("speed")}
+                    className={`py-1.5 rounded-lg text-center transition ${
+                      eventsFilterType === "speed" ? "bg-rose-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    🚨 Vel. ({alerts.filter((a) => a.type === "high_speed").length})
+                  </button>
+                  <button
+                    onClick={() => setEventsFilterType("other")}
+                    className={`py-1.5 rounded-lg text-center transition ${
+                      eventsFilterType === "other" ? "bg-rose-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    ⚠️ Outros
+                  </button>
+                </div>
+              </div>
+
+              {/* Events Cards List */}
+              {filteredEvents.length > 0 ? (
+                filteredEvents.map((al) => (
+                  <div
+                    key={al.id}
+                    className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-3.5 space-y-2.5 hover:border-rose-500/50 transition shadow-lg"
+                  >
+                    {/* Event Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center font-bold shrink-0">
+                          <AlertTriangle size={16} />
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-rose-400 uppercase tracking-wide block">
+                            {al.type === "high_speed" ? "Excesso de Velocidade" : "Alerta GPS / Monitoramento"}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono block">
+                            {formatRelativeTime(al.timestamp)} ({new Date(al.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                          </span>
+                        </div>
+                      </div>
+                      {onDismissAlert && (
+                        <button
+                          onClick={() => onDismissAlert(al.id)}
+                          className="text-slate-500 hover:text-slate-200 p-1"
+                          title="Descartar evento"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Driver & Vehicle Box */}
+                    <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                      <div>
+                        <strong className="text-white block font-bold text-xs">{formatDriverName(al.driverName)}</strong>
+                        <span className="text-slate-400 text-[11px]">
+                          Placa: <strong className="text-slate-200">{al.vehiclePlate}</strong> {al.vehicleModel ? `• ${al.vehicleModel}` : ""}
+                        </span>
+                      </div>
+                      {al.vehicleType && (
+                        <span className="bg-blue-950 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                          {al.vehicleType}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Speed Comparison Block */}
+                    {al.speedKmh !== undefined && al.maxSpeedKmh !== undefined && (
+                      <div className="bg-gradient-to-r from-rose-950/80 to-slate-900 border border-rose-800/50 p-2.5 rounded-xl text-xs space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-rose-300/80 block font-semibold">Velocidade Atingida</span>
+                            <strong className="text-rose-400 font-black text-sm">{al.speedKmh} km/h</strong>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 block font-semibold">
+                              Limite Cadastrado {al.vehicleType ? `(${al.vehicleType})` : ""}
+                            </span>
+                            <strong className="text-emerald-400 font-black text-sm">{al.maxSpeedKmh} km/h</strong>
+                          </div>
+                        </div>
+
+                        {al.speedKmh > al.maxSpeedKmh && (
+                          <div className="text-[10px] font-bold text-amber-300 text-center bg-rose-900/40 py-1 rounded-lg border border-rose-800/40">
+                            Excesso de +{al.speedKmh - al.maxSpeedKmh} km/h acima do limite permitido!
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="pt-0.5 flex items-center justify-end">
+                      <button
+                        onClick={() => {
+                          onSelectDriver(al.driver_id);
+                          setTab("drivers");
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600/20 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-500/40 text-xs font-bold flex items-center gap-1.5 transition"
+                      >
+                        <Navigation size={13} />
+                        <span>Ver Motorista no Mapa</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-xs text-slate-400 bg-slate-800/40 rounded-2xl border border-slate-800/80 space-y-2">
+                  <CheckCircle2 size={36} className="mx-auto text-emerald-400 mb-1" />
+                  <strong className="text-white text-sm block">Nenhum evento registrado</strong>
+                  <p className="text-slate-400 max-w-xs mx-auto text-[11px] leading-relaxed">
+                    Nenhum excesso de velocidade detectado. A frota está trafegando dentro dos limites de velocidade configurados para cada tipo de veículo!
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

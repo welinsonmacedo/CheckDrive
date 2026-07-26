@@ -28,6 +28,7 @@ export interface VehicleInfo {
   plate: string;
   model?: string;
   type?: string;
+  max_speed?: number | null;
   company_id?: string;
 }
 
@@ -74,9 +75,15 @@ export interface AlertItem {
   driver_id: string;
   driverName: string;
   vehiclePlate: string;
+  vehicleModel?: string;
+  vehicleType?: string;
   message: string;
   timestamp: string;
   severity: 'warning' | 'danger' | 'info';
+  speedKmh?: number;
+  maxSpeedKmh?: number;
+  lat?: number;
+  lng?: number;
 }
 
 export interface DashboardMetrics {

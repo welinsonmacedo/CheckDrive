@@ -24,6 +24,7 @@ interface TrackingDashboardProps {
   showClusters: boolean;
   onToggleClusters: () => void;
   onDismissAlert: (id: string) => void;
+  onOpenEventsTab?: () => void;
 }
 
 export const TrackingDashboard: React.FC<TrackingDashboardProps> = ({
@@ -34,6 +35,7 @@ export const TrackingDashboard: React.FC<TrackingDashboardProps> = ({
   showClusters,
   onToggleClusters,
   onDismissAlert,
+  onOpenEventsTab,
 }) => {
   const [showAlertsList, setShowAlertsList] = useState(false);
 
@@ -180,6 +182,18 @@ export const TrackingDashboard: React.FC<TrackingDashboardProps> = ({
                   </button>
                 </div>
               ))}
+
+              {onOpenEventsTab && (
+                <button
+                  onClick={() => {
+                    setShowAlertsList(false);
+                    onOpenEventsTab();
+                  }}
+                  className="w-full py-1.5 mt-2 bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 text-rose-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1"
+                >
+                  <span>Ver Todos na Aba de Eventos ➔</span>
+                </button>
+              )}
             </div>
           )}
         </div>

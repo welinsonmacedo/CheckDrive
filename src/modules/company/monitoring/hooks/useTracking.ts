@@ -63,13 +63,16 @@ export function useTracking() {
     if (!companyId) return;
     setLoading(true);
 
-    const { driverStates: initialStates, driversMap, vehiclesMap } = await fetchInitialData(
+    const { driverStates: initialStates, driversMap, vehiclesMap, initialAlerts } = await fetchInitialData(
       companyId
     );
 
     driversMapRef.current = driversMap;
     vehiclesMapRef.current = vehiclesMap;
     setDriverStates(initialStates);
+    if (initialAlerts && initialAlerts.length > 0) {
+      setAlerts(initialAlerts);
+    }
     setLoading(false);
   }, [companyId]);
 
@@ -110,19 +113,27 @@ export function useTracking() {
         const newStatus = determineDriverStatus(newLoc.created_at, speedKmh, newLoc.status);
         const updateAgo = formatRelativeTime(newLoc.created_at);
 
-        // Check for alerts
-        if (speedKmh > speedLimitKmh) {
+        // Check for alerts using vehicle's max_speed from vehicle_types table if available
+        const maxSpeedLimit = vehicleInfo?.max_speed ? Number(vehicleInfo.max_speed) : speedLimitKmh;
+
+        if (speedKmh > maxSpeedLimit) {
           const alert: AlertItem = {
             id: `alert-speed-${Date.now()}-${driverId}`,
             type: "high_speed",
             driver_id: driverId,
             driverName: driverInfo?.full_name || "Motorista",
             vehiclePlate: vehicleInfo?.plate || "Sem placa",
-            message: `Excesso de velocidade: ${speedKmh} km/h (Limite: ${speedLimitKmh} km/h)`,
+            vehicleModel: vehicleInfo?.model,
+            vehicleType: vehicleInfo?.type || "Veículo",
+            message: `Excesso de velocidade: ${speedKmh} km/h (Limite cadastrado para ${vehicleInfo?.type || 'o veículo'}: ${maxSpeedLimit} km/h)`,
             timestamp: newLoc.created_at,
             severity: "danger",
+            speedKmh,
+            maxSpeedKmh: maxSpeedLimit,
+            lat: newLoc.latitude,
+            lng: newLoc.longitude,
           };
-          setAlerts((prev) => [alert, ...prev.slice(0, 19)]);
+          setAlerts((prev) => [alert, ...prev.filter(a => a.id !== alert.id).slice(0, 49)]);
         }
 
         if (newLoc.accuracy && newLoc.accuracy > 50) {

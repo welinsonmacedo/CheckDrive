@@ -115,8 +115,8 @@ export async function fetchDriverProfile(driverId: string): Promise<DriverInfo |
 
 export async function fetchInitialData(companyId: string) {
   try {
-    // 1. Fetch drivers from profiles & drivers tables as well as vehicles
-    const [profilesRes, driversTableRes, vehiclesRes] = await Promise.all([
+    // 1. Fetch drivers from profiles & drivers tables, vehicles, and vehicle_types
+    const [profilesRes, driversTableRes, vehiclesRes, vehicleTypesRes] = await Promise.all([
       companyId
         ? supabase
             .from("profiles")
@@ -141,6 +141,14 @@ export async function fetchInitialData(companyId: string) {
         : supabase
             .from("vehicles")
             .select("*"),
+      companyId
+        ? supabase
+            .from("vehicle_types")
+            .select("*")
+            .eq("company_id", companyId)
+        : supabase
+            .from("vehicle_types")
+            .select("*"),
     ]);
 
     let profilesList = profilesRes.data || [];
@@ -154,6 +162,22 @@ export async function fetchInitialData(companyId: string) {
       const fallbackDrivers = await supabase.from("drivers").select("*");
       driversList = fallbackDrivers.data || [];
     }
+
+    let vehicleTypesList = vehicleTypesRes.data || [];
+    if (vehicleTypesList.length === 0) {
+      const fallbackVT = await supabase.from("vehicle_types").select("*");
+      vehicleTypesList = fallbackVT.data || [];
+    }
+
+    // Build vehicle types max speed map (by id and name)
+    const vehicleTypeSpeedMap = new Map<string, number>();
+    (vehicleTypesList || []).forEach((vt: any) => {
+      const speed = vt.max_speed ? parseFloat(String(vt.max_speed)) : null;
+      if (speed && !isNaN(speed) && speed > 0) {
+        if (vt.id) vehicleTypeSpeedMap.set(String(vt.id).trim().toLowerCase(), speed);
+        if (vt.name) vehicleTypeSpeedMap.set(String(vt.name).trim().toLowerCase(), speed);
+      }
+    });
 
     const driversMap = new Map<string, DriverInfo>();
 
@@ -191,7 +215,18 @@ export async function fetchInitialData(companyId: string) {
     });
 
     const vehiclesMap = new Map<string, VehicleInfo>();
-    (vehiclesRes.data || []).forEach((v) => vehiclesMap.set(v.id, v));
+    (vehiclesRes.data || []).forEach((v: any) => {
+      const typeKey = (v.type || v.type_id || "").trim().toLowerCase();
+      const typeMaxSpeed = vehicleTypeSpeedMap.get(typeKey) || (v.max_speed ? parseFloat(String(v.max_speed)) : undefined);
+      vehiclesMap.set(v.id, {
+        id: v.id,
+        plate: v.plate,
+        model: v.model,
+        type: v.type,
+        max_speed: typeMaxSpeed,
+        company_id: v.company_id,
+      });
+    });
 
     // 2. Fetch recent driver locations (last 48 hours to find latest for each driver)
     const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
@@ -355,10 +390,45 @@ export async function fetchInitialData(companyId: string) {
       }
     });
 
+    // Extract initial alerts for speeding violations based on vehicle max_speed
+    const initialAlerts: AlertItem[] = [];
+    const seenAlertKeys = new Set<string>();
+    (locations || []).slice(0, 300).forEach((loc) => {
+      if (!loc.driver_id) return;
+      const speedKmh = parseSpeedKmh(loc.speed);
+      const vehicle = loc.vehicle_id ? vehiclesMap.get(loc.vehicle_id) : undefined;
+      const maxSpeed = vehicle?.max_speed || 90;
+      if (speedKmh > maxSpeed) {
+        const driverKey = loc.driver_id.trim().toLowerCase();
+        const alertKey = `${driverKey}-${loc.created_at?.substring(0, 16)}`;
+        if (!seenAlertKeys.has(alertKey)) {
+          seenAlertKeys.add(alertKey);
+          const driver = driversMap.get(driverKey);
+          initialAlerts.push({
+            id: `alert-speed-${loc.id || Date.now()}-${loc.driver_id}`,
+            type: "high_speed",
+            driver_id: loc.driver_id,
+            driverName: driver?.full_name || "Motorista",
+            vehiclePlate: vehicle?.plate || "Sem placa",
+            vehicleModel: vehicle?.model,
+            vehicleType: vehicle?.type || "Veículo",
+            message: `Excesso de velocidade: ${speedKmh} km/h (Limite cadastrado para ${vehicle?.type || 'o veículo'}: ${maxSpeed} km/h)`,
+            timestamp: loc.created_at,
+            severity: "danger",
+            speedKmh,
+            maxSpeedKmh: maxSpeed,
+            lat: loc.latitude,
+            lng: loc.longitude,
+          });
+        }
+      }
+    });
+
     return {
       driverStates,
       driversMap,
       vehiclesMap,
+      initialAlerts,
     };
   } catch (err) {
     console.error("fetchInitialData error:", err);
@@ -366,6 +436,7 @@ export async function fetchInitialData(companyId: string) {
       driverStates: [],
       driversMap: new Map<string, DriverInfo>(),
       vehiclesMap: new Map<string, VehicleInfo>(),
+      initialAlerts: [],
     };
   }
 }
@@ -456,4 +527,87 @@ export function calculateTripMetrics(locations: DriverLocation[]): TripMetrics {
     lastPositionAt: lastLoc.created_at,
     locations,
   };
+}
+
+/**
+ * Saves a driver location record to Supabase.
+ * If the driver has NO active trip (trip_id is null/empty), it rate-limits insertions to max 1 record per minute
+ * by updating the existing record from the same minute if present, avoiding multiple lines per minute.
+ */
+export async function saveDriverLocation(
+  locationData: Partial<DriverLocation> & { driver_id: string; company_id: string; latitude: number; longitude: number }
+): Promise<{ success: boolean; data?: DriverLocation; error?: any }> {
+  try {
+    const { driver_id, company_id, trip_id } = locationData;
+    const nowIso = locationData.created_at || new Date().toISOString();
+
+    // Check if driver has no trip
+    if (!trip_id) {
+      const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+      const { data: recentLocs } = await supabase
+        .from("driver_locations")
+        .select("id, created_at")
+        .eq("driver_id", driver_id)
+        .is("trip_id", null)
+        .gte("created_at", oneMinuteAgo)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (recentLocs && recentLocs.length > 0) {
+        // Already saved a location for this user without a trip in the same minute -> update existing line
+        const existingId = recentLocs[0].id;
+        const { data: updated, error: updateErr } = await supabase
+          .from("driver_locations")
+          .update({
+            latitude: locationData.latitude,
+            longitude: locationData.longitude,
+            speed: locationData.speed ?? 0,
+            accuracy: locationData.accuracy,
+            bearing: locationData.bearing,
+            altitude: locationData.altitude,
+            status: locationData.status || "STOPPED",
+            vehicle_id: locationData.vehicle_id || null,
+            company_id: company_id,
+            created_at: nowIso,
+          })
+          .eq("id", existingId)
+          .select()
+          .maybeSingle();
+
+        if (!updateErr && updated) {
+          return { success: true, data: updated };
+        }
+      }
+    }
+
+    // Insert new location line
+    const { data: inserted, error: insertErr } = await supabase
+      .from("driver_locations")
+      .insert({
+        driver_id,
+        company_id,
+        trip_id: trip_id || null,
+        vehicle_id: locationData.vehicle_id || null,
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        speed: locationData.speed ?? 0,
+        accuracy: locationData.accuracy ?? 0,
+        bearing: locationData.bearing ?? 0,
+        altitude: locationData.altitude ?? 0,
+        status: locationData.status || (locationData.speed && locationData.speed > 3 ? "MOVING" : "STOPPED"),
+        created_at: nowIso,
+      })
+      .select()
+      .single();
+
+    if (insertErr) {
+      console.error("Error inserting driver location:", insertErr);
+      return { success: false, error: insertErr };
+    }
+
+    return { success: true, data: inserted };
+  } catch (err) {
+    console.error("saveDriverLocation error:", err);
+    return { success: false, error: err };
+  }
 }
