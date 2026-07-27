@@ -197,14 +197,14 @@ export default function AveragesTab() {
 
       if (entry) {
         litersId = entry[0];
-        liters = parseFloat(details.itemValues[entry[0]]?.toString().replace(',','.') || '0');
+        liters = parseFloat((details.itemValues[entry[0]] || '0').toString().replace(',', '.'));
       }
     } else if (details?.manual_liters !== undefined && details?.manual_liters !== null) {
-      liters = parseFloat(details.manual_liters.toString().replace(',','.'));
+      liters = parseFloat((details.manual_liters || 0).toString().replace(',','.'));
     }
 
     if (details?.adjusted_liters !== undefined && details?.adjusted_liters !== null && details.adjusted_liters !== '') {
-      liters = parseFloat(details.adjusted_liters.toString().replace(',', '.'));
+      liters = parseFloat((details.adjusted_liters || '0').toString().replace(',', '.'));
       hasAdjustment = true;
     }
 
@@ -523,7 +523,7 @@ export default function AveragesTab() {
         return;
       }
 
-      const manualLitersNum = parseFloat(editData.liters.toString().replace(',', '.'));
+      const manualLitersNum = parseFloat((editData.liters || 0).toString().replace(',', '.'));
       if (editData.liters && (isNaN(manualLitersNum) || manualLitersNum <= 0)) {
         alert('Erro: A quantidade de litros deve ser maior que zero.');
         return;
@@ -574,7 +574,7 @@ export default function AveragesTab() {
       return;
     }
 
-    const litersNumVal = parseFloat(addFormData.liters.toString().replace(',', '.'));
+    const litersNumVal = parseFloat((addFormData.liters || 0).toString().replace(',', '.'));
     if (addFormData.liters && (isNaN(litersNumVal) || litersNumVal <= 0)) {
       alert('Erro: A quantidade de litros deve ser maior que zero.');
       return;

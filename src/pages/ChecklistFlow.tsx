@@ -828,7 +828,7 @@ export default function ChecklistFlow() {
           let liters = 0;
           if (litersItem && formData.itemValues[litersItem.id]) {
             liters = parseFloat(
-              formData.itemValues[litersItem.id].toString().replace(",", "."),
+              (formData.itemValues[litersItem.id] || '').toString().replace(",", "."),
             );
           } else {
             // Fallback to title detection
@@ -845,7 +845,7 @@ export default function ChecklistFlow() {
             );
             if (titleEntry && formData.itemValues[titleEntry[0]]) {
               liters = parseFloat(
-                formData.itemValues[titleEntry[0]].toString().replace(",", "."),
+                (formData.itemValues[titleEntry[0]] || '').toString().replace(",", "."),
               );
             }
           }

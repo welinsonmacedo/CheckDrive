@@ -99,7 +99,7 @@ export default function FuelListPrintModal({ submissions, onClose, user }: FuelL
                   const driver = sub.profiles?.full_name || sub.driver_profiles?.full_name || "N/A";
                   const dateStr = new Date(sub.created_at).toLocaleDateString("pt-BR") + " " + new Date(sub.created_at).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'});
                   const odometer = sub.odometer ? sub.odometer.toString() : "-";
-                  const liters = sub.details?.manual_liters !== undefined ? sub.details.manual_liters.toString() : (sub.details?.itemValues?.gas_station_liters || "-");
+                  const liters = sub.details?.manual_liters != null ? sub.details.manual_liters.toString() : (sub.details?.itemValues?.gas_station_liters || "-");
                   const station = sub.details?.itemValues?.gas_station || "-";
 
                   return (
