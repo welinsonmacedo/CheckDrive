@@ -141,7 +141,7 @@ export default function LandingPage() {
     setDemoSubmitted(true);
     setTimeout(() => {
       const text = `Olá! Gostaria de solicitar uma demonstração do CheckDrive.%0A%0A*Nome:* ${demoFormData.name}%0A*Empresa:* ${demoFormData.company}%0A*Tamanho da Frota:* ${demoFormData.fleetSize} ativos%0A*Segmento:* ${demoFormData.segment}%0A*Telefone:* ${demoFormData.phone}`;
-      window.open(`https://wa.me/?text=${text}`, "_blank");
+      window.open(`https://wa.me/553492012702?text=${text}`, "_blank");
     }, 1000);
   };
 
@@ -170,7 +170,7 @@ export default function LandingPage() {
                 CheckDrive
               </span>
               <span className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest -mt-1">
-                Gestão de Ativos & Frotas
+                Gestão de Ativos Operacionais
               </span>
             </div>
           </div>
@@ -342,7 +342,7 @@ export default function LandingPage() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/90 border border-blue-500/30 text-blue-400 text-xs font-extrabold uppercase tracking-widest mb-6 shadow-xl"
             >
               <Sparkles size={14} className="text-blue-400 animate-pulse" />
-              Ecossistema Inteligente de Gestão de Ativos, Frotas e Operações
+              Sistema Inteligente para Gestão de Ativos Operacionais
             </motion.div>
 
             <motion.h1
@@ -353,7 +353,7 @@ export default function LandingPage() {
             >
               A plataforma inteligente para gestão de{" "}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-sky-400">
-                ativos, frotas e operações.
+                ativos operacionais.
               </span>
             </motion.h1>
 
@@ -906,7 +906,7 @@ export default function LandingPage() {
                   >
                     <div className="flex items-center justify-between border-b pb-3">
                       <div>
-                        <h3 className="text-xl font-black text-slate-800">Gestão de Frota & Equipamentos</h3>
+                        <h3 className="text-xl font-black text-slate-800">Gestão de Ativos Operacionais</h3>
                         <p className="text-xs text-slate-500">Cadastro de veículos pesados, leves e máquinas com fotos reais da garagem (placas desfocadas por segurança)</p>
                       </div>
                       <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
@@ -2052,7 +2052,7 @@ export default function LandingPage() {
                 <span className="text-base font-black text-white italic">CheckDrive</span>
               </div>
               <p className="text-zinc-400 text-xs leading-relaxed">
-                Plataforma inteligente de gestão de ativos, frotas, máquinas e equipamentos com PWA offline e assistente IA.
+                Sistema inteligente para gestão de ativos operacionais, máquinas e equipamentos com PWA offline e assistente IA.
               </p>
             </div>
 
@@ -2079,12 +2079,13 @@ export default function LandingPage() {
               <h5 className="font-bold text-zinc-300 uppercase tracking-wider mb-3">Contato & Suporte</h5>
               <p className="text-zinc-400 leading-relaxed mb-2">Suporte Técnico & Comercial via WhatsApp.</p>
               <a
-                href="https://wa.me/?text=Olá!%20Preciso%20de%20suporte%20do%20CheckDrive."
+                href="https://wa.me/553492012702?text=Olá!%20Preciso%20de%20suporte%20do%20CheckDrive."
                 target="_blank"
                 rel="noreferrer"
-                className="text-blue-400 hover:underline font-bold inline-flex items-center gap-1"
+                className="text-emerald-400 hover:underline font-bold inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-xs"
               >
-                Falar com Atendimento <ExternalLink size={12} />
+                <span>+55 34 9201-2702</span>
+                <ExternalLink size={12} />
               </a>
             </div>
           </div>
@@ -2203,7 +2204,7 @@ export default function LandingPage() {
                   </div>
                   <h3 className="text-xl font-black text-white">Solicitação Recebida!</h3>
                   <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-                    Redirecionando para o nosso atendimento no WhatsApp para agendar sua demonstração...
+                    Redirecionando para o nosso atendimento no WhatsApp (+55 34 9201-2702) para agendar sua demonstração...
                   </p>
                 </div>
               )}

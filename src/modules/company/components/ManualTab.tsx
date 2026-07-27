@@ -16,7 +16,7 @@ export default function ManualTab() {
           </div>
         </div>
         <p className="text-sm font-medium text-text-muted leading-relaxed">
-          Este manual descreve o funcionamento geral do sistema de gestão de frota, incluindo o App do Motorista, a gestão de pendências e as regras de pontuação (ranking).
+          Este manual descreve o funcionamento geral do sistema inteligente para gestão de ativos operacionais, incluindo o App do Motorista, a gestão de pendências e as regras de pontuação (ranking).
         </p>
       </div>
 
