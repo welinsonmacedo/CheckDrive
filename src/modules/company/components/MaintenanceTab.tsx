@@ -32,10 +32,14 @@ import { SupplierModal } from "./SupplierModal";
 import IssueDetailsModal from "./IssueDetailsModal";
 import AlertHistoryModal from "./AlertHistoryModal";
 import { usePersistentState } from "@/src/hooks/usePersistentState";
+import MaintenanceListPrintModal from "./MaintenanceListPrintModal";
+import MaintenanceTrackingPrintModal from "./MaintenanceTrackingPrintModal";
 
 export default function MaintenanceTab() {
   const { user } = useAuth();
   const [issues, setIssues] = useState<any[]>([]);
+  const [showIssuesPrintModal, setShowIssuesPrintModal] = useState(false);
+  const [showTrackingPrintModal, setShowTrackingPrintModal] = useState(false);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [odometers, setOdometers] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = usePersistentState(
@@ -1245,236 +1249,46 @@ export default function MaintenanceTab() {
   };
 
   const handlePrintTracking = () => {
-    let printContent = `
-      <html>
-        <head>
-          <title>Acompanhamento de Manutenções</title>
-          <style>
-            body { font-family: sans-serif; padding: 20px; }
-            h1 { font-size: 18px; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
-            th { background-color: #f5f5f5; }
-            .overdue { color: red; font-weight: bold; }
-            .near { color: darkorange; font-weight: bold; }
-            .ok { color: green; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <h1>Acompanhamento de Manutenções - ${new Date().toLocaleDateString("pt-BR")}</h1>
-          <div className="overflow-x-auto w-full"><table>
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Alerta</th>
-                <th>Veículo</th>
-                <th>Tipo</th>
-                <th>Detalhes</th>
-              </tr>
-            </thead>
-            <tbody>
-    `;
-
-    filteredAlertsForTracking.forEach((alert) => {
-      const isKm = alert.trigger_type === "km";
-      let statusText = "Em dia";
-      let statusClass = "ok";
-      let details = "";
-
-      if (isKm) {
-        const currentKm = odometers[alert.target_vehicle_id] || 0;
-        const targetKm =
-          Number(alert.last_km || 0) + Number(alert.interval_km || 0);
-        const remainingKm = targetKm - currentKm;
-        const isOverdue = remainingKm <= 0;
-        const isNear =
-          remainingKm > 0 && remainingKm <= (Number(alert.warning_km) || 1000);
-
-        if (isOverdue) {
-          statusText = "Atrasada";
-          statusClass = "overdue";
-        } else if (isNear) {
-          statusText = "Próxima";
-          statusClass = "near";
-        }
-
-        details = `Atual: ${currentKm} | Alvo: ${targetKm} | Faltam: ${remainingKm > 0 ? remainingKm : 0}`;
-      } else if (alert.trigger_date) {
-        const targetDate = new Date(alert.trigger_date + "T00:00:00");
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const diffTime = targetDate.getTime() - today.getTime();
-        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        const isOverdue = daysRemaining < 0;
-        const isNear =
-          daysRemaining >= 0 &&
-          daysRemaining <= (Number(alert.warning_days) || 7);
-
-        if (isOverdue) {
-          statusText = "Atrasada";
-          statusClass = "overdue";
-        } else if (isNear) {
-          statusText = "Próxima";
-          statusClass = "near";
-        }
-
-        details = `Alvo: ${targetDate.toLocaleDateString("pt-BR")} | Faltam: ${daysRemaining > 0 ? daysRemaining : 0} dias`;
-      }
-
-      printContent += `
-        <tr>
-          <td class="${statusClass}">${statusText}</td>
-          <td>${alert.title || "N/A"}</td>
-          <td>${alert.vehicles?.plate || "N/A"}</td>
-          <td>${isKm ? "Odomêtro" : "Data"}</td>
-          <td>${details}</td>
-        </tr>
-      `;
-    });
-
-    printContent += `
-            </tbody>
-          </table></div>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-    }
+    setShowTrackingPrintModal(true);
   };
 
   const handlePrintIssuesList = () => {
-    const itemsToPrint = selectedRows.length > 0 
-      ? filteredIssues.filter(i => selectedRows.includes(i.id))
-      : filteredIssues;
-
-    const tabTitle = activeTab === "pending"
-      ? "Relatório de Pendências de Manutenção"
-      : activeTab === "waiting"
-      ? "Relatório de Manutenções em Aguardo"
-      : activeTab === "waiting_nf"
-      ? "Relatório de Manutenções Aguardando Nota Fiscal"
-      : "Relatório de Manutenções Resolvidas";
-
-    let printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${tabTitle}</title>
-          <meta charset="utf-8" />
-          <style>
-            body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; padding: 25px; color: #0f172a; background: #fff; line-height: 1.4; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; }
-            .header h1 { font-size: 20px; margin: 0; font-weight: 800; text-transform: uppercase; letter-spacing: -0.5px; }
-            .header p { font-size: 11px; color: #64748b; margin: 4px 0 0 0; }
-            .company-brand { text-align: right; }
-            .company-brand strong { font-size: 16px; color: #0284c7; letter-spacing: 0.5px; }
-            .company-brand p { font-size: 10px; color: #64748b; margin: 2px 0 0 0; font-weight: 600; }
-            .summary-bar { display: flex; justify-content: space-between; items-center: center; margin-bottom: 16px; background: #f8fafc; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12px; font-weight: 600; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
-            th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; vertical-align: top; }
-            th { background-color: #f1f5f9; font-weight: 700; text-transform: uppercase; font-size: 10px; color: #334155; letter-spacing: 0.5px; }
-            tr:nth-child(even) { background-color: #f8fafc; }
-            .plate { font-weight: 800; font-family: monospace; font-size: 12px; color: #0f172a; }
-            .status-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 9px; font-weight: 800; text-transform: uppercase; }
-            .status-pending { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-            .status-waiting { background: #fffbe3; color: #92400e; border: 1px solid #fde68a; }
-            .status-waiting_nf { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-            .status-resolved { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-            .footer { margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
-            @media print {
-              body { padding: 0; }
-              @page { margin: 1.2cm; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <h1>${tabTitle}</h1>
-              <p>Relatório emitido em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'})}</p>
-            </div>
-            <div class="company-brand">
-              <strong>CHECKDRIVE</strong>
-              <p>Gestão Inteligente de Frotas</p>
-            </div>
-          </div>
-
-          <div class="summary-bar">
-            <div>Total de Itens: <strong>${itemsToPrint.length}</strong></div>
-            <div>${selectedRows.length > 0 ? `Itens Selecionados: <strong>${selectedRows.length}</strong>` : 'Exibindo todos os itens do filtro ativo'}</div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 25px;">#</th>
-                <th style="width: 85px;">Data / Hora</th>
-                <th style="width: 100px;">Veículo</th>
-                <th style="width: 120px;">Motorista / Relator</th>
-                <th>Item / Defeito</th>
-                <th>Descrição / Obs. Tratativa</th>
-                <th style="width: 90px; text-align: center;">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsToPrint.length === 0 ? `
-                <tr><td colspan="7" style="text-align: center; padding: 20px; color: #64748b;">Nenhum item encontrado nesta lista.</td></tr>
-              ` : itemsToPrint.map((item, idx) => {
-                const plate = item.vehicles?.plate || item.trailers?.plate || "Sem Placa";
-                const driver = item.profiles?.full_name || "N/A";
-                const dateStr = new Date(item.created_at).toLocaleDateString("pt-BR") + " " + new Date(item.created_at).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'});
-                const statusClass = `status-${item.status || 'pending'}`;
-                const statusLabel = item.status === "pending" ? "Pendente" : item.status === "waiting" ? "Aguardando" : item.status === "waiting_nf" ? "Aguardando NF" : "Resolvido";
-                
-                return `
-                  <tr>
-                    <td>${idx + 1}</td>
-                    <td>${dateStr}</td>
-                    <td><span class="plate">${plate}</span></td>
-                    <td>${driver}</td>
-                    <td><strong>${item.item_title || 'N/A'}</strong></td>
-                    <td>
-                      ${item.description || '-'} 
-                      ${item.resolution_notes ? `<div style="margin-top: 4px; font-size: 10px; color: #4338ca; font-style: italic;"><strong>Tratativa:</strong> ${item.resolution_notes}</div>` : ''}
-                    </td>
-                    <td style="text-align: center;">
-                      <span class="status-badge ${statusClass}">${statusLabel}</span>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-
-          <div class="footer">
-            <span>CheckDrive System - Documento para uso interno e operacional</span>
-            <span>Emitido por: ${user?.email || 'Administrador'}</span>
-          </div>
-
-          <script>
-            window.onload = function() {
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-    }
+    setShowIssuesPrintModal(true);
   };
+
+
+  const tabTitle = activeTab === "pending"
+    ? "Relatório de Pendências de Manutenção"
+    : activeTab === "waiting"
+    ? "Relatório de Manutenções em Aguardo"
+    : activeTab === "waiting_nf"
+    ? "Relatório de Manutenções Aguardando Nota Fiscal"
+    : "Relatório de Manutenções Resolvidas";
+
+  const itemsToPrint = selectedRows.length > 0 
+    ? filteredIssues.filter(i => selectedRows.includes(i.id))
+    : filteredIssues;
 
   return (
     <div className="space-y-6">
+
+      {showIssuesPrintModal && (
+        <MaintenanceListPrintModal
+          issues={itemsToPrint}
+          onClose={() => setShowIssuesPrintModal(false)}
+          user={user}
+          tabTitle={tabTitle}
+        />
+      )}
+      {showTrackingPrintModal && (
+        <MaintenanceTrackingPrintModal
+          alerts={filteredAlertsForTracking}
+          odometers={odometers}
+          onClose={() => setShowTrackingPrintModal(false)}
+          user={user}
+        />
+      )}
+
       {/* Abas */}
       <div className="bento-card !p-0 overflow-hidden">
         <div className="border-b border-app-border">

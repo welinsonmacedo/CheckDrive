@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from '@/src/modules/shared/contexts/AuthContext';
 import AddressFromCoordinates from "@/src/components/common/AddressFromCoordinates";
+import FuelListPrintModal from "./FuelListPrintModal";
 import { Edit2, Save, X, History, Clock, Filter, Search, Printer } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
@@ -15,6 +16,7 @@ export default function FuelTab() {
   const [editFormData, setEditFormData] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [historySub, setHistorySub] = useState<any>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const [filterPlate, setFilterPlate] = useState("");
   const [filterDriver, setFilterDriver] = useState("");
@@ -222,110 +224,18 @@ export default function FuelTab() {
   };
 
   const handlePrintList = () => {
-    let printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Relatório de Abastecimentos</title>
-          <meta charset="utf-8" />
-          <style>
-            body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; padding: 25px; color: #0f172a; background: #fff; line-height: 1.4; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; }
-            .header h1 { font-size: 20px; margin: 0; font-weight: 800; text-transform: uppercase; letter-spacing: -0.5px; }
-            .header p { font-size: 11px; color: #64748b; margin: 4px 0 0 0; }
-            .company-brand { text-align: right; }
-            .company-brand strong { font-size: 16px; color: #0284c7; letter-spacing: 0.5px; }
-            .company-brand p { font-size: 10px; color: #64748b; margin: 2px 0 0 0; font-weight: 600; }
-            .summary-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: #f8fafc; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12px; font-weight: 600; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
-            th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; vertical-align: top; }
-            th { background-color: #f1f5f9; font-weight: 700; text-transform: uppercase; font-size: 10px; color: #334155; letter-spacing: 0.5px; }
-            tr:nth-child(even) { background-color: #f8fafc; }
-            .plate { font-weight: 800; font-family: monospace; font-size: 12px; color: #0f172a; }
-            .footer { margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 10px; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
-            @media print {
-              body { padding: 0; }
-              @page { margin: 1.2cm; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <h1>Relatório de Abastecimentos</h1>
-              <p>Relatório emitido em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'})}</p>
-            </div>
-            <div class="company-brand">
-              <strong>CHECKDRIVE</strong>
-              <p>Gestão Inteligente de Ativos Operacionais</p>
-            </div>
-          </div>
-
-          <div class="summary-bar">
-            <div>Total de Itens: <strong>${filteredSubmissions.length}</strong></div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 25px;">#</th>
-                <th style="width: 120px;">Data / Hora</th>
-                <th style="width: 100px;">Veículo</th>
-                <th style="width: 150px;">Motorista</th>
-                <th style="width: 100px;">KM</th>
-                <th style="width: 100px;">Litragem</th>
-                <th>Posto / OBS</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filteredSubmissions.length === 0 ? `
-                <tr><td colspan="7" style="text-align: center; padding: 20px; color: #64748b;">Nenhum abastecimento encontrado nesta lista.</td></tr>
-              ` : filteredSubmissions.map((sub, idx) => {
-                const plate = sub.vehicles?.plate || "Sem Placa";
-                const driver = sub.profiles?.full_name || sub.driver_profiles?.full_name || "N/A";
-                const dateStr = new Date(sub.created_at).toLocaleDateString("pt-BR") + " " + new Date(sub.created_at).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'});
-                const odometer = sub.odometer ? sub.odometer.toString() : "-";
-                const liters = sub.details?.manual_liters !== undefined ? sub.details.manual_liters.toString() : (sub.details?.itemValues?.gas_station_liters || "-");
-                const station = sub.details?.itemValues?.gas_station || "-";
-                
-                return `
-                  <tr>
-                    <td>${idx + 1}</td>
-                    <td>${dateStr}</td>
-                    <td><span class="plate">${plate}</span></td>
-                    <td>${driver}</td>
-                    <td>${odometer}</td>
-                    <td>${liters}</td>
-                    <td>${station}</td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-
-          <div class="footer">
-            <span>CheckDrive System - Documento para uso interno e operacional</span>
-            <span>Emitido por: ${user?.email || 'Administrador'}</span>
-          </div>
-
-          <script>
-            window.onload = function() {
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-    }
+    setShowPrintModal(true);
   };
 
   return (
     <div className="space-y-6">
+      {showPrintModal && (
+        <FuelListPrintModal
+          submissions={filteredSubmissions}
+          onClose={() => setShowPrintModal(false)}
+          user={user}
+        />
+      )}
       {renderEditModal()}
       {renderHistoryModal()}
       <div className="bento-card p-5 mb-6">

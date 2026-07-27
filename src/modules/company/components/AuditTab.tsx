@@ -58,6 +58,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
 
   // Filters for System Audit
   const [searchQuery, setSearchQuery] = useState("");
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const [selectedModule, setSelectedModule] = useState("all");
   const [selectedAction, setSelectedAction] = useState("all");
   const [selectedEntity, setSelectedEntity] = useState("all");
@@ -311,93 +312,7 @@ export default function AuditTab({ appSettings }: AuditTabProps) {
       showToastMsg("Nenhum registro para exportar com os filtros atuais.", "info");
       return;
     }
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      showToastMsg("Não foi possível abrir a janela de impressão.", "error");
-      return;
-    }
-
-    const rowsHtml = filteredSystemLogs
-      .map(
-        (log) => `
-        <tr>
-          <td>${new Date(log.created_at).toLocaleString("pt-BR")}</td>
-          <td><b>${log.user_name || "Sistema"}</b><br/><small>${log.user_email || ""}</small></td>
-          <td><span class="badge module">${log.module || "-"}</span></td>
-          <td><span class="badge action action-${(log.action || "").toLowerCase()}">${log.action || "-"}</span></td>
-          <td><b>${log.entity || "-"}</b> ${log.entity_id ? `(#${log.entity_id})` : ""}</td>
-          <td>${log.reason || "-"}</td>
-        </tr>
-      `
-      )
-      .join("");
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Relatório de Auditoria do Sistema - CheckDrive</title>
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 20px; color: #1e293b; font-size: 11px; }
-          .header { border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-          .header h1 { margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.5px; }
-          .header p { margin: 4px 0 0 0; color: #64748b; font-size: 11px; }
-          .filter-info { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 10px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          th { background: #f1f5f9; text-align: left; padding: 8px; font-size: 9px; text-transform: uppercase; color: #475569; border-bottom: 1px solid #cbd5e1; }
-          td { padding: 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-          .badge { padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 9px; text-transform: uppercase; display: inline-block; }
-          .badge.module { background: #e0f2fe; color: #0369a1; }
-          .badge.action { background: #f1f5f9; color: #334155; }
-          .badge.action-criar { background: #dcfce7; color: #15803d; }
-          .badge.action-editar { background: #dbeafe; color: #1d4ed8; }
-          .badge.action-excluir { background: #ffe4e6; color: #be123c; }
-          .footer { margin-top: 30px; font-size: 9px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 10px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div>
-            <h1>CheckDrive - Relatório Oficial de Auditoria de Sistema</h1>
-            <p>Histórico rastreável de modificações e eventos operacionais</p>
-          </div>
-          <div style="text-align: right;">
-            <strong>Data do Relatório:</strong> ${new Date().toLocaleString("pt-BR")}<br/>
-            <strong>Total Registros:</strong> ${filteredSystemLogs.length}
-          </div>
-        </div>
-
-        <div class="filter-info">
-          <strong>Filtros Aplicados:</strong> Módulo: ${selectedModule} | Ação: ${selectedAction} | Entidade: ${selectedEntity} | Usuário: ${selectedUser} ${dateFrom ? `| De: ${dateFrom}` : ""} ${dateTo ? `| Até: ${dateTo}` : ""}
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 130px;">Data / Hora</th>
-              <th style="width: 150px;">Usuário Responsável</th>
-              <th style="width: 100px;">Módulo</th>
-              <th style="width: 90px;">Ação</th>
-              <th style="width: 120px;">Entidade / Alvo</th>
-              <th>Resumo da Alteração</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml}
-          </tbody>
-        </table>
-
-        <div class="footer">
-          Relatório gerado automaticamente pelo módulo de auditoria do sistema CheckDrive.
-        </div>
-        <script>
-          window.onload = function() { window.print(); }
-        </script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
+    setShowPrintModal(true);
   };
 
   // --- ACTION BADGE COLOR HELPER ---
