@@ -1278,6 +1278,20 @@ export default function MaintenanceTab() {
     ? filteredIssues.filter(i => selectedRows.includes(i.id))
     : filteredIssues;
 
+
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'Critico':
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-red-100 text-red-700 ml-2">Crítico</span>;
+      case 'Medio':
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-orange-100 text-orange-700 ml-2">Médio</span>;
+      case 'Leve':
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-green-100 text-green-700 ml-2">Leve</span>;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-6">
 
@@ -1912,7 +1926,7 @@ export default function MaintenanceTab() {
                     </div>
 
                     <div className="bg-zinc-50 rounded-lg p-3">
-                      <div className="text-sm font-bold text-zinc-900">{issue.item_title}</div>
+                      <div className="text-sm font-bold text-zinc-900 flex items-center">{issue.item_title}{getPriorityBadge(issue.priority)}</div>
                       {issue.description && <div className="text-xs text-zinc-600 mt-1">{issue.description}</div>}
                       
                       {issue.status === "waiting" && issue.resolution_notes && (
@@ -2084,8 +2098,9 @@ export default function MaintenanceTab() {
                         </td>
 
                         <td className="px-5 py-4">
-                          <div className="text-sm font-medium">
+                          <div className="text-sm font-medium flex items-center">
                             {issue.item_title}
+                            {getPriorityBadge(issue.priority)}
                           </div>
                           {issue.description && (
                             <div className="text-xs text-gray-500 mt-1 max-w-xs">

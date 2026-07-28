@@ -22,7 +22,8 @@ export default function ChecklistSetupTab() {
     mask: 'none',
     is_fuel_liters: false,
     options: [] as string[],
-    newOption: ''
+    newOption: '',
+    priority: 'Medio'
   });
   
   const [saving, setSaving] = useState(false);
@@ -116,6 +117,7 @@ export default function ChecklistSetupTab() {
         appears_in_manual: itemForm.appears_in_manual,
         input_type: finalInputType,
         order_index: itemForm.is_required ? 1 : 0,
+        priority: itemForm.priority,
         company_id: user?.company_id
       }));
 
@@ -135,6 +137,7 @@ export default function ChecklistSetupTab() {
           is_trailer_item: isTrailer,
           input_type: finalInputType,
           order_index: itemForm.is_required ? 1 : 0,
+        priority: itemForm.priority,
           company_id: user?.company_id
         }));
         const { error: err3 } = await supabase.from('checklist_items').insert(fallbackInserts);
@@ -143,7 +146,8 @@ export default function ChecklistSetupTab() {
         }
       }
       
-      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], target_vehicle_type: 'ALL', appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
+      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], target_vehicle_type: 'ALL', appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '',
+    priority: 'Medio' });
       setShowForm(false);
       setEditingItemIds([]);
       fetchData();
@@ -189,7 +193,8 @@ export default function ChecklistSetupTab() {
       mask: item.mask || 'none',
       is_fuel_liters: item.input_type === 'fuel_liters',
       options: item.options || [],
-      newOption: ''
+      newOption: '',
+    priority: 'Medio'
     });
     setEditingItemIds(item.ids);
     setShowForm(true);
@@ -305,7 +310,23 @@ export default function ChecklistSetupTab() {
                    ))}
                  </div>
               </div>
-
+              <div className="flex flex-col gap-2 p-3 bg-zinc-50 border border-app-border rounded-xl mt-2">
+                 <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">Prioridade:</span>
+                 <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-text-main">
+                      <input type="radio" value="Critico" checked={itemForm.priority === 'Critico'} onChange={e => setItemForm({...itemForm, priority: 'Critico'})} className="text-red-500 focus:ring-red-500" />
+                      Crítico
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-text-main">
+                      <input type="radio" value="Medio" checked={itemForm.priority === 'Medio'} onChange={e => setItemForm({...itemForm, priority: 'Medio'})} className="text-orange-500 focus:ring-orange-500" />
+                      Médio
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-text-main">
+                      <input type="radio" value="Leve" checked={itemForm.priority === 'Leve'} onChange={e => setItemForm({...itemForm, priority: 'Leve'})} className="text-green-500 focus:ring-green-500" />
+                      Leve
+                    </label>
+                 </div>
+              </div>
               <div className="flex flex-col gap-2 p-3 bg-zinc-50 border border-app-border rounded-xl mt-2">
                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">Tipo de Resposta:</span>
                  <div className="flex items-center gap-4">
@@ -369,7 +390,8 @@ export default function ChecklistSetupTab() {
                          if (e.key === 'Enter') {
                            e.preventDefault();
                            if (itemForm.newOption.trim()) {
-                             setItemForm({ ...itemForm, options: [...itemForm.options, itemForm.newOption.trim()], newOption: '' });
+                             setItemForm({ ...itemForm, options: [...itemForm.options, itemForm.newOption.trim()], newOption: '',
+    priority: 'Medio' });
                            }
                          }
                        }}
@@ -378,7 +400,8 @@ export default function ChecklistSetupTab() {
                        type="button"
                        onClick={() => {
                          if (itemForm.newOption.trim()) {
-                           setItemForm({ ...itemForm, options: [...itemForm.options, itemForm.newOption.trim()], newOption: '' });
+                           setItemForm({ ...itemForm, options: [...itemForm.options, itemForm.newOption.trim()], newOption: '',
+    priority: 'Medio' });
                          }
                        }}
                        className="h-10 px-4 bg-zinc-200 text-zinc-700 rounded-lg text-xs font-bold hover:bg-zinc-300 transition-colors"
@@ -428,7 +451,8 @@ export default function ChecklistSetupTab() {
                     onClick={() => {
                       setEditingItemIds([]);
                       setShowForm(false);
-                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], target_vehicle_type: 'ALL', appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
+                      setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], target_vehicle_type: 'ALL', appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '',
+    priority: 'Medio' });
                     }}
                     className="h-10 px-4 bg-zinc-200 text-zinc-700 flex items-center justify-center gap-2 rounded-xl shadow-sm text-xs font-black uppercase tracking-widest hover:bg-zinc-300 transition-colors"
                   >
@@ -456,7 +480,8 @@ export default function ChecklistSetupTab() {
             </span>
             <button
               onClick={() => {
-                setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], target_vehicle_type: 'ALL', appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '' });
+                setItemForm({ title: '', is_trailer_item: false, selectedTypes: [], target_vehicle_type: 'ALL', appears_in_manual: false, input_type: 'boolean', is_required: true, mask: 'none', is_fuel_liters: false, options: [], newOption: '',
+    priority: 'Medio' });
                 setEditingItemIds([]);
                 setShowForm(true);
               }}
