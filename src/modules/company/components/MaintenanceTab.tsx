@@ -1335,29 +1335,23 @@ export default function MaintenanceTab() {
     : filteredIssues;
 
 
+  
   const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case 'Critico':
-        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-red-100 text-red-700 ml-2">Crítico</span>;
-      case 'Medio':
-        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-orange-100 text-orange-700 ml-2">Médio</span>;
-      case 'Leve':
-        return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-green-100 text-green-700 ml-2">Leve</span>;
-      default:
-        return null;
-    }
+    return (
+      <div className="flex items-center gap-2 ml-2">
+        <div className="flex items-center gap-0.5 bg-zinc-800 p-0.5 rounded-full" title={priority === 'Critico' ? 'Prioridade Crítica' : priority === 'Medio' ? 'Prioridade Média' : priority === 'Leve' ? 'Prioridade Leve' : 'Prioridade Não Definida'}>
+          <div className={`w-2 h-2 rounded-full ${priority === 'Critico' ? 'bg-red-500 shadow-[0_0_4px_rgba(239,68,68,1)]' : 'bg-zinc-600'}`}></div>
+          <div className={`w-2 h-2 rounded-full ${priority === 'Medio' ? 'bg-orange-500 shadow-[0_0_4px_rgba(249,115,22,1)]' : 'bg-zinc-600'}`}></div>
+          <div className={`w-2 h-2 rounded-full ${priority === 'Leve' ? 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,1)]' : 'bg-zinc-600'}`}></div>
+        </div>
+        {priority === 'Critico' && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-red-100 text-red-700">Crítico</span>}
+        {priority === 'Medio' && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-orange-100 text-orange-700">Médio</span>}
+        {priority === 'Leve' && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-green-100 text-green-700">Leve</span>}
+      </div>
+    );
   };
 
-  const getPriorityBorder = (priority: string) => {
-    switch (priority) {
-      case 'Critico': return 'border-l-4 border-l-red-500';
-      case 'Medio': return 'border-l-4 border-l-orange-500';
-      case 'Leve': return 'border-l-4 border-l-green-500';
-      default: return '';
-    }
-  };
-
-  return (
+    return (
     <div className="space-y-6">
 
       {showIssuesPrintModal && (
@@ -1965,7 +1959,7 @@ export default function MaintenanceTab() {
                 const isSelected = selectedRows.includes(issue.id);
                 
                 return (
-                  <div key={issue.id} className={`bg-white rounded-xl border p-4 flex flex-col gap-3 shadow-sm transition-colors overflow-hidden ${isSelected ? 'border-primary ring-1 ring-primary bg-primary/5' : 'border-app-border'} ${getPriorityBorder(issue.priority)}`}>
+                  <div key={issue.id} className={`bg-white rounded-xl border p-4 flex flex-col gap-3 shadow-sm transition-colors overflow-hidden ${isSelected ? 'border-primary ring-1 ring-primary bg-primary/5' : 'border-app-border'} `}>
                     <div className="flex justify-between items-start">
                       <div className="flex gap-2 items-start">
                         {(activeTab === "pending" || activeTab === "waiting" || activeTab === "waiting_nf") && user?.role === "admin" && (
@@ -2112,7 +2106,7 @@ export default function MaintenanceTab() {
                     return (
                       <tr
                         key={issue.id}
-                        className={`transition-colors ${selectedRows.includes(issue.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-gray-50"} ${getPriorityBorder(issue.priority)}`}
+                        className={`transition-colors ${selectedRows.includes(issue.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-gray-50"} `}
                       >
                         {(activeTab === "pending" || activeTab === "waiting" || activeTab === "waiting_nf") &&
                           user?.role === "admin" && (
