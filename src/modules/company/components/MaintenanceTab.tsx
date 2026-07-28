@@ -320,6 +320,7 @@ export default function MaintenanceTab() {
         (i: any) => !fuelSubmissionIds.includes(i.submission_id),
       );
 
+      const { data: checklistItemsResData } = await supabase.from("checklist_items").select("title, priority").order("order_index");
       const vehicleIds = [
         ...new Set(
           filteredIssues.map((i: any) => i.vehicle_id).filter(Boolean),
@@ -361,7 +362,7 @@ export default function MaintenanceTab() {
           status = "pending";
         }
         
-        const checklistItem = checklistItemsRes?.data?.find(ci => ci.title === issue.item_title);
+        const checklistItem = checklistItemsResData?.find(ci => ci.title === issue.item_title);
         const mappedPriority = checklistItem?.priority || "Medio";
         
         return {
