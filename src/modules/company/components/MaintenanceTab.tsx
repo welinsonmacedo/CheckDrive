@@ -140,13 +140,13 @@ export default function MaintenanceTab() {
           vehicles (plate, model),
           profiles (full_name)
         `)
-        .eq("company_id", companyId);
+        .eq("company_id", (user as any)?.company_id);
 
-      if (!alertsError && alertsData) {
+      if (alertsError) { console.error("ALERTS ERROR:", alertsError); alert("Error fetch alerts: " + JSON.stringify(alertsError)); } if (!alertsError && alertsData) {
         setAlerts(alertsData);
       }
 
-      const { data: submissions, error: subError } = await supabase.from("checklist_submissions").select("vehicle_id, odometer, created_at").eq("company_id", companyId)
+      const { data: submissions, error: subError } = await supabase.from("checklist_submissions").select("vehicle_id, odometer, created_at").eq("company_id", (user as any)?.company_id)
         .order("created_at", { ascending: false });
 
       if (!subError && submissions) {
@@ -168,8 +168,8 @@ export default function MaintenanceTab() {
     if (!companyId) return;
     try {
       const [itemsRes, suppliersRes, checklistItemsRes] = await Promise.all([
-        supabase.from("inventory_items").select("*").eq("company_id", companyId).eq("company_id", companyId).order("name"),
-        supabase.from("inventory_suppliers").select("*").eq("company_id", companyId).eq("company_id", companyId).order("name"),
+        supabase.from("inventory_items").select("*").eq("company_id", (user as any)?.company_id).eq("company_id", (user as any)?.company_id).order("name"),
+        supabase.from("inventory_suppliers").select("*").eq("company_id", (user as any)?.company_id).eq("company_id", (user as any)?.company_id).order("name"),
         supabase.from("checklist_items").select("title").order("order_index"),
       ]);
 
@@ -238,21 +238,77 @@ export default function MaintenanceTab() {
           *,
           auto_alerts (*)
         `)
-        .eq("company_id", companyId)
+        .eq("company_id", (user as any)?.company_id)
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error(error);
+        console.error(error); alert("Error fetching issues: " + JSON.stringify(error));
         setIssues([]);
         setLoading(false);
         return;
       }
 
+      
+      // --- MIGRATION / FALLBACK FOR OLD SUBMISSIONS ---
+      const { data: allSubmissions } = await supabase
+        .from("checklist_submissions")
+        .select("*")
+        .eq("company_id", (user as any)?.company_id)
+        .neq("type", "fuel")
+        .neq("type", "Abastecimento")
+        .order("created_at", { ascending: false });
+        
+      const oldIssues: any[] = [];
+      
+      if (allSubmissions) {
+        allSubmissions.forEach(sub => {
+          // Check if this submission already has records in checklist_issues
+          const hasMigrated = issuesData?.some((i: any) => i.submission_id === sub.id);
+          if (hasMigrated) return;
+          
+          let responses;
+          try {
+            responses = typeof sub.responses === 'string' ? JSON.parse(sub.responses) : sub.responses;
+          } catch(e) {
+            return;
+          }
+          
+          if (responses && responses.defects) {
+             Object.entries(responses.defects).forEach(([itemId, defectsList]: [string, any]) => {
+                if (Array.isArray(defectsList)) {
+                   defectsList.forEach(d => {
+                      if (d.description || d.photo) {
+                         oldIssues.push({
+                           id: `old-${sub.id}-${itemId}-${Math.random()}`,
+                           submission_id: sub.id,
+                           vehicle_id: sub.vehicle_id,
+                           trailer_id: sub.trailer_id,
+                           driver_id: sub.driver_id,
+                           item_title: itemId,
+                           description: d.description,
+                           photo_url: d.photo,
+                           status: "pending",
+                           priority: "Medio",
+                           created_at: sub.created_at,
+                           company_id: sub.company_id,
+                           auto_alerts: null,
+                         });
+                      }
+                   });
+                }
+             });
+          }
+        });
+      }
+      
+      const combinedIssuesData = [...(issuesData || []), ...oldIssues];
+      
       const submissionIds = [
-        ...new Set(issuesData.map((i: any) => i.submission_id)),
-      ];
+        ...new Set(combinedIssuesData.map((i: any) => i.submission_id)),
+      ].filter(Boolean);
 
-      const { data: submissionsData } = await supabase.from("checklist_submissions").select("id, type").eq("company_id", companyId)
+
+      const { data: submissionsData } = await supabase.from("checklist_submissions").select("id, type").eq("company_id", (user as any)?.company_id)
         .in("id", submissionIds);
 
       const fuelSubmissionIds =
@@ -260,7 +316,7 @@ export default function MaintenanceTab() {
           ?.filter((s: any) => s.type === "fuel" || s.type === "Abastecimento")
           .map((s: any) => s.id) || [];
 
-      const filteredIssues = issuesData.filter(
+      const filteredIssues = combinedIssuesData.filter(
         (i: any) => !fuelSubmissionIds.includes(i.submission_id),
       );
 
@@ -280,21 +336,21 @@ export default function MaintenanceTab() {
 
       let vehiclesData: any[] = [];
       if (vehicleIds.length > 0) {
-        const { data } = await supabase.from("vehicles").select("id, plate, model").eq("company_id", companyId)
+        const { data } = await supabase.from("vehicles").select("id, plate, model").eq("company_id", (user as any)?.company_id)
           .in("id", vehicleIds);
         vehiclesData = data || [];
       }
 
       let trailersData: any[] = [];
       if (trailerIds.length > 0) {
-        const { data } = await supabase.from("trailers").select("id, plate").eq("company_id", companyId)
+        const { data } = await supabase.from("trailers").select("id, plate").eq("company_id", (user as any)?.company_id)
           .in("id", trailerIds);
         trailersData = data || [];
       }
 
       let driversData: any[] = [];
       if (driverIds.length > 0) {
-        const { data } = await supabase.from("profiles").select("id, full_name").eq("company_id", companyId)
+        const { data } = await supabase.from("profiles").select("id, full_name").eq("company_id", (user as any)?.company_id)
           .in("id", driverIds);
         driversData = data || [];
       }
@@ -318,7 +374,7 @@ export default function MaintenanceTab() {
       const pendingGroups: { [key: string]: any } = {};
 
       issuesWithRelations.forEach((issue: any) => {
-        if (issue.status === "pending") {
+        if (issue.status?.toLowerCase().trim() === "pending") {
           const key = `${issue.vehicle_id || "none"}-${issue.trailer_id || "none"}-${issue.item_title}`;
           if (pendingGroups[key]) {
             const exist = pendingGroups[key];
@@ -366,7 +422,7 @@ export default function MaintenanceTab() {
       setIssues(combinedIssues);
       fetchAlertsData();
     } catch (error) {
-      console.error(error);
+      console.error(error); alert("Error fetching issues: " + JSON.stringify(error));
     }
 
     setLoading(false);
@@ -453,7 +509,7 @@ export default function MaintenanceTab() {
 
         // Fetch real-time current odometer of the vehicle if available
         if (issue.vehicle_id) {
-          supabase.from("checklist_submissions").select("odometer").eq("company_id", companyId)
+          supabase.from("checklist_submissions").select("odometer").eq("company_id", (user as any)?.company_id)
             .eq("vehicle_id", issue.vehicle_id)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -1047,7 +1103,7 @@ export default function MaintenanceTab() {
       if (activeTab === "resolved") {
         return issue.status === "resolved" && !issue.resolution_notes?.startsWith("[AGUARDANDO_NF]");
       }
-      return issue.status === activeTab;
+      return issue.status?.toLowerCase().trim() === activeTab;
     })
     .filter((issue) => {
       if (alertFilter === "all") return true;
@@ -1089,10 +1145,10 @@ export default function MaintenanceTab() {
           .includes(searchTerm.toLowerCase()),
     );
 
-  const pendingCount = issues.filter((i) => i.status === "pending").length;
-  const waitingCount = issues.filter((i) => i.status === "waiting").length;
-  const waitingNfCount = issues.filter((i) => i.status === "resolved" && i.resolution_notes?.startsWith("[AGUARDANDO_NF]")).length;
-  const resolvedCount = issues.filter((i) => i.status === "resolved" && !i.resolution_notes?.startsWith("[AGUARDANDO_NF]") && !i.resolution_notes?.toLowerCase().includes("normal no checklist")).length;
+  const pendingCount = issues.filter((i) => i.status?.toLowerCase().trim() === "pending").length;
+  const waitingCount = issues.filter((i) => i.status?.toLowerCase().trim() === "waiting").length;
+  const waitingNfCount = issues.filter((i) => i.status?.toLowerCase().trim() === "resolved" && i.resolution_notes?.startsWith("[AGUARDANDO_NF]")).length;
+  const resolvedCount = issues.filter((i) => i.status?.toLowerCase().trim() === "resolved" && !i.resolution_notes?.startsWith("[AGUARDANDO_NF]") && !i.resolution_notes?.toLowerCase().includes("normal no checklist")).length;
 
   const filteredAlertsForTracking = alerts.filter((alert) => {
     const titleMatch = (alert.title || "")
@@ -1168,7 +1224,7 @@ export default function MaintenanceTab() {
 
         let supplierId = "";
         if ((user as any)?.company_id && cnpj) {
-          const { data: existingSuppliers } = await supabase.from("inventory_suppliers").select("id").eq("company_id", companyId)
+          const { data: existingSuppliers } = await supabase.from("inventory_suppliers").select("id").eq("company_id", (user as any)?.company_id)
             .eq("company_id", user.company_id)
             .eq("cnpj_cpf", cnpj)
             .limit(1);
@@ -1202,7 +1258,7 @@ export default function MaintenanceTab() {
             
             let itemId = "";
             if ((user as any)?.company_id && xProd) {
-              const { data: existingItems } = await supabase.from("inventory_items").select("id").eq("company_id", companyId)
+              const { data: existingItems } = await supabase.from("inventory_items").select("id").eq("company_id", (user as any)?.company_id)
                 .eq("company_id", user.company_id)
                 .ilike("name", xProd)
                 .limit(1);
@@ -3322,7 +3378,7 @@ export default function MaintenanceTab() {
                                           const { data: nfeApi, error: apiError } = await supabase
                                             .from("integration_nfe_api")
                                             .select("*")
-                                            .eq("company_id", companyId)
+                                            .eq("company_id", (user as any)?.company_id)
                                             .limit(1);
 
                                           if (apiError || !nfeApi || nfeApi.length === 0 || !nfeApi[0].api_key) {
