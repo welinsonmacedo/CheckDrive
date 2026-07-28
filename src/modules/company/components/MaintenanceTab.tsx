@@ -1225,7 +1225,7 @@ export default function MaintenanceTab() {
         let supplierId = "";
         if ((user as any)?.company_id && cnpj) {
           const { data: existingSuppliers } = await supabase.from("inventory_suppliers").select("id").eq("company_id", (user as any)?.company_id)
-            .eq("company_id", user.company_id)
+            .eq("company_id", (user as any)?.company_id)
             .eq("cnpj_cpf", cnpj)
             .limit(1);
 
@@ -1235,7 +1235,7 @@ export default function MaintenanceTab() {
             const { data: newSupplier } = await supabase
               .from("inventory_suppliers")
               .insert({
-                company_id: user.company_id,
+                company_id: (user as any)?.company_id,
                 cnpj_cpf: cnpj,
                 name: xNome,
               })
@@ -1259,7 +1259,7 @@ export default function MaintenanceTab() {
             let itemId = "";
             if ((user as any)?.company_id && xProd) {
               const { data: existingItems } = await supabase.from("inventory_items").select("id").eq("company_id", (user as any)?.company_id)
-                .eq("company_id", user.company_id)
+                .eq("company_id", (user as any)?.company_id)
                 .ilike("name", xProd)
                 .limit(1);
 
@@ -1269,7 +1269,7 @@ export default function MaintenanceTab() {
                 const { data: newItem } = await supabase
                   .from("inventory_items")
                   .insert({
-                    company_id: user.company_id,
+                    company_id: (user as any)?.company_id,
                     name: xProd,
                     sku: cProd,
                     category: "Peças",
