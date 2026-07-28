@@ -35,11 +35,7 @@ export function formatDriverName(rawName?: string | null, email?: string | null)
 
 export function parseSpeedKmh(rawSpeed: number | null | undefined): number {
   if (rawSpeed == null || isNaN(rawSpeed) || rawSpeed <= 0) return 0;
-  // If speed is likely in m/s (Android Location.getSpeed() returns meters/second)
-  // 1 m/s = 3.6 km/h. E.g. 20 m/s = 72 km/h.
-  // If rawSpeed < 70, convert from m/s to km/h; if rawSpeed >= 70, assume it's already km/h.
-  const kmh = rawSpeed < 70 ? rawSpeed * 3.6 : rawSpeed;
-  return Math.round(kmh);
+  return Math.round(rawSpeed);
 }
 
 export function determineDriverStatus(
