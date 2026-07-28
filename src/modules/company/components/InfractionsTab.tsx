@@ -24,6 +24,8 @@ import {
   FileText,
   User,
   Eye,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -882,6 +884,7 @@ export default function InfractionsTab() {
         notice_number: formData.notice_number || null,
         license_plate: formData.license_plate || null,
         address: formData.address || null,
+        status: formData.status || "pending",
         installments: finalInstallments,
         attachment_url: attachmentUrl,
         created_by: user?.id,
@@ -907,6 +910,23 @@ export default function InfractionsTab() {
       alert("Erro ao salvar a infração.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  
+  const handleToggleStatus = async (infraction: any) => {
+    try {
+      const newStatus = infraction.status === "paid" ? "pending" : "paid";
+      const { error } = await supabase
+        .from("traffic_infractions")
+        .update({ status: newStatus })
+        .eq("id", infraction.id);
+        
+      if (error) throw error;
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao alterar status.");
     }
   };
 
@@ -1097,6 +1117,10 @@ export default function InfractionsTab() {
                           <FileText size={18} />
                         </button>
                       )}
+                      
+                      <button onClick={() => handleToggleStatus(inf)} className={`p-2 rounded-lg ${inf.status === 'paid' ? 'text-amber-500 hover:bg-amber-50' : 'text-emerald-500 hover:bg-emerald-50'}`} title={inf.status === 'paid' ? 'Marcar como Pendente' : 'Marcar como Resolvida'}>
+                        {inf.status === 'paid' ? <XCircle size={18} /> : <CheckCircle size={18} />}
+                      </button>
                       <button onClick={() => setPrintInfraction(inf)} className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg" title="Imprimir Recibo">
                         <Printer size={18} />
                       </button>
@@ -1120,6 +1144,7 @@ export default function InfractionsTab() {
                     <th className="px-6 py-4 font-medium">Motorista</th>
                     <th className="px-6 py-4 font-medium">Data / Local</th>
                     <th className="px-6 py-4 font-medium">Infração</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
                     <th className="px-6 py-4 font-medium">Valores</th>
                     <th className="px-6 py-4 font-medium text-right">Ações</th>
                   </tr>
@@ -1128,7 +1153,7 @@ export default function InfractionsTab() {
                   {filteredInfractions.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-6 py-8 text-center text-zinc-500"
                       >
                         Nenhuma infração encontrada.
@@ -1173,6 +1198,16 @@ export default function InfractionsTab() {
                               Placa: {inf.license_plate}
                             </div>
                           )}
+                        
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                            inf.status === "paid"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {inf.status === "paid" ? "Paga" : "Pendente"}
+                          </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm font-bold text-zinc-900">
@@ -1189,6 +1224,16 @@ export default function InfractionsTab() {
                               Auto: {inf.notice_number}
                             </div>
                           )}
+                        
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                            inf.status === "paid"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {inf.status === "paid" ? "Paga" : "Pendente"}
+                          </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm font-bold text-zinc-900">
@@ -1257,6 +1302,10 @@ export default function InfractionsTab() {
                                 <Eye size={18} />
                               </button>
                             )}
+                            
+                            <button onClick={() => handleToggleStatus(inf)} className={`p-2 rounded-lg transition-colors ${inf.status === 'paid' ? 'text-amber-500 hover:bg-amber-50' : 'text-emerald-500 hover:bg-emerald-50'}`} title={inf.status === 'paid' ? 'Marcar como Pendente' : 'Marcar como Resolvida'}>
+                              {inf.status === 'paid' ? <XCircle size={18} /> : <CheckCircle size={18} />}
+                            </button>
                             <button
                               onClick={() => setPrintInfraction(inf)}
                               className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
@@ -1614,6 +1663,22 @@ export default function InfractionsTab() {
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  
+                  {/* Status */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-zinc-700 mb-1">
+                      Status da Infração
+                    </label>
+                    <select
+                      value={formData.status || "pending"}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    >
+                      <option value="pending">Pendente</option>
+                      <option value="paid">Resolvida (Paga)</option>
+                    </select>
                   </div>
 
                   {/* Endereço */}
