@@ -332,11 +332,13 @@ export function useTracking() {
       else offline++;
 
       if (ds.status === "moving" || ds.status === "stopped") {
-        if (ds.speedKmh > 0) {
+        if (ds.speedKmh > 0 && ds.speedKmh <= 140) {
           totalSpeed += ds.speedKmh;
           movingCount++;
         }
-        if (ds.speedKmh > maxSpeed) maxSpeed = ds.speedKmh;
+        if (ds.speedKmh > maxSpeed) {
+          maxSpeed = ds.speedKmh;
+        }
       }
 
       if (ds.latestLocation.trip_id) {
