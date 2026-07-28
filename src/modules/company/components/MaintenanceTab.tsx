@@ -1348,6 +1348,15 @@ export default function MaintenanceTab() {
     }
   };
 
+  const getPriorityBorder = (priority: string) => {
+    switch (priority) {
+      case 'Critico': return 'border-l-4 border-l-red-500';
+      case 'Medio': return 'border-l-4 border-l-orange-500';
+      case 'Leve': return 'border-l-4 border-l-green-500';
+      default: return '';
+    }
+  };
+
   return (
     <div className="space-y-6">
 
@@ -1956,7 +1965,7 @@ export default function MaintenanceTab() {
                 const isSelected = selectedRows.includes(issue.id);
                 
                 return (
-                  <div key={issue.id} className={`bg-white rounded-xl border p-4 flex flex-col gap-3 shadow-sm transition-colors ${isSelected ? 'border-primary ring-1 ring-primary bg-primary/5' : 'border-app-border'}`}>
+                  <div key={issue.id} className={`bg-white rounded-xl border p-4 flex flex-col gap-3 shadow-sm transition-colors overflow-hidden ${isSelected ? 'border-primary ring-1 ring-primary bg-primary/5' : 'border-app-border'} ${getPriorityBorder(issue.priority)}`}>
                     <div className="flex justify-between items-start">
                       <div className="flex gap-2 items-start">
                         {(activeTab === "pending" || activeTab === "waiting" || activeTab === "waiting_nf") && user?.role === "admin" && (
@@ -2103,7 +2112,7 @@ export default function MaintenanceTab() {
                     return (
                       <tr
                         key={issue.id}
-                        className={`transition-colors ${selectedRows.includes(issue.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-gray-50"}`}
+                        className={`transition-colors ${selectedRows.includes(issue.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-gray-50"} ${getPriorityBorder(issue.priority)}`}
                       >
                         {(activeTab === "pending" || activeTab === "waiting" || activeTab === "waiting_nf") &&
                           user?.role === "admin" && (
