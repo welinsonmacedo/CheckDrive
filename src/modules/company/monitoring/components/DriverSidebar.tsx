@@ -392,11 +392,14 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
                         <h2 className="text-sm font-black text-white leading-tight">
                           {formatDriverName(selectedDriverState.driver?.full_name)}
                         </h2>
-                        <span className="text-xs text-slate-400 font-medium">
+                        
+                        <span className="text-xs text-slate-400 font-medium line-clamp-2 leading-snug block mt-0.5">
                           {selectedDriverState.vehicle
                             ? `${selectedDriverState.vehicle.model || "Veículo"} (${selectedDriverState.vehicle.plate})`
                             : "Sem veículo atribuído"}
+                          {selectedDriverState.route_name ? ` • ${selectedDriverState.route_name}` : ""}
                         </span>
+
                       </div>
                     </div>
 
@@ -413,8 +416,8 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
                       {selectedDriverState.status === "moving"
                         ? "🟢 Em Movimento"
                         : selectedDriverState.status === "stopped"
-                        ? "🔴 Parado"
-                        : "⚪ Offline"}
+                        ? (selectedDriverState.is_on_break ? "🟠 No Intervalo" : "🔴 Parado")
+                        : (selectedDriverState.is_on_break ? "🟠 Offline (Intervalo)" : "⚪ Offline")}
                     </div>
                   </div>
 
@@ -570,11 +573,14 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
                             <h4 className="text-xs font-bold text-white truncate">
                               {formatDriverName(ds.driver?.full_name)}
                             </h4>
+                            
                             <p className="text-[11px] text-slate-400 truncate">
                               {ds.vehicle
                                 ? `${ds.vehicle.model || ""} • ${ds.vehicle.plate}`
                                 : "Sem Veículo"}
+                              {ds.route_name ? ` | Rota: ${ds.route_name}` : ""}
                             </p>
+
                             <span className="text-[10px] text-slate-500 font-mono block">
                               {ds.lastUpdateAgo}
                             </span>
@@ -592,14 +598,14 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
                                 : "text-slate-400"
                             }`}
                           >
-                            {ds.speedKmh > 0 ? `${ds.speedKmh} km/h` : "Parado"}
+                            {ds.speedKmh > 0 ? `${ds.speedKmh} km/h` : (ds.is_on_break ? "Intervalo" : "Parado")}
                           </div>
                           <span className="text-[10px] text-slate-400 font-semibold block">
                             {ds.status === "moving"
                               ? "Em Movimento"
                               : ds.status === "stopped"
-                              ? "Parado"
-                              : "Offline"}
+                              ? (ds.is_on_break ? "Intervalo" : "Parado")
+                              : (ds.is_on_break ? "Off/Intervalo" : "Offline")}
                           </span>
                         </div>
                       </div>

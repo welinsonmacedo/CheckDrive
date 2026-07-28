@@ -44,6 +44,8 @@ export interface DriverState {
   speedKmh: number;
   address?: string;
   locationsCount: number;
+  route_name?: string;
+  is_on_break?: boolean;
 }
 
 export interface TripMetrics {

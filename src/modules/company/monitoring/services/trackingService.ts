@@ -232,20 +232,42 @@ export async function fetchInitialData(companyId: string) {
     // 2. Fetch recent driver locations (last 48 hours to find latest for each driver)
     const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
-    let { data: locations, error } = companyId
-      ? await supabase
-          .from("driver_locations")
-          .select("*")
-          .eq("company_id", companyId)
-          .gte("created_at", twoDaysAgo)
-          .order("created_at", { ascending: false })
-          .limit(1000)
-      : await supabase
-          .from("driver_locations")
-          .select("*")
-          .gte("created_at", twoDaysAgo)
-          .order("created_at", { ascending: false })
-          .limit(1000);
+    
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+
+    
+    let [{ data: locations, error }, { data: activeSchedules }] = await Promise.all([
+      companyId
+        ? supabase
+            .from("driver_locations")
+            .select("*")
+            .eq("company_id", companyId)
+            .gte("created_at", twoDaysAgo)
+            .order("created_at", { ascending: false })
+            .limit(1000)
+        : supabase
+            .from("driver_locations")
+            .select("*")
+            .gte("created_at", twoDaysAgo)
+            .order("created_at", { ascending: false })
+            .limit(1000),
+      companyId
+        ? supabase
+            .from("schedules")
+            .select("driver_id, vehicle_id, routes(origin, destination)")
+            .eq("company_id", companyId)
+            .not("start_checklist_id", "is", null)
+            .is("end_checklist_id", null)
+            .order("start_at", { ascending: false })
+        : supabase
+            .from("schedules")
+            .select("driver_id, vehicle_id, routes(origin, destination)")
+            .not("start_checklist_id", "is", null)
+            .is("end_checklist_id", null)
+            .order("start_at", { ascending: false })
+    ]);
+
+
 
     if ((!locations || locations.length === 0) && companyId) {
       const fallbackLocs = await supabase
@@ -335,6 +357,24 @@ export async function fetchInitialData(companyId: string) {
       }
     });
 
+    
+    
+    const activeTripByDriver = new Map();
+    (activeSchedules || []).forEach(sched => {
+      if (!sched.driver_id) return;
+      const driverKey = sched.driver_id.trim().toLowerCase();
+      if (activeTripByDriver.has(driverKey)) return;
+      
+      let routeName = "";
+      const routes = sched.routes as any;
+      if (routes) {
+        routeName = `${routes.origin || ""} - ${routes.destination || ""}`;
+        if (routeName === " - ") routeName = "Rota não informada";
+      }
+      activeTripByDriver.set(driverKey, { vehicle_id: sched.vehicle_id, route_name: routeName });
+    });
+
+
     // Construct DriverStates list
     const driverStates: DriverState[] = [];
 
@@ -350,11 +390,25 @@ export async function fetchInitialData(companyId: string) {
         driversMap.set(key, driver);
       }
 
-      const vehicleId = latest.vehicle_id;
-      const vehicle = vehicleId ? vehiclesMap.get(vehicleId) : undefined;
       const speedKmh = parseSpeedKmh(latest.speed);
       const status = determineDriverStatus(latest.created_at, speedKmh, latest.status);
 
+      let vehicleId = latest.vehicle_id;
+      let routeName;
+      let isOnBreak = false;
+      const activeTrip = activeTripByDriver.get(key);
+      if (activeTrip) {
+        if (!vehicleId || vehicleId !== activeTrip.vehicle_id) {
+          vehicleId = activeTrip.vehicle_id;
+        }
+        routeName = activeTrip.route_name;
+        // If they have an active trip but haven't moved in a while or status is stopped/offline, they might be on a break
+        if (status !== "moving") {
+           isOnBreak = true;
+        }
+      }
+      
+      const vehicle = vehicleId ? vehiclesMap.get(vehicleId) : undefined;
       driverStates.push({
         driver_id: driverId,
         driver,
@@ -364,21 +418,35 @@ export async function fetchInitialData(companyId: string) {
         lastUpdateAgo: formatRelativeTime(latest.created_at),
         speedKmh,
         locationsCount: count,
+        route_name: routeName,
+        is_on_break: isOnBreak,
       });
+
     });
 
     // Also include drivers without recent location entries as 'offline'
     driversMap.forEach((driver, driverId) => {
       if (!latestByDriver.has(driverId)) {
+        
+        let vehicle;
+        let routeName;
+        let isOnBreak = false;
+        const activeTrip = activeTripByDriver.get(driverId.trim().toLowerCase());
+        if (activeTrip) {
+          vehicle = activeTrip.vehicle_id ? vehiclesMap.get(activeTrip.vehicle_id) : undefined;
+          routeName = activeTrip.route_name;
+          isOnBreak = true;
+        }
+
         driverStates.push({
           driver_id: driverId,
           driver,
-          vehicle: undefined,
+          vehicle,
           latestLocation: {
             id: `fake-${driverId}`,
             driver_id: driverId,
             company_id: companyId,
-            latitude: -15.793889, // default brasilia fallback if no coords
+            latitude: -15.793889,
             longitude: -47.882778,
             speed: 0,
             created_at: new Date(0).toISOString(),
@@ -387,9 +455,14 @@ export async function fetchInitialData(companyId: string) {
           lastUpdateAgo: "Nunca registrou",
           speedKmh: 0,
           locationsCount: 0,
+          route_name: routeName,
+          is_on_break: isOnBreak,
         });
+
       }
     });
+
+    
 
     // Extract initial alerts for speeding violations based on vehicle max_speed
     const initialAlerts: AlertItem[] = [];
