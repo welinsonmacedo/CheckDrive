@@ -125,23 +125,28 @@ export default function MaintenanceTab() {
     fetchIssues();
     fetchCatalog();
     fetchAlertsData();
-  }, []);
+  }, [(user as any)?.company_id]);
 
   async function fetchAlertsData() {
     try {
+      const companyId = (user as any)?.company_id;
+      if (!companyId) return;
+
       const { data: alertsData, error: alertsError } = await supabase.from(
         "auto_alerts",
-      ).select(`
+      )
+        .select(`
           *,
           vehicles (plate, model),
           profiles (full_name)
-        `);
+        `)
+        .eq("company_id", companyId);
 
       if (!alertsError && alertsData) {
         setAlerts(alertsData);
       }
 
-      const { data: submissions, error: subError } = await supabase.from("checklist_submissions").select("vehicle_id, odometer, created_at").eq("company_id", (user as any)?.company_id)
+      const { data: submissions, error: subError } = await supabase.from("checklist_submissions").select("vehicle_id, odometer, created_at").eq("company_id", companyId)
         .order("created_at", { ascending: false });
 
       if (!subError && submissions) {
@@ -159,10 +164,12 @@ export default function MaintenanceTab() {
   }
 
   async function fetchCatalog() {
+    const companyId = (user as any)?.company_id;
+    if (!companyId) return;
     try {
       const [itemsRes, suppliersRes, checklistItemsRes] = await Promise.all([
-        supabase.from("inventory_items").select("*").eq("company_id", (user as any)?.company_id).eq("company_id", (user as any)?.company_id).order("name"),
-        supabase.from("inventory_suppliers").select("*").eq("company_id", (user as any)?.company_id).eq("company_id", (user as any)?.company_id).order("name"),
+        supabase.from("inventory_items").select("*").eq("company_id", companyId).eq("company_id", companyId).order("name"),
+        supabase.from("inventory_suppliers").select("*").eq("company_id", companyId).eq("company_id", companyId).order("name"),
         supabase.from("checklist_items").select("title").order("order_index"),
       ]);
 
@@ -222,6 +229,8 @@ export default function MaintenanceTab() {
   }
 
   async function fetchIssues() {
+    const companyId = (user as any)?.company_id;
+    if (!companyId) return;
     setLoading(true);
 
     try {
@@ -229,7 +238,7 @@ export default function MaintenanceTab() {
           *,
           auto_alerts (*)
         `)
-        .eq("company_id", (user as any)?.company_id)
+        .eq("company_id", companyId)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -243,7 +252,7 @@ export default function MaintenanceTab() {
         ...new Set(issuesData.map((i: any) => i.submission_id)),
       ];
 
-      const { data: submissionsData } = await supabase.from("checklist_submissions").select("id, type").eq("company_id", (user as any)?.company_id)
+      const { data: submissionsData } = await supabase.from("checklist_submissions").select("id, type").eq("company_id", companyId)
         .in("id", submissionIds);
 
       const fuelSubmissionIds =
@@ -271,21 +280,21 @@ export default function MaintenanceTab() {
 
       let vehiclesData: any[] = [];
       if (vehicleIds.length > 0) {
-        const { data } = await supabase.from("vehicles").select("id, plate, model").eq("company_id", (user as any)?.company_id)
+        const { data } = await supabase.from("vehicles").select("id, plate, model").eq("company_id", companyId)
           .in("id", vehicleIds);
         vehiclesData = data || [];
       }
 
       let trailersData: any[] = [];
       if (trailerIds.length > 0) {
-        const { data } = await supabase.from("trailers").select("id, plate").eq("company_id", (user as any)?.company_id)
+        const { data } = await supabase.from("trailers").select("id, plate").eq("company_id", companyId)
           .in("id", trailerIds);
         trailersData = data || [];
       }
 
       let driversData: any[] = [];
       if (driverIds.length > 0) {
-        const { data } = await supabase.from("profiles").select("id, full_name").eq("company_id", (user as any)?.company_id)
+        const { data } = await supabase.from("profiles").select("id, full_name").eq("company_id", companyId)
           .in("id", driverIds);
         driversData = data || [];
       }
@@ -444,7 +453,7 @@ export default function MaintenanceTab() {
 
         // Fetch real-time current odometer of the vehicle if available
         if (issue.vehicle_id) {
-          supabase.from("checklist_submissions").select("odometer").eq("company_id", (user as any)?.company_id)
+          supabase.from("checklist_submissions").select("odometer").eq("company_id", companyId)
             .eq("vehicle_id", issue.vehicle_id)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -1159,7 +1168,7 @@ export default function MaintenanceTab() {
 
         let supplierId = "";
         if ((user as any)?.company_id && cnpj) {
-          const { data: existingSuppliers } = await supabase.from("inventory_suppliers").select("id").eq("company_id", (user as any)?.company_id)
+          const { data: existingSuppliers } = await supabase.from("inventory_suppliers").select("id").eq("company_id", companyId)
             .eq("company_id", user.company_id)
             .eq("cnpj_cpf", cnpj)
             .limit(1);
@@ -1193,7 +1202,7 @@ export default function MaintenanceTab() {
             
             let itemId = "";
             if ((user as any)?.company_id && xProd) {
-              const { data: existingItems } = await supabase.from("inventory_items").select("id").eq("company_id", (user as any)?.company_id)
+              const { data: existingItems } = await supabase.from("inventory_items").select("id").eq("company_id", companyId)
                 .eq("company_id", user.company_id)
                 .ilike("name", xProd)
                 .limit(1);
@@ -3298,7 +3307,7 @@ export default function MaintenanceTab() {
                                           const { data: nfeApi, error: apiError } = await supabase
                                             .from("integration_nfe_api")
                                             .select("*")
-                                            .eq("company_id", (user as any)?.company_id)
+                                            .eq("company_id", companyId)
                                             .limit(1);
 
                                           if (apiError || !nfeApi || nfeApi.length === 0 || !nfeApi[0].api_key) {
