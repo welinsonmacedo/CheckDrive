@@ -170,7 +170,7 @@ export default function MaintenanceTab() {
       const [itemsRes, suppliersRes, checklistItemsRes] = await Promise.all([
         supabase.from("inventory_items").select("*").eq("company_id", (user as any)?.company_id).eq("company_id", (user as any)?.company_id).order("name"),
         supabase.from("inventory_suppliers").select("*").eq("company_id", (user as any)?.company_id).eq("company_id", (user as any)?.company_id).order("name"),
-        supabase.from("checklist_items").select("title").order("order_index"),
+        supabase.from("checklist_items").select("title, priority").order("order_index"),
       ]);
 
       if (!itemsRes.error && itemsRes.data) {
@@ -360,8 +360,14 @@ export default function MaintenanceTab() {
         if (status === "resolved" && !issue.resolved_by) {
           status = "pending";
         }
+        
+        const checklistItem = checklistItemsRes?.data?.find(ci => ci.title === issue.item_title);
+        const mappedPriority = checklistItem?.priority || "Medio";
+        
         return {
           ...issue,
+          priority: mappedPriority,
+
           status,
           vehicles: vehiclesData.find((v) => v.id === issue.vehicle_id),
           trailers: trailersData.find((t) => t.id === issue.trailer_id),
