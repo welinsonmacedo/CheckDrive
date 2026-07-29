@@ -630,14 +630,33 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       ) : filteredAlerts.length === 0 ? (
-        <div className="bg-app-bg border border-dashed border-app-border rounded-3xl p-10 flex flex-col items-center justify-center text-center">
-          <AlertTriangle size={48} className="text-zinc-300 mb-4" />
-          <h3 className="text-lg font-black text-zinc-500 tracking-tight">
-            Nenhum alerta encontrado
-          </h3>
-          <p className="text-sm text-zinc-400 mt-1 max-w-sm">
-            Tente ajustar os filtros ou cadastre um novo alerta.
-          </p>
+        <div className="space-y-4">
+          <div className="bg-app-bg border border-dashed border-app-border rounded-3xl p-8 flex flex-col items-center justify-center text-center">
+            <AlertTriangle size={48} className="text-amber-500/80 mb-3" />
+            <h3 className="text-base font-bold text-zinc-800 tracking-tight font-sans">
+              Nenhum alerta exibido na tela
+            </h3>
+            <p className="text-xs text-zinc-500 mt-1 max-w-md font-sans">
+              Se você possui regras cadastradas diretamente no banco Supabase (ex: 98 alertas) mas elas não estão aparecendo, o Supabase está bloqueando a leitura pelo <strong>Row Level Security (RLS)</strong>.
+            </p>
+
+            <div className="mt-4 p-4 bg-zinc-900 text-amber-300 rounded-2xl text-left max-w-xl w-full font-mono text-[11px] overflow-x-auto shadow-inner relative group">
+              <p className="text-zinc-400 text-[10px] uppercase font-sans font-bold mb-2">Execute este SQL no Supabase Editor para liberar o acesso:</p>
+              <pre className="select-all">
+{`ALTER TABLE public.auto_alerts DISABLE ROW LEVEL SECURITY;`}
+              </pre>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText("ALTER TABLE public.auto_alerts DISABLE ROW LEVEL SECURITY;");
+                  alert("Código SQL copiado! Cole no SQL Editor do Supabase para aplicar.");
+                }}
+                className="mt-3 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-lg text-xs transition-colors font-sans"
+              >
+                Copiar Comando SQL RLS
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

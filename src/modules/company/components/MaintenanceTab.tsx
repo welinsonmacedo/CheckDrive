@@ -1761,8 +1761,8 @@ export default function MaintenanceTab() {
           </div>
 
           {filteredAlertsForTracking.length === 0 ? (
-            <div className="bg-white rounded-3xl p-12 text-center border border-app-border shadow-sm">
-              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="bg-white rounded-3xl p-10 text-center border border-app-border shadow-sm flex flex-col items-center">
+              <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Wrench size={32} />
               </div>
               <h4 className="text-sm font-bold text-text-main font-sans">
@@ -1770,11 +1770,31 @@ export default function MaintenanceTab() {
                   ? "Nenhum acompanhamento atende aos filtros aplicados"
                   : "Nenhuma manutenção monitorada encontrada"}
               </h4>
-              <p className="text-xs text-text-muted max-w-sm mx-auto mt-1 font-sans mb-4">
+              <p className="text-xs text-text-muted max-w-md mx-auto mt-1 font-sans mb-4">
                 {alerts.length > 0
                   ? "Tente ajustar a pesquisa ou os filtros de tipo e status acima para visualizar seus acompanhamentos."
-                  : "Cadastre novas regras de alertas de KM ou Data para iniciar o monitoramento preventivo da sua frota."}
+                  : "Se você já possui 98 regras no Supabase e elas não aparecem, desabilite o bloqueio RLS da tabela 'auto_alerts'."}
               </p>
+
+              {alerts.length === 0 && (
+                <div className="mb-5 p-4 bg-zinc-900 text-amber-300 rounded-2xl text-left max-w-lg w-full font-mono text-[11px] overflow-x-auto shadow-inner relative group">
+                  <p className="text-zinc-400 text-[10px] uppercase font-sans font-bold mb-2">Comando SQL RLS para liberar os 98 alertas no Supabase:</p>
+                  <pre className="select-all">
+{`ALTER TABLE public.auto_alerts DISABLE ROW LEVEL SECURITY;`}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText("ALTER TABLE public.auto_alerts DISABLE ROW LEVEL SECURITY;");
+                      alert("Código SQL copiado! Cole no SQL Editor do Supabase para aplicar.");
+                    }}
+                    className="mt-3 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-lg text-xs transition-colors font-sans"
+                  >
+                    Copiar Comando SQL RLS
+                  </button>
+                </div>
+              )}
+
               {alerts.length > 0 ? (
                 <button
                   onClick={() => {
@@ -1782,7 +1802,7 @@ export default function MaintenanceTab() {
                     setTrackingTypeFilter("all");
                     setTrackingFilter("all");
                   }}
-                  className="px-4 py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-xl hover:bg-blue-100 transition-colors inline-flex items-center gap-2"
+                  className="px-4 py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-xl hover:bg-blue-100 transition-colors inline-flex items-center gap-2 font-sans"
                 >
                   Limpar Filtros
                 </button>
