@@ -121,16 +121,39 @@ export default function MaintenanceTab() {
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
   const [checklistItemsList, setChecklistItemsList] = useState<any[]>([]);
 
+  const [showNewAlertModal, setShowNewAlertModal] = useState(false);
+  const [vehiclesList, setVehiclesList] = useState<any[]>([]);
+  const [newAlertForm, setNewAlertForm] = useState({
+    title: "",
+    trigger_type: "km" as "km" | "date",
+    target_vehicle_id: "",
+    interval_km: "",
+    last_km: "",
+    warning_km: "1000",
+    trigger_date: "",
+    warning_days: "7",
+    generate_issue: false,
+  });
+
   useEffect(() => {
     fetchIssues();
     fetchCatalog();
     fetchAlertsData();
-  }, [(user as any)?.company_id]);
+  }, [(user as any)?.company_id, activeTab]);
 
   async function fetchAlertsData() {
     try {
       const companyId = (user as any)?.company_id;
       if (!companyId) return;
+
+      // Fetch vehicles list for dropdowns
+      const { data: vList } = await supabase
+        .from("vehicles")
+        .select("id, plate, model, current_km, odometer, km")
+        .eq("company_id", companyId)
+        .eq("active", true)
+        .order("plate");
+      if (vList) setVehiclesList(vList);
 
       let rawAlerts: any[] = [];
 
@@ -283,6 +306,62 @@ export default function MaintenanceTab() {
       setOdometers(latestOdometer);
     } catch (err) {
       console.warn("Error fetching alerts tracking data:", err);
+    }
+  }
+
+  async function handleSaveNewAlert(e: React.FormEvent) {
+    e.preventDefault();
+    const companyId = (user as any)?.company_id;
+    if (!companyId) return alert("Sessão inválida ou sem empresa vinculada.");
+    if (!newAlertForm.title) return alert("Informe o título do acompanhamento.");
+    if (!newAlertForm.target_vehicle_id) return alert("Selecione um veículo.");
+
+    try {
+      const payload: any = {
+        company_id: companyId,
+        title: newAlertForm.title.trim(),
+        trigger_type: newAlertForm.trigger_type,
+        target_type: "vehicle",
+        target_vehicle_id: newAlertForm.target_vehicle_id,
+        active: true,
+        generate_issue: newAlertForm.generate_issue ?? false,
+      };
+
+      if (newAlertForm.trigger_type === "km") {
+        if (!newAlertForm.interval_km || !newAlertForm.last_km) {
+          return alert("Preencha o intervalo em KM e o KM da última revisão.");
+        }
+        payload.interval_km = Number(newAlertForm.interval_km);
+        payload.last_km = Number(newAlertForm.last_km);
+        payload.warning_km = Number(newAlertForm.warning_km || 1000);
+      } else {
+        if (!newAlertForm.trigger_date) {
+          return alert("Preencha a data do próximo evento de manutenção.");
+        }
+        payload.trigger_date = newAlertForm.trigger_date;
+        payload.warning_days = Number(newAlertForm.warning_days || 7);
+      }
+
+      const { error } = await supabase.from("auto_alerts").insert([payload]);
+      if (error) throw error;
+
+      setShowNewAlertModal(false);
+      setNewAlertForm({
+        title: "",
+        trigger_type: "km",
+        target_vehicle_id: "",
+        interval_km: "",
+        last_km: "",
+        warning_km: "1000",
+        trigger_date: "",
+        warning_days: "7",
+        generate_issue: false,
+      });
+      fetchAlertsData();
+      alert("Acompanhamento de manutenção cadastrado com sucesso!");
+    } catch (err: any) {
+      console.error("Erro ao salvar acompanhamento:", err);
+      alert("Erro ao salvar acompanhamento: " + (err.message || "Tente novamente."));
     }
   }
 
@@ -1649,6 +1728,23 @@ export default function MaintenanceTab() {
                 Imprimir
               </button>
 
+              <button
+                onClick={() => {
+                  if (vehiclesList.length > 0 && !newAlertForm.target_vehicle_id) {
+                    setNewAlertForm((prev) => ({
+                      ...prev,
+                      target_vehicle_id: vehiclesList[0].id,
+                      last_km: (vehiclesList[0].current_km || vehiclesList[0].odometer || vehiclesList[0].km || 0).toString(),
+                    }));
+                  }
+                  setShowNewAlertModal(true);
+                }}
+                className="h-9 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-2 shadow-sm font-sans"
+              >
+                <Plus size={14} />
+                Novo Acompanhamento
+              </button>
+
               <div className="relative w-full md:w-64">
                 <Search
                   size={14}
@@ -1678,9 +1774,9 @@ export default function MaintenanceTab() {
               <p className="text-xs text-text-muted max-w-sm mx-auto mt-1 font-sans mb-4">
                 {alerts.length > 0
                   ? "Tente ajustar a pesquisa ou os filtros de tipo e status acima para visualizar seus acompanhamentos."
-                  : "Cadastre novas regras de alertas de KM ou Data na aba \"Alertas\" para iniciar o acompanhamento."}
+                  : "Cadastre novas regras de alertas de KM ou Data para iniciar o monitoramento preventivo da sua frota."}
               </p>
-              {alerts.length > 0 && (
+              {alerts.length > 0 ? (
                 <button
                   onClick={() => {
                     setSearchTerm("");
@@ -1690,6 +1786,23 @@ export default function MaintenanceTab() {
                   className="px-4 py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-xl hover:bg-blue-100 transition-colors inline-flex items-center gap-2"
                 >
                   Limpar Filtros
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (vehiclesList.length > 0 && !newAlertForm.target_vehicle_id) {
+                      setNewAlertForm((prev) => ({
+                        ...prev,
+                        target_vehicle_id: vehiclesList[0].id,
+                        last_km: (vehiclesList[0].current_km || vehiclesList[0].odometer || vehiclesList[0].km || 0).toString(),
+                      }));
+                    }
+                    setShowNewAlertModal(true);
+                  }}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all inline-flex items-center gap-2 font-sans"
+                >
+                  <Plus size={16} />
+                  Cadastrar Regra de Acompanhamento
                 </button>
               )}
             </div>
@@ -4207,6 +4320,243 @@ ADD COLUMN IF NOT EXISTS maintenance_end_date DATE;`}
           alert={selectedAlertForHistory}
           onClose={() => setSelectedAlertForHistory(null)}
         />
+      )}
+
+      {/* Modal para cadastrar Novo Acompanhamento de Manutenção */}
+      {showNewAlertModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-app-border space-y-5">
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+                  <Wrench size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-zinc-900 font-sans">
+                    Novo Acompanhamento de Manutenção
+                  </h3>
+                  <p className="text-xs text-zinc-500 font-sans">
+                    Cadastre uma regra preventiva por KM ou Data para seu veículo
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowNewAlertModal(false)}
+                className="p-2 text-zinc-400 hover:text-zinc-600 rounded-xl hover:bg-zinc-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNewAlert} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-zinc-700 mb-1 font-sans">
+                  Título do Acompanhamento / Serviço *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Troca de Óleo e Filtro, Revisão de Freios"
+                  value={newAlertForm.title}
+                  onChange={(e) =>
+                    setNewAlertForm({ ...newAlertForm, title: e.target.value })
+                  }
+                  className="w-full h-10 px-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-zinc-700 mb-1 font-sans">
+                    Veículo *
+                  </label>
+                  <select
+                    required
+                    value={newAlertForm.target_vehicle_id}
+                    onChange={(e) => {
+                      const vehId = e.target.value;
+                      const selectedVeh = vehiclesList.find((v) => v.id === vehId);
+                      const currentVehKm = selectedVeh
+                        ? (selectedVeh.current_km || selectedVeh.odometer || selectedVeh.km || 0).toString()
+                        : "";
+                      setNewAlertForm({
+                        ...newAlertForm,
+                        target_vehicle_id: vehId,
+                        last_km: currentVehKm || newAlertForm.last_km,
+                      });
+                    }}
+                    className="w-full h-10 px-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
+                  >
+                    <option value="">Selecione um Veículo...</option>
+                    {vehiclesList.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.plate} {v.model ? `(${v.model})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-zinc-700 mb-1 font-sans">
+                    Tipo de Monitoramento *
+                  </label>
+                  <select
+                    value={newAlertForm.trigger_type}
+                    onChange={(e) =>
+                      setNewAlertForm({
+                        ...newAlertForm,
+                        trigger_type: e.target.value as "km" | "date",
+                      })
+                    }
+                    className="w-full h-10 px-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
+                  >
+                    <option value="km">Por Quilometragem (KM)</option>
+                    <option value="date">Por Data (Calendário)</option>
+                  </select>
+                </div>
+              </div>
+
+              {newAlertForm.trigger_type === "km" ? (
+                <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block font-bold text-zinc-700 mb-1 text-[11px] font-sans">
+                        KM Úl. Revisão *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        placeholder="Ex: 50000"
+                        value={newAlertForm.last_km}
+                        onChange={(e) =>
+                          setNewAlertForm({
+                            ...newAlertForm,
+                            last_km: e.target.value,
+                          })
+                        }
+                        className="w-full h-9 px-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-zinc-700 mb-1 text-[11px] font-sans">
+                        Intervalo (KM) *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        placeholder="Ex: 10000"
+                        value={newAlertForm.interval_km}
+                        onChange={(e) =>
+                          setNewAlertForm({
+                            ...newAlertForm,
+                            interval_km: e.target.value,
+                          })
+                        }
+                        className="w-full h-9 px-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-zinc-700 mb-1 text-[11px] font-sans">
+                        Aviso Prévio (KM)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="Ex: 1000"
+                        value={newAlertForm.warning_km}
+                        onChange={(e) =>
+                          setNewAlertForm({
+                            ...newAlertForm,
+                            warning_km: e.target.value,
+                          })
+                        }
+                        className="w-full h-9 px-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 font-sans">
+                    Exemplo: Se a última revisão foi com {newAlertForm.last_km || "0"} KM e o intervalo é de {newAlertForm.interval_km || "10000"} KM, a próxima revisão será aos {Number(newAlertForm.last_km || 0) + Number(newAlertForm.interval_km || 0)} KM.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-zinc-700 mb-1 text-[11px] font-sans">
+                        Data da Próxima Revisão *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={newAlertForm.trigger_date}
+                        onChange={(e) =>
+                          setNewAlertForm({
+                            ...newAlertForm,
+                            trigger_date: e.target.value,
+                          })
+                        }
+                        className="w-full h-9 px-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-zinc-700 mb-1 text-[11px] font-sans">
+                        Antecedência (Dias)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="Ex: 7"
+                        value={newAlertForm.warning_days}
+                        onChange={(e) =>
+                          setNewAlertForm({
+                            ...newAlertForm,
+                            warning_days: e.target.value,
+                          })
+                        }
+                        className="w-full h-9 px-3 bg-white border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="generate_issue_chk"
+                  checked={newAlertForm.generate_issue}
+                  onChange={(e) =>
+                    setNewAlertForm({
+                      ...newAlertForm,
+                      generate_issue: e.target.checked,
+                    })
+                  }
+                  className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500"
+                />
+                <label htmlFor="generate_issue_chk" className="text-xs font-semibold text-zinc-700 font-sans cursor-pointer">
+                  Gerar pendência/OS automaticamente no sistema ao vencer
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-zinc-100">
+                <button
+                  type="button"
+                  onClick={() => setShowNewAlertModal(false)}
+                  className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-colors font-sans"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-colors font-sans"
+                >
+                  Salvar Acompanhamento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

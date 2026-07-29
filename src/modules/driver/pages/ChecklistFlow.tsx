@@ -1152,7 +1152,6 @@ export default function ChecklistFlow() {
                   liters: liters,
                   average: average,
                   status: "pending",
-            priority: itemObj?.priority || "Medio", // Initially 'pending' so managers need to review
                   notes:
                     "Calculado automaticamente na submissão (2º abastecimento posterior à escala)",
                 },
