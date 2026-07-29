@@ -979,7 +979,7 @@ export default function ChecklistFlow() {
             description: d.description,
             photo_url: dPhotoUrl,
             status: "pending",
-            priority: itemObj?.priority || "Medio",
+            priority: "Media",
             existing_issue_id: d.existing_issue_id || null,
             company_id: companyId,
           });
@@ -1152,7 +1152,7 @@ export default function ChecklistFlow() {
                   liters: liters,
                   average: average,
                   status: "pending",
-            priority: itemObj?.priority || "Medio", // Initially 'pending' so managers need to review
+            priority: "Media", // Initially 'pending' so managers need to review
                   notes:
                     "Calculado automaticamente na submissão (2º abastecimento posterior à escala)",
                 },

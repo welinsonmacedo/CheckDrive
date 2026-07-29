@@ -49,14 +49,12 @@ export default function MaintenanceTab() {
   const [alertFilter, setAlertFilter] = usePersistentState<
     "all" | "driver" | "alert_km" | "alert_date" | "expired"
   >("maintenance_alertFilter", "all");
-  const [trackingTypeFilter, setTrackingTypeFilter] = usePersistentState<"all" | "km" | "date">("maintenance_trackingTypeFilter", "all");
+  const [trackingTypeFilter, setTrackingTypeFilter] = usePersistentState<"all" | "km" | "date" | "hours">("maintenance_trackingTypeFilter", "all");
   const [trackingFilter, setTrackingFilter] = usePersistentState<
     "all" | "overdue" | "near" | "ok"
   >("maintenance_trackingFilter", "all");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = usePersistentState<
-    "pending" | "waiting" | "waiting_nf" | "resolved" | "tracking"
-  >("maintenance_activeTab", "pending");
+  const [activeTab, setActiveTab] = usePersistentState<string>("maintenance_activeTab", "pending");
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
@@ -165,6 +163,27 @@ export default function MaintenanceTab() {
       console.warn("Error fetching alerts tracking data:", err);
     }
   }
+
+  
+  const handlePrintIssuesList = () => {
+    window.print();
+  };
+
+  const handlePrintTracking = () => {
+    window.print();
+  };
+
+
+  const getPriorityBadge = (priority?: string) => {
+    if (priority === "Baixa") return <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Baixa</span>;
+    if (priority === "Média" || priority === "Media") return <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">Média</span>;
+    if (priority === "Alta") return <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Alta</span>;
+    return null;
+  };
+
+  const handleXmlUpload = (e: any, nfIdx: number) => {
+    alert("Processamento de XML de NF-e não configurado.");
+  };
 
   async function fetchCatalog() {
     const companyId = (user as any)?.company_id;
