@@ -37,7 +37,7 @@ export default function AlertsTab() {
   const [form, setForm] = useState({
     id: "",
     title: "",
-    trigger_type: "km", // date, km
+    trigger_type: "km", // date, km, hours
     target_type: "vehicle", // vehicle, driver
     target_vehicle_id: "",
     target_driver_id: "",
@@ -46,6 +46,9 @@ export default function AlertsTab() {
     interval_km: "",
     last_km: "",
     warning_km: "",
+    interval_hours: "",
+    last_hours: "",
+    warning_hours: "",
     generate_issue: false,
   });
 
@@ -133,6 +136,10 @@ export default function AlertsTab() {
           form.trigger_type === "km" ? Number(form.interval_km) : null,
         last_km: form.trigger_type === "km" ? Number(form.last_km) : null,
         warning_km: form.trigger_type === "km" ? Number(form.warning_km) : null,
+        interval_hours:
+          form.trigger_type === "hours" ? Number(form.interval_hours) : null,
+        last_hours: form.trigger_type === "hours" ? Number(form.last_hours) : null,
+        warning_hours: form.trigger_type === "hours" ? Number(form.warning_hours) : null,
         generate_issue:
           form.target_type === "vehicle" ? form.generate_issue : false,
         company_id: user?.company_id,
@@ -191,6 +198,9 @@ export default function AlertsTab() {
       interval_km: "",
       last_km: "",
       warning_km: "",
+      interval_hours: "",
+      last_hours: "",
+      warning_hours: "",
       generate_issue: false,
     });
   };
@@ -253,8 +263,8 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
           </pre>
         </div>
         <button
-          onClick={() => fetchData()}
-          className="mt-6 px-6 py-3 bg-primary text-white rounded-xl text-sm font-bold shadow-md hover:bg-primary-hover transition-colors"
+          onClick={fetchData}
+          className="mt-4 px-4 py-2 bg-primary text-white rounded-xl font-bold text-xs"
         >
           Tentar Novamente
         </button>
@@ -264,13 +274,13 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-black text-text-main tracking-tight">
-            Regras de Alertas
+            Alertas Automáticos
           </h2>
-          <p className="text-sm text-text-muted">
-            Programe alertas por data ou intervalo de KM e auto-gere pendências.
+          <p className="text-sm text-text-muted mt-1">
+            Configure regras de manutenção preventiva por KM, Data ou Horímetro.
           </p>
         </div>
         <button
@@ -278,30 +288,28 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
             resetForm();
             setShowForm(true);
           }}
-          className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md hover:bg-primary-hover transition-colors shrink-0"
+          className="bg-primary hover:bg-primary-hover text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-colors flex items-center gap-2"
         >
-          <Plus size={16} /> Novo Alerta
+          <Plus size={16} />
+          Novo Alerta
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-2xl border border-app-border shadow-sm">
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search size={16} className="text-zinc-400" />
-          </div>
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white p-4 rounded-2xl border border-zinc-200">
+        <div className="relative w-full sm:max-w-xs">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
           <input
             type="text"
+            placeholder="Buscar alertas..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar regra de alerta..."
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            className="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
           />
         </div>
-        <div className="flex gap-2">
+        
+        <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Filter size={14} className="text-zinc-400" />
-            </div>
+            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <select
               value={triggerFilter}
               onChange={(e) => setTriggerFilter(e.target.value)}
@@ -310,6 +318,7 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
               <option value="all">Todos Tipos</option>
               <option value="km">Por KM</option>
               <option value="date">Por Data</option>
+              <option value="hours">Por Horímetro</option>
             </select>
           </div>
           <select
@@ -338,26 +347,29 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
               >
                 <X size={20} />
               </button>
-              <h3 className="text-lg font-black text-text-main mb-6">
-                {form.id ? "Editar Alerta" : "Novo Alerta"}
+
+              <h3 className="text-xl font-black text-text-main mb-6">
+                {form.id ? "Editar Alerta" : "Novo Alerta Automático"}
               </h3>
+
               <form onSubmit={handleSave} className="space-y-4">
                 <div>
                   <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
-                    Título do Alerta
+                    Título do Alerta *
                   </label>
                   <input
                     type="text"
+                    required
                     value={form.title}
                     onChange={(e) =>
                       setForm({ ...form, title: e.target.value })
                     }
-                    placeholder="Ex: Troca de Óleo, Renovação CNH..."
+                    placeholder="Ex: Troca de Óleo - 10.000 KM"
                     className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
                       Tipo de Gatilho
@@ -365,7 +377,9 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
                     <div className="flex bg-app-bg rounded-xl border border-app-border p-1">
                       <button
                         type="button"
-                        onClick={() => setForm({ ...form, trigger_type: "km" })}
+                        onClick={() =>
+                          setForm({ ...form, trigger_type: "km" })
+                        }
                         className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${form.trigger_type === "km" ? "bg-white shadow text-primary" : "text-zinc-500"}`}
                       >
                         KM ou Intervalo
@@ -378,6 +392,15 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
                         className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${form.trigger_type === "date" ? "bg-white shadow text-primary" : "text-zinc-500"}`}
                       >
                         Por Data
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm({ ...form, trigger_type: "hours" })
+                        }
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${form.trigger_type === "hours" ? "bg-white shadow text-primary" : "text-zinc-500"}`}
+                      >
+                        Horímetro
                       </button>
                     </div>
                   </div>
@@ -496,6 +519,51 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
                             setForm({ ...form, warning_km: e.target.value })
                           }
                           placeholder="Avisar faltando quantos KM?"
+                          className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    </>
+                  ) : form.trigger_type === "hours" ? (
+                    <>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
+                          Último Horímetro (Ex: 5000)
+                        </label>
+                        <input
+                          type="number"
+                          value={form.last_hours}
+                          onChange={(e) =>
+                            setForm({ ...form, last_hours: e.target.value })
+                          }
+                          placeholder="Horas atuais/última troca"
+                          className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
+                          Intervalo Horas (Ex: 1000)
+                        </label>
+                        <input
+                          type="number"
+                          value={form.interval_hours}
+                          onChange={(e) =>
+                            setForm({ ...form, interval_hours: e.target.value })
+                          }
+                          placeholder="A cada quantas horas?"
+                          className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-black uppercase text-zinc-500 mb-1">
+                          Antecedência (Ex: 100)
+                        </label>
+                        <input
+                          type="number"
+                          value={form.warning_hours}
+                          onChange={(e) =>
+                            setForm({ ...form, warning_hours: e.target.value })
+                          }
+                          placeholder="Avisar faltando quantas horas?"
                           className="w-full bg-app-bg border border-app-border rounded-xl px-4 py-3 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                         />
                       </div>
@@ -619,6 +687,8 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
                   <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
                     {alert.trigger_type === "date"
                       ? "Por Data"
+                      : alert.trigger_type === "hours"
+                      ? "Por Horímetro"
                       : "Por Odomêtro"}
                   </span>
                 </div>
@@ -650,6 +720,9 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
                         warning_km: alert.warning_km
                           ? alert.warning_km.toString()
                           : "",
+                        interval_hours: alert.interval_hours ? alert.interval_hours.toString() : "",
+                        last_hours: alert.last_hours ? alert.last_hours.toString() : "",
+                        warning_hours: alert.warning_hours ? alert.warning_hours.toString() : "",
                         generate_issue: alert.generate_issue,
                       });
                       setShowForm(true);
@@ -718,16 +791,37 @@ DROP FUNCTION IF EXISTS reset_auto_alert_on_resolve();`}
                         {alert.trigger_date.split("-").reverse().join("/")}
                       </span>
                     </div>
-                    {alert.warning_days && (
-                      <div className="flex justify-between items-center bg-orange-50/50 p-1.5 rounded text-orange-700 mt-1">
-                        <span className="font-bold">
-                          Avisar com antecedência de:
-                        </span>
-                        <span className="font-mono">
-                          {alert.warning_days} dias
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex justify-between items-center">
+                      <span>Antecedência Aviso:</span>
+                      <span className="font-mono text-text-main">
+                        {alert.warning_days} dias
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {alert.trigger_type === "hours" && (
+                  <div className="flex flex-col text-xs text-zinc-500 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span>Última Execução/Horas:</span>
+                      <span className="font-mono font-medium text-text-main">
+                        {Number(alert.last_hours).toLocaleString("pt-BR")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Intervalo/Desgaste:</span>
+                      <span className="font-mono font-medium text-text-main">
+                        {Number(alert.interval_hours).toLocaleString("pt-BR")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-app-border border-dashed text-sm">
+                      <span className="font-bold text-zinc-700">Horas Alvo:</span>
+                      <span className="font-mono font-black text-teal-600">
+                        {(
+                          Number(alert.last_hours || 0) +
+                          Number(alert.interval_hours || 0)
+                        ).toLocaleString("pt-BR")}
+                      </span>
+                    </div>
                   </div>
                 )}
                 {alert.generate_issue && (

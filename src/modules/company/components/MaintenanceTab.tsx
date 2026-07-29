@@ -94,6 +94,9 @@ export default function MaintenanceTab() {
   const [resolveCurrentKm, setResolveCurrentKm] = useState("");
   const [resolveIntervalKm, setResolveIntervalKm] = useState("");
   const [resolveWarningKm, setResolveWarningKm] = useState("");
+  const [resolveCurrentHours, setResolveCurrentHours] = useState("");
+  const [resolveIntervalHours, setResolveIntervalHours] = useState("");
+  const [resolveWarningHours, setResolveWarningHours] = useState("");
   const [isResolving, setIsResolving] = useState(false);
   const [resolveSubStatus, setResolveSubStatus] = useState<
     "resolved" | "waiting" | "waiting_nf"
@@ -137,7 +140,7 @@ export default function MaintenanceTab() {
       )
         .select(`
           *,
-          vehicles (plate, model),
+          vehicles (plate, model, hour_meter_current),
           profiles (full_name)
         `)
         .eq("company_id", (user as any)?.company_id);
@@ -463,6 +466,9 @@ export default function MaintenanceTab() {
     setResolveCurrentKm("");
     setResolveIntervalKm("");
     setResolveWarningKm("");
+    setResolveCurrentHours("");
+    setResolveIntervalHours("");
+    setResolveWarningHours("");
 
     let loadedNfs = null;
     try {
@@ -502,17 +508,20 @@ export default function MaintenanceTab() {
       // Sempre inicializa campos de KM e Data se for um alerta automático
       setResolveIntervalKm(issue.auto_alerts.interval_km?.toString() || "");
       setResolveWarningKm(issue.auto_alerts.warning_km?.toString() || "");
+      setResolveIntervalHours(issue.auto_alerts.interval_hours?.toString() || "");
+      setResolveWarningHours(issue.auto_alerts.warning_hours?.toString() || "");
       setResolveWarningDays(issue.auto_alerts.warning_days?.toString() || "");
       setResolveNextDate(issue.auto_alerts.trigger_date || "");
 
       if (issue.status === "resolved") {
         setResolveCurrentKm(issue.auto_alerts.last_km?.toString() || "");
+        setResolveCurrentHours(issue.auto_alerts.last_hours?.toString() || "");
       } else {
         // Initial estimate of KM
-        const estimatedKm =
-          Number(issue.auto_alerts.last_km || 0) +
-          Number(issue.auto_alerts.interval_km || 0);
+        const estimatedKm = Number(issue.auto_alerts.last_km || 0) + Number(issue.auto_alerts.interval_km || 0);
         setResolveCurrentKm(estimatedKm.toString());
+        const estimatedHours = Number(issue.auto_alerts.last_hours || 0) + Number(issue.auto_alerts.interval_hours || 0);
+        setResolveCurrentHours(estimatedHours.toString());
 
         // Fetch real-time current odometer of the vehicle if available
         if (issue.vehicle_id) {
@@ -632,6 +641,13 @@ export default function MaintenanceTab() {
           !resolveCurrentKm
         ) {
           alert("Por favor, informe o KM da resolução para o alerta.");
+          return;
+        }
+        if (
+          resolvingIssueData?.auto_alerts?.trigger_type === "hours" &&
+          !resolveCurrentHours
+        ) {
+          alert("Por favor, informe as Horas de resolução para o alerta.");
           return;
         }
       } else {
@@ -872,6 +888,16 @@ export default function MaintenanceTab() {
           alertPayload.warning_km = resolveWarningKm
             ? Number(resolveWarningKm)
             : resolvingIssueData.auto_alerts.warning_km;
+        }
+
+        if (resolveCurrentHours) {
+          alertPayload.last_hours = Number(resolveCurrentHours);
+          alertPayload.interval_hours = resolveIntervalHours
+            ? Number(resolveIntervalHours)
+            : resolvingIssueData.auto_alerts.interval_hours;
+          alertPayload.warning_hours = resolveWarningHours
+            ? Number(resolveWarningHours)
+            : resolvingIssueData.auto_alerts.warning_hours;
         }
 
         if (resolveNextDate) {
@@ -1177,21 +1203,27 @@ export default function MaintenanceTab() {
 
     if (trackingTypeFilter === "km" && alert.trigger_type !== "km") return false;
     if (trackingTypeFilter === "date" && alert.trigger_type !== "date") return false;
+    if (trackingTypeFilter === "hours" && alert.trigger_type !== "hours") return false;
 
     if (trackingFilter === "all") return true;
 
     const isKm = alert.trigger_type === "km";
+    const isHours = alert.trigger_type === "hours";
     let isOverdue = false;
     let isNear = false;
 
     if (isKm) {
       const currentKm = odometers[alert.target_vehicle_id] || 0;
-      const targetKm =
-        Number(alert.last_km || 0) + Number(alert.interval_km || 0);
+      const targetKm = Number(alert.last_km || 0) + Number(alert.interval_km || 0);
       const remainingKm = targetKm - currentKm;
       isOverdue = remainingKm <= 0;
-      isNear =
-        remainingKm > 0 && remainingKm <= (Number(alert.warning_km) || 1000);
+      isNear = remainingKm > 0 && remainingKm <= (Number(alert.warning_km) || 1000);
+    } else if (isHours) {
+      const currentHours = alert.vehicles?.hour_meter_current || 0;
+      const targetHours = Number(alert.last_hours || 0) + Number(alert.interval_hours || 0);
+      const remainingHours = targetHours - currentHours;
+      isOverdue = remainingHours <= 0;
+      isNear = remainingHours > 0 && remainingHours <= (Number(alert.warning_hours) || 100);
     } else if (alert.trigger_date) {
       const targetDate = new Date(alert.trigger_date + "T00:00:00");
       const today = new Date();
@@ -1199,9 +1231,7 @@ export default function MaintenanceTab() {
       const diffTime = targetDate.getTime() - today.getTime();
       const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       isOverdue = daysRemaining < 0;
-      isNear =
-        daysRemaining >= 0 &&
-        daysRemaining <= (Number(alert.warning_days) || 7);
+      isNear = daysRemaining >= 0 && daysRemaining <= (Number(alert.warning_days) || 7);
     }
 
     if (trackingFilter === "overdue") return isOverdue;
@@ -1211,291 +1241,51 @@ export default function MaintenanceTab() {
     return true;
   });
 
-  const handleXmlUpload = async (e: React.ChangeEvent<HTMLInputElement>, nfIdx: number) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const xmlText = event.target?.result as string;
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-
-        const chNFe = xmlDoc.getElementsByTagName("chNFe")[0]?.textContent || "";
-        const nNF = xmlDoc.getElementsByTagName("nNF")[0]?.textContent || "";
-
-        const emit = xmlDoc.getElementsByTagName("emit")[0];
-        const cnpj = emit?.getElementsByTagName("CNPJ")[0]?.textContent || "";
-        const xNome = emit?.getElementsByTagName("xNome")[0]?.textContent || "Fornecedor da NF";
-
-        let supplierId = "";
-        if ((user as any)?.company_id && cnpj) {
-          const { data: existingSuppliers } = await supabase.from("inventory_suppliers").select("id").eq("company_id", (user as any)?.company_id)
-            .eq("company_id", (user as any)?.company_id)
-            .eq("cnpj_cpf", cnpj)
-            .limit(1);
-
-          if (existingSuppliers && existingSuppliers.length > 0) {
-            supplierId = existingSuppliers[0].id;
-          } else {
-            const { data: newSupplier } = await supabase
-              .from("inventory_suppliers")
-              .insert({
-                company_id: (user as any)?.company_id,
-                cnpj_cpf: cnpj,
-                name: xNome,
-              })
-              .select("id")
-              .single();
-            if (newSupplier) supplierId = newSupplier.id;
-          }
-        }
-
-        const detElements = xmlDoc.getElementsByTagName("det");
-        const parsedItems: any[] = [];
-
-        for (let i = 0; i < detElements.length; i++) {
-          const prod = detElements[i].getElementsByTagName("prod")[0];
-          if (prod) {
-            const xProd = prod.getElementsByTagName("xProd")[0]?.textContent || "Produto sem nome";
-            const qCom = parseFloat(prod.getElementsByTagName("qCom")[0]?.textContent || "0");
-            const vUnCom = parseFloat(prod.getElementsByTagName("vUnCom")[0]?.textContent || "0");
-            const cProd = prod.getElementsByTagName("cProd")[0]?.textContent || "";
-            
-            let itemId = "";
-            if ((user as any)?.company_id && xProd) {
-              const { data: existingItems } = await supabase.from("inventory_items").select("id").eq("company_id", (user as any)?.company_id)
-                .eq("company_id", (user as any)?.company_id)
-                .ilike("name", xProd)
-                .limit(1);
-
-              if (existingItems && existingItems.length > 0) {
-                itemId = existingItems[0].id;
-              } else {
-                const { data: newItem } = await supabase
-                  .from("inventory_items")
-                  .insert({
-                    company_id: (user as any)?.company_id,
-                    name: xProd,
-                    sku: cProd,
-                    category: "Peças",
-                    current_quantity: 0,
-                    min_quantity: 0,
-                  })
-                  .select("id")
-                  .single();
-                if (newItem) itemId = newItem.id;
-              }
-            }
-
-            parsedItems.push({
-               id: `item-${Date.now()}-${i}`,
-               item_id: itemId,
-               name: xProd,
-               quantity: qCom,
-               unit_price: vUnCom,
-            });
-          }
-        }
-
-        if (parsedItems.length > 0 || chNFe) {
-           const updated = [...resolveNfs];
-           if (chNFe) updated[nfIdx].nf_key = chNFe;
-           if (nNF) updated[nfIdx].nf_number = nNF;
-           if (supplierId) updated[nfIdx].supplier_id = supplierId;
-           if (parsedItems.length > 0) updated[nfIdx].items = parsedItems;
-           setResolveNfs(updated);
-           alert("XML importado com sucesso! Fornecedor e itens foram validados/cadastrados.");
-           fetchCatalog(); // Refresh catalog if new items were added
-        } else {
-           alert("Não foi possível encontrar dados válidos de NF-e neste arquivo XML.");
-        }
-      } catch (e) {
-        console.error("Erro ao importar XML:", e);
-        alert("Erro ao processar o arquivo XML.");
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  };
-
-  const handlePrintTracking = () => {
-    setShowTrackingPrintModal(true);
-  };
-
-  const handlePrintIssuesList = () => {
-    setShowIssuesPrintModal(true);
-  };
-
-
-  const tabTitle = activeTab === "pending"
-    ? "Relatório de Pendências de Manutenção"
-    : activeTab === "waiting"
-    ? "Relatório de Manutenções em Aguardo"
-    : activeTab === "waiting_nf"
-    ? "Relatório de Manutenções Aguardando Nota Fiscal"
-    : "Relatório de Manutenções Resolvidas";
-
-  const itemsToPrint = selectedRows.length > 0 
-    ? filteredIssues.filter(i => selectedRows.includes(i.id))
-    : filteredIssues;
-
-
-  
-  const getPriorityBadge = (priority: string) => {
-    return (
-      <div className="flex items-center gap-2 ml-2">
-        <div className="flex items-center gap-0.5 bg-zinc-800 p-0.5 rounded-full" title={priority === 'Critico' ? 'Prioridade Crítica' : priority === 'Medio' ? 'Prioridade Média' : priority === 'Leve' ? 'Prioridade Leve' : 'Prioridade Não Definida'}>
-          <div className={`w-2 h-2 rounded-full ${priority === 'Critico' ? 'bg-red-500 shadow-[0_0_4px_rgba(239,68,68,1)]' : 'bg-zinc-600'}`}></div>
-          <div className={`w-2 h-2 rounded-full ${priority === 'Medio' ? 'bg-orange-500 shadow-[0_0_4px_rgba(249,115,22,1)]' : 'bg-zinc-600'}`}></div>
-          <div className={`w-2 h-2 rounded-full ${priority === 'Leve' ? 'bg-green-500 shadow-[0_0_4px_rgba(34,197,94,1)]' : 'bg-zinc-600'}`}></div>
-        </div>
-        {priority === 'Critico' && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-red-100 text-red-700">Crítico</span>}
-        {priority === 'Medio' && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-orange-100 text-orange-700">Médio</span>}
-        {priority === 'Leve' && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-green-100 text-green-700">Leve</span>}
-      </div>
-    );
-  };
-
-    return (
-    <div className="space-y-6">
-
-      {showIssuesPrintModal && (
-        <MaintenanceListPrintModal
-          issues={itemsToPrint}
-          onClose={() => setShowIssuesPrintModal(false)}
-          user={user}
-          tabTitle={tabTitle}
-        />
-      )}
-      {showTrackingPrintModal && (
-        <MaintenanceTrackingPrintModal
-          alerts={filteredAlertsForTracking}
-          odometers={odometers}
-          onClose={() => setShowTrackingPrintModal(false)}
-          user={user}
-        />
-      )}
-
-      {/* Abas */}
-      <div className="bento-card !p-0 overflow-hidden">
-        <div className="border-b border-app-border">
-          <div className="flex">
-            <button
-              onClick={() => {
-                setActiveTab("pending");
-                setSelectedRows([]);
-              }}
-              className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                activeTab === "pending"
-                  ? "text-primary border-b-2 border-primary bg-primary/5"
-                  : "text-text-muted hover:text-text-main hover:bg-gray-50"
-              }`}
-            >
-              <AlertCircle size={16} />
-              Pendentes
-              {pendingCount > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-xs bg-red-100 text-red-600 rounded-full font-bold">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("waiting");
-                setSelectedRows([]);
-              }}
-              className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                activeTab === "waiting"
-                  ? "text-primary border-b-2 border-primary bg-primary/5"
-                  : "text-text-muted hover:text-text-main hover:bg-gray-50"
-              }`}
-            >
-              <Clock size={16} />
-              Aguardando
-              {waitingCount > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-xs bg-amber-100 text-amber-600 rounded-full font-bold">
-                  {waitingCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("waiting_nf");
-                setSelectedRows([]);
-              }}
-              className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                activeTab === "waiting_nf"
-                  ? "text-primary border-b-2 border-primary bg-primary/5"
-                  : "text-text-muted hover:text-text-main hover:bg-gray-50"
-              }`}
-            >
-              <Receipt size={16} />
-              Aguardando NF
-              {waitingNfCount > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full font-bold">
-                  {waitingNfCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("resolved");
-                setSelectedRows([]);
-              }}
-              className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                activeTab === "resolved"
-                  ? "text-primary border-b-2 border-primary bg-primary/5"
-                  : "text-text-muted hover:text-text-main hover:bg-gray-50"
-              }`}
-            >
-              <CheckCircle size={16} />
-              Resolvidos
-              {resolvedCount > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-xs bg-green-100 text-green-600 rounded-full font-bold">
-                  {resolvedCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab("tracking");
-                setSelectedRows([]);
-              }}
-              className={`flex-1 px-6 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                activeTab === "tracking"
-                  ? "text-primary border-b-2 border-primary bg-primary/5"
-                  : "text-text-muted hover:text-text-main hover:bg-gray-50"
-              }`}
-            >
-              <Wrench size={16} />
-              Acompanhamento
-              {alerts.length > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full font-bold font-sans">
-                  {alerts.length}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide border-b border-app-border">
+        {["pending", "waiting", "waiting_nf", "resolved", "maintenance_tracking", "items", "reports"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab as any)}
+            className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeTab === tab
+                ? "bg-white text-primary border-t border-x border-app-border shadow-sm -mb-[1px]"
+                : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-50"
+            }`}
+          >
+            {tab === "pending"
+              ? `Pendentes (${pendingCount})`
+              : tab === "waiting"
+                ? `Aguardando (${waitingCount})`
+                : tab === "waiting_nf"
+                  ? `Aguard. NF (${waitingNfCount})`
+                  : tab === "resolved"
+                    ? `Resolvidas (${resolvedCount})`
+                    : tab === "items"
+                      ? "Itens & Preços"
+                      : tab === "reports"
+                        ? "Relatórios / NF"
+                        : "Acompanhamento"}
+          </button>
+        ))}
       </div>
 
-      {activeTab === "tracking" ? (
+      {activeTab === "maintenance_tracking" ? (
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-app-border shadow-sm">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h3 className="text-base font-black text-text-main tracking-tight flex items-center gap-2 font-sans">
-                <Wrench size={18} className="text-primary text-blue-600" />
-                Acompanhamento de Manutenções
-              </h3>
-              <p className="text-xs text-text-muted mt-1 font-sans">
-                Monitore as revisões por KM e prazos por data configurados nos
-                alertas de sua frota.
+              <h2 className="text-xl font-black text-text-main tracking-tight flex items-center gap-2">
+                <Gauge className="text-primary" size={24} /> Acompanhamento
+              </h2>
+              <p className="text-sm text-text-muted mt-1">
+                Monitore alertas de manutenção preventiva programados.
               </p>
             </div>
+          </div>
 
-            <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white p-4 rounded-2xl border border-zinc-200">
+            <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
               <select
                 value={trackingTypeFilter}
                 onChange={(e) => setTrackingTypeFilter(e.target.value as any)}
@@ -1504,6 +1294,7 @@ export default function MaintenanceTab() {
                 <option value="all">Todos os Tipos</option>
                 <option value="km">Por KM</option>
                 <option value="date">Por Data</option>
+                <option value="hours">Por Horímetro</option>
               </select>
 
               <select
@@ -1542,26 +1333,27 @@ export default function MaintenanceTab() {
           </div>
 
           {filteredAlertsForTracking.length === 0 ? (
-            <div className="bg-white rounded-3xl p-12 text-center border border-app-border shadow-sm">
-              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Wrench size={32} />
+            <div className="bg-white p-8 rounded-3xl border border-app-border text-center space-y-4 shadow-sm">
+              <div className="w-16 h-16 bg-zinc-50 rounded-2xl flex items-center justify-center mx-auto text-zinc-300">
+                <CheckCircle2 size={32} />
               </div>
-              <h4 className="text-sm font-bold text-text-main font-sans">
-                Nenhuma manutenção monitorada encontrada
-              </h4>
-              <p className="text-xs text-text-muted max-w-sm mx-auto mt-1 font-sans">
-                Cadastre novas regras de alertas de KM ou Data na aba "Alertas"
-                para iniciar o acompanhamento.
-              </p>
+              <div>
+                <p className="text-zinc-600 font-bold">
+                  Nenhuma manutenção monitorada encontrada.
+                </p>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Selecione outros filtros ou crie regras na aba "Alertas
+                  Automáticos".
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filteredAlertsForTracking.map((alert) => {
                 const isKm = alert.trigger_type === "km";
+                const isHours = alert.trigger_type === "hours";
 
-                // Dynamic Calculations
-                let statusBadgeColor =
-                  "bg-green-50 text-green-700 border-green-200";
+                let statusBadgeColor = "bg-green-50 text-green-700 border-green-200";
                 let statusText = "Em dia";
                 let progressPct = 0;
                 let statsContent = null;
@@ -1580,17 +1372,13 @@ export default function MaintenanceTab() {
                   const clampedProgressPct = Math.min(100, progressPct);
 
                   const isOverdue = remainingKm <= 0;
-                  const isNear =
-                    remainingKm > 0 &&
-                    remainingKm <= (Number(alert.warning_km) || 1000);
+                  const isNear = remainingKm > 0 && remainingKm <= (Number(alert.warning_km) || 1000);
 
                   if (isOverdue) {
-                    statusBadgeColor =
-                      "bg-red-50 text-red-700 border-red-200 animate-pulse";
+                    statusBadgeColor = "bg-red-50 text-red-700 border-red-200 animate-pulse";
                     statusText = "Atrasada / Vencida";
                   } else if (isNear) {
-                    statusBadgeColor =
-                      "bg-orange-50 text-orange-700 border-orange-200";
+                    statusBadgeColor = "bg-orange-50 text-orange-700 border-orange-200";
                     statusText = "Vence em breve";
                   }
 
@@ -1617,12 +1405,8 @@ export default function MaintenanceTab() {
                           <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">
                             Falta
                           </span>
-                          <span
-                            className={`text-xs font-black font-sans ${isOverdue ? "text-red-650" : "text-zinc-700"}`}
-                          >
-                            {isOverdue
-                              ? `${Math.abs(remainingKm).toLocaleString("pt-BR")} KM d+`
-                              : `${remainingKm.toLocaleString("pt-BR")} KM`}
+                          <span className={`text-xs font-black font-sans ${isOverdue ? "text-red-650" : "text-zinc-700"}`}>
+                            {isOverdue ? `${Math.abs(remainingKm).toLocaleString("pt-BR")} KM d+` : `${remainingKm.toLocaleString("pt-BR")} KM`}
                           </span>
                         </div>
                         <div className="text-center border-l border-zinc-200 pl-1">
@@ -1634,69 +1418,108 @@ export default function MaintenanceTab() {
                           </span>
                         </div>
                       </div>
-
                       <div className="space-y-1.5">
                         <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 font-sans">
-                          <span>
-                            Desgaste / Intervalo (
-                            {intervalKm.toLocaleString("pt-BR")} KM)
-                          </span>
-                          <span>{progressPct}%</span>
+                          <span>Desgaste / Intervalo ({intervalKm.toLocaleString("pt-BR")} KM)</span>
+                          <span>{clampedProgressPct}%</span>
                         </div>
-                        <div className="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              isOverdue
-                                ? "bg-red-500"
-                                : isNear
-                                  ? "bg-orange-500"
-                                  : "bg-green-500"
-                            }`}
-                            style={{ width: `${clampedProgressPct}%` }}
-                          />
+                        <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                          <div className={`h-full transition-all ${isOverdue ? "bg-red-500" : isNear ? "bg-orange-500" : "bg-green-500"}`} style={{ width: `${clampedProgressPct}%` }} />
                         </div>
                       </div>
                     </div>
                   );
-                } else {
-                  // Date-based Alert
-                  let daysRemaining = 0;
-                  let targetDateStr = "Não Definida";
-                  let isOverdue = false;
-                  let isNear = false;
+                } else if (isHours) {
+                  const currentHours = alert.vehicles?.hour_meter_current || 0;
+                  const intervalHours = Number(alert.interval_hours) || 0;
+                  const lastHours = Number(alert.last_hours) || 0;
+                  const targetHours = lastHours + intervalHours;
+                  const remainingHours = targetHours - currentHours;
 
-                  if (alert.trigger_date) {
-                    const targetDate = new Date(
-                      alert.trigger_date + "T00:00:00",
-                    );
-                    targetDateStr = targetDate.toLocaleDateString("pt-BR");
+                  if (intervalHours > 0) {
+                    progressPct = ((currentHours - lastHours) / intervalHours) * 100;
+                  }
+                  progressPct = Math.max(0, Math.round(progressPct));
+                  const clampedProgressPct = Math.min(100, progressPct);
 
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const diffTime = targetDate.getTime() - today.getTime();
-                    daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  const isOverdue = remainingHours <= 0;
+                  const isNear = remainingHours > 0 && remainingHours <= (Number(alert.warning_hours) || 100);
 
-                    isOverdue = daysRemaining < 0;
-                    isNear =
-                      daysRemaining >= 0 &&
-                      daysRemaining <= (Number(alert.warning_days) || 7);
+                  if (isOverdue) {
+                    statusBadgeColor = "bg-red-50 text-red-700 border-red-200 animate-pulse";
+                    statusText = "Atrasada / Vencida";
+                  } else if (isNear) {
+                    statusBadgeColor = "bg-orange-50 text-orange-700 border-orange-200";
+                    statusText = "Vence em breve";
+                  }
 
-                    if (isOverdue) {
-                      statusBadgeColor =
-                        "bg-red-50 text-red-700 border-red-200";
-                      statusText = `Atrasada (${Math.abs(daysRemaining)} d)`;
-                    } else if (isNear) {
-                      statusBadgeColor =
-                        "bg-orange-50 text-orange-700 border-orange-200";
-                      statusText =
-                        daysRemaining === 0
-                          ? "Vence HOJE"
-                          : `Vence em ${daysRemaining} dias`;
-                    } else {
-                      statusBadgeColor =
-                        "bg-green-50 text-green-700 border-green-200";
-                      statusText = `Vence em ${daysRemaining} dias`;
-                    }
+                  statsContent = (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-zinc-50 p-3 rounded-2xl border border-zinc-100">
+                        <div className="text-center">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">
+                            Revisão
+                          </span>
+                          <span className="text-xs font-bold text-zinc-700 font-sans">
+                            {lastHours.toLocaleString("pt-BR")} H
+                          </span>
+                        </div>
+                        <div className="text-center border-l border-zinc-200 pl-1">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">
+                            Atual
+                          </span>
+                          <span className="text-xs font-bold text-zinc-700 font-sans">
+                            {currentHours.toLocaleString("pt-BR")} H
+                          </span>
+                        </div>
+                        <div className="text-center border-l border-zinc-200 pl-1">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">
+                            Falta
+                          </span>
+                          <span className={`text-xs font-black font-sans ${isOverdue ? "text-red-650" : "text-zinc-700"}`}>
+                            {isOverdue ? `${Math.abs(remainingHours).toLocaleString("pt-BR")} H d+` : `${remainingHours.toLocaleString("pt-BR")} H`}
+                          </span>
+                        </div>
+                        <div className="text-center border-l border-zinc-200 pl-1">
+                          <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">
+                            Alvo
+                          </span>
+                          <span className="text-xs font-bold text-primary font-mono">
+                            {targetHours.toLocaleString("pt-BR")} H
+                          </span>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 font-sans">
+                          <span>Desgaste / Intervalo ({intervalHours.toLocaleString("pt-BR")} H)</span>
+                          <span>{clampedProgressPct}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                          <div className={`h-full transition-all ${isOverdue ? "bg-red-500" : isNear ? "bg-orange-500" : "bg-green-500"}`} style={{ width: `${clampedProgressPct}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else if (alert.trigger_date) {
+                  const targetDate = new Date(alert.trigger_date + "T00:00:00");
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const diffTime = targetDate.getTime() - today.getTime();
+                  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  const targetDateStr = targetDate.toLocaleDateString("pt-BR");
+
+                  const isOverdue = daysRemaining < 0;
+                  const isNear = daysRemaining >= 0 && daysRemaining <= (Number(alert.warning_days) || 7);
+
+                  if (isOverdue) {
+                    statusBadgeColor = "bg-red-50 text-red-700 border-red-200 animate-pulse";
+                    statusText = `Atrasada (${Math.abs(daysRemaining)} d)`;
+                  } else if (isNear) {
+                    statusBadgeColor = "bg-orange-50 text-orange-700 border-orange-200";
+                    statusText = daysRemaining === 0 ? "Vence HOJE" : `Vence em ${daysRemaining} dias`;
+                  } else {
+                    statusBadgeColor = "bg-green-50 text-green-700 border-green-200";
+                    statusText = `Vence em ${daysRemaining} dias`;
                   }
 
                   statsContent = (
@@ -1717,19 +1540,10 @@ export default function MaintenanceTab() {
                           <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider block font-sans">
                             Tempo Restante
                           </span>
-                          <span
-                            className={`text-sm font-black font-sans ${isOverdue ? "text-red-655 font-black font-sans" : "text-zinc-700"}`}
-                          >
-                            {isOverdue
-                              ? `Atraso ${Math.abs(daysRemaining)} d`
-                              : `${daysRemaining} dias`}
+                          <span className={`text-sm font-black font-sans ${isOverdue ? "text-red-650" : "text-zinc-700"}`}>
+                            {isOverdue ? `${Math.abs(daysRemaining)} dias d+` : `${daysRemaining} dias`}
                           </span>
                         </div>
-                      </div>
-
-                      <div className="text-[10px] text-zinc-400 italic text-center font-medium font-sans">
-                        Alerta configurado com antecedência de{" "}
-                        {alert.warning_days || 0} dias.
                       </div>
                     </div>
                   );
@@ -2863,135 +2677,172 @@ export default function MaintenanceTab() {
                       {/* Alert Calibration Panel */}
                       {resolvingIssueData?.auto_alert_id && (
                         <div className="space-y-4">
-                          {/* KM Section */}
-                          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
-                            <div className="flex items-center gap-2">
-                              <Gauge className="text-blue-500" size={18} />
-                              <h4 className="text-xs font-black text-blue-700 uppercase tracking-widest">
-                                Alerta de Quilometragem (KM)
-                              </h4>
-                            </div>
-                            <p className="text-xs text-blue-800/80 leading-relaxed font-semibold text-left">
-                              Indique o hodômetro atual e os parâmetros do
-                              alerta para reprogramar os avisos futuros.
-                            </p>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <div>
-                                <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">
-                                  KM Atual do Serv. *
-                                </label>
-                                <input
-                                  type="number"
-                                  value={resolveCurrentKm}
-                                  onChange={(e) =>
-                                    setResolveCurrentKm(e.target.value)
-                                  }
-                                  placeholder="Fração/KM"
-                                  className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-bold"
-                                />
+                          {resolvingIssueData.auto_alerts?.trigger_type === "km" && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
+                              <div className="flex items-center gap-2">
+                                <Gauge className="text-blue-500" size={18} />
+                                <h4 className="text-xs font-black text-blue-700 uppercase tracking-widest">
+                                  Alerta de Quilometragem (KM)
+                                </h4>
                               </div>
-                              <div>
-                                <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">
-                                  Próximo Ciclo (KM)
-                                </label>
-                                <input
-                                  type="number"
-                                  value={resolveIntervalKm}
-                                  onChange={(e) =>
-                                    setResolveIntervalKm(e.target.value)
-                                  }
-                                  placeholder="Ciclo KM"
-                                  className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                />
+                              <p className="text-xs text-blue-800/80 leading-relaxed font-semibold text-left">
+                                Indique o hodômetro atual e os parâmetros do alerta para reprogramar os avisos futuros.
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                  <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">
+                                    KM Atual do Serv. *
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={resolveCurrentKm}
+                                    onChange={(e) => setResolveCurrentKm(e.target.value)}
+                                    placeholder="Fração/KM"
+                                    className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-bold"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">
+                                    Próximo Ciclo (KM)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={resolveIntervalKm}
+                                    onChange={(e) => setResolveIntervalKm(e.target.value)}
+                                    placeholder="Ciclo KM"
+                                    className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">
+                                    Avisar Antes (KM)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={resolveWarningKm}
+                                    onChange={(e) => setResolveWarningKm(e.target.value)}
+                                    placeholder="KM antecedência"
+                                    className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  />
+                                </div>
                               </div>
-                              <div>
-                                <label className="block text-[10px] font-black uppercase text-blue-700 mb-1">
-                                  Aparecer Antes (KM)
-                                </label>
-                                <input
-                                  type="number"
-                                  value={resolveWarningKm}
-                                  onChange={(e) =>
-                                    setResolveWarningKm(e.target.value)
-                                  }
-                                  placeholder="Aviso KM"
-                                  className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                />
-                              </div>
-                            </div>
-
-                            {resolveCurrentKm && resolveIntervalKm && (
-                              <div className="pt-2 border-t border-blue-200/60 flex flex-col gap-1 text-[11px] text-blue-900 font-bold">
-                                <span className="flex items-center gap-1.5 text-left">
-                                  • Próximo vencimento programado:{" "}
-                                  <strong>
-                                    {Number(resolveCurrentKm) +
-                                      Number(resolveIntervalKm)}{" "}
-                                    KM
-                                  </strong>
-                                </span>
-                                {resolveWarningKm && (
+                              {resolveCurrentKm && resolveIntervalKm && (
+                                <div className="pt-2 border-t border-blue-200/60 flex flex-col gap-1 text-[11px] text-blue-900 font-bold">
                                   <span className="flex items-center gap-1.5 text-left">
-                                    • Alerta aparecerá no painel em:{" "}
-                                    <strong className="text-amber-700">
-                                      {Number(resolveCurrentKm) +
-                                        Number(resolveIntervalKm) -
-                                        Number(resolveWarningKm)}{" "}
-                                      KM
-                                    </strong>
+                                    • Próximo programado: {Number(resolveCurrentKm) + Number(resolveIntervalKm)} KM
                                   </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Date Section */}
-                          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
-                            <div className="flex items-center gap-2">
-                              <AlertCircle
-                                className="text-orange-500"
-                                size={18}
-                              />
-                              <h4 className="text-xs font-black text-orange-700 uppercase tracking-widest">
-                                Alerta Temporal (Prazo/Data)
-                              </h4>
+                                  {resolveWarningKm && (
+                                    <span className="flex items-center gap-1.5 text-left text-amber-700">
+                                      • Avisará no painel em: {Number(resolveCurrentKm) + Number(resolveIntervalKm) - Number(resolveWarningKm)} KM
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            <p className="text-xs text-orange-800/80 leading-relaxed font-semibold text-left">
-                              Pendência vinculada a vencimento calendarizado.
-                              Defina os prazos adequados.
-                            </p>
+                          )}
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">
-                                  Próximo Vencimento
-                                </label>
-                                <input
-                                  type="date"
-                                  value={resolveNextDate}
-                                  onChange={(e) =>
-                                    setResolveNextDate(e.target.value)
-                                  }
-                                  className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                                />
+                          {resolvingIssueData.auto_alerts?.trigger_type === "date" && (
+                            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
+                              <div className="flex items-center gap-2">
+                                <AlertCircle className="text-orange-500" size={18} />
+                                <h4 className="text-xs font-black text-orange-700 uppercase tracking-widest">
+                                  Alerta Temporal (Prazo/Data)
+                                </h4>
                               </div>
-                              <div>
-                                <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">
-                                  Notificar com (Dias)
-                                </label>
-                                <input
-                                  type="number"
-                                  value={resolveWarningDays}
-                                  onChange={(e) =>
-                                    setResolveWarningDays(e.target.value)
-                                  }
-                                  placeholder="Dias de antecedência"
-                                  className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
-                                />
+                              <p className="text-xs text-orange-800/80 leading-relaxed font-semibold text-left">
+                                Pendência vinculada a vencimento calendarizado. Defina os prazos adequados.
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">
+                                    Próximo Vencimento
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={resolveNextDate}
+                                    onChange={(e) => setResolveNextDate(e.target.value)}
+                                    className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-black uppercase text-orange-700 mb-1">
+                                    Notificar com (Dias)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={resolveWarningDays}
+                                    onChange={(e) => setResolveWarningDays(e.target.value)}
+                                    placeholder="Dias antecedência"
+                                    className="w-full bg-white border border-orange-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                                  />
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          )}
+
+                          {resolvingIssueData.auto_alerts?.trigger_type === "hours" && (
+                            <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 space-y-3 relative overflow-hidden">
+                              <div className="flex items-center gap-2">
+                                <Gauge className="text-teal-500" size={18} />
+                                <h4 className="text-xs font-black text-teal-700 uppercase tracking-widest">
+                                  Alerta de Horímetro (Horas)
+                                </h4>
+                              </div>
+                              <p className="text-xs text-teal-800/80 leading-relaxed font-semibold text-left">
+                                Indique o horímetro atual e os parâmetros do alerta.
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                  <label className="block text-[10px] font-black uppercase text-teal-700 mb-1">
+                                    Horas Atuais *
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={resolveCurrentHours}
+                                    onChange={(e) => setResolveCurrentHours(e.target.value)}
+                                    placeholder="Ex: 5000"
+                                    className="w-full bg-white border border-teal-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 font-bold"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-black uppercase text-teal-700 mb-1">
+                                    Ciclo (Horas)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={resolveIntervalHours}
+                                    onChange={(e) => setResolveIntervalHours(e.target.value)}
+                                    placeholder="Intervalo"
+                                    className="w-full bg-white border border-teal-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-black uppercase text-teal-700 mb-1">
+                                    Avisar Antes (Horas)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={resolveWarningHours}
+                                    onChange={(e) => setResolveWarningHours(e.target.value)}
+                                    placeholder="Aviso"
+                                    className="w-full bg-white border border-teal-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                  />
+                                </div>
+                              </div>
+                              {resolveCurrentHours && resolveIntervalHours && (
+                                <div className="pt-2 border-t border-teal-200/60 flex flex-col gap-1 text-[11px] text-teal-900 font-bold">
+                                  <span className="flex items-center gap-1.5 text-left">
+                                    • Próximo programado: {Number(resolveCurrentHours) + Number(resolveIntervalHours)} H
+                                  </span>
+                                  {resolveWarningHours && (
+                                    <span className="flex items-center gap-1.5 text-left text-amber-700">
+                                      • Avisará em: {Number(resolveCurrentHours) + Number(resolveIntervalHours) - Number(resolveWarningHours)} H
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 
