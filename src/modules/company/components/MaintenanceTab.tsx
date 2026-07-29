@@ -1263,7 +1263,7 @@ export default function MaintenanceTab() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide border-b border-app-border">
-        {["pending", "waiting", "waiting_nf", "resolved", "maintenance_tracking", "items", "reports"].map((tab) => (
+        {["pending", "waiting", "waiting_nf", "resolved", "maintenance_tracking"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab as any)}
@@ -1281,11 +1281,9 @@ export default function MaintenanceTab() {
                   ? `Aguard. NF (${waitingNfCount})`
                   : tab === "resolved"
                     ? `Resolvidas (${resolvedCount})`
-                    : tab === "items"
-                      ? "Itens & Preços"
-                      : tab === "reports"
-                        ? "Relatórios / NF"
-                        : "Acompanhamento"}
+                    : tab === "maintenance_tracking"
+                      ? "Acompanhamento"
+                      : ""}
           </button>
         ))}
       </div>
