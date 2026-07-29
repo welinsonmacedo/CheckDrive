@@ -132,32 +132,155 @@ export default function MaintenanceTab() {
       const companyId = (user as any)?.company_id;
       if (!companyId) return;
 
-      const { data: alertsData, error: alertsError } = await supabase.from(
-        "auto_alerts",
-      )
+      let rawAlerts: any[] = [];
+
+      // Try embedding joins first
+      const { data: embeddedData, error: embeddedError } = await supabase
+        .from("auto_alerts")
         .select(`
           *,
-          vehicles (plate, model),
-          profiles (full_name)
+          vehicles:target_vehicle_id (plate, model),
+          profiles:target_driver_id (full_name)
         `)
-        .eq("company_id", (user as any)?.company_id);
-
-      if (alertsError) { console.error("ALERTS ERROR:", alertsError); alert("Error fetch alerts: " + JSON.stringify(alertsError)); } if (!alertsError && alertsData) {
-        setAlerts(alertsData);
-      }
-
-      const { data: submissions, error: subError } = await supabase.from("checklist_submissions").select("vehicle_id, odometer, created_at").eq("company_id", (user as any)?.company_id)
+        .eq("company_id", companyId)
         .order("created_at", { ascending: false });
 
-      if (!subError && submissions) {
-        const latestOdometer: Record<string, number> = {};
+      if (!embeddedError && embeddedData) {
+        rawAlerts = embeddedData;
+      } else {
+        // Fallback to standard query without custom FK aliases
+        const { data: stdData, error: stdError } = await supabase
+          .from("auto_alerts")
+          .select(`
+            *,
+            vehicles (plate, model),
+            profiles (full_name)
+          `)
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: false });
+
+        if (!stdError && stdData) {
+          rawAlerts = stdData;
+        } else {
+          // Fallback to plain query
+          const { data: plainData, error: plainError } = await supabase
+            .from("auto_alerts")
+            .select("*")
+            .eq("company_id", companyId)
+            .order("created_at", { ascending: false });
+
+          if (!plainError && plainData) {
+            rawAlerts = plainData;
+          } else {
+            console.error("Error fetching auto_alerts:", stdError || plainError);
+          }
+        }
+      }
+
+      // Manual fallback mapping to guarantee vehicles and profiles objects exist on every alert
+      const vehicleIds = [
+        ...new Set(
+          rawAlerts
+            .map((a) => a.target_vehicle_id || a.vehicle_id)
+            .filter(Boolean)
+        ),
+      ];
+      const driverIds = [
+        ...new Set(
+          rawAlerts
+            .map((a) => a.target_driver_id || a.driver_id)
+            .filter(Boolean)
+        ),
+      ];
+
+      let vehiclesMap: Record<string, any> = {};
+      let profilesMap: Record<string, any> = {};
+
+      if (vehicleIds.length > 0) {
+        const { data: vData } = await supabase
+          .from("vehicles")
+          .select("id, plate, model")
+          .eq("company_id", companyId)
+          .in("id", vehicleIds);
+
+        if (vData) {
+          vData.forEach((v) => {
+            vehiclesMap[v.id] = v;
+          });
+        }
+      }
+
+      if (driverIds.length > 0) {
+        const { data: pData } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .eq("company_id", companyId)
+          .in("id", driverIds);
+
+        if (pData) {
+          pData.forEach((p) => {
+            profilesMap[p.id] = p;
+          });
+        }
+      }
+
+      const normalizedAlerts = rawAlerts.map((alert) => {
+        const vehId = alert.target_vehicle_id || alert.vehicle_id;
+        const drvId = alert.target_driver_id || alert.driver_id;
+
+        const vehObj =
+          (alert.vehicles && typeof alert.vehicles === "object" && Object.keys(alert.vehicles).length > 0 ? alert.vehicles : null) ||
+          vehiclesMap[vehId] ||
+          null;
+
+        const drvObj =
+          (alert.profiles && typeof alert.profiles === "object" && Object.keys(alert.profiles).length > 0 ? alert.profiles : null) ||
+          profilesMap[drvId] ||
+          null;
+
+        return {
+          ...alert,
+          target_vehicle_id: vehId,
+          target_driver_id: drvId,
+          vehicles: vehObj,
+          profiles: drvObj,
+        };
+      });
+
+      setAlerts(normalizedAlerts);
+
+      // Fetch odometers from checklist_submissions AND vehicles table
+      const { data: submissions } = await supabase
+        .from("checklist_submissions")
+        .select("vehicle_id, odometer, created_at")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false });
+
+      const latestOdometer: Record<string, number> = {};
+
+      if (submissions) {
         submissions.forEach((sub) => {
-          if (sub.vehicle_id && !latestOdometer[sub.vehicle_id]) {
-            latestOdometer[sub.vehicle_id] = sub.odometer || 0;
+          if (sub.vehicle_id && !latestOdometer[sub.vehicle_id] && sub.odometer) {
+            latestOdometer[sub.vehicle_id] = Number(sub.odometer) || 0;
           }
         });
-        setOdometers(latestOdometer);
       }
+
+      const { data: vehiclesOdometer } = await supabase
+        .from("vehicles")
+        .select("id, odometer, current_km, km")
+        .eq("company_id", companyId);
+
+      if (vehiclesOdometer) {
+        vehiclesOdometer.forEach((v) => {
+          const vehKm = Number(v.odometer || v.current_km || v.km || 0);
+          if (v.id && vehKm > (latestOdometer[v.id] || 0)) {
+            latestOdometer[v.id] = vehKm;
+          }
+        });
+      }
+
+      setOdometers(latestOdometer);
     } catch (err) {
       console.warn("Error fetching alerts tracking data:", err);
     }
@@ -1185,7 +1308,8 @@ export default function MaintenanceTab() {
     let isNear = false;
 
     if (isKm) {
-      const currentKm = odometers[alert.target_vehicle_id] || 0;
+      const vehId = alert.target_vehicle_id || alert.vehicle_id;
+      const currentKm = odometers[vehId] || 0;
       const targetKm =
         Number(alert.last_km || 0) + Number(alert.interval_km || 0);
       const remainingKm = targetKm - currentKm;
@@ -1547,12 +1671,27 @@ export default function MaintenanceTab() {
                 <Wrench size={32} />
               </div>
               <h4 className="text-sm font-bold text-text-main font-sans">
-                Nenhuma manutenção monitorada encontrada
+                {alerts.length > 0
+                  ? "Nenhum acompanhamento atende aos filtros aplicados"
+                  : "Nenhuma manutenção monitorada encontrada"}
               </h4>
-              <p className="text-xs text-text-muted max-w-sm mx-auto mt-1 font-sans">
-                Cadastre novas regras de alertas de KM ou Data na aba "Alertas"
-                para iniciar o acompanhamento.
+              <p className="text-xs text-text-muted max-w-sm mx-auto mt-1 font-sans mb-4">
+                {alerts.length > 0
+                  ? "Tente ajustar a pesquisa ou os filtros de tipo e status acima para visualizar seus acompanhamentos."
+                  : "Cadastre novas regras de alertas de KM ou Data na aba \"Alertas\" para iniciar o acompanhamento."}
               </p>
+              {alerts.length > 0 && (
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setTrackingTypeFilter("all");
+                    setTrackingFilter("all");
+                  }}
+                  className="px-4 py-2 bg-blue-50 text-blue-600 font-bold text-xs rounded-xl hover:bg-blue-100 transition-colors inline-flex items-center gap-2"
+                >
+                  Limpar Filtros
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1567,7 +1706,8 @@ export default function MaintenanceTab() {
                 let statsContent = null;
 
                 if (isKm) {
-                  const currentKm = odometers[alert.target_vehicle_id] || 0;
+                  const vehId = alert.target_vehicle_id || alert.vehicle_id;
+                  const currentKm = odometers[vehId] || 0;
                   const intervalKm = Number(alert.interval_km) || 0;
                   const lastKm = Number(alert.last_km) || 0;
                   const targetKm = lastKm + intervalKm;

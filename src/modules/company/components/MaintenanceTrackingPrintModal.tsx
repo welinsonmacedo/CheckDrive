@@ -99,7 +99,8 @@ export default function MaintenanceTrackingPrintModal({ alerts, odometers, onClo
                   let details = "";
 
                   if (isKm) {
-                    const currentKm = odometers[alert.target_vehicle_id] || 0;
+                    const vehId = alert.target_vehicle_id || alert.vehicle_id;
+                    const currentKm = odometers[vehId] || 0;
                     const targetKm = Number(alert.last_km || 0) + Number(alert.interval_km || 0);
                     const remainingKm = targetKm - currentKm;
                     const isOverdue = remainingKm <= 0;
