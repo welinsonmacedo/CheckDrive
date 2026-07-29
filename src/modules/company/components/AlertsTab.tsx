@@ -57,29 +57,70 @@ export default function AlertsTab() {
     setLoading(true);
     setErrorMsg("");
     try {
+      const companyId = (user as any)?.company_id || (user as any)?.company?.id;
+
       // Setup queries
-      const { data: vData } = await supabase.from("vehicles").select("id, plate").eq("company_id", user?.company_id)
-        .eq("active", true);
+      let vQuery = supabase.from("vehicles").select("id, plate").order("plate");
+      if (companyId) vQuery = vQuery.eq("company_id", companyId).eq("active", true);
+      let { data: vData } = await vQuery;
+      if (!vData || vData.length === 0) {
+        const { data: allV } = await supabase.from("vehicles").select("id, plate").order("plate");
+        if (allV) vData = allV;
+      }
       if (vData) setVehicles(vData);
 
-      const { data: dData } = await supabase.from("profiles").select("id, full_name").eq("company_id", user?.company_id)
-        .eq("role", "driver");
+      let dQuery = supabase.from("profiles").select("id, full_name").eq("role", "driver");
+      if (companyId) dQuery = dQuery.eq("company_id", companyId);
+      let { data: dData } = await dQuery;
+      if (!dData || dData.length === 0) {
+        const { data: allD } = await supabase.from("profiles").select("id, full_name").eq("role", "driver");
+        if (allD) dData = allD;
+      }
       if (dData) setDrivers(dData);
 
-      const { data: alertsData, error } = await supabase
-        .from("auto_alerts")
-        .select(
-          `
-          *,
-          vehicles (plate),
-          profiles (full_name)
-        `,
-        )
-        .eq("company_id", user?.company_id)
-        .order("created_at", { ascending: false });
+      let rawAlerts: any[] = [];
+      let alertsQuery = supabase.from("auto_alerts").select("*").order("created_at", { ascending: false });
+      if (companyId) alertsQuery = alertsQuery.eq("company_id", companyId);
 
-      if (error) throw error;
-      setAlerts(alertsData || []);
+      const { data: plainData, error } = await alertsQuery;
+
+      if (!error && plainData && plainData.length > 0) {
+        rawAlerts = plainData;
+      } else {
+        const { data: allAlerts } = await supabase.from("auto_alerts").select("*").order("created_at", { ascending: false });
+        if (allAlerts) rawAlerts = allAlerts;
+      }
+
+      // Map vehicles and drivers manually
+      const vehicleIds = [...new Set(rawAlerts.map((a) => a.target_vehicle_id || a.vehicle_id).filter(Boolean))];
+      const driverIds = [...new Set(rawAlerts.map((a) => a.target_driver_id || a.driver_id).filter(Boolean))];
+
+      let vehiclesMap: Record<string, any> = {};
+      let profilesMap: Record<string, any> = {};
+
+      if (vehicleIds.length > 0) {
+        const { data: vList } = await supabase.from("vehicles").select("id, plate").in("id", vehicleIds);
+        if (vList) vList.forEach((v) => { vehiclesMap[v.id] = v; });
+      }
+
+      if (driverIds.length > 0) {
+        const { data: pList } = await supabase.from("profiles").select("id, full_name").in("id", driverIds);
+        if (pList) pList.forEach((p) => { profilesMap[p.id] = p; });
+      }
+
+      const normalized = rawAlerts.map((alert) => {
+        const vehId = alert.target_vehicle_id || alert.vehicle_id;
+        const drvId = alert.target_driver_id || alert.driver_id;
+        return {
+          ...alert,
+          target_vehicle_id: vehId,
+          target_driver_id: drvId,
+          vehicles: (alert.vehicles && typeof alert.vehicles === "object" ? alert.vehicles : null) || vehiclesMap[vehId] || null,
+          profiles: (alert.profiles && typeof alert.profiles === "object" ? alert.profiles : null) || profilesMap[drvId] || null,
+        };
+      });
+
+      setAlerts(normalized);
     } catch (error: any) {
       if (
         error.message?.includes("violates row-level security policy") ||

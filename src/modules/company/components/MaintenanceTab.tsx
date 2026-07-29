@@ -143,64 +143,59 @@ export default function MaintenanceTab() {
 
   async function fetchAlertsData() {
     try {
-      const companyId = (user as any)?.company_id;
-      if (!companyId) return;
+      const companyId = (user as any)?.company_id || (user as any)?.company?.id;
 
       // Fetch vehicles list for dropdowns
-      const { data: vList } = await supabase
+      let vQuery = supabase
         .from("vehicles")
         .select("id, plate, model, current_km, odometer, km")
-        .eq("company_id", companyId)
-        .eq("active", true)
         .order("plate");
+      if (companyId) {
+        vQuery = vQuery.eq("company_id", companyId).eq("active", true);
+      }
+      let { data: vList } = await vQuery;
+      if (!vList || vList.length === 0) {
+        const { data: fallbackV } = await supabase
+          .from("vehicles")
+          .select("id, plate, model, current_km, odometer, km")
+          .order("plate");
+        if (fallbackV) vList = fallbackV;
+      }
       if (vList) setVehiclesList(vList);
 
       let rawAlerts: any[] = [];
 
-      // Try embedding joins first
-      const { data: embeddedData, error: embeddedError } = await supabase
+      // Fetch plain auto_alerts without Postgrest join syntax to prevent FK lookup failures
+      let alertsQuery = supabase
         .from("auto_alerts")
-        .select(`
-          *,
-          vehicles:target_vehicle_id (plate, model),
-          profiles:target_driver_id (full_name)
-        `)
-        .eq("company_id", companyId)
+        .select("*")
         .order("created_at", { ascending: false });
 
-      if (!embeddedError && embeddedData) {
-        rawAlerts = embeddedData;
+      if (companyId) {
+        alertsQuery = alertsQuery.eq("company_id", companyId);
+      }
+
+      const { data: plainData, error: plainError } = await alertsQuery;
+
+      if (!plainError && plainData && plainData.length > 0) {
+        rawAlerts = plainData;
       } else {
-        // Fallback to standard query without custom FK aliases
-        const { data: stdData, error: stdError } = await supabase
+        // Fallback: fetch all auto_alerts
+        const { data: allAlertsData, error: allError } = await supabase
           .from("auto_alerts")
-          .select(`
-            *,
-            vehicles (plate, model),
-            profiles (full_name)
-          `)
-          .eq("company_id", companyId)
+          .select("*")
           .order("created_at", { ascending: false });
 
-        if (!stdError && stdData) {
-          rawAlerts = stdData;
-        } else {
-          // Fallback to plain query
-          const { data: plainData, error: plainError } = await supabase
-            .from("auto_alerts")
-            .select("*")
-            .eq("company_id", companyId)
-            .order("created_at", { ascending: false });
-
-          if (!plainError && plainData) {
-            rawAlerts = plainData;
-          } else {
-            console.error("Error fetching auto_alerts:", stdError || plainError);
-          }
+        if (!allError && allAlertsData && allAlertsData.length > 0) {
+          rawAlerts = allAlertsData;
+        } else if (plainData) {
+          rawAlerts = plainData;
+        } else if (allAlertsData) {
+          rawAlerts = allAlertsData;
         }
       }
 
-      // Manual fallback mapping to guarantee vehicles and profiles objects exist on every alert
+      // Manual mapping to guarantee vehicles and profiles objects exist on every alert
       const vehicleIds = [
         ...new Set(
           rawAlerts
@@ -223,7 +218,6 @@ export default function MaintenanceTab() {
         const { data: vData } = await supabase
           .from("vehicles")
           .select("id, plate, model")
-          .eq("company_id", companyId)
           .in("id", vehicleIds);
 
         if (vData) {
@@ -237,7 +231,6 @@ export default function MaintenanceTab() {
         const { data: pData } = await supabase
           .from("profiles")
           .select("id, full_name")
-          .eq("company_id", companyId)
           .in("id", driverIds);
 
         if (pData) {
@@ -273,11 +266,14 @@ export default function MaintenanceTab() {
       setAlerts(normalizedAlerts);
 
       // Fetch odometers from checklist_submissions AND vehicles table
-      const { data: submissions } = await supabase
+      let subQuery = supabase
         .from("checklist_submissions")
         .select("vehicle_id, odometer, created_at")
-        .eq("company_id", companyId)
         .order("created_at", { ascending: false });
+      if (companyId) {
+        subQuery = subQuery.eq("company_id", companyId);
+      }
+      const { data: submissions } = await subQuery;
 
       const latestOdometer: Record<string, number> = {};
 
@@ -289,10 +285,13 @@ export default function MaintenanceTab() {
         });
       }
 
-      const { data: vehiclesOdometer } = await supabase
+      let vehOdoQuery = supabase
         .from("vehicles")
-        .select("id, odometer, current_km, km")
-        .eq("company_id", companyId);
+        .select("id, odometer, current_km, km");
+      if (companyId) {
+        vehOdoQuery = vehOdoQuery.eq("company_id", companyId);
+      }
+      const { data: vehiclesOdometer } = await vehOdoQuery;
 
       if (vehiclesOdometer) {
         vehiclesOdometer.forEach((v) => {
