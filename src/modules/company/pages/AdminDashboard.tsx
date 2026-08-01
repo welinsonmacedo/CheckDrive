@@ -32,6 +32,7 @@ import {
   MessageSquare,
   PackageSearch, Menu,
   Bot,
+  Building2,
 } from "lucide-react";
 import CheckDriveAiTab from "../components/CheckDriveAiTab";
 import { supabase } from "@/src/lib/supabase";
@@ -61,6 +62,7 @@ import InfractionsTab from "@/src/modules/company/components/InfractionsTab";
 import FeedbackTab from "@/src/modules/company/components/FeedbackTab";
 import NotificationsTab from "@/src/modules/company/components/NotificationsTab";
 import InsurancesTab from "@/src/modules/company/components/InsurancesTab";
+import BranchesTab from "@/src/modules/company/components/BranchesTab";
 import MyVehicles from "@/src/modules/driver/pages/MyVehicles";
 import MyDrivers from "@/src/modules/driver/pages/MyDrivers";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -460,6 +462,12 @@ export default function AdminDashboard() {
 
   const registerItems = [
     {
+      id: "branches",
+      icon: Building2,
+      label: "Filiais",
+      color: "from-blue-600 to-cyan-500",
+    },
+    {
       id: "adm_users",
       icon: Users,
       label: "Usuários Admin",
@@ -783,6 +791,9 @@ export default function AdminDashboard() {
             </div>
             <div className={activeTab === "reports" ? "block h-full animate-fadeIn" : "hidden"}>
               {visitedTabs.has("reports") && <ReportsTab />}
+            </div>
+            <div className={activeTab === "branches" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("branches") && <BranchesTab />}
             </div>
             <div className={activeTab === "adm_users" ? "block h-full animate-fadeIn" : "hidden"}>
               {visitedTabs.has("adm_users") && <AdmUsersTab />}
