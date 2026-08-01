@@ -12,10 +12,11 @@ export default function MyVehicles() {
   const [types, setTypes] = useState<any[]>([]);
   const [models, setModels] = useState<any[]>([]);
   const [modalities, setModalities] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
-  
+
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
   const [formType, setFormType] = useState<"vehicle" | "trailer">("vehicle");
   const [currentVehicleIndex, setCurrentVehicleIndex] = useState(0);
@@ -23,7 +24,7 @@ export default function MyVehicles() {
   const [isTrailerFormOpen, setIsTrailerFormOpen] = useState(false);
 
   const [itemForm, setItemForm] = useState<any>({
-    id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "",
+    id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", branch_id: "",
     renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "",
     photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "",
     doc_crlv_url: "", doc_antt_url: "", doc_insurance_url: "",
@@ -45,19 +46,21 @@ export default function MyVehicles() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vRes, tRes, typesRes, modelsRes, modRes, insurancesRes] = await Promise.all([
+      const [vRes, tRes, typesRes, modelsRes, modRes, insurancesRes, branchesRes] = await Promise.all([
         supabase.from("vehicles").select("*, vehicle_modalities(name)").eq("company_id", user?.company_id).order("plate"),
         supabase.from("trailers").select("*").eq("company_id", user?.company_id).order("plate"),
         supabase.from("vehicle_types").select("*").eq("company_id", user?.company_id).order("name"),
         supabase.from("vehicle_models").select("*").eq("company_id", user?.company_id).order("name"),
         supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id).order("name"),
         supabase.from("insurances").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("branches").select("*").eq("company_id", user?.company_id).order("name"),
       ]);
       setVehicles(vRes.data || []);
       setTrailers(tRes.data || []);
       setTypes(typesRes.data || []);
       setModels(modelsRes.data || []);
       setModalities(modRes.data || []);
+      setBranches(branchesRes.data || []);
       if (insurancesRes.error && insurancesRes.error.code !== '42P01') { console.error(insurancesRes.error); } else if (insurancesRes.data) { setInsurances(insurancesRes.data); }
     } catch (error) {
       console.error("Error fetching vehicles:", error);
@@ -115,7 +118,7 @@ export default function MyVehicles() {
 
       const payload = {
         plate: itemForm.plate, model: itemForm.model, type: itemForm.type, requires_trailer: itemForm.requires_trailer,
-        modality_id: itemForm.modality_id || null, renavam: itemForm.renavam || null, chassi: itemForm.chassi || null, manufacture_year: itemForm.manufacture_year || null,
+        modality_id: itemForm.modality_id || null, branch_id: itemForm.branch_id || null, renavam: itemForm.renavam || null, chassi: itemForm.chassi || null, manufacture_year: itemForm.manufacture_year || null,
         model_year: itemForm.model_year || null, crv_number: itemForm.crv_number || null, fuel_type: itemForm.fuel_type || null,
         color: itemForm.color || null, antt: itemForm.antt || null, insurance_id: itemForm.insurance_id || null,
         company_id: user?.company_id,
@@ -275,6 +278,10 @@ export default function MyVehicles() {
                       <div>
                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Chassi</span>
                         <span className="text-[10px] font-bold text-text-main uppercase font-mono">{item.chassi || '-'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Filial</span>
+                        <span className="text-[10px] font-bold text-blue-600 uppercase">{branches.find(b => b.id === item.branch_id)?.name || '-'}</span>
                       </div>
                     </div>
                   )}

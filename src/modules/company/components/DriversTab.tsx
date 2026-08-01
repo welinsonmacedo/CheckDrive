@@ -10,6 +10,7 @@ export default function DriversTab() {
   const [users, setUsers] = useState<any[]>([]);
   const [modalities, setModalities] = useState<any[]>([]);
   const [scoreProfiles, setScoreProfiles] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentUserIndex, setCurrentUserIndex] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -36,6 +37,7 @@ export default function DriversTab() {
     participatesInRanking: true,
     modalityIds: [] as string[],
     scoreProfileId: "",
+    branchId: "",
     isAuthUser: true,
   });
   const openCreateForm = () => {
@@ -56,6 +58,7 @@ export default function DriversTab() {
       participatesInRanking: true,
       modalityIds: [] as string[],
       scoreProfileId: "",
+      branchId: "",
       isAuthUser: true,
     });
     setShowForm(true);
@@ -63,7 +66,7 @@ export default function DriversTab() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const [{ data }, { data: modData }, { data: scoreProfilesData }] =
+      const [{ data }, { data: modData }, { data: scoreProfilesData }, { data: branchesData }] =
         await Promise.all([
           supabase.from("profiles").select("*, score_profiles(name)")
             .eq("company_id", user?.company_id)
@@ -71,11 +74,13 @@ export default function DriversTab() {
             .order("full_name"),
           supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id).order("name"),
           supabase.from("score_profiles").select("*").order("name"),
+          supabase.from("branches").select("*").eq("company_id", user?.company_id).order("name"),
         ]);
 
       setUsers(data || []);
       setModalities(modData || []);
       setScoreProfiles(scoreProfilesData || []);
+      setBranches(branchesData || []);
     } catch (error) {
       console.error("Error fetching drivers data:", error);
     } finally {
@@ -134,6 +139,7 @@ export default function DriversTab() {
       participates_in_ranking: userForm.participatesInRanking,
       modality_ids: userForm.modalityIds,
       score_profile_id: userForm.scoreProfileId || null,
+      branch_id: userForm.branchId || null,
     };
 
     try {
@@ -155,6 +161,7 @@ export default function DriversTab() {
               participates_in_ranking: userForm.participatesInRanking,
               modality_ids: userForm.modalityIds,
               score_profile_id: userForm.scoreProfileId || null,
+              branch_id: userForm.branchId || null,
             })
             .eq("id", userForm.id);
             
@@ -236,6 +243,7 @@ export default function DriversTab() {
               participates_in_ranking: userForm.participatesInRanking,
               modality_ids: userForm.modalityIds,
               score_profile_id: userForm.scoreProfileId || null,
+              branch_id: userForm.branchId || null,
             }).eq("id", data.user.id);
           }
 
@@ -556,6 +564,12 @@ export default function DriversTab() {
                         {currentUser.score_profiles?.name || "N/A"}
                       </span>
                     </div>
+                    <div>
+                      <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Filial Atribuída</span>
+                      <span className="text-sm font-black text-blue-600 uppercase">
+                        {branches.find((b) => b.id === currentUser.branch_id)?.name || "N/I"}
+                      </span>
+                    </div>
                     <div className="sm:col-span-2">
                       <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Modalidades</span>
                       <span className="text-sm font-black text-text-main uppercase">
@@ -617,6 +631,7 @@ export default function DriversTab() {
                         participatesInRanking: currentUser.participates_in_ranking !== false,
                         modalityIds: currentUser.modality_ids || [],
                         scoreProfileId: currentUser.score_profile_id || "",
+                        branchId: currentUser.branch_id || "",
                         isAuthUser: !!currentUser.email,
                       });
                       setShowForm(true);
@@ -849,6 +864,21 @@ export default function DriversTab() {
                 {scoreProfiles.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={userForm.branchId || ""}
+                onChange={(e) =>
+                  setUserForm({ ...userForm, branchId: e.target.value })
+                }
+                className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Selecione a Filial (Opcional)</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} {b.code ? `(${b.code})` : ""}
                   </option>
                 ))}
               </select>

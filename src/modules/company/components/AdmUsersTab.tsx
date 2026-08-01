@@ -7,6 +7,7 @@ export default function AdmUsersTab() {
   const { user } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [modalities, setModalities] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -22,6 +23,7 @@ export default function AdmUsersTab() {
     password: "",
     isInternal: false,
     modalityIds: [] as string[],
+    branchId: "",
   });
   const openCreateForm = () => {
     setUserForm({
@@ -33,6 +35,7 @@ export default function AdmUsersTab() {
       password: "",
       isInternal: false,
       modalityIds: [],
+      branchId: "",
     });
 
     setShowForm(true);
@@ -49,6 +52,9 @@ export default function AdmUsersTab() {
       const { data: mData } = await supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id)
         .order("name");
       setModalities(mData || []);
+
+      const { data: bData } = await supabase.from("branches").select("*").eq("company_id", user?.company_id).order("name");
+      setBranches(bData || []);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -75,6 +81,7 @@ export default function AdmUsersTab() {
             cpf: userForm.cpf || null,
             role: userForm.role,
             modality_ids: userForm.modalityIds,
+            branch_id: userForm.branchId || null,
           })
           .eq("id", userForm.id);
 
@@ -109,6 +116,7 @@ export default function AdmUsersTab() {
                 cpf: userForm.cpf || null,
                 role: userForm.role,
                 modality_ids: userForm.modalityIds,
+                branch_id: userForm.branchId || null,
                 active: true,
               },
               { onConflict: "id" },
@@ -127,6 +135,7 @@ export default function AdmUsersTab() {
                 full_name: parsedName,
                 cpf: userForm.cpf || null,
                 modality_ids: userForm.modalityIds,
+                branch_id: userForm.branchId || null,
               })
               .eq("id", data.user.id);
           }
@@ -379,6 +388,7 @@ export default function AdmUsersTab() {
                               password: "",
                               isInternal: false,
                               modalityIds: user.modality_ids || [],
+                              branchId: user.branch_id || "",
                             });
 
                             setShowForm(true);
@@ -503,6 +513,21 @@ export default function AdmUsersTab() {
               >
                 <option value="admin">Administrador</option>
                 <option value="standard">Padrão</option>
+              </select>
+
+              <select
+                value={userForm.branchId || ""}
+                onChange={(e) =>
+                  setUserForm({ ...userForm, branchId: e.target.value })
+                }
+                className="w-full h-11 px-4 rounded-lg border border-app-border bg-app-bg text-sm outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Selecione a Filial (Opcional)</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} {b.code ? `(${b.code})` : ""}
+                  </option>
+                ))}
               </select>
 
               <div className="border border-app-border rounded-xl p-4 bg-app-bg/50">

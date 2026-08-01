@@ -13,6 +13,7 @@ export default function VehiclesTab() {
   const [types, setTypes] = useState<any[]>([]);
   const [models, setModels] = useState<any[]>([]);
   const [modalities, setModalities] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -26,7 +27,7 @@ export default function VehiclesTab() {
   const [assetTypeFilter, setAssetTypeFilter] = useState<string>("all");
 
   const [itemForm, setItemForm] = useState<any>({
-    id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "",
+    id: "", plate: "", model: "", type: "", requires_trailer: false, modality_id: "", branch_id: "",
     asset_type: "VEHICLE", control_unit: "KM", hour_meter_initial: 0, hour_meter_current: 0,
     renavam: "", chassi: "", manufacture_year: "", model_year: "", crv_number: "", fuel_type: "", color: "", antt: "", insurance_id: "",
     photo_front_url: "", photo_right_url: "", photo_left_url: "", photo_rear_url: "",
@@ -49,19 +50,21 @@ export default function VehiclesTab() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vRes, tRes, typesRes, modelsRes, modRes, insurancesRes] = await Promise.all([
+      const [vRes, tRes, typesRes, modelsRes, modRes, insurancesRes, branchesRes] = await Promise.all([
         supabase.from("vehicles").select("*, vehicle_modalities(name)").eq("company_id", user?.company_id).order("plate"),
         supabase.from("trailers").select("*").eq("company_id", user?.company_id).order("plate"),
         supabase.from("vehicle_types").select("*").eq("company_id", user?.company_id).order("name"),
         supabase.from("vehicle_models").select("*").eq("company_id", user?.company_id).order("name"),
         supabase.from("vehicle_modalities").select("*").eq("company_id", user?.company_id).order("name"),
         supabase.from("insurances").select("*").eq("company_id", user?.company_id).order("name"),
+        supabase.from("branches").select("*").eq("company_id", user?.company_id).order("name"),
       ]);
       setVehicles(vRes.data || []);
       setTrailers(tRes.data || []);
       setTypes(typesRes.data || []);
       setModels(modelsRes.data || []);
       setModalities(modRes.data || []);
+      setBranches(branchesRes.data || []);
       if (insurancesRes.error && insurancesRes.error.code !== '42P01') { console.error(insurancesRes.error); } else if (insurancesRes.data) { setInsurances(insurancesRes.data); }
     } catch (error) {
       console.error("Error fetching vehicles:", error);
@@ -119,7 +122,7 @@ export default function VehiclesTab() {
 
       const payload = {
         plate: itemForm.plate, model: itemForm.model, type: itemForm.type, requires_trailer: itemForm.requires_trailer,
-        modality_id: itemForm.modality_id || null, renavam: itemForm.renavam || null, chassi: itemForm.chassi || null, manufacture_year: itemForm.manufacture_year || null,
+        modality_id: itemForm.modality_id || null, branch_id: itemForm.branch_id || null, renavam: itemForm.renavam || null, chassi: itemForm.chassi || null, manufacture_year: itemForm.manufacture_year || null,
         model_year: itemForm.model_year || null, crv_number: itemForm.crv_number || null, fuel_type: itemForm.fuel_type || null,
         color: itemForm.color || null, antt: itemForm.antt || null, insurance_id: itemForm.insurance_id || null,
         asset_type: itemForm.asset_type || "VEHICLE",
@@ -383,6 +386,10 @@ export default function VehiclesTab() {
                         <span className="text-sm font-black text-text-main uppercase">{modalities.find((m) => m.id === currentItem.modality_id)?.name || "N/I"}</span>
                       </div>
                       <div>
+                        <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Filial</span>
+                        <span className="text-sm font-black text-blue-600 uppercase">{branches.find((b) => b.id === currentItem.branch_id)?.name || "N/I"}</span>
+                      </div>
+                      <div>
                         <span className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Cor Predominante</span>
                         <span className="text-sm font-black text-text-main uppercase">{currentItem.color || "N/I"}</span>
                       </div>
@@ -567,7 +574,7 @@ export default function VehiclesTab() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Tipo de Veículo</label>
                   <select required className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.type} onChange={(e) => setItemForm({ ...itemForm, type: e.target.value })}>
@@ -580,6 +587,15 @@ export default function VehiclesTab() {
                   <select className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.modality_id} onChange={(e) => setItemForm({ ...itemForm, modality_id: e.target.value })}>
                     <option value="">Nenhuma / Geral</option>
                     {modalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Filial Atribuída</label>
+                  <select className="w-full h-11 px-4 rounded-xl border border-app-border bg-app-bg text-[11px] font-bold outline-none focus:border-primary" value={itemForm.branch_id || ""} onChange={(e) => setItemForm({ ...itemForm, branch_id: e.target.value })}>
+                    <option value="">Selecione uma Filial (Opcional)</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name} {b.code ? `(${b.code})` : ''}</option>
+                    ))}
                   </select>
                 </div>
               </div>
