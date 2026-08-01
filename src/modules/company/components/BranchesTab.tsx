@@ -34,6 +34,18 @@ export interface Branch {
   created_at?: string;
 }
 
+function isValidUUID(str?: string | null): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
+function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "00000000-0000-4000-8000-" + Date.now().toString(16).padStart(12, "0").slice(-12);
+}
+
 export default function BranchesTab() {
   const { user } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -89,7 +101,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
     try {
       // Tenta buscar do Supabase
       let query = supabase.from("branches").select("*").order("name");
-      if (companyId) {
+      if (isValidUUID(companyId)) {
         query = query.eq("company_id", companyId);
       }
 
@@ -118,11 +130,11 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
       if (saved) {
         setBranches(JSON.parse(saved));
       } else {
-        // Dados de exemplo caso esteja vazio
+        // Dados de exemplo caso esteja vazio com UUID valido
         const initialMock: Branch[] = [
           {
-            id: "branch-matriz",
-            company_id: companyId || "demo",
+            id: generateUUID(),
+            company_id: isValidUUID(companyId) ? companyId : "2988d70f-3c53-4563-a442-67c20ea40b7a",
             name: "Matriz Principal",
             cnpj: "12.345.678/0001-90",
             cep: "74000-000",
@@ -215,8 +227,10 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
     if (!form.name.trim()) return alert("Por favor, informe o nome da filial.");
     setSaving(true);
 
+    const validCompanyId = isValidUUID(companyId) ? companyId : "2988d70f-3c53-4563-a442-67c20ea40b7a";
+
     const payload = {
-      company_id: companyId || "default",
+      company_id: validCompanyId,
       name: form.name.trim(),
       cnpj: form.cnpj.trim(),
       cep: form.cep.trim(),
@@ -231,14 +245,18 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
 
     try {
       if (!dbError) {
-        if (form.id) {
+        if (form.id && isValidUUID(form.id)) {
           const { error } = await supabase
             .from("branches")
             .update(payload)
             .eq("id", form.id);
           if (error) throw error;
         } else {
-          const { error } = await supabase.from("branches").insert([payload]);
+          const insertPayload = {
+            id: generateUUID(),
+            ...payload,
+          };
+          const { error } = await supabase.from("branches").insert([insertPayload]);
           if (error) throw error;
         }
         await fetchData();
@@ -251,7 +269,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
           );
         } else {
           const newBranch: Branch = {
-            id: `branch_${Date.now()}`,
+            id: generateUUID(),
             ...payload,
             created_at: new Date().toISOString(),
           };
@@ -285,7 +303,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
         );
       } else {
         const newBranch: Branch = {
-          id: `branch_${Date.now()}`,
+          id: generateUUID(),
           ...payload,
           created_at: new Date().toISOString(),
         };
