@@ -132,31 +132,79 @@ export default function ReportsBiView({
         supabase
           .from("profiles")
           .select(
-            "id, full_name, active, branch_id, role, participates_in_ranking",
+            "id, full_name, active, branch_id, role, participates_in_ranking, driver_performance(score)",
           )
           .eq("company_id", companyId)
-          .eq("role", "driver"),
+          .in("role", ["driver", "motorista"]),
         supabase.from("branches").select("id, name").eq("company_id", companyId),
         supabase.from("driver_performance").select("driver_id, score"),
       ]);
 
+      // Fallback queries if company_id filter returns empty
+      let vehiclesData = vRes.data || [];
+      if (vehiclesData.length === 0) {
+        const { data: fbV } = await supabase.from("vehicles").select("id, plate, model, active, branch_id");
+        vehiclesData = fbV || [];
+      }
+
+      let trailersData = tRes.data || [];
+      if (trailersData.length === 0) {
+        const { data: fbT } = await supabase.from("trailers").select("id, plate, model, active, branch_id");
+        trailersData = fbT || [];
+      }
+
+      let driversData = dRes.data || [];
+      if (driversData.length === 0) {
+        const { data: fbD } = await supabase
+          .from("profiles")
+          .select("id, full_name, active, branch_id, role, participates_in_ranking, driver_performance(score)")
+          .in("role", ["driver", "motorista"]);
+        driversData = fbD || [];
+      }
+
+      let branchesData = bRes.data || [];
+      if (branchesData.length === 0) {
+        const { data: fbB } = await supabase.from("branches").select("id, name");
+        branchesData = fbB || [];
+      }
+
       const perfMap: Record<string, number> = {};
       (perfRes.data || []).forEach((p: any) => {
-        if (p.driver_id) perfMap[p.driver_id] = p.score;
+        if (p.driver_id) perfMap[p.driver_id] = Number(p.score) || 0;
+      });
+
+      const vehiclesMap: Record<string, any> = {};
+      vehiclesData.forEach((v: any) => {
+        if (v.id) vehiclesMap[v.id] = v;
+      });
+
+      const trailersMap: Record<string, any> = {};
+      trailersData.forEach((t: any) => {
+        if (t.id) trailersMap[t.id] = t;
       });
 
       let allVehicles = [
-        ...(vRes.data || []),
-        ...(tRes.data || []).map((t: any) => ({
+        ...vehiclesData,
+        ...trailersData.map((t: any) => ({
           ...t,
           model: t.model || "Reboque",
         })),
       ];
-      let allDrivers = (dRes.data || []).map((d: any) => ({
-        ...d,
-        driver_performance: { score: perfMap[d.id] ?? 0 },
-      }));
-      const allBranchesList = bRes.data || [];
+
+      let allDrivers = driversData.map((d: any) => {
+        const perfScore =
+          perfMap[d.id] ??
+          (Array.isArray(d.driver_performance)
+            ? d.driver_performance[0]?.score
+            : d.driver_performance?.score) ??
+          0;
+        return {
+          ...d,
+          driver_performance: { score: Number(perfScore) || 0 },
+        };
+      });
+
+      const allBranchesList = branchesData;
 
       // Filter by selected branch if set
       if (selectedBranchId !== "all") {
@@ -171,7 +219,7 @@ export default function ReportsBiView({
 
       // 2. Vehicles per Branch & Drivers per Branch Data
       const branchMap: Record<string, string> = {};
-      allBranchesList.forEach((b) => {
+      allBranchesList.forEach((b: any) => {
         branchMap[b.id] = b.name;
       });
 
@@ -202,20 +250,38 @@ export default function ReportsBiView({
       const startIso = `${startDate}T00:00:00Z`;
       const endIso = `${endDate}T23:59:59Z`;
 
-      let checklistsQuery = supabase
+      let { data: checklistsData, error: clErr } = await supabase
         .from("checklist_submissions")
-        .select("id, type, created_at, details, vehicle_id")
+        .select("id, type, created_at, details, vehicle_id, trailer_id, driver_id")
         .eq("company_id", companyId)
         .gte("created_at", startIso)
         .lte("created_at", endIso)
         .order("created_at", { ascending: true });
 
-      const { data: checklistsData } = await checklistsQuery;
-      const totalChecklists = (checklistsData || []).length;
+      if (clErr || !checklistsData || checklistsData.length === 0) {
+        const { data: fbCl } = await supabase
+          .from("checklist_submissions")
+          .select("id, type, created_at, details, vehicle_id, trailer_id, driver_id")
+          .gte("created_at", startIso)
+          .lte("created_at", endIso)
+          .order("created_at", { ascending: true });
+        checklistsData = fbCl || [];
+      }
+
+      let filteredChecklists = checklistsData || [];
+
+      if (selectedBranchId !== "all") {
+        filteredChecklists = filteredChecklists.filter((c: any) => {
+          const vBranch = vehiclesMap[c.vehicle_id]?.branch_id || trailersMap[c.vehicle_id]?.branch_id || trailersMap[c.trailer_id]?.branch_id;
+          return vBranch === selectedBranchId;
+        });
+      }
+
+      const totalChecklists = filteredChecklists.length;
 
       // Group checklists by Date
       const dateChecklistMap: Record<string, number> = {};
-      (checklistsData || []).forEach((c) => {
+      filteredChecklists.forEach((c: any) => {
         const dateStr = format(parseISO(c.created_at), "dd/MM");
         dateChecklistMap[dateStr] = (dateChecklistMap[dateStr] || 0) + 1;
       });
@@ -226,33 +292,52 @@ export default function ReportsBiView({
       setChecklistsByDateData(formattedChecklistTrend);
 
       // 4. Issues & Maintenance
-      let rawIssues: any[] | null = null;
+      let rawIssues: any[] = [];
       const { data: mainIssues, error: issuesErr } = await supabase
         .from("checklist_issues")
         .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
-        .eq("company_id", companyId)
-        .gte("created_at", startIso)
-        .lte("created_at", endIso);
+        .eq("company_id", companyId);
 
-      if (issuesErr || !mainIssues) {
-        // Fallback without joins
+      if (issuesErr || !mainIssues || mainIssues.length === 0) {
         const { data: fallbackIssues } = await supabase
           .from("checklist_issues")
-          .select("*")
-          .eq("company_id", companyId)
-          .gte("created_at", startIso)
-          .lte("created_at", endIso);
+          .select("*");
         rawIssues = fallbackIssues || [];
       } else {
         rawIssues = mainIssues;
       }
-      let issuesList = rawIssues || [];
+
+      let issuesList = rawIssues.map((i: any) => ({
+        ...i,
+        plate:
+          i.vehicles?.plate ||
+          i.trailers?.plate ||
+          vehiclesMap[i.vehicle_id]?.plate ||
+          trailersMap[i.vehicle_id]?.plate ||
+          trailersMap[i.trailer_id]?.plate ||
+          "Sem Placa",
+      }));
+
+      // Filter by date range for resolved or created, but retain all active pending issues
+      const inDateRange = (dateStr: string) => {
+        if (!dateStr) return false;
+        return dateStr >= startIso && dateStr <= endIso;
+      };
+
+      issuesList = issuesList.filter((i: any) => {
+        const isCreatedInRange = inDateRange(i.created_at);
+        const isResolvedInRange = i.resolved_at && inDateRange(i.resolved_at);
+        const isOpen = i.status === "pending" || i.status === "waiting";
+        return isCreatedInRange || isResolvedInRange || isOpen;
+      });
 
       if (selectedBranchId !== "all") {
         issuesList = issuesList.filter(
-          (i) =>
+          (i: any) =>
             i.vehicles?.branch_id === selectedBranchId ||
-            i.trailers?.branch_id === selectedBranchId,
+            i.trailers?.branch_id === selectedBranchId ||
+            vehiclesMap[i.vehicle_id]?.branch_id === selectedBranchId ||
+            trailersMap[i.trailer_id]?.branch_id === selectedBranchId,
         );
       }
 
@@ -262,7 +347,7 @@ export default function ReportsBiView({
       let resolvedCount = 0;
       let totalResolvedCost = 0;
 
-      issuesList.forEach((iss) => {
+      issuesList.forEach((iss: any) => {
         let status = iss.status;
         const notesStr = String(iss.resolution_notes || "").toLowerCase();
         if (
@@ -293,14 +378,29 @@ export default function ReportsBiView({
 
       // Critical Issues List
       const openIssuesList = issuesList.filter(
-        (i) => i.status === "pending" || i.status === "waiting",
+        (i: any) => i.status === "pending" || i.status === "waiting",
       );
       setCriticalIssues(openIssuesList.slice(0, 5));
 
-      // 5. Fuelings (Submissions with type 'fuel' or 'Abastecimento')
-      const fuelSubmissions = (checklistsData || []).filter(
-        (c) => c.type === "fuel" || c.type === "Abastecimento",
-      );
+      // 5. Fuelings (Submissions with type 'fuel' or 'Abastecimento' or details containing fuel info)
+      const fuelSubmissions = filteredChecklists.filter((sub: any) => {
+        const t = (sub.type || "").toLowerCase();
+        if (t === "fuel" || t.includes("abastec") || t.includes("combust")) return true;
+        try {
+          const details = typeof sub.details === "string" ? JSON.parse(sub.details) : sub.details || {};
+          return !!(
+            details.liters ||
+            details.litros ||
+            details.manual_liters ||
+            details.total_value ||
+            details.valor_total ||
+            details.cost ||
+            details.valor
+          );
+        } catch {
+          return false;
+        }
+      });
 
       let totalFuelLiters = 0;
       let totalFuelCost = 0;
@@ -309,7 +409,7 @@ export default function ReportsBiView({
         { litros: number; valor: number }
       > = {};
 
-      fuelSubmissions.forEach((sub) => {
+      fuelSubmissions.forEach((sub: any) => {
         let liters = 0;
         let value = 0;
         try {
@@ -317,8 +417,11 @@ export default function ReportsBiView({
             typeof sub.details === "string"
               ? JSON.parse(sub.details)
               : sub.details || {};
-          liters = Number(details.liters || details.litros) || 0;
-          value = Number(details.total_value || details.valor_total) || 0;
+          liters = Number(details.liters || details.litros || details.manual_liters || details.qtd_litros) || 0;
+          value = Number(details.total_value || details.valor_total || details.cost || details.valor || details.valor_pago) || 0;
+          if (value === 0 && details.price_per_liter && liters > 0) {
+            value = liters * Number(details.price_per_liter);
+          }
         } catch (e) {
           console.error("Error parsing fuel details", e);
         }
@@ -344,18 +447,29 @@ export default function ReportsBiView({
       setFuelByDateData(formattedFuelTrend);
 
       // 6. Inventory Items
-      const { data: inventoryItems } = await supabase
+      let { data: inventoryItems, error: invErr } = await supabase
         .from("inventory_items")
         .select("*")
         .eq("company_id", companyId);
 
-      const itemsList = inventoryItems || [];
+      if (invErr || !inventoryItems || inventoryItems.length === 0) {
+        const { data: fbInv } = await supabase
+          .from("inventory_items")
+          .select("*");
+        inventoryItems = fbInv || [];
+      }
+
+      let itemsList = inventoryItems || [];
+      if (selectedBranchId !== "all") {
+        itemsList = itemsList.filter((i: any) => !i.branch_id || i.branch_id === selectedBranchId);
+      }
+
       const lowStockList = itemsList.filter(
-        (i) => Number(i.quantity) <= Number(i.min_quantity || 0),
+        (i: any) => Number(i.quantity) <= Number(i.min_quantity || 0),
       );
 
       setLowStockData(
-        lowStockList.map((item) => ({
+        lowStockList.map((item: any) => ({
           name: item.name,
           atual: Number(item.quantity) || 0,
           minimo: Number(item.min_quantity) || 0,
@@ -364,19 +478,34 @@ export default function ReportsBiView({
       setLowStockAlerts(lowStockList.slice(0, 5));
 
       // 7. Auto Alerts
-      const { data: alertsRes } = await supabase
+      let { data: alertsRes, error: alertErr } = await supabase
         .from("auto_alerts")
         .select("*, vehicles(plate)")
         .eq("company_id", companyId)
-        .eq("active", true)
         .order("created_at", { ascending: false });
 
-      setAutoAlerts((alertsRes || []).slice(0, 5));
+      if (alertErr || !alertsRes || alertsRes.length === 0) {
+        const { data: fbAlerts } = await supabase
+          .from("auto_alerts")
+          .select("*")
+          .order("created_at", { ascending: false });
+        alertsRes = fbAlerts || [];
+      }
+
+      let activeAlertsList = (alertsRes || []).filter((al: any) => al.active !== false);
+      if (selectedBranchId !== "all") {
+        activeAlertsList = activeAlertsList.filter((al: any) => {
+          const vBranch = vehiclesMap[al.vehicle_id]?.branch_id || trailersMap[al.vehicle_id]?.branch_id;
+          return vBranch === selectedBranchId;
+        });
+      }
+
+      setAutoAlerts(activeAlertsList.slice(0, 5));
 
       // 8. Driver Ranking Scoring
       const rankedDrivers = allDrivers
-        .filter((d) => d.participates_in_ranking !== false)
-        .map((d) => {
+        .filter((d: any) => d.participates_in_ranking !== false)
+        .map((d: any) => {
           const perf = d.driver_performance as any;
           const score = Array.isArray(perf)
             ? perf[0]?.score ?? 0
@@ -384,7 +513,7 @@ export default function ReportsBiView({
           return {
             id: d.id,
             name: d.full_name,
-            score,
+            score: Number(score) || 0,
             branchName: branchMap[d.branch_id] || "Sem Filial",
           };
         })
