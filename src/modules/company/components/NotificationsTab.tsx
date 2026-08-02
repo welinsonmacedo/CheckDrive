@@ -109,7 +109,8 @@ export default function NotificationsTab() {
 
 
       // 2. Fetch auto alerts
-      const { data: alertsData, error: alertsError } = await supabase
+      let alertsData: any[] = [];
+      const { data: rawAlertsData, error: alertsError } = await supabase
         .from("auto_alerts")
         .select(`
           *,
@@ -120,12 +121,41 @@ export default function NotificationsTab() {
         .eq("active", true);
 
       if (alertsError) {
-        console.error("Error fetching auto alerts:", alertsError);
+        console.warn("Could not fetch auto alerts with joins, using fallback without joins:", alertsError.message);
+        const { data: plainAlerts } = await supabase
+          .from("auto_alerts")
+          .select("*")
+          .eq("company_id", user?.company_id)
+          .eq("active", true);
+
+        if (plainAlerts && plainAlerts.length > 0) {
+          const vehicleIds = [...new Set(plainAlerts.map((a) => a.target_vehicle_id || a.vehicle_id).filter(Boolean))];
+          const trailerIds = [...new Set(plainAlerts.map((a) => a.target_trailer_id || a.trailer_id).filter(Boolean))];
+
+          let vehiclesMap: Record<string, any> = {};
+          let trailersMap: Record<string, any> = {};
+
+          if (vehicleIds.length > 0) {
+            const { data: vData } = await supabase.from("vehicles").select("id, plate").in("id", vehicleIds);
+            (vData || []).forEach((v) => { vehiclesMap[v.id] = v; });
+          }
+          if (trailerIds.length > 0) {
+            const { data: tData } = await supabase.from("trailers").select("id, plate").in("id", trailerIds);
+            (tData || []).forEach((t) => { trailersMap[t.id] = t; });
+          }
+
+          alertsData = plainAlerts.map((a) => ({
+            ...a,
+            vehicle: vehiclesMap[a.target_vehicle_id || a.vehicle_id] || null,
+            trailer: trailersMap[a.target_trailer_id || a.trailer_id] || null,
+          }));
+        }
+      } else {
+        alertsData = rawAlertsData || [];
       }
 
       // Fetch latest odometer submissions to check triggers
       const { data: recentSubmissions } = await supabase.from("checklist_submissions").select("vehicle_id, odometer").eq("company_id", user?.company_id)
-        .eq("company_id", user?.company_id)
         .order("created_at", { ascending: false });
 
       const latestOdometerByVehicle: Record<string, number> = {};

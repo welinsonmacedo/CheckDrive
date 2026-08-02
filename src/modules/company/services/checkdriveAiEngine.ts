@@ -135,12 +135,28 @@ const handleLateMaintenance = async (companyId: string): Promise<string> => {
     .in("status", ["pending", "open", "in_progress"])
     .order("created_at", { ascending: false });
 
-  const { data: alerts, error: alertsErr } = await supabase
+  let alerts = null;
+  let alertsErr = null;
+  const { data: rawAlerts, error: joinErr } = await supabase
     .from("auto_alerts")
     .select("*, vehicles(plate, model)")
     .eq("company_id", companyId)
     .neq("status", "done")
     .order("created_at", { ascending: false });
+
+  if (joinErr) {
+    const { data: plainAlerts, error: plainErr } = await supabase
+      .from("auto_alerts")
+      .select("*")
+      .eq("company_id", companyId)
+      .neq("status", "done")
+      .order("created_at", { ascending: false });
+
+    alerts = plainAlerts;
+    alertsErr = plainErr;
+  } else {
+    alerts = rawAlerts;
+  }
 
   if (issuesErr && alertsErr) {
     return "❌ Ocorreu um erro ao consultar as manutenções no banco de dados. Por favor, tente novamente.";

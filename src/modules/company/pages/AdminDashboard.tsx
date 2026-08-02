@@ -237,7 +237,7 @@ const MODULES = [
     badgeBg: "bg-amber-100 text-amber-700",
     items: [
       { id: "ranking", icon: Trophy, label: "Ranking", color: "from-yellow-400 to-yellow-600" },
-      { id: "reports", icon: BarChart3, label: "Relatório Gerencial", color: "from-indigo-600 to-blue-600" },
+      { id: "reports", icon: BarChart3, label: "Relatórios e BI", color: "from-indigo-600 to-blue-600" },
       { id: "audit", icon: History, label: "Auditoria", color: "from-slate-500 to-gray-500", requiresPermission: "AUDIT_VIEW" },
       { id: "notifications", icon: Bell, label: "Notificações", color: "from-orange-500 to-amber-500" },
       { id: "feedback", icon: MessageSquare, label: "Feedback", color: "from-pink-500 to-rose-500", requiresRole: "admin" },

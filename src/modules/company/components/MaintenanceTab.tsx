@@ -35,7 +35,11 @@ import { usePersistentState } from "@/src/hooks/usePersistentState";
 import MaintenanceListPrintModal from "./MaintenanceListPrintModal";
 import MaintenanceTrackingPrintModal from "./MaintenanceTrackingPrintModal";
 
-export default function MaintenanceTab() {
+interface MaintenanceTabProps {
+  branchId?: string;
+}
+
+export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
   const { user } = useAuth();
   const [issues, setIssues] = useState<any[]>([]);
   const [showIssuesPrintModal, setShowIssuesPrintModal] = useState(false);
@@ -538,14 +542,14 @@ export default function MaintenanceTab() {
 
       let vehiclesData: any[] = [];
       if (vehicleIds.length > 0) {
-        const { data } = await supabase.from("vehicles").select("id, plate, model").eq("company_id", (user as any)?.company_id)
+        const { data } = await supabase.from("vehicles").select("id, plate, model, branch_id").eq("company_id", (user as any)?.company_id)
           .in("id", vehicleIds);
         vehiclesData = data || [];
       }
 
       let trailersData: any[] = [];
       if (trailerIds.length > 0) {
-        const { data } = await supabase.from("trailers").select("id, plate").eq("company_id", (user as any)?.company_id)
+        const { data } = await supabase.from("trailers").select("id, plate, branch_id").eq("company_id", (user as any)?.company_id)
           .in("id", trailerIds);
         trailersData = data || [];
       }
@@ -627,7 +631,15 @@ export default function MaintenanceTab() {
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
 
-      setIssues(combinedIssues);
+      let finalIssues = combinedIssues;
+      if (branchId) {
+        finalIssues = combinedIssues.filter((i) => {
+          const vBranch = i.vehicles?.branch_id || i.trailers?.branch_id || i.branch_id;
+          return vBranch === branchId;
+        });
+      }
+
+      setIssues(finalIssues);
       fetchAlertsData();
     } catch (error) {
       console.error(error); alert("Error fetching issues: " + JSON.stringify(error));

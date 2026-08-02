@@ -5,7 +5,11 @@ import { CheckCircle2, Search, X, Plus, Key, ChevronLeft, ChevronRight, Edit2, U
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import { logSystemAudit } from "@/src/lib/systemAuditService";
 
-export default function DriversTab() {
+interface DriversTabProps {
+  branchId?: string;
+}
+
+export default function DriversTab({ branchId }: DriversTabProps = {}) {
   const { user } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [modalities, setModalities] = useState<any[]>([]);
@@ -58,7 +62,7 @@ export default function DriversTab() {
       participatesInRanking: true,
       modalityIds: [] as string[],
       scoreProfileId: "",
-      branchId: "",
+      branchId: branchId || "",
       isAuthUser: true,
     });
     setShowForm(true);
@@ -427,7 +431,10 @@ export default function DriversTab() {
     );
   }
 
-  const filteredUsers = users.filter((u) => u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || u.email?.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredUsers = users.filter((u) => {
+    if (branchId && u.branch_id !== branchId) return false;
+    return u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || u.email?.toLowerCase().includes(searchTerm.toLowerCase());
+  });
   const currentUser = filteredUsers[currentUserIndex];
 
   return (

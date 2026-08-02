@@ -6,7 +6,11 @@ import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import { exportVehiclesToExcel, exportVehiclesToPDF } from "@/src/utils/exportVehicleCatalog";
 import { logSystemAudit } from "@/src/lib/systemAuditService";
 
-export default function VehiclesTab() {
+interface VehiclesTabProps {
+  branchId?: string;
+}
+
+export default function VehiclesTab({ branchId }: VehiclesTabProps = {}) {
   const { user } = useAuth();
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [trailers, setTrailers] = useState<any[]>([]);
@@ -219,6 +223,7 @@ export default function VehiclesTab() {
   ];
 
   const filteredItems = combinedItems.filter((item) => {
+    if (branchId && item.branch_id !== branchId) return false;
     const matchesSearch = 
       item.plate?.toLowerCase().includes(searchTerm.toLowerCase()) || 
       item.chassi?.toLowerCase().includes(searchTerm.toLowerCase()) ||
