@@ -5,31 +5,37 @@ Esta é a documentação completa do CheckDrive, um sistema de gestão de frotas
 ## 1. Módulo de Autenticação e Perfis
 - **Login e Registro:** Sistema de autenticação seguro (via Supabase Auth).
 - **Tipos de Perfil:**
-  - **Empresa (Administrador):** Cadastra motoristas, veículos, reboques, apólices de seguro, e gerencia as configurações da frota.
+  - **Empresa (Administrador):** Cadastra motoristas, veículos, reboques, filiais, apólices de seguro, e gerencia as configurações da frota.
   - **Motorista (Usuário):** Tem acesso pelo aplicativo/sistema para responder a checklists diários.
 - **Configurações da Empresa:** 
   - Limite de veículos e motoristas do plano atual.
   - Informações corporativas.
 
-## 2. Módulo de Veículos e Reboques
+## 2. Módulo de Filiais (Unidades)
+- **Gestão de Filiais:**
+  - Cadastro completo com Razão Social / Nome da Filial, CNPJ, Código identificador, CEP, Endereço, Bairro, Cidade, Estado e Status (Ativa/Inativa).
+  - Vínculo direto com a empresa gestora.
+  - Permite categorizar e organizar veículos, motoristas e usuários administrativos por filial.
+
+## 3. Módulo de Veículos e Reboques
 - **Gestão de Veículos (Frota):**
-  - Informações Principais: Placa, Modelo, Renavam, Ano Fabricação/Modelo, Tipo de Combustível, Cor Predominante, ANTT, Tipo de Veículo e Modalidade.
+  - Informações Principais: Placa, Modelo, Renavam, Ano Fabricação/Modelo, Tipo de Combustível, Cor Predominante, ANTT, Tipo de Veículo, Modalidade e **Filial Atribuída** (Select de filial).
   - Seguradora Vinculada.
   - Requisito de Reboque: Opção de definir se um veículo obriga a anexação de um reboque no checklist.
   - **Fotos:** Frontal, Lateral Direita, Lateral Esquerda e Traseira.
   - **Documentos em PDF (Upload):** CRLV, ANTT e Apólice do Seguro.
-- **Visualização Moderna (Carousel):** Interface onde o administrador vê detalhes minuciosos e as fotos de um veículo por vez.
+- **Visualização Moderna (Carousel):** Interface onde o administrador vê detalhes minuciosos, fotos e a filial vinculada a cada veículo.
 - **Gestão de Reboques:** Cadastro simples de placa de reboques associados à empresa.
 
-## 3. Módulo de Seguradoras
+## 4. Módulo de Seguradoras
 - **Cadastro de Seguradoras:**
   - Informações Cadastrais: Nome, CNPJ.
   - Telefones de Contato: Telefone Sinistro, Telefone 24 horas e Telefone da Corretora.
 - Os veículos podem ser vinculados a essas seguradoras.
 
-## 4. Módulo de Motoristas
+## 5. Módulo de Motoristas
 - **Cadastro de Motoristas:**
-  - Inserção de dados, CNH, categoria da CNH, telefone, e-mail e criação de senha para acesso.
+  - Inserção de dados, CNH, categoria da CNH, telefone, e-mail, criação de senha para acesso e **Atribuição de Filial**.
   - Motoristas ficam restritos a visualizar e responder checklists da empresa a que pertencem.
 
 ## 5. Módulo de Checklists Operacionais

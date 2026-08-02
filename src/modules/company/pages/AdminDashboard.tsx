@@ -33,6 +33,9 @@ import {
   PackageSearch, Menu,
   Bot,
   Building2,
+  Grid,
+  ArrowLeft,
+  Layers,
 } from "lucide-react";
 import CheckDriveAiTab from "../components/CheckDriveAiTab";
 import { supabase } from "@/src/lib/supabase";
@@ -70,18 +73,246 @@ import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import { GlobalSearch } from "@/src/modules/company/components/GlobalSearch";
 import { runSilentAudit } from "@/src/lib/auditService";
 
+const tabToModuleMap: Record<string, string> = {
+  overview: "core",
+  branches: "core",
+  adm_users: "core",
+  drivers: "core",
+  my_drivers: "core",
+  vehicles: "core",
+  my_vehicles: "core",
+  insurances: "core",
+  settings: "core",
+
+  checklists: "checklist",
+  checklist_setup: "checklist",
+
+  maintenance: "maintenance",
+  alerts: "maintenance",
+  infractions: "maintenance",
+
+  inventory: "inventory",
+
+  abastecimentos: "fuel",
+  averages: "fuel",
+
+  tracking: "tracking",
+  routes: "tracking",
+  baits: "tracking",
+
+  schedules: "schedules",
+
+  ranking: "intelligence",
+  reports: "intelligence",
+  audit: "intelligence",
+  notifications: "intelligence",
+  feedback: "intelligence",
+  database: "intelligence",
+
+  checkdrive_ai: "checkdrive_ai",
+};
+
+const MODULES = [
+  {
+    id: "core",
+    title: "Core",
+    subtitle: "Gestão Principal",
+    description: "Visão geral, filiais, usuários administrativos, motoristas, veículos e configurações do sistema.",
+    icon: Building2,
+    color: "from-blue-600 to-indigo-600",
+    bgGradient: "from-blue-50 to-indigo-50/50",
+    borderHover: "hover:border-blue-300",
+    badgeBg: "bg-blue-100 text-blue-700",
+    items: [
+      { id: "overview", icon: LayoutDashboard, label: "Painel Geral", color: "from-blue-500 to-cyan-500" },
+      { id: "branches", icon: Building2, label: "Filiais", color: "from-blue-600 to-cyan-500", requiresRole: "admin" },
+      { id: "adm_users", icon: Users, label: "Usuários Admin", color: "from-blue-500 to-indigo-500", requiresRole: "admin" },
+      { id: "drivers", icon: Users, label: "Motoristas", color: "from-amber-500 to-yellow-500" },
+      { id: "my_drivers", icon: Users, label: "Meus Motoristas", color: "from-amber-500 to-yellow-500" },
+      { id: "vehicles", icon: Truck, label: "Veículos", color: "from-teal-500 to-green-500", requiresRole: "admin" },
+      { id: "my_vehicles", icon: Truck, label: "Meus Veículos", color: "from-teal-500 to-green-500" },
+      { id: "insurances", icon: Shield, label: "Seguradoras", color: "from-indigo-500 to-blue-500", requiresRole: "admin" },
+      { id: "settings", icon: Settings, label: "Opções de Perfil", color: "from-gray-500 to-slate-500", requiresRole: "admin" },
+    ],
+  },
+  {
+    id: "checklist",
+    title: "Checklist",
+    subtitle: "Inspeções e Formulários",
+    description: "Acompanhamento do histórico de auditoria de veículos e parametrização do setup de checklists.",
+    icon: ClipboardCheck,
+    color: "from-purple-600 to-pink-600",
+    bgGradient: "from-purple-50 to-pink-50/50",
+    borderHover: "hover:border-purple-300",
+    badgeBg: "bg-purple-100 text-purple-700",
+    items: [
+      { id: "checklists", icon: BarChart3, label: "Histórico de Checklists", color: "from-purple-500 to-pink-500" },
+      { id: "checklist_setup", icon: ClipboardCheck, label: "Setup do Checklist", color: "from-rose-500 to-red-500", requiresRole: "admin" },
+    ],
+  },
+  {
+    id: "maintenance",
+    title: "Manutenção",
+    subtitle: "Pendências e Alertas",
+    description: "Central de resolução de pendências de frota, regras de alertas automáticos e registro de infrações.",
+    icon: AlertTriangle,
+    color: "from-red-500 to-orange-500",
+    bgGradient: "from-red-50 to-orange-50/50",
+    borderHover: "hover:border-red-300",
+    badgeBg: "bg-red-100 text-red-700",
+    items: [
+      { id: "maintenance", icon: AlertTriangle, label: "Pendências e Resolução", color: "from-red-500 to-orange-500" },
+      { id: "alerts", icon: Bell, label: "Alertas Automáticos", color: "from-orange-500 to-amber-500", requiresRole: "admin" },
+      { id: "infractions", icon: ShieldAlert, label: "Infrações", color: "from-red-600 to-rose-600" },
+    ],
+  },
+  {
+    id: "inventory",
+    title: "Estoque",
+    subtitle: "Suprimentos e Peças",
+    description: "Gestão de peças, insumos, cadastro de fornecedores e lançamento de entrada por Notas Fiscais.",
+    icon: PackageSearch,
+    color: "from-teal-500 to-emerald-600",
+    bgGradient: "from-teal-50 to-emerald-50/50",
+    borderHover: "hover:border-teal-300",
+    badgeBg: "bg-teal-100 text-teal-700",
+    items: [
+      { id: "inventory", icon: PackageSearch, label: "Peças, Insumos e Notas", color: "from-teal-500 to-emerald-500" },
+    ],
+  },
+  {
+    id: "fuel",
+    title: "Abastecimento",
+    subtitle: "Combustível e Médias",
+    description: "Lançamento e controle de abastecimentos da frota com cálculo e monitoramento de médias de consumo.",
+    icon: Fuel,
+    color: "from-green-500 to-emerald-600",
+    bgGradient: "from-green-50 to-emerald-50/50",
+    borderHover: "hover:border-green-300",
+    badgeBg: "bg-green-100 text-green-700",
+    items: [
+      { id: "abastecimentos", icon: Fuel, label: "Abastecimento", color: "from-green-500 to-emerald-500" },
+      { id: "averages", icon: Activity, label: "Médias de Consumo", color: "from-cyan-500 to-blue-500" },
+    ],
+  },
+  {
+    id: "tracking",
+    title: "Rastreamento",
+    subtitle: "Telemetria e Rotas",
+    description: "Monitoramento em tempo real, cadastro e gestão de rotas operacionais e rastreadores iscas.",
+    icon: Navigation,
+    color: "from-emerald-500 to-cyan-600",
+    bgGradient: "from-emerald-50 to-cyan-50/50",
+    borderHover: "hover:border-emerald-300",
+    badgeBg: "bg-emerald-100 text-emerald-700",
+    items: [
+      { id: "tracking", icon: Navigation, label: "Monitoramento", color: "from-emerald-500 to-teal-500" },
+      { id: "routes", icon: Map, label: "Rotas", color: "from-violet-500 to-purple-500", requiresRole: "admin" },
+      { id: "baits", icon: Map, label: "Iscas", color: "from-fuchsia-500 to-purple-500", requiresRole: "admin" },
+    ],
+  },
+  {
+    id: "schedules",
+    title: "Planejamento",
+    subtitle: "Escalas de Trabalho",
+    description: "Programação e gestão de escalas de serviço e turnos operacionais dos motoristas.",
+    icon: CalendarDays,
+    color: "from-indigo-500 to-blue-600",
+    bgGradient: "from-indigo-50 to-blue-50/50",
+    borderHover: "hover:border-indigo-300",
+    badgeBg: "bg-indigo-100 text-indigo-700",
+    items: [
+      { id: "schedules", icon: CalendarDays, label: "Escalas", color: "from-indigo-500 to-blue-500" },
+    ],
+  },
+  {
+    id: "intelligence",
+    title: "Inteligência",
+    subtitle: "Análises e Auditoria",
+    description: "Ranking de desempenho, relatórios gerenciais consolidados, auditoria de alterações e notificações.",
+    icon: Trophy,
+    color: "from-amber-500 to-yellow-600",
+    bgGradient: "from-amber-50 to-yellow-50/50",
+    borderHover: "hover:border-amber-300",
+    badgeBg: "bg-amber-100 text-amber-700",
+    items: [
+      { id: "ranking", icon: Trophy, label: "Ranking", color: "from-yellow-400 to-yellow-600" },
+      { id: "reports", icon: BarChart3, label: "Relatório Gerencial", color: "from-indigo-600 to-blue-600" },
+      { id: "audit", icon: History, label: "Auditoria", color: "from-slate-500 to-gray-500", requiresPermission: "AUDIT_VIEW" },
+      { id: "notifications", icon: Bell, label: "Notificações", color: "from-orange-500 to-amber-500" },
+      { id: "feedback", icon: MessageSquare, label: "Feedback", color: "from-pink-500 to-rose-500", requiresRole: "admin" },
+    ],
+  },
+  {
+    id: "checkdrive_ai",
+    title: "IA (CheckDrive AI)",
+    subtitle: "Inteligência Artificial",
+    description: "Assistente virtual inteligente para insights preditivos e análises em tempo real da frota.",
+    icon: Bot,
+    color: "from-blue-600 via-indigo-600 to-purple-600",
+    bgGradient: "from-indigo-50 via-purple-50 to-blue-50/50",
+    borderHover: "hover:border-indigo-300",
+    badgeBg: "bg-indigo-100 text-indigo-700",
+    items: [
+      { id: "checkdrive_ai", icon: Bot, label: "CheckDrive AI", color: "from-blue-600 via-indigo-600 to-purple-600" },
+    ],
+  },
+];
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "overview";
+
+  const urlModule = searchParams.get("module");
+  const urlTab = searchParams.get("tab");
+
+  const activeTab = urlTab || null;
+  const activeModule = urlModule || (urlTab ? tabToModuleMap[urlTab] || null : null);
+
+  const isItemAccessible = (item: any, userObj: any) => {
+    if (item.hideIf) return false;
+    if (item.requiresRole === "admin" && userObj?.role !== "admin") return false;
+    if (item.requiresPermission) {
+      const userPerms = userObj?.permissions || [];
+      const hasPerm =
+        userObj?.role === "admin" ||
+        userPerms.includes(item.requiresPermission) ||
+        userPerms.includes(item.requiresPermission.toLowerCase());
+      if (!hasPerm) return false;
+    }
+    return true;
+  };
+
+  const accessibleModules = MODULES.filter((mod) =>
+    mod.items.some((item) => isItemAccessible(item, user))
+  );
+
+  const currentModuleObj = MODULES.find((m) => m.id === activeModule);
+  const accessibleCurrentModuleItems = currentModuleObj
+    ? currentModuleObj.items.filter((item) => isItemAccessible(item, user))
+    : [];
+
+  const selectModule = (moduleId: string) => {
+    const mod = MODULES.find((m) => m.id === moduleId);
+    if (!mod) return;
+    const validItems = mod.items.filter((item) => isItemAccessible(item, user));
+    if (validItems.length === 0) return;
+    const defaultTab = validItems[0].id;
+    setSearchParams({ module: moduleId, tab: defaultTab });
+  };
+
   const setActiveTab = (tab: string) => {
     setIsMobileMenuOpen(false);
-    setSearchParams((prev) => {
-      prev.set("tab", tab);
-      return prev;
-    });
+    const targetModule = tabToModuleMap[tab] || activeModule || "core";
+    setSearchParams({ module: targetModule, tab });
   };
+
+  const goBackToModules = () => {
+    setIsMobileMenuOpen(false);
+    setSearchParams({});
+  };
+
   const [appSettings, setAppSettings] = useState({
     system_type: "points",
     initial_value: 1000,
@@ -95,17 +326,19 @@ export default function AdminDashboard() {
   const [vehiclesWithPending, setVehiclesWithPending] = useState<any[]>([]);
   const [openDropdowns, setOpenDropdowns] = useState<string[]>([]);
   const [notifCount, setNotifCount] = useState(0);
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set([searchParams.get("tab") || "overview"]));
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(activeTab ? [activeTab] : []));
 
   useEffect(() => {
-    setVisitedTabs((prev) => {
-      if (!prev.has(activeTab)) {
-        const next = new Set(prev);
-        next.add(activeTab);
-        return next;
-      }
-      return prev;
-    });
+    if (activeTab) {
+      setVisitedTabs((prev) => {
+        if (!prev.has(activeTab)) {
+          const next = new Set(prev);
+          next.add(activeTab);
+          return next;
+        }
+        return prev;
+      });
+    }
   }, [activeTab]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -554,127 +787,83 @@ export default function AdminDashboard() {
         )}
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto overflow-x-hidden md:hide-scrollbar">
-          {navItems.map((item) => (
-            <motion.button
-              key={item.id}
-              whileHover={item.disabled ? {} : { x: 5 }}
-              whileTap={item.disabled ? {} : { scale: 0.98 }}
-              onClick={() => !item.disabled && setActiveTab(item.id)}
-              disabled={item.disabled}
-              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group/item ${
-                item.disabled
-                  ? "opacity-60 cursor-not-allowed bg-gray-50 text-gray-400"
-                  : activeTab === item.id
-                    ? `bg-gradient-to-r ${item.color} text-white shadow-lg`
-                    : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              <div className="min-w-[20px] flex items-center justify-center relative">
-                <item.icon
-                  size={20}
-                  className={
-                    item.disabled
-                      ? "text-gray-400"
-                      : activeTab === item.id
-                        ? "text-white"
-                        : "text-gray-400 group-hover/item:text-gray-600"
-                  }
-                />
-              </div>
-              <span className="text-sm font-semibold flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                {item.label}
-              </span>
-              {activeTab === item.id && !item.disabled && (
-                <ChevronRight
-                  size={16}
-                  className="text-white/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 min-w-[16px]"
-                />
-              )}
-            </motion.button>
-          ))}
-
-          {/* Dropdown: Cadastros - Only visible for admin */}
-          {user?.role === "admin" && (
-            <div className="mt-2">
-              <motion.button
-                whileTap={{ scale: 0.98 }}
-                onClick={() => toggleDropdown("cadastros")}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group/item ${
-                  registerItems.some((item) => item.id === activeTab)
-                    ? "bg-gradient-to-r from-gray-100 to-gray-50 text-gray-800 shadow-sm"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
+        <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto overflow-x-hidden md:hide-scrollbar">
+          {!activeModule ? (
+            <div className="space-y-2">
+              <button
+                onClick={goBackToModules}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md font-bold text-sm"
               >
-                <div className="min-w-[20px] flex items-center justify-center">
-                  <Database
-                    size={20}
-                    className={
-                      registerItems.some((item) => item.id === activeTab)
-                        ? "text-primary"
-                        : "text-gray-400 group-hover/item:text-gray-600"
-                    }
-                  />
-                </div>
-                <span className="text-sm font-semibold flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                  Cadastros
+                <Grid size={20} className="min-w-[20px]" />
+                <span className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                  Central de Módulos
                 </span>
-                <motion.div
-                  animate={{
-                    rotate: openDropdowns.includes("cadastros") ? 180 : 0,
-                  }}
-                  transition={{ duration: 0.2 }}
-                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 min-w-[16px]"
-                >
-                  <ChevronDown size={16} className="text-gray-400" />
-                </motion.div>
-              </motion.button>
+              </button>
+              <div className="pt-2 px-2">
+                <p className="text-[11px] font-medium text-gray-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 leading-relaxed">
+                  Selecione um módulo na central para acessar as telas.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Back to Modules button */}
+              <button
+                onClick={goBackToModules}
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors text-xs font-bold border border-slate-200 shadow-sm"
+              >
+                <ArrowLeft size={16} className="text-slate-600 min-w-[16px]" />
+                <span className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap truncate">
+                  Voltar aos Módulos
+                </span>
+              </button>
 
-              <AnimatePresence>
-                {openDropdowns.includes("cadastros") && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="ml-2 md:ml-6 mt-1 space-y-1 overflow-hidden"
+              {/* Active Module Header */}
+              {currentModuleObj && (
+                <div className="px-3 py-2 rounded-xl bg-blue-50 border border-blue-100 flex items-center gap-2">
+                  <currentModuleObj.icon size={18} className="text-blue-600 min-w-[18px]" />
+                  <span className="text-xs font-black uppercase text-blue-900 tracking-wider truncate opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300">
+                    {currentModuleObj.title}
+                  </span>
+                </div>
+              )}
+
+              {/* Module Items */}
+              <div className="pt-1 space-y-1">
+                {accessibleCurrentModuleItems.map((item) => (
+                  <motion.button
+                    key={item.id}
+                    whileHover={{ x: 3 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group/item ${
+                      activeTab === item.id
+                        ? `bg-gradient-to-r ${item.color} text-white shadow-md font-bold`
+                        : "text-gray-600 hover:bg-gray-100 font-semibold"
+                    }`}
                   >
-                    {registerItems.map((item) => (
-                      <motion.button
-                        key={item.id}
-                        whileHover={{ x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setActiveTab(item.id)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group/sub ${
+                    <div className="min-w-[20px] flex items-center justify-center relative">
+                      <item.icon
+                        size={20}
+                        className={
                           activeTab === item.id
-                            ? `bg-gradient-to-r ${item.color} text-white shadow-md`
-                            : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                        }`}
-                      >
-                        <div className="min-w-[18px] flex items-center justify-center">
-                          <item.icon
-                            size={18}
-                            className={
-                              activeTab === item.id
-                                ? "text-white"
-                                : "text-gray-400 group-hover/sub:text-gray-600"
-                            }
-                          />
-                        </div>
-                        <span className="text-xs font-semibold flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                          {item.label}
-                        </span>
-                        {activeTab === item.id && (
-                          <ChevronRight
-                            size={14}
-                            className="text-white/70 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 min-w-[14px]"
-                          />
-                        )}
-                      </motion.button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                            ? "text-white"
+                            : "text-gray-400 group-hover/item:text-gray-600"
+                        }
+                      />
+                    </div>
+                    <span className="text-sm flex-1 text-left opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                      {item.label}
+                    </span>
+                    {activeTab === item.id && (
+                      <ChevronRight
+                        size={16}
+                        className="text-white/80 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 min-w-[16px]"
+                      />
+                    )}
+                  </motion.button>
+                ))}
+              </div>
             </div>
           )}
         </nav>
@@ -686,7 +875,16 @@ export default function AdminDashboard() {
       >
         {/* Top Bar */}
         <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-4 md:px-8 py-2 md:py-3 flex items-center justify-between print:hidden">
-          <div className="flex items-center gap-4 lg:gap-8 flex-1">
+          <div className="flex items-center gap-3 lg:gap-4 flex-1">
+            {activeModule && (
+              <button
+                onClick={goBackToModules}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all border border-slate-200 shadow-sm flex-shrink-0"
+              >
+                <Grid size={16} className="text-blue-600" />
+                <span className="hidden sm:inline">Módulos</span>
+              </button>
+            )}
             {/* Search Input */}
             <GlobalSearch
               onNavigate={(tab) => {
@@ -770,13 +968,88 @@ export default function AdminDashboard() {
 
         {/* Content Area */}
         <div
-          className={`flex-1 p-8 ${activeTab === "notifications" ? "flex flex-col overflow-hidden h-full" : "space-y-6"}`}
+          className={`flex-1 p-4 md:p-8 ${activeTab === "notifications" ? "flex flex-col overflow-hidden h-full" : "space-y-6"}`}
         >
-          {/* Vehicles with Pending Section */}
+          {!activeModule ? (
+            /* Tela de Módulos (Central de Navegação) */
+            <div className="max-w-7xl mx-auto space-y-8 animate-fadeIn pb-12">
+              {/* Header section */}
+              <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
+                <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="relative z-10 space-y-2">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs font-bold uppercase tracking-wider">
+                    <Grid size={14} />
+                    Central de Módulos
+                  </div>
+                  <h1 className="text-2xl md:text-3xl font-black tracking-tight">
+                    Bem-vindo ao CheckDrive, {user?.name?.split(" ")[0] || "Usuário"}
+                  </h1>
+                  <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
+                    Selecione um dos módulos organizados abaixo para acessar as funcionalidades do sistema de gestão da frota.
+                  </p>
+                </div>
+              </div>
 
-          {/* Tab Content */}
-          {/* Tab Content */}
-          <div className="w-full h-full relative">
+              {/* Grid of Modules */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {accessibleModules.map((mod) => {
+                  const modAccessibleItems = mod.items.filter((i) => isItemAccessible(i, user));
+                  return (
+                    <motion.div
+                      key={mod.id}
+                      whileHover={{ y: -4, scale: 1.01 }}
+                      transition={{ duration: 0.2 }}
+                      onClick={() => selectModule(mod.id)}
+                      className={`group cursor-pointer rounded-2xl bg-white border border-slate-200/80 p-6 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between relative overflow-hidden ${mod.borderHover}`}
+                    >
+                      <div className="space-y-4">
+                        <div className="flex items-start justify-between">
+                          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${mod.color} flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-300`}>
+                            <mod.icon size={24} />
+                          </div>
+                          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${mod.badgeBg}`}>
+                            {modAccessibleItems.length} {modAccessibleItems.length === 1 ? 'tela' : 'telas'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                              {mod.title}
+                            </h3>
+                            <span className="text-xs text-slate-400 font-medium">({mod.subtitle})</span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                            {mod.description}
+                          </p>
+                        </div>
+
+                        {/* List of screens/pages inside this module */}
+                        <div className="pt-2 flex flex-wrap gap-1.5">
+                          {modAccessibleItems.map((item) => (
+                            <span
+                              key={item.id}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200/60"
+                            >
+                              <item.icon size={12} className="text-slate-400" />
+                              {item.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-blue-600 group-hover:text-blue-700">
+                        <span>Acessar Módulo</span>
+                        <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Tab Content */
+            <div className="w-full h-full relative">
             <div className={activeTab === "checkdrive_ai" ? "block h-full animate-fadeIn" : "hidden"}>
               {visitedTabs.has("checkdrive_ai") && <CheckDriveAiTab />}
             </div>
@@ -881,7 +1154,8 @@ export default function AdminDashboard() {
               )}
             </div>
           </div>
-        </div>
+        )}
+      </div>
       </div>
 
       {/* Checklist Details Modal - Apenas uma vez */}

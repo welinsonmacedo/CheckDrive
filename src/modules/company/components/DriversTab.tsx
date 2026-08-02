@@ -285,6 +285,7 @@ export default function DriversTab() {
         participatesInRanking: true,
         modalityIds: [],
         scoreProfileId: "",
+        branchId: "",
         isAuthUser: true,
       });
       setPhotoFile(null);

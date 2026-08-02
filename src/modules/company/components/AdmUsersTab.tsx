@@ -151,6 +151,7 @@ export default function AdmUsersTab() {
         password: "",
         isInternal: false,
         modalityIds: [],
+        branchId: "",
       });
 
       setShowForm(false);

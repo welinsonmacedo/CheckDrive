@@ -50,9 +50,10 @@ Permite ao gestor criar, alterar ou visualizar a agenda de viagem ou turno aloca
 ## 2. Abas de Cadastros Base
 
 Na barra de navegação auxiliar de Cadastros ("Registros"), temos:
-- **Usuários Admin (`adm_users`):** Controle dos perfis de outras pessoas da backoffice que usam o painel, controlando suas permissões e tipo de acesso (Admin, Supervisor, etc).
-- **Motoristas (`drivers`):** Listagem e adição do time de condutores. Pode-se controlar dados pessoais.
-- **Veículos (`vehicles`):** Ficha técnica do patrimônio (placa, chassi, documento, modelo). 
+- **Filiais (`branches`):** Cadastro e gestão das unidades e filiais da empresa (Nome, CNPJ, Código interno, CEP, Endereço, Bairro, Cidade, Estado e Status Ativo/Inativo).
+- **Usuários Admin (`adm_users`):** Controle dos perfis de outras pessoas do backoffice que usam o painel, controlando suas permissões, tipo de acesso (Admin, Supervisor, etc.) e filial atribuída.
+- **Motoristas (`drivers`):** Listagem e adição do time de condutores com dados pessoais, CNH, perfil de pontuação e filial vinculada.
+- **Veículos (`vehicles`):** Ficha técnica do patrimônio (placa, chassi, documento, modelo, modalidade, tipo e filial atribuída). 
 - **Rotas (`routes`):** Configuração de caminhos padrões ou bases de viagem.
 - **Iscas (`baits`):** Gerencia os rastreadores secundários colocados em cargas ou caixas, vinculando-os à frota principal.
 - **Alertas (`alerts`):** Configuração paramétrica de regras para as pendências que vão para o Auto Alerts automáticos do sistema (como aviso de km vencida baseado no Hodômetro registrado). 
