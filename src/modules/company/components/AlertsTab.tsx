@@ -61,13 +61,16 @@ export default function AlertsTab() {
 
       // Setup queries
       let vQuery = supabase.from("vehicles").select("id, plate").order("plate");
-      if (companyId) vQuery = vQuery.eq("company_id", companyId).eq("active", true);
-      let { data: vData } = await vQuery;
-      if (!vData || vData.length === 0) {
-        const { data: allV } = await supabase.from("vehicles").select("id, plate").order("plate");
-        if (allV) vData = allV;
+      let tQuery = supabase.from("trailers").select("id, plate").order("plate");
+      if (companyId) {
+        vQuery = vQuery.eq("company_id", companyId).eq("active", true);
+        tQuery = tQuery.eq("company_id", companyId).eq("active", true);
       }
-      if (vData) setVehicles(vData);
+      let [vRes, tRes] = await Promise.all([vQuery, tQuery]);
+      let vData = vRes.data || [];
+      let tData = (tRes.data || []).map((t: any) => ({ ...t, plate: `${t.plate} (Reboque)` }));
+      const mergedVehicles = [...vData, ...tData].sort((a, b) => (a.plate || "").localeCompare(b.plate || ""));
+      setVehicles(mergedVehicles);
 
       let dQuery = supabase.from("profiles").select("id, full_name").eq("role", "driver");
       if (companyId) dQuery = dQuery.eq("company_id", companyId);
@@ -99,8 +102,12 @@ export default function AlertsTab() {
       let profilesMap: Record<string, any> = {};
 
       if (vehicleIds.length > 0) {
-        const { data: vList } = await supabase.from("vehicles").select("id, plate").in("id", vehicleIds);
-        if (vList) vList.forEach((v) => { vehiclesMap[v.id] = v; });
+        const [vListRes, tListRes] = await Promise.all([
+          supabase.from("vehicles").select("id, plate").in("id", vehicleIds),
+          supabase.from("trailers").select("id, plate").in("id", vehicleIds),
+        ]);
+        if (vListRes.data) vListRes.data.forEach((v) => { vehiclesMap[v.id] = v; });
+        if (tListRes.data) tListRes.data.forEach((t) => { vehiclesMap[t.id] = { ...t, plate: `${t.plate} (Reboque)` }; });
       }
 
       if (driverIds.length > 0) {

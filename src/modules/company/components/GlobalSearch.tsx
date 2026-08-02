@@ -83,12 +83,12 @@ export function GlobalSearch({
 
       const isAdmin = user.role === "admin" || user.role === "superadmin";
 
-      // Search Vehicles (only if admin)
+      // Search Vehicles & Trailers (only if admin)
       if (isAdmin) {
-        const { data: vehicles } = await supabase.from("vehicles").select("id, plate, model").eq("company_id", user?.company_id)
-          .eq("company_id", companyId)
-          .or(`plate.ilike.${term},model.ilike.${term}`)
-          .limit(3);
+        const [{ data: vehicles }, { data: trailers }] = await Promise.all([
+          supabase.from("vehicles").select("id, plate, model").eq("company_id", companyId).or(`plate.ilike.${term},model.ilike.${term}`).limit(3),
+          supabase.from("trailers").select("id, plate, model").eq("company_id", companyId).or(`plate.ilike.${term},model.ilike.${term}`).limit(3),
+        ]);
 
         if (vehicles) {
           vehicles.forEach((v) => {
@@ -97,6 +97,18 @@ export function GlobalSearch({
               id: v.id,
               title: v.plate,
               subtitle: v.model || "Sem modelo",
+              icon: <Car size={16} />,
+              tab: "vehicles",
+            });
+          });
+        }
+        if (trailers) {
+          trailers.forEach((t) => {
+            searchResults.push({
+              type: "Veículo (Reboque)",
+              id: t.id,
+              title: t.plate,
+              subtitle: t.model || "Reboque",
               icon: <Car size={16} />,
               tab: "vehicles",
             });

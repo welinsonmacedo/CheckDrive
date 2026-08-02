@@ -149,23 +149,27 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
     try {
       const companyId = (user as any)?.company_id || (user as any)?.company?.id;
 
-      // Fetch vehicles list for dropdowns
+      // Fetch vehicles and trailers list for dropdowns
       let vQuery = supabase
         .from("vehicles")
         .select("id, plate, model, current_km, odometer, km")
         .order("plate");
+      let tQuery = supabase
+        .from("trailers")
+        .select("id, plate, model")
+        .order("plate");
       if (companyId) {
         vQuery = vQuery.eq("company_id", companyId).eq("active", true);
+        tQuery = tQuery.eq("company_id", companyId).eq("active", true);
       }
-      let { data: vList } = await vQuery;
-      if (!vList || vList.length === 0) {
-        const { data: fallbackV } = await supabase
-          .from("vehicles")
-          .select("id, plate, model, current_km, odometer, km")
-          .order("plate");
-        if (fallbackV) vList = fallbackV;
-      }
-      if (vList) setVehiclesList(vList);
+      const [vRes, tRes] = await Promise.all([vQuery, tQuery]);
+      let vList = vRes.data || [];
+      let tList = (tRes.data || []).map((t: any) => ({
+        ...t,
+        model: t.model ? `${t.model} (Reboque)` : "Reboque",
+      }));
+      const combinedVehicles = [...vList, ...tList].sort((a, b) => (a.plate || "").localeCompare(b.plate || ""));
+      setVehiclesList(combinedVehicles);
 
       let rawAlerts: any[] = [];
 
@@ -219,14 +223,19 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
       let profilesMap: Record<string, any> = {};
 
       if (vehicleIds.length > 0) {
-        const { data: vData } = await supabase
-          .from("vehicles")
-          .select("id, plate, model")
-          .in("id", vehicleIds);
+        const [vRes, tRes] = await Promise.all([
+          supabase.from("vehicles").select("id, plate, model").in("id", vehicleIds),
+          supabase.from("trailers").select("id, plate, model").in("id", vehicleIds),
+        ]);
 
-        if (vData) {
-          vData.forEach((v) => {
+        if (vRes.data) {
+          vRes.data.forEach((v) => {
             vehiclesMap[v.id] = v;
+          });
+        }
+        if (tRes.data) {
+          tRes.data.forEach((t) => {
+            vehiclesMap[t.id] = { ...t, model: t.model || "Reboque" };
           });
         }
       }

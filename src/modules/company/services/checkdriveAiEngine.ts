@@ -76,13 +76,24 @@ const getVehicleObj = (v: any) => {
 // Global robust data fetchers
 const fetchVehicles = async (companyId?: string) => {
   try {
-    const { data } = await supabase.from("vehicles").select("*");
-    if (data && data.length > 0) {
+    const [vRes, tRes] = await Promise.all([
+      supabase.from("vehicles").select("*"),
+      supabase.from("trailers").select("*"),
+    ]);
+    const vData = vRes.data || [];
+    const tData = (tRes.data || []).map((t: any) => ({
+      ...t,
+      model: t.model || "Reboque",
+      type: t.type || "Reboque",
+      is_trailer: true,
+    }));
+    const combined = [...vData, ...tData];
+    if (combined.length > 0) {
       if (companyId) {
-        const filtered = data.filter((v) => v.company_id === companyId);
+        const filtered = combined.filter((v) => v.company_id === companyId);
         if (filtered.length > 0) return filtered;
       }
-      return data;
+      return combined;
     }
     return [];
   } catch (e) {

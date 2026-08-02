@@ -119,10 +119,14 @@ export default function ReportsBiView({
     try {
       const companyId = user.company_id;
 
-      // 1. Fetch Fleet Overview (Vehicles, Drivers, Branches)
-      const [vRes, dRes, bRes, perfRes] = await Promise.all([
+      // 1. Fetch Fleet Overview (Vehicles, Trailers, Drivers, Branches)
+      const [vRes, tRes, dRes, bRes, perfRes] = await Promise.all([
         supabase
           .from("vehicles")
+          .select("id, plate, model, active, branch_id")
+          .eq("company_id", companyId),
+        supabase
+          .from("trailers")
           .select("id, plate, model, active, branch_id")
           .eq("company_id", companyId),
         supabase
@@ -141,7 +145,13 @@ export default function ReportsBiView({
         if (p.driver_id) perfMap[p.driver_id] = p.score;
       });
 
-      let allVehicles = vRes.data || [];
+      let allVehicles = [
+        ...(vRes.data || []),
+        ...(tRes.data || []).map((t: any) => ({
+          ...t,
+          model: t.model || "Reboque",
+        })),
+      ];
       let allDrivers = (dRes.data || []).map((d: any) => ({
         ...d,
         driver_performance: { score: perfMap[d.id] ?? 0 },
