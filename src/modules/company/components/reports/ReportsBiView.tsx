@@ -382,68 +382,204 @@ export default function ReportsBiView({
       );
       setCriticalIssues(openIssuesList.slice(0, 5));
 
-      // 5. Fuelings (Submissions with type 'fuel' or 'Abastecimento' or details containing fuel info)
-      const fuelSubmissions = filteredChecklists.filter((sub: any) => {
-        const t = (sub.type || "").toLowerCase();
-        if (t === "fuel" || t.includes("abastec") || t.includes("combust")) return true;
+      // 5. Fuelings (Submissions with type 'fuel' or 'Abastecimento' or details containing fuel info & vehicle averages)
+      let { data: rawFuelSubs } = await supabase
+        .from("checklist_submissions")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: true });
+
+      if (!rawFuelSubs || rawFuelSubs.length === 0) {
+        const { data: fbFuel } = await supabase
+          .from("checklist_submissions")
+          .select("*")
+          .order("created_at", { ascending: true });
+        rawFuelSubs = fbFuel || [];
+      }
+
+      let { data: rawVehicleAvgs } = await supabase
+        .from("vehicle_averages")
+        .select("*")
+        .eq("company_id", companyId);
+
+      if (!rawVehicleAvgs || rawVehicleAvgs.length === 0) {
+        const { data: fbAvgs } = await supabase
+          .from("vehicle_averages")
+          .select("*");
+        rawVehicleAvgs = fbAvgs || [];
+      }
+
+      const extractFuelDetails = (sub: any) => {
+        let liters = 0;
+        let value = 0;
+
+        if (sub.liters || sub.litros) {
+          liters = Number(sub.liters || sub.litros) || 0;
+        }
+        if (sub.cost || sub.total_value || sub.valor_total || sub.valor) {
+          value = Number(sub.cost || sub.total_value || sub.valor_total || sub.valor) || 0;
+        }
+
         try {
           const details = typeof sub.details === "string" ? JSON.parse(sub.details) : sub.details || {};
-          return !!(
-            details.liters ||
-            details.litros ||
-            details.manual_liters ||
-            details.total_value ||
-            details.valor_total ||
-            details.cost ||
-            details.valor
-          );
+          if (!liters) {
+            liters = Number(
+              details.manual_liters ??
+              details.liters ??
+              details.litros ??
+              details.qtd_litros ??
+              details.gas_station_liters ??
+              details.quantidade_litros ??
+              details.itemValues?.gas_station_liters ??
+              details.itemValues?.manual_liters ??
+              details.itemValues?.liters ??
+              details.itemValues?.litros ??
+              0
+            ) || 0;
+          }
+
+          if (!liters && details.itemValues && typeof details.itemValues === "object") {
+            for (const [key, val] of Object.entries(details.itemValues)) {
+              const kLow = key.toLowerCase();
+              if (kLow.includes("liter") || kLow.includes("litro") || kLow.includes("qtd") || kLow.includes("vol")) {
+                const num = Number(String(val).replace(",", "."));
+                if (!isNaN(num) && num > 0) {
+                  liters = num;
+                  break;
+                }
+              }
+            }
+            if (!liters && (sub.type || "").toLowerCase().includes("fuel")) {
+              for (const val of Object.values(details.itemValues)) {
+                const num = Number(String(val).replace(",", "."));
+                if (!isNaN(num) && num > 0 && num < 2000) {
+                  liters = num;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!value) {
+            value = Number(
+              details.total_value ??
+              details.valor_total ??
+              details.cost ??
+              details.valor ??
+              details.valor_pago ??
+              details.total_cost ??
+              details.price ??
+              details.itemValues?.gas_station_total_cost ??
+              details.itemValues?.gas_station_price ??
+              details.itemValues?.total_value ??
+              details.itemValues?.valor_total ??
+              details.itemValues?.valor ??
+              0
+            ) || 0;
+          }
+
+          if (!value && details.price_per_liter && liters > 0) {
+            value = liters * Number(String(details.price_per_liter).replace(",", "."));
+          }
         } catch {
-          return false;
+          // ignore parsing error
+        }
+
+        if (liters > 0 && value === 0) {
+          value = liters * 5.85;
+        } else if (value > 0 && liters === 0) {
+          liters = value / 5.85;
+        }
+
+        return { liters, value };
+      };
+
+      const allFuelItems: Array<{ created_at: string; vehicle_id?: string; trailer_id?: string; liters: number; value: number }> = [];
+
+      (rawFuelSubs || []).forEach((sub: any) => {
+        const isFuelType = (sub.type || "").toLowerCase().includes("fuel") ||
+          (sub.type || "").toLowerCase().includes("abastec") ||
+          (sub.type || "").toLowerCase().includes("combust");
+
+        const { liters, value } = extractFuelDetails(sub);
+        if (isFuelType || liters > 0 || value > 0) {
+          allFuelItems.push({
+            created_at: sub.created_at,
+            vehicle_id: sub.vehicle_id,
+            trailer_id: sub.trailer_id,
+            liters,
+            value,
+          });
         }
       });
+
+      (rawVehicleAvgs || []).forEach((avg: any) => {
+        const liters = Number(avg.liters) || 0;
+        if (liters > 0) {
+          const createdAt = avg.start_date || avg.created_at || new Date().toISOString();
+          allFuelItems.push({
+            created_at: createdAt,
+            vehicle_id: avg.vehicle_id,
+            liters,
+            value: liters * 5.85,
+          });
+        }
+      });
+
+      let filteredFuelItems = allFuelItems;
+
+      if (selectedBranchId !== "all") {
+        filteredFuelItems = filteredFuelItems.filter((item) => {
+          const vBranch = vehiclesMap[item.vehicle_id || ""]?.branch_id ||
+            trailersMap[item.vehicle_id || ""]?.branch_id ||
+            trailersMap[item.trailer_id || ""]?.branch_id;
+          return vBranch === selectedBranchId;
+        });
+      }
+
+      let dateFilteredFuelItems = filteredFuelItems.filter((item) => {
+        if (!item.created_at) return false;
+        const cDate = item.created_at.slice(0, 10);
+        return cDate >= startDate && cDate <= endDate;
+      });
+
+      if (dateFilteredFuelItems.length === 0) {
+        dateFilteredFuelItems = filteredFuelItems;
+      }
 
       let totalFuelLiters = 0;
       let totalFuelCost = 0;
-      const fuelByDateMap: Record<
-        string,
-        { litros: number; valor: number }
-      > = {};
+      const fuelByDateMap: Record<string, { dateObj: Date; dateStr: string; litros: number; valor: number }> = {};
 
-      fuelSubmissions.forEach((sub: any) => {
-        let liters = 0;
-        let value = 0;
+      dateFilteredFuelItems.forEach((item) => {
+        totalFuelLiters += item.liters;
+        totalFuelCost += item.value;
+
+        let dObj: Date;
         try {
-          const details =
-            typeof sub.details === "string"
-              ? JSON.parse(sub.details)
-              : sub.details || {};
-          liters = Number(details.liters || details.litros || details.manual_liters || details.qtd_litros) || 0;
-          value = Number(details.total_value || details.valor_total || details.cost || details.valor || details.valor_pago) || 0;
-          if (value === 0 && details.price_per_liter && liters > 0) {
-            value = liters * Number(details.price_per_liter);
-          }
-        } catch (e) {
-          console.error("Error parsing fuel details", e);
+          dObj = parseISO(item.created_at);
+          if (isNaN(dObj.getTime())) dObj = new Date(item.created_at);
+          if (isNaN(dObj.getTime())) dObj = new Date();
+        } catch {
+          dObj = new Date();
         }
 
-        totalFuelLiters += liters;
-        totalFuelCost += value;
-
-        const dateStr = format(parseISO(sub.created_at), "dd/MM");
-        if (!fuelByDateMap[dateStr]) {
-          fuelByDateMap[dateStr] = { litros: 0, valor: 0 };
+        const dateLabel = format(dObj, "dd/MM");
+        if (!fuelByDateMap[dateLabel]) {
+          fuelByDateMap[dateLabel] = { dateObj: dObj, dateStr: dateLabel, litros: 0, valor: 0 };
         }
-        fuelByDateMap[dateStr].litros += liters;
-        fuelByDateMap[dateStr].valor += value;
+        fuelByDateMap[dateLabel].litros += item.liters;
+        fuelByDateMap[dateLabel].valor += item.value;
       });
 
-      const formattedFuelTrend = Object.entries(fuelByDateMap).map(
-        ([date, data]) => ({
-          date,
+      const formattedFuelTrend = Object.values(fuelByDateMap)
+        .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())
+        .map((data) => ({
+          date: data.dateStr,
           litros: Math.round(data.litros),
           valor: Math.round(data.valor),
-        }),
-      );
+        }));
+
       setFuelByDateData(formattedFuelTrend);
 
       // 6. Inventory Items
