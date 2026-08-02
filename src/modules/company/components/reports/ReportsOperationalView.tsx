@@ -315,10 +315,11 @@ export default function ReportsOperationalView() {
           break;
         }
 
-        case "notifications": {
+        case "notifications":
+        case "auto_alerts": {
           let { data, error } = await supabase
             .from("auto_alerts")
-            .select("*, vehicles(plate), trailers(plate)")
+            .select("*, vehicles:target_vehicle_id(plate, branch_id), trailers:target_vehicle_id(plate, branch_id)")
             .eq("company_id", companyId)
             .order("created_at", { ascending: false });
 
@@ -331,14 +332,52 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
-          let result = (data || []).map((r: any) => ({
-            ...r,
-            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
-            trailers: r.trailers || trailersMap[r.trailer_id] || null,
-          }));
+          let result = (data || []).map((r: any) => {
+            const vId = r.target_vehicle_id || r.vehicle_id;
+            const veh = r.vehicles || vehiclesMap[vId] || trailersMap[vId] || null;
+            const dId = r.target_driver_id || r.driver_id;
+            const drvName = profilesMap[dId] || "-";
 
-          if (filters.status === "active") result = result.filter((r: any) => r.active === true);
+            let desc = r.description || r.notes || "";
+            if (!desc) {
+              if (r.trigger_type === "km") {
+                desc = `A cada ${r.interval_km || 0} km (Aviso aos ${r.warning_km || 0} km | Último: ${r.last_km || 0} km)`;
+              } else if (r.trigger_type === "date") {
+                desc = `Data: ${r.trigger_date || "-"} (Aviso ${r.warning_days || 0} dias antes)`;
+              } else {
+                desc = r.alert_type || "Regra automática de manutenção";
+              }
+            }
+
+            return {
+              ...r,
+              vehicles: veh,
+              plate: veh?.plate || r.plate || "-",
+              description: desc,
+              driver_name: drvName,
+            };
+          });
+
+          if (filters.status === "active") result = result.filter((r: any) => r.active !== false);
           if (filters.status === "inactive") result = result.filter((r: any) => r.active === false);
+
+          if (filters.vehicleId !== "all") {
+            result = result.filter((r: any) => (r.target_vehicle_id || r.vehicle_id) === filters.vehicleId);
+          }
+
+          if (filters.branchId !== "all") {
+            result = result.filter((r: any) => r.vehicles?.branch_id === filters.branchId);
+          }
+
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter(
+              (r: any) =>
+                r.title?.toLowerCase().includes(term) ||
+                r.description?.toLowerCase().includes(term) ||
+                r.plate?.toLowerCase().includes(term),
+            );
+          }
 
           setReportData(result);
           setSummaryStats({ total: result.length });
@@ -607,33 +646,6 @@ export default function ReportsOperationalView() {
             totalResolved: result.length,
             totalCost,
           });
-          break;
-        }
-
-        case "auto_alerts": {
-          let { data, error } = await supabase
-            .from("auto_alerts")
-            .select("*, vehicles(plate), trailers(plate)")
-            .eq("company_id", companyId)
-            .order("created_at", { ascending: false });
-
-          if (error || !data) {
-            const fbRes = await supabase
-              .from("auto_alerts")
-              .select("*")
-              .eq("company_id", companyId)
-              .order("created_at", { ascending: false });
-            data = fbRes.data || [];
-          }
-
-          let result = (data || []).map((r: any) => ({
-            ...r,
-            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
-            trailers: r.trailers || trailersMap[r.trailer_id] || null,
-          }));
-
-          setReportData(result);
-          setSummaryStats({ total: result.length });
           break;
         }
 
@@ -957,14 +969,14 @@ export default function ReportsOperationalView() {
       let rows: any[][] = [];
 
       if (selectedReport === "checklists" || selectedReport === "history") {
-        headers = ["Data", "Placa", "Item / Defeito", "Motorista", "Status", "Descrição"];
+        headers = ["Data", "Placa", "Item / Defeito", "Descrição / Observação", "Motorista", "Status"];
         rows = (reportData || []).map((d) => [
           new Date(d.created_at).toLocaleString("pt-BR"),
           d.plate || d.vehicles?.plate || d.trailers?.plate || "-",
           d.item_title,
+          d.description || d.observation || "-",
           d.profiles?.full_name || "-",
           d.status,
-          d.description || "-",
         ]);
       } else if (selectedReport === "pending_by_plate") {
         headers = ["Placa", "Qtd Pendências", "Itens Pendentes"];
@@ -991,11 +1003,13 @@ export default function ReportsOperationalView() {
           d.active !== false ? "Ativo" : "Inativo",
         ]);
       } else if (selectedReport === "resolved_issues") {
-        headers = ["Data Resolução", "Placa", "Item", "Resolvido Por", "Custo (R$)"];
+        headers = ["Data Resolução", "Placa", "Item", "Descrição da Pendência", "Detalhes da Resolução", "Resolvido Por", "Custo (R$)"];
         rows = (reportData || []).map((d) => [
           d.resolved_at ? new Date(d.resolved_at).toLocaleString("pt-BR") : "-",
           d.plate || d.vehicles?.plate || d.trailers?.plate || "-",
           d.item_title,
+          d.description || d.observation || "-",
+          d.resolution_notes || "-",
           d.resolver?.full_name || "Sistema",
           Number(d.resolution_value || 0).toFixed(2),
         ]);
@@ -1017,11 +1031,12 @@ export default function ReportsOperationalView() {
           d.status || "-",
         ]);
       } else if (selectedReport === "notifications" || selectedReport === "auto_alerts") {
-        headers = ["Data", "Placa", "Título / Alerta", "Status"];
+        headers = ["Data", "Placa", "Título / Alerta", "Descrição", "Status"];
         rows = (reportData || []).map((d) => [
           d.created_at ? new Date(d.created_at).toLocaleString("pt-BR") : "-",
           d.plate || d.vehicles?.plate || d.trailers?.plate || "-",
           d.title || d.message || d.alert_type || "-",
+          d.description || "-",
           d.active !== false ? "Ativo" : "Inativo",
         ]);
       } else if (selectedReport === "mileage") {
@@ -1500,6 +1515,33 @@ export default function ReportsOperationalView() {
                       <th className="py-3 px-4">Distância Rodada (KM)</th>
                       <th className="py-3 px-4">Checklists</th>
                     </>
+                  ) : selectedReport === "resolved_issues" ? (
+                    <>
+                      <th className="py-3 px-4">Data Resolução</th>
+                      <th className="py-3 px-4">Placa</th>
+                      <th className="py-3 px-4">Item / Defeito</th>
+                      <th className="py-3 px-4">Descrição da Pendência</th>
+                      <th className="py-3 px-4">Detalhes da Resolução</th>
+                      <th className="py-3 px-4">Resolvido Por</th>
+                      <th className="py-3 px-4">Custo (R$)</th>
+                    </>
+                  ) : selectedReport === "checklists" || selectedReport === "history" ? (
+                    <>
+                      <th className="py-3 px-4">Data</th>
+                      <th className="py-3 px-4">Placa</th>
+                      <th className="py-3 px-4">Item / Defeito</th>
+                      <th className="py-3 px-4">Descrição</th>
+                      <th className="py-3 px-4">Motorista</th>
+                      <th className="py-3 px-4">Status</th>
+                    </>
+                  ) : selectedReport === "notifications" || selectedReport === "auto_alerts" ? (
+                    <>
+                      <th className="py-3 px-4">Data</th>
+                      <th className="py-3 px-4">Placa</th>
+                      <th className="py-3 px-4">Título / Alerta</th>
+                      <th className="py-3 px-4">Descrição / Regra</th>
+                      <th className="py-3 px-4">Status</th>
+                    </>
                   ) : (
                     <>
                       <th className="py-3 px-4">Data</th>
@@ -1576,6 +1618,83 @@ export default function ReportsOperationalView() {
                         <td className="py-3 px-4">{row.endOdo}</td>
                         <td className="py-3 px-4 font-black text-indigo-600">{row.kmDriven} km</td>
                         <td className="py-3 px-4">{row.count}</td>
+                      </>
+                    ) : selectedReport === "resolved_issues" ? (
+                      <>
+                        <td className="py-3 px-4 text-gray-500">
+                          {row.resolved_at
+                            ? new Date(row.resolved_at).toLocaleDateString("pt-BR")
+                            : row.created_at
+                            ? new Date(row.created_at).toLocaleDateString("pt-BR")
+                            : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-gray-900">
+                          {row.plate || row.vehicles?.plate || row.trailers?.plate || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-gray-900">{row.item_title || "-"}</td>
+                        <td className="py-3 px-4 text-gray-600 max-w-xs truncate" title={row.description || row.observation || "-"}>
+                          {row.description || row.observation || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-gray-600 max-w-xs truncate" title={row.resolution_notes || "-"}>
+                          {row.resolution_notes || "-"}
+                        </td>
+                        <td className="py-3 px-4">{row.resolver?.full_name || row.profiles?.full_name || "Sistema"}</td>
+                        <td className="py-3 px-4 font-black text-emerald-600">
+                          R$ {Number(row.resolution_value || 0).toFixed(2)}
+                        </td>
+                      </>
+                    ) : selectedReport === "checklists" || selectedReport === "history" ? (
+                      <>
+                        <td className="py-3 px-4 text-gray-500">
+                          {row.created_at ? new Date(row.created_at).toLocaleDateString("pt-BR") : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-gray-900">
+                          {row.plate || row.vehicles?.plate || row.trailers?.plate || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-gray-900">{row.item_title || "-"}</td>
+                        <td className="py-3 px-4 text-gray-600 max-w-xs truncate" title={row.description || row.observation || "-"}>
+                          {row.description || row.observation || "-"}
+                        </td>
+                        <td className="py-3 px-4">{row.profiles?.full_name || "-"}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              row.status === "resolved"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : row.status === "waiting"
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-rose-50 text-rose-700"
+                            }`}
+                          >
+                            {row.status || "pendente"}
+                          </span>
+                        </td>
+                      </>
+                    ) : selectedReport === "notifications" || selectedReport === "auto_alerts" ? (
+                      <>
+                        <td className="py-3 px-4 text-gray-500">
+                          {row.created_at ? new Date(row.created_at).toLocaleDateString("pt-BR") : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-gray-900">
+                          {row.plate || row.vehicles?.plate || row.trailers?.plate || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-gray-900">
+                          {row.title || row.message || row.alert_type || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-gray-600 max-w-xs truncate" title={row.description || "-"}>
+                          {row.description || "-"}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              row.active !== false
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-rose-50 text-rose-700"
+                            }`}
+                          >
+                            {row.active !== false ? "Ativo" : "Inativo"}
+                          </span>
+                        </td>
                       </>
                     ) : (
                       <>
