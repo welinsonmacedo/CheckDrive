@@ -120,7 +120,7 @@ export default function ReportsBiView({
       const companyId = user.company_id;
 
       // 1. Fetch Fleet Overview (Vehicles, Drivers, Branches)
-      const [vRes, dRes, bRes] = await Promise.all([
+      const [vRes, dRes, bRes, perfRes] = await Promise.all([
         supabase
           .from("vehicles")
           .select("id, plate, model, active, branch_id")
@@ -128,15 +128,24 @@ export default function ReportsBiView({
         supabase
           .from("profiles")
           .select(
-            "id, full_name, active, branch_id, role, participates_in_ranking, driver_performance(score)",
+            "id, full_name, active, branch_id, role, participates_in_ranking",
           )
           .eq("company_id", companyId)
           .eq("role", "driver"),
         supabase.from("branches").select("id, name").eq("company_id", companyId),
+        supabase.from("driver_performance").select("driver_id, score"),
       ]);
 
+      const perfMap: Record<string, number> = {};
+      (perfRes.data || []).forEach((p: any) => {
+        if (p.driver_id) perfMap[p.driver_id] = p.score;
+      });
+
       let allVehicles = vRes.data || [];
-      let allDrivers = dRes.data || [];
+      let allDrivers = (dRes.data || []).map((d: any) => ({
+        ...d,
+        driver_performance: { score: perfMap[d.id] ?? 0 },
+      }));
       const allBranchesList = bRes.data || [];
 
       // Filter by selected branch if set
@@ -207,16 +216,26 @@ export default function ReportsBiView({
       setChecklistsByDateData(formattedChecklistTrend);
 
       // 4. Issues & Maintenance
-      let issuesQuery = supabase
+      let rawIssues: any[] | null = null;
+      const { data: mainIssues, error: issuesErr } = await supabase
         .from("checklist_issues")
-        .select(
-          "*, vehicles(plate, branch_id), trailers(plate, branch_id), profiles!checklist_issues_driver_id_fkey(full_name)",
-        )
+        .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
         .eq("company_id", companyId)
         .gte("created_at", startIso)
         .lte("created_at", endIso);
 
-      const { data: rawIssues } = await issuesQuery;
+      if (issuesErr || !mainIssues) {
+        // Fallback without joins
+        const { data: fallbackIssues } = await supabase
+          .from("checklist_issues")
+          .select("*")
+          .eq("company_id", companyId)
+          .gte("created_at", startIso)
+          .lte("created_at", endIso);
+        rawIssues = fallbackIssues || [];
+      } else {
+        rawIssues = mainIssues;
+      }
       let issuesList = rawIssues || [];
 
       if (selectedBranchId !== "all") {

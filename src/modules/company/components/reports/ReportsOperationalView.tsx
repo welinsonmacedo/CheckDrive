@@ -134,14 +134,34 @@ export default function ReportsOperationalView() {
       const startIso = `${filters.startDate}T00:00:00Z`;
       const endIso = `${filters.endDate}T23:59:59Z`;
 
+      // Helper lookup maps for robust offline/schema-independent resolution
+      const [profilesRes, vehiclesRes, trailersRes] = await Promise.all([
+        supabase.from("profiles").select("id, full_name").eq("company_id", companyId),
+        supabase.from("vehicles").select("id, plate, branch_id").eq("company_id", companyId),
+        supabase.from("trailers").select("id, plate, branch_id").eq("company_id", companyId),
+      ]);
+
+      const profilesMap: Record<string, string> = {};
+      (profilesRes.data || []).forEach((p: any) => {
+        if (p.id) profilesMap[p.id] = p.full_name;
+      });
+
+      const vehiclesMap: Record<string, any> = {};
+      (vehiclesRes.data || []).forEach((v: any) => {
+        if (v.id) vehiclesMap[v.id] = v;
+      });
+
+      const trailersMap: Record<string, any> = {};
+      (trailersRes.data || []).forEach((t: any) => {
+        if (t.id) trailersMap[t.id] = t;
+      });
+
       switch (selectedReport) {
         // --- CATEGORY: OPERAÇÃO ---
         case "checklists": {
           let query = supabase
             .from("checklist_issues")
-            .select(
-              "*, vehicles(plate, branch_id), trailers(plate, branch_id), profiles!checklist_issues_driver_id_fkey(full_name)",
-            )
+            .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
             .eq("company_id", companyId)
             .gte("created_at", startIso)
             .lte("created_at", endIso)
@@ -151,13 +171,33 @@ export default function ReportsOperationalView() {
           if (filters.driverId !== "all") query = query.eq("driver_id", filters.driverId);
           if (filters.status !== "all") query = query.eq("status", filters.status);
 
-          const { data, error } = await query;
-          if (error) throw error;
+          let { data, error } = await query;
+          if (error || !data) {
+            // Fallback without joins
+            let fallbackQuery = supabase
+              .from("checklist_issues")
+              .select("*")
+              .eq("company_id", companyId)
+              .gte("created_at", startIso)
+              .lte("created_at", endIso)
+              .order("created_at", { ascending: false });
+            if (filters.vehicleId !== "all") fallbackQuery = fallbackQuery.eq("vehicle_id", filters.vehicleId);
+            if (filters.driverId !== "all") fallbackQuery = fallbackQuery.eq("driver_id", filters.driverId);
+            if (filters.status !== "all") fallbackQuery = fallbackQuery.eq("status", filters.status);
+            const fbRes = await fallbackQuery;
+            data = fbRes.data || [];
+          }
 
-          let result = data || [];
+          let result = (data || []).map((r: any) => ({
+            ...r,
+            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
+            trailers: r.trailers || trailersMap[r.trailer_id] || null,
+            profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-" },
+          }));
+
           if (filters.branchId !== "all") {
             result = result.filter(
-              (r) =>
+              (r: any) =>
                 r.vehicles?.branch_id === filters.branchId ||
                 r.trailers?.branch_id === filters.branchId,
             );
@@ -166,7 +206,7 @@ export default function ReportsOperationalView() {
           if (filters.searchTerm) {
             const term = filters.searchTerm.toLowerCase();
             result = result.filter(
-              (r) =>
+              (r: any) =>
                 r.item_title?.toLowerCase().includes(term) ||
                 r.vehicles?.plate?.toLowerCase().includes(term) ||
                 r.profiles?.full_name?.toLowerCase().includes(term),
@@ -176,9 +216,9 @@ export default function ReportsOperationalView() {
           setReportData(result);
           setSummaryStats({
             total: result.length,
-            pending: result.filter((r) => r.status === "pending").length,
-            waiting: result.filter((r) => r.status === "waiting").length,
-            resolved: result.filter((r) => r.status === "resolved").length,
+            pending: result.filter((r: any) => r.status === "pending").length,
+            waiting: result.filter((r: any) => r.status === "waiting").length,
+            resolved: result.filter((r: any) => r.status === "resolved").length,
           });
           break;
         }
@@ -186,9 +226,7 @@ export default function ReportsOperationalView() {
         case "pending_by_plate": {
           let query = supabase
             .from("checklist_issues")
-            .select(
-              "*, vehicles(plate, branch_id), trailers(plate, branch_id), profiles!checklist_issues_driver_id_fkey(full_name)",
-            )
+            .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
             .eq("company_id", companyId)
             .in("status", ["pending", "waiting"])
             .gte("created_at", startIso)
@@ -197,12 +235,31 @@ export default function ReportsOperationalView() {
           if (filters.vehicleId !== "all") query = query.eq("vehicle_id", filters.vehicleId);
           if (filters.driverId !== "all") query = query.eq("driver_id", filters.driverId);
 
-          const { data } = await query;
-          let result = data || [];
+          let { data, error } = await query;
+          if (error || !data) {
+            let fbQuery = supabase
+              .from("checklist_issues")
+              .select("*")
+              .eq("company_id", companyId)
+              .in("status", ["pending", "waiting"])
+              .gte("created_at", startIso)
+              .lte("created_at", endIso);
+            if (filters.vehicleId !== "all") fbQuery = fbQuery.eq("vehicle_id", filters.vehicleId);
+            if (filters.driverId !== "all") fbQuery = fbQuery.eq("driver_id", filters.driverId);
+            const fbRes = await fbQuery;
+            data = fbRes.data || [];
+          }
+
+          let result = (data || []).map((r: any) => ({
+            ...r,
+            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
+            trailers: r.trailers || trailersMap[r.trailer_id] || null,
+            profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-" },
+          }));
 
           if (filters.branchId !== "all") {
             result = result.filter(
-              (r) =>
+              (r: any) =>
                 r.vehicles?.branch_id === filters.branchId ||
                 r.trailers?.branch_id === filters.branchId,
             );
@@ -210,7 +267,7 @@ export default function ReportsOperationalView() {
 
           // Group by plate
           const groupedMap: Record<string, any[]> = {};
-          result.forEach((iss) => {
+          result.forEach((iss: any) => {
             const plate = iss.vehicles?.plate || iss.trailers?.plate || "Sem Placa";
             if (!groupedMap[plate]) groupedMap[plate] = [];
             groupedMap[plate].push(iss);
@@ -231,15 +288,29 @@ export default function ReportsOperationalView() {
         }
 
         case "notifications": {
-          const { data } = await supabase
+          let { data, error } = await supabase
             .from("auto_alerts")
             .select("*, vehicles(plate), trailers(plate)")
             .eq("company_id", companyId)
             .order("created_at", { ascending: false });
 
-          let result = data || [];
-          if (filters.status === "active") result = result.filter((r) => r.active === true);
-          if (filters.status === "inactive") result = result.filter((r) => r.active === false);
+          if (error || !data) {
+            const fbRes = await supabase
+              .from("auto_alerts")
+              .select("*")
+              .eq("company_id", companyId)
+              .order("created_at", { ascending: false });
+            data = fbRes.data || [];
+          }
+
+          let result = (data || []).map((r: any) => ({
+            ...r,
+            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
+            trailers: r.trailers || trailersMap[r.trailer_id] || null,
+          }));
+
+          if (filters.status === "active") result = result.filter((r: any) => r.active === true);
+          if (filters.status === "inactive") result = result.filter((r: any) => r.active === false);
 
           setReportData(result);
           setSummaryStats({ total: result.length });
@@ -249,9 +320,7 @@ export default function ReportsOperationalView() {
         case "schedules": {
           let query = supabase
             .from("schedules")
-            .select(
-              "*, profiles(full_name, branch_id), vehicles(plate, branch_id), routes(origin, destination)",
-            )
+            .select("*, profiles(full_name, branch_id), vehicles(plate, branch_id)")
             .eq("company_id", companyId)
             .gte("start_at", startIso)
             .lte("start_at", endIso)
@@ -260,12 +329,30 @@ export default function ReportsOperationalView() {
           if (filters.driverId !== "all") query = query.eq("driver_id", filters.driverId);
           if (filters.vehicleId !== "all") query = query.eq("vehicle_id", filters.vehicleId);
 
-          const { data } = await query;
-          let result = data || [];
+          let { data, error } = await query;
+          if (error || !data) {
+            let fbQuery = supabase
+              .from("schedules")
+              .select("*")
+              .eq("company_id", companyId)
+              .gte("start_at", startIso)
+              .lte("start_at", endIso)
+              .order("start_at", { ascending: false });
+            if (filters.driverId !== "all") fbQuery = fbQuery.eq("driver_id", filters.driverId);
+            if (filters.vehicleId !== "all") fbQuery = fbQuery.eq("vehicle_id", filters.vehicleId);
+            const fbRes = await fbQuery;
+            data = fbRes.data || [];
+          }
+
+          let result = (data || []).map((r: any) => ({
+            ...r,
+            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
+            profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-", branch_id: null },
+          }));
 
           if (filters.branchId !== "all") {
             result = result.filter(
-              (r) =>
+              (r: any) =>
                 r.vehicles?.branch_id === filters.branchId ||
                 r.profiles?.branch_id === filters.branchId,
             );
@@ -288,13 +375,26 @@ export default function ReportsOperationalView() {
           if (filters.status === "active") query = query.eq("active", true);
           if (filters.status === "inactive") query = query.eq("active", false);
 
-          const { data } = await query;
+          let { data, error } = await query;
+          if (error || !data) {
+            let fbQuery = supabase
+              .from("vehicles")
+              .select("*")
+              .eq("company_id", companyId)
+              .order("plate");
+            if (filters.branchId !== "all") fbQuery = fbQuery.eq("branch_id", filters.branchId);
+            if (filters.status === "active") fbQuery = fbQuery.eq("active", true);
+            if (filters.status === "inactive") fbQuery = fbQuery.eq("active", false);
+            const fbRes = await fbQuery;
+            data = fbRes.data || [];
+          }
+
           let result = data || [];
 
           if (filters.searchTerm) {
             const term = filters.searchTerm.toLowerCase();
             result = result.filter(
-              (v) =>
+              (v: any) =>
                 v.plate?.toLowerCase().includes(term) ||
                 v.model?.toLowerCase().includes(term) ||
                 v.type?.toLowerCase().includes(term),
@@ -304,7 +404,7 @@ export default function ReportsOperationalView() {
           setReportData(result);
           setSummaryStats({
             total: result.length,
-            active: result.filter((v) => v.active !== false).length,
+            active: result.filter((v: any) => v.active !== false).length,
           });
           break;
         }
@@ -312,7 +412,7 @@ export default function ReportsOperationalView() {
         case "drivers": {
           let query = supabase
             .from("profiles")
-            .select("*, branches(name), driver_performance(score)")
+            .select("*, branches(name)")
             .eq("company_id", companyId)
             .eq("role", "driver")
             .order("full_name");
@@ -321,18 +421,44 @@ export default function ReportsOperationalView() {
           if (filters.status === "active") query = query.eq("active", true);
           if (filters.status === "inactive") query = query.eq("active", false);
 
-          const { data } = await query;
-          let result = data || [];
+          let { data, error } = await query;
+          if (error || !data) {
+            let fbQuery = supabase
+              .from("profiles")
+              .select("*")
+              .eq("company_id", companyId)
+              .eq("role", "driver")
+              .order("full_name");
+            if (filters.branchId !== "all") fbQuery = fbQuery.eq("branch_id", filters.branchId);
+            if (filters.status === "active") fbQuery = fbQuery.eq("active", true);
+            if (filters.status === "inactive") fbQuery = fbQuery.eq("active", false);
+            const fbRes = await fbQuery;
+            data = fbRes.data || [];
+          }
+
+          // Fetch scores separately
+          const { data: perfData } = await supabase
+            .from("driver_performance")
+            .select("driver_id, score");
+          const perfMap: Record<string, number> = {};
+          (perfData || []).forEach((p: any) => {
+            if (p.driver_id) perfMap[p.driver_id] = p.score;
+          });
+
+          let result = (data || []).map((d: any) => ({
+            ...d,
+            driver_performance: [{ score: perfMap[d.id] ?? 0 }],
+          }));
 
           if (filters.searchTerm) {
             const term = filters.searchTerm.toLowerCase();
-            result = result.filter((d) => d.full_name?.toLowerCase().includes(term));
+            result = result.filter((d: any) => d.full_name?.toLowerCase().includes(term));
           }
 
           setReportData(result);
           setSummaryStats({
             total: result.length,
-            active: result.filter((d) => d.active !== false).length,
+            active: result.filter((d: any) => d.active !== false).length,
           });
           break;
         }
@@ -351,32 +477,48 @@ export default function ReportsOperationalView() {
 
         // --- CATEGORY: MANUTENÇÃO ---
         case "history": {
-          if (filters.vehicleId === "all") {
-            setReportData([]);
-            setSummaryStats({ message: "Selecione um veículo no filtro para ver o histórico" });
-            break;
-          }
-
-          const { data } = await supabase
+          let query = supabase
             .from("checklist_issues")
-            .select("*, profiles!checklist_issues_driver_id_fkey(full_name)")
+            .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
             .eq("company_id", companyId)
-            .eq("vehicle_id", filters.vehicleId)
             .gte("created_at", startIso)
             .lte("created_at", endIso)
             .order("created_at", { ascending: false });
 
-          setReportData(data || []);
-          setSummaryStats({ total: (data || []).length });
+          if (filters.vehicleId !== "all") {
+            query = query.eq("vehicle_id", filters.vehicleId);
+          }
+
+          let { data, error } = await query;
+          if (error || !data) {
+            let fbQuery = supabase
+              .from("checklist_issues")
+              .select("*")
+              .eq("company_id", companyId)
+              .gte("created_at", startIso)
+              .lte("created_at", endIso)
+              .order("created_at", { ascending: false });
+            if (filters.vehicleId !== "all") fbQuery = fbQuery.eq("vehicle_id", filters.vehicleId);
+            const fbRes = await fbQuery;
+            data = fbRes.data || [];
+          }
+
+          let result = (data || []).map((r: any) => ({
+            ...r,
+            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
+            trailers: r.trailers || trailersMap[r.trailer_id] || null,
+            profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-" },
+          }));
+
+          setReportData(result);
+          setSummaryStats({ total: result.length });
           break;
         }
 
         case "resolved_issues": {
           let query = supabase
             .from("checklist_issues")
-            .select(
-              "*, vehicles(plate, branch_id), trailers(plate, branch_id), resolver:profiles!checklist_issues_resolved_by_fkey(full_name)",
-            )
+            .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
             .eq("company_id", companyId)
             .eq("status", "resolved")
             .gte("resolved_at", startIso)
@@ -385,19 +527,38 @@ export default function ReportsOperationalView() {
 
           if (filters.vehicleId !== "all") query = query.eq("vehicle_id", filters.vehicleId);
 
-          const { data } = await query;
-          let result = data || [];
+          let { data, error } = await query;
+          if (error || !data) {
+            let fbQuery = supabase
+              .from("checklist_issues")
+              .select("*")
+              .eq("company_id", companyId)
+              .eq("status", "resolved")
+              .gte("resolved_at", startIso)
+              .lte("resolved_at", endIso)
+              .order("resolved_at", { ascending: false });
+            if (filters.vehicleId !== "all") fbQuery = fbQuery.eq("vehicle_id", filters.vehicleId);
+            const fbRes = await fbQuery;
+            data = fbRes.data || [];
+          }
+
+          let result = (data || []).map((r: any) => ({
+            ...r,
+            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
+            trailers: r.trailers || trailersMap[r.trailer_id] || null,
+            resolver: r.resolver || { full_name: profilesMap[r.resolved_by] || "Sistema" },
+          }));
 
           if (filters.branchId !== "all") {
             result = result.filter(
-              (r) =>
+              (r: any) =>
                 r.vehicles?.branch_id === filters.branchId ||
                 r.trailers?.branch_id === filters.branchId,
             );
           }
 
           const totalCost = result.reduce(
-            (acc, curr) => acc + (Number(curr.resolution_value) || 0),
+            (acc: number, curr: any) => acc + (Number(curr.resolution_value) || 0),
             0,
           );
 
@@ -410,14 +571,29 @@ export default function ReportsOperationalView() {
         }
 
         case "auto_alerts": {
-          const { data } = await supabase
+          let { data, error } = await supabase
             .from("auto_alerts")
             .select("*, vehicles(plate), trailers(plate)")
             .eq("company_id", companyId)
             .order("created_at", { ascending: false });
 
-          setReportData(data || []);
-          setSummaryStats({ total: (data || []).length });
+          if (error || !data) {
+            const fbRes = await supabase
+              .from("auto_alerts")
+              .select("*")
+              .eq("company_id", companyId)
+              .order("created_at", { ascending: false });
+            data = fbRes.data || [];
+          }
+
+          let result = (data || []).map((r: any) => ({
+            ...r,
+            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
+            trailers: r.trailers || trailersMap[r.trailer_id] || null,
+          }));
+
+          setReportData(result);
+          setSummaryStats({ total: result.length });
           break;
         }
 
@@ -448,7 +624,7 @@ export default function ReportsOperationalView() {
         }
 
         case "purchases": {
-          const { data } = await supabase
+          let { data, error } = await supabase
             .from("inventory_transactions")
             .select("*, inventory_items(name)")
             .eq("company_id", companyId)
@@ -456,6 +632,18 @@ export default function ReportsOperationalView() {
             .gte("created_at", startIso)
             .lte("created_at", endIso)
             .order("created_at", { ascending: false });
+
+          if (error || !data) {
+            const fbRes = await supabase
+              .from("inventory_transactions")
+              .select("*")
+              .eq("company_id", companyId)
+              .eq("type", "in")
+              .gte("created_at", startIso)
+              .lte("created_at", endIso)
+              .order("created_at", { ascending: false });
+            data = fbRes.data || [];
+          }
 
           const result = data || [];
           const totalAmount = result.reduce(
@@ -472,7 +660,7 @@ export default function ReportsOperationalView() {
         }
 
         case "stock_out": {
-          const { data } = await supabase
+          let { data, error } = await supabase
             .from("inventory_transactions")
             .select("*, inventory_items(name)")
             .eq("company_id", companyId)
@@ -480,6 +668,18 @@ export default function ReportsOperationalView() {
             .gte("created_at", startIso)
             .lte("created_at", endIso)
             .order("created_at", { ascending: false });
+
+          if (error || !data) {
+            const fbRes = await supabase
+              .from("inventory_transactions")
+              .select("*")
+              .eq("company_id", companyId)
+              .eq("type", "out")
+              .gte("created_at", startIso)
+              .lte("created_at", endIso)
+              .order("created_at", { ascending: false });
+            data = fbRes.data || [];
+          }
 
           setReportData(data || []);
           setSummaryStats({ total: (data || []).length });
@@ -502,9 +702,8 @@ export default function ReportsOperationalView() {
         case "fuelings": {
           let query = supabase
             .from("checklist_submissions")
-            .select("*, vehicles(plate, branch_id), profiles(full_name)")
+            .select("*, vehicles(plate, branch_id)")
             .eq("company_id", companyId)
-            .in("type", ["fuel", "Abastecimento"])
             .gte("created_at", startIso)
             .lte("created_at", endIso)
             .order("created_at", { ascending: false });
@@ -512,17 +711,43 @@ export default function ReportsOperationalView() {
           if (filters.vehicleId !== "all") query = query.eq("vehicle_id", filters.vehicleId);
           if (filters.driverId !== "all") query = query.eq("driver_id", filters.driverId);
 
-          const { data } = await query;
-          let result = data || [];
+          let { data, error } = await query;
+          if (error || !data) {
+            let fbQuery = supabase
+              .from("checklist_submissions")
+              .select("*")
+              .eq("company_id", companyId)
+              .gte("created_at", startIso)
+              .lte("created_at", endIso)
+              .order("created_at", { ascending: false });
+            if (filters.vehicleId !== "all") fbQuery = fbQuery.eq("vehicle_id", filters.vehicleId);
+            if (filters.driverId !== "all") fbQuery = fbQuery.eq("driver_id", filters.driverId);
+            const fbRes = await fbQuery;
+            data = fbRes.data || [];
+          }
+
+          // Filter for fuel type or fuel details
+          let result = (data || []).filter((sub: any) => {
+            const t = (sub.type || "").toLowerCase();
+            if (t === "fuel" || t === "abastecimento" || t === "combustivel") return true;
+            try {
+              const d = typeof sub.details === "string" ? JSON.parse(sub.details) : sub.details || {};
+              if (d.liters || d.litros || d.total_value || d.valor_total) return true;
+            } catch (e) {}
+            return false;
+          });
 
           if (filters.branchId !== "all") {
-            result = result.filter((r) => r.vehicles?.branch_id === filters.branchId);
+            result = result.filter((r: any) => {
+              const v = r.vehicles || vehiclesMap[r.vehicle_id];
+              return v?.branch_id === filters.branchId;
+            });
           }
 
           let totalLiters = 0;
           let totalCost = 0;
 
-          result = result.map((row) => {
+          result = result.map((row: any) => {
             let detailsObj: any = {};
             try {
               detailsObj =
@@ -538,6 +763,8 @@ export default function ReportsOperationalView() {
 
             return {
               ...row,
+              vehicles: row.vehicles || vehiclesMap[row.vehicle_id] || null,
+              profiles: row.profiles || { full_name: profilesMap[row.driver_id] || "-" },
               parsedDetails: detailsObj,
               liters,
               cost,
@@ -554,20 +781,31 @@ export default function ReportsOperationalView() {
         }
 
         case "mileage": {
-          const { data } = await supabase
+          let { data, error } = await supabase
             .from("checklist_submissions")
-            .select("id, odometer, created_at, vehicles(plate), profiles(full_name)")
+            .select("id, odometer, created_at, vehicle_id, driver_id")
             .eq("company_id", companyId)
             .not("odometer", "is", null)
             .gte("created_at", startIso)
             .lte("created_at", endIso)
             .order("created_at", { ascending: true });
 
+          if (error || !data) {
+            const fbRes = await supabase
+              .from("checklist_submissions")
+              .select("*")
+              .eq("company_id", companyId)
+              .gte("created_at", startIso)
+              .lte("created_at", endIso)
+              .order("created_at", { ascending: true });
+            data = (fbRes.data || []).filter((s: any) => s.odometer !== null && s.odometer !== undefined);
+          }
+
           const subs = data || [];
           const groupedByVehicle: Record<string, any[]> = {};
 
           subs.forEach((s: any) => {
-            const plate = (Array.isArray(s.vehicles) ? s.vehicles[0]?.plate : s.vehicles?.plate) || "Sem Placa";
+            const plate = vehiclesMap[s.vehicle_id]?.plate || "Sem Placa";
             if (!groupedByVehicle[plate]) groupedByVehicle[plate] = [];
             groupedByVehicle[plate].push(s);
           });
@@ -596,29 +834,32 @@ export default function ReportsOperationalView() {
         // --- CATEGORY: AUDITORIA ---
         case "user_audits":
         case "system_audits": {
-          let query = supabase
+          let { data, error } = await supabase
             .from("system_audit_logs")
-            .select("*, profiles(full_name)")
+            .select("*")
             .eq("company_id", companyId)
             .gte("created_at", startIso)
             .lte("created_at", endIso)
             .order("created_at", { ascending: false });
 
-          const { data, error } = await query;
-          if (error) {
-            // Fallback to audit_logs
+          if (error || !data || data.length === 0) {
             const { data: fallbackData } = await supabase
               .from("audit_logs")
-              .select("*, profiles!audit_logs_driver_id_fkey(full_name)")
+              .select("*")
               .eq("company_id", companyId)
               .gte("created_at", startIso)
               .lte("created_at", endIso)
               .order("created_at", { ascending: false });
-            setReportData(fallbackData || []);
-          } else {
-            setReportData(data || []);
+            data = fallbackData || [];
           }
-          setSummaryStats({ total: (data || []).length });
+
+          let result = (data || []).map((a: any) => ({
+            ...a,
+            profiles: { full_name: profilesMap[a.user_id || a.driver_id] || "-" },
+          }));
+
+          setReportData(result);
+          setSummaryStats({ total: result.length });
           break;
         }
 
@@ -666,7 +907,7 @@ export default function ReportsOperationalView() {
 
       if (selectedReport === "checklists" || selectedReport === "history") {
         headers = ["Data", "Placa", "Item / Defeito", "Motorista", "Status", "Descrição"];
-        rows = reportData.map((d) => [
+        rows = (reportData || []).map((d) => [
           new Date(d.created_at).toLocaleString("pt-BR"),
           d.vehicles?.plate || d.trailers?.plate || "-",
           d.item_title,
@@ -676,14 +917,14 @@ export default function ReportsOperationalView() {
         ]);
       } else if (selectedReport === "pending_by_plate") {
         headers = ["Placa", "Qtd Pendências", "Itens Pendentes"];
-        rows = reportData.map((d) => [
+        rows = (reportData || []).map((d) => [
           d.plate,
           d.count,
-          d.items.map((i: any) => i.item_title).join(" | "),
+          (d.items || []).map((i: any) => i?.item_title || "").join(" | "),
         ]);
       } else if (selectedReport === "vehicles") {
         headers = ["Placa", "Modelo", "Tipo", "Filial", "Status"];
-        rows = reportData.map((d) => [
+        rows = (reportData || []).map((d) => [
           d.plate,
           d.model || "-",
           d.type || "-",
@@ -692,7 +933,7 @@ export default function ReportsOperationalView() {
         ]);
       } else if (selectedReport === "drivers") {
         headers = ["Nome Completo", "Filial", "Pontuação", "Status"];
-        rows = reportData.map((d) => [
+        rows = (reportData || []).map((d) => [
           d.full_name,
           d.branches?.name || "Sem Filial",
           d.driver_performance?.[0]?.score ?? d.driver_performance?.score ?? "-",
@@ -700,7 +941,7 @@ export default function ReportsOperationalView() {
         ]);
       } else if (selectedReport === "resolved_issues") {
         headers = ["Data Resolução", "Placa", "Item", "Resolvido Por", "Custo (R$)"];
-        rows = reportData.map((d) => [
+        rows = (reportData || []).map((d) => [
           d.resolved_at ? new Date(d.resolved_at).toLocaleString("pt-BR") : "-",
           d.vehicles?.plate || d.trailers?.plate || "-",
           d.item_title,
@@ -709,7 +950,7 @@ export default function ReportsOperationalView() {
         ]);
       } else if (selectedReport === "fuelings") {
         headers = ["Data", "Placa", "Motorista", "Litros (L)", "Valor Total (R$)"];
-        rows = reportData.map((d) => [
+        rows = (reportData || []).map((d) => [
           new Date(d.created_at).toLocaleString("pt-BR"),
           d.vehicles?.plate || "-",
           d.profiles?.full_name || "-",
@@ -719,7 +960,7 @@ export default function ReportsOperationalView() {
       } else {
         // Fallback generic tabular mapping
         headers = ["ID", "Data / Nome", "Detalhes / Status"];
-        rows = reportData.map((d) => [
+        rows = (reportData || []).map((d) => [
           d.id || "-",
           d.created_at ? new Date(d.created_at).toLocaleDateString("pt-BR") : d.name || "-",
           d.status || d.description || JSON.stringify(d).slice(0, 50),
@@ -1194,14 +1435,14 @@ export default function ReportsOperationalView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-700">
-                {reportData.map((row, idx) => (
+                {(reportData || []).map((row, idx) => (
                   <tr key={row.id || idx} className="hover:bg-gray-50/50 transition-colors">
                     {selectedReport === "pending_by_plate" ? (
                       <>
                         <td className="py-3 px-4 font-black text-indigo-600">{row.plate}</td>
                         <td className="py-3 px-4 font-bold">{row.count}</td>
                         <td className="py-3 px-4 text-gray-600">
-                          {row.items.map((i: any) => i.item_title).join(", ")}
+                          {(row.items || []).map((i: any) => i?.item_title || "").join(", ")}
                         </td>
                       </>
                     ) : selectedReport === "vehicles" ? (
