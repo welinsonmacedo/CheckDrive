@@ -138,6 +138,7 @@ export default function ReportsBiView({
           .in("role", ["driver", "motorista"]),
         supabase.from("branches").select("id, name").eq("company_id", companyId),
         supabase.from("driver_performance").select("driver_id, score"),
+        supabase.from("checklist_items").select("id, title, input_type").eq("company_id", companyId),
       ]);
 
       // Fallback queries if company_id filter returns empty
@@ -167,6 +168,19 @@ export default function ReportsBiView({
         const { data: fbB } = await supabase.from("branches").select("id, name");
         branchesData = fbB || [];
       }
+
+      let itemsData = (bRes as any)[5]?.data || [];
+      const { data: fbItems } = await supabase.from("checklist_items").select("id, title, input_type");
+      itemsData = (fbItems || []);
+
+      const fuelLiterItemIds = new Set<string>();
+      itemsData.forEach((item: any) => {
+        const type = (item.input_type || "").toLowerCase();
+        const title = (item.title || "").toLowerCase();
+        if (type === "fuel_liters" || title.includes("litro") || title.includes("combust")) {
+          fuelLiterItemIds.add(item.id);
+        }
+      });
 
       const perfMap: Record<string, number> = {};
       (perfRes.data || []).forEach((p: any) => {
@@ -422,6 +436,7 @@ export default function ReportsBiView({
 
         try {
           const details = typeof sub.details === "string" ? JSON.parse(sub.details) : sub.details || {};
+          
           if (!liters) {
             liters = Number(
               details.manual_liters ??
@@ -438,21 +453,40 @@ export default function ReportsBiView({
             ) || 0;
           }
 
-          if (!liters && details.itemValues && typeof details.itemValues === "object") {
+          if (details.itemValues && typeof details.itemValues === "object") {
             for (const [key, val] of Object.entries(details.itemValues)) {
-              const kLow = key.toLowerCase();
-              if (kLow.includes("liter") || kLow.includes("litro") || kLow.includes("qtd") || kLow.includes("vol")) {
-                const num = Number(String(val).replace(",", "."));
-                if (!isNaN(num) && num > 0) {
-                  liters = num;
-                  break;
-                }
+              if (val === undefined || val === null || val === "" || val === "defect") continue;
+              const num = parseFloat(String(val).replace(",", "."));
+              if (isNaN(num) || num <= 0) continue;
+
+              const title = (details.itemTitles?.[key] || "").toLowerCase();
+              const isFuelLiterItem = fuelLiterItemIds.has(key) ||
+                key.toLowerCase().includes("liter") ||
+                key.toLowerCase().includes("litro") ||
+                title.includes("litro") ||
+                title.includes("liters") ||
+                title.includes("abastec") ||
+                title.includes("lts");
+
+              const isPriceItem = title.includes("valor") ||
+                title.includes("preço") ||
+                title.includes("preco") ||
+                title.includes("custo") ||
+                title.includes("total") ||
+                title.includes("r$");
+
+              if (isFuelLiterItem && liters === 0) {
+                liters = num;
+              } else if (isPriceItem && value === 0) {
+                value = num;
               }
             }
-            if (!liters && (sub.type || "").toLowerCase().includes("fuel")) {
+
+            if (liters === 0 && (sub.type || "").toLowerCase().includes("fuel")) {
               for (const val of Object.values(details.itemValues)) {
-                const num = Number(String(val).replace(",", "."));
-                if (!isNaN(num) && num > 0 && num < 2000) {
+                if (!val || val === "defect") continue;
+                const num = parseFloat(String(val).replace(",", "."));
+                if (!isNaN(num) && num > 0 && num < 5000) {
                   liters = num;
                   break;
                 }
@@ -479,16 +513,13 @@ export default function ReportsBiView({
           }
 
           if (!value && details.price_per_liter && liters > 0) {
-            value = liters * Number(String(details.price_per_liter).replace(",", "."));
+            const pL = parseFloat(String(details.price_per_liter).replace(",", "."));
+            if (!isNaN(pL) && pL > 0) {
+              value = liters * pL;
+            }
           }
         } catch {
           // ignore parsing error
-        }
-
-        if (liters > 0 && value === 0) {
-          value = liters * 5.85;
-        } else if (value > 0 && liters === 0) {
-          liters = value / 5.85;
         }
 
         return { liters, value };
@@ -515,13 +546,14 @@ export default function ReportsBiView({
 
       (rawVehicleAvgs || []).forEach((avg: any) => {
         const liters = Number(avg.liters) || 0;
+        const value = Number(avg.total_value || avg.cost || avg.valor || 0) || 0;
         if (liters > 0) {
           const createdAt = avg.start_date || avg.created_at || new Date().toISOString();
           allFuelItems.push({
             created_at: createdAt,
             vehicle_id: avg.vehicle_id,
             liters,
-            value: liters * 5.85,
+            value,
           });
         }
       });
