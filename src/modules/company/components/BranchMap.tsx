@@ -216,10 +216,64 @@ export default function BranchMap({
         }
 
         const cleanCep = (branch.cep || "").replace(/\D/g, "");
+        const numStr = branch.number || "";
+        const locationStr = branch.location || "";
+        // Extract number if not separate
+        const extractedNum = numStr || (locationStr.match(/(?:nº|n°|num|número|no\.?|,)?\s*(\d+[a-zA-Z]?)\b/i)?.[1] || "");
+
         let resolved: { lat: number; lng: number } | null = null;
 
-        if (cleanCep.length === 8) {
-          // 1. Try AwesomeAPI CEP (fast & accurate for Brazilian postal codes)
+        // 1. Try Nominatim with full address (Street + Number + City + State + CEP)
+        if ((locationStr || cleanCep) && (branch.city || branch.state)) {
+          try {
+            const addressParts = [
+              locationStr,
+              extractedNum ? `nº ${extractedNum}` : "",
+              branch.city,
+              branch.state,
+              cleanCep ? `CEP ${cleanCep}` : "",
+              "Brasil",
+            ].filter(Boolean).join(", ");
+
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(addressParts)}`
+            );
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+                resolved = {
+                  lat: parseFloat(data[0].lat),
+                  lng: parseFloat(data[0].lon),
+                };
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        // 2. Try Nominatim with Postal code + Number if full address search didn't resolve
+        if (!resolved && cleanCep.length === 8 && extractedNum) {
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=Brazil&postalcode=${cleanCep}&street=${encodeURIComponent(extractedNum)}`
+            );
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+                resolved = {
+                  lat: parseFloat(data[0].lat),
+                  lng: parseFloat(data[0].lon),
+                };
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        // 3. Try AwesomeAPI CEP (returns lat/lng for Brazilian postal codes)
+        if (!resolved && cleanCep.length === 8) {
           try {
             const res = await fetch(`https://cep.awesomeapi.com.br/json/${cleanCep}`);
             if (res.ok) {
@@ -236,7 +290,7 @@ export default function BranchMap({
             // ignore and fallback
           }
 
-          // 2. Try Nominatim by postalcode
+          // 4. Try Nominatim by postalcode alone
           if (!resolved) {
             try {
               const res = await fetch(
@@ -257,10 +311,10 @@ export default function BranchMap({
           }
         }
 
-        // 3. Try Nominatim by Address if CEP geocoding wasn't enough
+        // 5. Try Nominatim by City + State
         if (!resolved && (branch.city || branch.state)) {
           try {
-            const query = [branch.location, branch.city, branch.state, "Brasil"].filter(Boolean).join(", ");
+            const query = [branch.city, branch.state, "Brasil"].filter(Boolean).join(", ");
             const res = await fetch(
               `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`
             );
@@ -372,8 +426,10 @@ export default function BranchMap({
               : ""
           }
           ${
-            branch.cep
-              ? `<div style="font-size: 11px; font-weight: 700; color: #2563eb; margin-bottom: 6px;">📍 CEP: ${branch.cep}</div>`
+            branch.cep || branch.number
+              ? `<div style="font-size: 11px; font-weight: 700; color: #2563eb; margin-bottom: 6px;">📍 CEP: ${branch.cep || "N/I"} ${
+                  branch.number ? `• Nº ${branch.number}` : ""
+                }</div>`
               : ""
           }
           <div style="border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 6px; color: #334155;">

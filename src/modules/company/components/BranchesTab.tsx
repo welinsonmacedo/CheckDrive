@@ -37,6 +37,7 @@ export interface Branch {
   name: string;
   cnpj: string;
   cep: string;
+  number?: string;
   location: string; // Localidade / Endereço Completo
   city: string;
   state: string;
@@ -86,6 +87,7 @@ export default function BranchesTab() {
     name: string;
     cnpj: string;
     cep: string;
+    number: string;
     location: string;
     city: string;
     state: string;
@@ -99,6 +101,7 @@ export default function BranchesTab() {
     name: "",
     cnpj: "",
     cep: "",
+    number: "",
     location: "",
     city: "",
     state: "",
@@ -118,12 +121,15 @@ CREATE TABLE IF NOT EXISTS public.branches (
     name TEXT NOT NULL,
     cnpj TEXT,
     cep TEXT,
+    number TEXT,
     location TEXT,
     city TEXT,
     state TEXT,
     phone TEXT,
     manager TEXT,
     active BOOLEAN DEFAULT true,
+    lat DOUBLE PRECISION,
+    lng DOUBLE PRECISION,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -221,6 +227,73 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
     setSearchParams(newParams);
   };
 
+  const geocodeAddress = async (cep: string, number: string, location: string, city: string, state: string) => {
+    const cleanCep = cep.replace(/\D/g, "");
+    let lat: number | undefined;
+    let lng: number | undefined;
+
+    // Try full street address + number + CEP search
+    if (location || cleanCep) {
+      try {
+        const query = [location, number ? `nº ${number}` : "", city, state, cleanCep ? `CEP ${cleanCep}` : "", "Brasil"]
+          .filter(Boolean)
+          .join(", ");
+
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+            return {
+              lat: parseFloat(data[0].lat),
+              lng: parseFloat(data[0].lon),
+            };
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // Try CEP + street number
+    if (cleanCep.length === 8 && number) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&country=Brazil&postalcode=${cleanCep}&street=${encodeURIComponent(number)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+            return {
+              lat: parseFloat(data[0].lat),
+              lng: parseFloat(data[0].lon),
+            };
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // Fallback AwesomeAPI CEP
+    if (cleanCep.length === 8) {
+      try {
+        const geoRes = await fetch(`https://cep.awesomeapi.com.br/json/${cleanCep}`);
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          if (geoData.lat && geoData.lng) {
+            lat = parseFloat(geoData.lat);
+            lng = parseFloat(geoData.lng);
+            if (!isNaN(lat) && !isNaN(lng)) {
+              return { lat, lng };
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    return null;
+  };
+
   const handleCepBlur = async () => {
     const cleanCep = form.cep.replace(/\D/g, "");
     if (cleanCep.length === 8) {
@@ -228,31 +301,21 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
         const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
         const data = await res.json();
         if (!data.erro) {
-          let lat = form.lat;
-          let lng = form.lng;
+          const newCity = data.localidade || form.city;
+          const newState = data.uf || form.state;
+          const newLocation = data.logradouro
+            ? `${data.logradouro}${data.bairro ? `, ${data.bairro}` : ""}`
+            : form.location;
 
-          try {
-            const geoRes = await fetch(`https://cep.awesomeapi.com.br/json/${cleanCep}`);
-            if (geoRes.ok) {
-              const geoData = await geoRes.json();
-              if (geoData.lat && geoData.lng) {
-                lat = parseFloat(geoData.lat);
-                lng = parseFloat(geoData.lng);
-              }
-            }
-          } catch (e) {
-            // ignore
-          }
+          const coords = await geocodeAddress(cleanCep, form.number, newLocation, newCity, newState);
 
           setForm((prev) => ({
             ...prev,
-            city: data.localidade || prev.city,
-            state: data.uf || prev.state,
-            location: data.logradouro
-              ? `${data.logradouro}${data.bairro ? `, ${data.bairro}` : ""}`
-              : prev.location,
-            lat: lat ?? prev.lat,
-            lng: lng ?? prev.lng,
+            city: newCity,
+            state: newState,
+            location: newLocation,
+            lat: coords?.lat ?? prev.lat,
+            lng: coords?.lng ?? prev.lng,
           }));
         }
       } catch (err) {
@@ -267,6 +330,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
       name: "",
       cnpj: "",
       cep: "",
+      number: "",
       location: "",
       city: "",
       state: "",
@@ -285,6 +349,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
       name: branch.name || "",
       cnpj: branch.cnpj || "",
       cep: branch.cep || "",
+      number: branch.number || "",
       location: branch.location || "",
       city: branch.city || "",
       state: branch.state || "",
@@ -302,6 +367,18 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
     if (!form.name.trim()) return alert("Por favor, informe o nome da filial.");
     setSaving(true);
 
+    let lat = form.lat;
+    let lng = form.lng;
+
+    // Automatically attempt geocoding if lat/lng missing
+    if (!lat || !lng) {
+      const coords = await geocodeAddress(form.cep, form.number, form.location, form.city, form.state);
+      if (coords) {
+        lat = coords.lat;
+        lng = coords.lng;
+      }
+    }
+
     const validCompanyId = isValidUUID(companyId) ? companyId : "2988d70f-3c53-4563-a442-67c20ea40b7a";
 
     const payload = {
@@ -309,14 +386,15 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
       name: form.name.trim(),
       cnpj: form.cnpj.trim(),
       cep: form.cep.trim(),
+      number: form.number.trim(),
       location: form.location.trim(),
       city: form.city.trim(),
       state: form.state.trim().toUpperCase(),
       phone: form.phone.trim(),
       manager: form.manager.trim(),
       active: form.active,
-      lat: form.lat,
-      lng: form.lng,
+      lat,
+      lng,
       updated_at: new Date().toISOString(),
     };
 
@@ -591,6 +669,15 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
                     </span>
                     <p className="text-sm font-bold text-zinc-800">
                       {selectedBranch.cep || "Não informado"}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      Número do Endereço
+                    </span>
+                    <p className="text-sm font-bold text-zinc-800">
+                      {selectedBranch.number || "Não informado"}
                     </p>
                   </div>
 
@@ -880,7 +967,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
                           <span>
                             {branch.city}
                             {branch.state ? ` - ${branch.state}` : ""}
-                            {branch.cep ? ` (CEP: ${branch.cep})` : ""}
+                            {branch.cep || branch.number ? ` (CEP: ${branch.cep || 'N/I'}${branch.number ? `, Nº ${branch.number}` : ''})` : ""}
                           </span>
                         </div>
                       )}
@@ -985,7 +1072,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-zinc-700 mb-1">
                     CNPJ
@@ -1011,9 +1098,19 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
                     onBlur={handleCepBlur}
                     className="w-full h-10 px-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
-                  <p className="text-[10px] text-zinc-400 mt-0.5">
-                    Preencha o CEP para carregar dados automaticamente
-                  </p>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-zinc-700 mb-1">
+                    Número do Endereço
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 1050 ou S/N"
+                    value={form.number}
+                    onChange={(e) => setForm({ ...form, number: e.target.value })}
+                    className="w-full h-10 px-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
                 </div>
               </div>
 
