@@ -229,17 +229,31 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
 
   const geocodeAddress = async (cep: string, number: string, location: string, city: string, state: string) => {
     const cleanCep = cep.replace(/\D/g, "");
-    let lat: number | undefined;
-    let lng: number | undefined;
+    const numStr = number.trim();
+    const cleanStreet = location
+      .replace(/(?:quadra|qd\.?|lote|lt\.?|bloco|bl\.?|apto|apt\.?)\s*\d+/gi, "")
+      .replace(/(?:nº|n°|num|número|no\.?)\s*\d+/gi, "")
+      .replace(/,\s*,/g, ",")
+      .trim()
+      .replace(/^,|,$/g, "");
 
-    // Try full street address + number + CEP search
-    if (location || cleanCep) {
+    // 1. Structured Nominatim Search
+    if (cleanStreet || cleanCep) {
       try {
-        const query = [location, number ? `nº ${number}` : "", city, state, cleanCep ? `CEP ${cleanCep}` : "", "Brasil"]
-          .filter(Boolean)
-          .join(", ");
+        const params = new URLSearchParams({
+          format: "json",
+          limit: "1",
+          country: "Brazil",
+        });
 
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+        if (cleanStreet) params.append("street", `${numStr ? numStr + " " : ""}${cleanStreet}`);
+        if (city) params.append("city", city);
+        if (state) params.append("state", state);
+        if (cleanCep.length === 8) params.append("postalcode", cleanCep);
+
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+          headers: { "User-Agent": "SuaLogisticaApp/1.0" },
+        });
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
@@ -254,10 +268,14 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
       }
     }
 
-    // Try CEP + street number
-    if (cleanCep.length === 8 && number) {
+    // 2. Freeform Nominatim
+    if (cleanStreet || city) {
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&country=Brazil&postalcode=${cleanCep}&street=${encodeURIComponent(number)}`);
+        const queryStr = [cleanStreet, numStr, city, state, "Brasil"].filter(Boolean).join(", ");
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(queryStr)}`,
+          { headers: { "User-Agent": "SuaLogisticaApp/1.0" } }
+        );
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
@@ -272,16 +290,35 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
       }
     }
 
-    // Fallback AwesomeAPI CEP
+    // 3. BrasilAPI CEP
+    if (cleanCep.length === 8) {
+      try {
+        const res = await fetch(`https://brasilapi.com.br/api/cep/v2/${cleanCep}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.location?.coordinates?.latitude && data.location?.coordinates?.longitude) {
+            const lat = parseFloat(data.location.coordinates.latitude);
+            const lng = parseFloat(data.location.coordinates.longitude);
+            if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+              return { lat, lng };
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // 4. AwesomeAPI CEP
     if (cleanCep.length === 8) {
       try {
         const geoRes = await fetch(`https://cep.awesomeapi.com.br/json/${cleanCep}`);
         if (geoRes.ok) {
           const geoData = await geoRes.json();
           if (geoData.lat && geoData.lng) {
-            lat = parseFloat(geoData.lat);
-            lng = parseFloat(geoData.lng);
-            if (!isNaN(lat) && !isNaN(lng)) {
+            const lat = parseFloat(geoData.lat);
+            const lng = parseFloat(geoData.lng);
+            if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
               return { lat, lng };
             }
           }
@@ -1185,6 +1222,64 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
                     }
                     className="w-full h-10 px-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
+                </div>
+              </div>
+
+              {/* Coordinates Section */}
+              <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-zinc-800 text-xs flex items-center gap-1.5">
+                    📍 Coordenadas Geográficas (Mapa)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const coords = await geocodeAddress(form.cep, form.number, form.location, form.city, form.state);
+                      if (coords) {
+                        setForm((prev) => ({ ...prev, lat: coords.lat, lng: coords.lng }));
+                        alert(`Coordenadas localizadas: Lat ${coords.lat.toFixed(5)}, Lng ${coords.lng.toFixed(5)}`);
+                      } else {
+                        alert("Não foi possível encontrar as coordenadas exatas para esse endereço/CEP.");
+                      }
+                    }}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-white px-2.5 py-1 rounded-lg border border-blue-200 shadow-sm hover:bg-blue-50 transition-colors"
+                  >
+                    🔍 Buscar Coordenadas Automáticas
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-zinc-600 mb-0.5 text-[11px]">
+                      Latitude
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="Ex: -16.6869"
+                      value={form.lat ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, lat: e.target.value ? parseFloat(e.target.value) : undefined })
+                      }
+                      className="w-full h-9 px-3 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-zinc-600 mb-0.5 text-[11px]">
+                      Longitude
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="Ex: -49.2648"
+                      value={form.lng ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, lng: e.target.value ? parseFloat(e.target.value) : undefined })
+                      }
+                      className="w-full h-9 px-3 bg-white border border-zinc-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-xs"
+                    />
+                  </div>
                 </div>
               </div>
 

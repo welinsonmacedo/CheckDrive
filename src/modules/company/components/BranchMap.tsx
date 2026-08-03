@@ -204,39 +204,80 @@ export default function BranchMap({
 
       for (let i = 0; i < branches.length; i++) {
         const branch = branches[i];
+
+        // Explicit lat/lng on branch object always takes priority!
+        if (branch.lat !== undefined && branch.lng !== undefined && branch.lat !== 0 && branch.lng !== 0) {
+          const latNum = typeof branch.lat === "string" ? parseFloat(branch.lat) : branch.lat;
+          const lngNum = typeof branch.lng === "string" ? parseFloat(branch.lng) : branch.lng;
+          if (!isNaN(latNum) && !isNaN(lngNum)) {
+            newCoordsMap[branch.id] = { lat: latNum, lng: lngNum };
+            if (!cepCoordsMap[branch.id] || cepCoordsMap[branch.id].lat !== latNum) {
+              needsUpdate = true;
+            }
+            continue;
+          }
+        }
+
         if (cepCoordsMap[branch.id]) {
           newCoordsMap[branch.id] = cepCoordsMap[branch.id];
           continue;
         }
 
-        if (branch.lat && branch.lng) {
-          newCoordsMap[branch.id] = { lat: branch.lat, lng: branch.lng };
-          needsUpdate = true;
-          continue;
-        }
-
         const cleanCep = (branch.cep || "").replace(/\D/g, "");
-        const numStr = branch.number || "";
-        const locationStr = branch.location || "";
-        // Extract number if not separate
-        const extractedNum = numStr || (locationStr.match(/(?:nº|n°|num|número|no\.?|,)?\s*(\d+[a-zA-Z]?)\b/i)?.[1] || "");
+        const numStr = (branch.number || "").trim();
+        const rawLocation = (branch.location || "").trim();
+
+        // Clean street name by removing "Quadra X, Lote Y" noise
+        const cleanStreet = rawLocation
+          .replace(/(?:quadra|qd\.?|lote|lt\.?|bloco|bl\.?|apto|apt\.?)\s*\d+/gi, "")
+          .replace(/(?:nº|n°|num|número|no\.?)\s*\d+/gi, "")
+          .replace(/,\s*,/g, ",")
+          .trim()
+          .replace(/^,|,$/g, "");
 
         let resolved: { lat: number; lng: number } | null = null;
 
-        // 1. Try Nominatim with full address (Street + Number + City + State + CEP)
-        if ((locationStr || cleanCep) && (branch.city || branch.state)) {
+        // 1. Try Nominatim Structured Search (Street + Number + City + State + Postalcode)
+        if (cleanStreet || cleanCep) {
           try {
-            const addressParts = [
-              locationStr,
-              extractedNum ? `nº ${extractedNum}` : "",
-              branch.city,
-              branch.state,
-              cleanCep ? `CEP ${cleanCep}` : "",
-              "Brasil",
-            ].filter(Boolean).join(", ");
+            const params = new URLSearchParams({
+              format: "json",
+              limit: "1",
+              country: "Brazil",
+            });
+
+            if (cleanStreet) params.append("street", `${numStr ? numStr + " " : ""}${cleanStreet}`);
+            if (branch.city) params.append("city", branch.city);
+            if (branch.state) params.append("state", branch.state);
+            if (cleanCep.length === 8) params.append("postalcode", cleanCep);
+
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+              headers: { "User-Agent": "SuaLogisticaApp/1.0" },
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+                resolved = {
+                  lat: parseFloat(data[0].lat),
+                  lng: parseFloat(data[0].lon),
+                };
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        // 2. Try Nominatim Freeform Search (Clean Street + Number + City + State)
+        if (!resolved && (cleanStreet || branch.city)) {
+          try {
+            const queryStr = [cleanStreet, numStr, branch.city, branch.state, "Brasil"]
+              .filter(Boolean)
+              .join(", ");
 
             const res = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(addressParts)}`
+              `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(queryStr)}`,
+              { headers: { "User-Agent": "SuaLogisticaApp/1.0" } }
             );
             if (res.ok) {
               const data = await res.json();
@@ -252,19 +293,18 @@ export default function BranchMap({
           }
         }
 
-        // 2. Try Nominatim with Postal code + Number if full address search didn't resolve
-        if (!resolved && cleanCep.length === 8 && extractedNum) {
+        // 3. Try BrasilAPI v2 CEP
+        if (!resolved && cleanCep.length === 8) {
           try {
-            const res = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=Brazil&postalcode=${cleanCep}&street=${encodeURIComponent(extractedNum)}`
-            );
+            const res = await fetch(`https://brasilapi.com.br/api/cep/v2/${cleanCep}`);
             if (res.ok) {
               const data = await res.json();
-              if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
-                resolved = {
-                  lat: parseFloat(data[0].lat),
-                  lng: parseFloat(data[0].lon),
-                };
+              if (data.location?.coordinates?.latitude && data.location?.coordinates?.longitude) {
+                const lat = parseFloat(data.location.coordinates.latitude);
+                const lng = parseFloat(data.location.coordinates.longitude);
+                if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+                  resolved = { lat, lng };
+                }
               }
             }
           } catch (e) {
@@ -272,7 +312,7 @@ export default function BranchMap({
           }
         }
 
-        // 3. Try AwesomeAPI CEP (returns lat/lng for Brazilian postal codes)
+        // 4. Try AwesomeAPI CEP
         if (!resolved && cleanCep.length === 8) {
           try {
             const res = await fetch(`https://cep.awesomeapi.com.br/json/${cleanCep}`);
@@ -287,27 +327,7 @@ export default function BranchMap({
               }
             }
           } catch (e) {
-            // ignore and fallback
-          }
-
-          // 4. Try Nominatim by postalcode alone
-          if (!resolved) {
-            try {
-              const res = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&country=Brazil&postalcode=${cleanCep}`
-              );
-              if (res.ok) {
-                const data = await res.json();
-                if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
-                  resolved = {
-                    lat: parseFloat(data[0].lat),
-                    lng: parseFloat(data[0].lon),
-                  };
-                }
-              }
-            } catch (e) {
-              // ignore
-            }
+            // ignore
           }
         }
 
@@ -316,7 +336,8 @@ export default function BranchMap({
           try {
             const query = [branch.city, branch.state, "Brasil"].filter(Boolean).join(", ");
             const res = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`
+              `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
+              { headers: { "User-Agent": "SuaLogisticaApp/1.0" } }
             );
             if (res.ok) {
               const data = await res.json();
