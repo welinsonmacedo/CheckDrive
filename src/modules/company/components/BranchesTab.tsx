@@ -43,6 +43,8 @@ export interface Branch {
   phone?: string;
   manager?: string;
   active: boolean;
+  lat?: number;
+  lng?: number;
   created_at?: string;
 }
 
@@ -79,7 +81,20 @@ export default function BranchesTab() {
     "cadastro" | "veiculos" | "motoristas" | "pendencias"
   >("cadastro");
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    id: string;
+    name: string;
+    cnpj: string;
+    cep: string;
+    location: string;
+    city: string;
+    state: string;
+    phone: string;
+    manager: string;
+    active: boolean;
+    lat?: number;
+    lng?: number;
+  }>({
     id: "",
     name: "",
     cnpj: "",
@@ -213,6 +228,22 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
         const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
         const data = await res.json();
         if (!data.erro) {
+          let lat = form.lat;
+          let lng = form.lng;
+
+          try {
+            const geoRes = await fetch(`https://cep.awesomeapi.com.br/json/${cleanCep}`);
+            if (geoRes.ok) {
+              const geoData = await geoRes.json();
+              if (geoData.lat && geoData.lng) {
+                lat = parseFloat(geoData.lat);
+                lng = parseFloat(geoData.lng);
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+
           setForm((prev) => ({
             ...prev,
             city: data.localidade || prev.city,
@@ -220,6 +251,8 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
             location: data.logradouro
               ? `${data.logradouro}${data.bairro ? `, ${data.bairro}` : ""}`
               : prev.location,
+            lat: lat ?? prev.lat,
+            lng: lng ?? prev.lng,
           }));
         }
       } catch (err) {
@@ -240,6 +273,8 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
       phone: "",
       manager: "",
       active: true,
+      lat: undefined,
+      lng: undefined,
     });
     setShowModal(true);
   };
@@ -256,6 +291,8 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
       phone: branch.phone || "",
       manager: branch.manager || "",
       active: branch.active !== false,
+      lat: branch.lat,
+      lng: branch.lng,
     });
     setShowModal(true);
   };
@@ -278,6 +315,8 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
       phone: form.phone.trim(),
       manager: form.manager.trim(),
       active: form.active,
+      lat: form.lat,
+      lng: form.lng,
       updated_at: new Date().toISOString(),
     };
 

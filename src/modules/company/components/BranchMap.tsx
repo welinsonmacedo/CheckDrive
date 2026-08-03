@@ -189,6 +189,119 @@ export default function BranchMap({
   const markersRef = useRef<{ [id: string]: L.Marker }>({});
   const [mapTileStyle, setMapTileStyle] = useState<"standard" | "satellite">("standard");
   const [isExpanded, setIsExpanded] = useState(false);
+  const [cepCoordsMap, setCepCoordsMap] = useState<Record<string, { lat: number; lng: number }>>({});
+  const [geocoding, setGeocoding] = useState(false);
+
+  // Asynchronously resolve coordinates for branches by CEP / Address
+  useEffect(() => {
+    let isMounted = true;
+
+    async function resolveAllBranchCoords() {
+      const newCoordsMap: Record<string, { lat: number; lng: number }> = {};
+      let needsUpdate = false;
+
+      setGeocoding(true);
+
+      for (let i = 0; i < branches.length; i++) {
+        const branch = branches[i];
+        if (cepCoordsMap[branch.id]) {
+          newCoordsMap[branch.id] = cepCoordsMap[branch.id];
+          continue;
+        }
+
+        if (branch.lat && branch.lng) {
+          newCoordsMap[branch.id] = { lat: branch.lat, lng: branch.lng };
+          needsUpdate = true;
+          continue;
+        }
+
+        const cleanCep = (branch.cep || "").replace(/\D/g, "");
+        let resolved: { lat: number; lng: number } | null = null;
+
+        if (cleanCep.length === 8) {
+          // 1. Try AwesomeAPI CEP (fast & accurate for Brazilian postal codes)
+          try {
+            const res = await fetch(`https://cep.awesomeapi.com.br/json/${cleanCep}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.lat && data.lng) {
+                const lat = parseFloat(data.lat);
+                const lng = parseFloat(data.lng);
+                if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+                  resolved = { lat, lng };
+                }
+              }
+            }
+          } catch (e) {
+            // ignore and fallback
+          }
+
+          // 2. Try Nominatim by postalcode
+          if (!resolved) {
+            try {
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&country=Brazil&postalcode=${cleanCep}`
+              );
+              if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+                  resolved = {
+                    lat: parseFloat(data[0].lat),
+                    lng: parseFloat(data[0].lon),
+                  };
+                }
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+
+        // 3. Try Nominatim by Address if CEP geocoding wasn't enough
+        if (!resolved && (branch.city || branch.state)) {
+          try {
+            const query = [branch.location, branch.city, branch.state, "Brasil"].filter(Boolean).join(", ");
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`
+            );
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+                resolved = {
+                  lat: parseFloat(data[0].lat),
+                  lng: parseFloat(data[0].lon),
+                };
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        if (resolved) {
+          newCoordsMap[branch.id] = resolved;
+          needsUpdate = true;
+        } else {
+          // Fallback to capital/city offset
+          newCoordsMap[branch.id] = getBranchCoords(branch, i);
+          needsUpdate = true;
+        }
+      }
+
+      if (isMounted) {
+        if (needsUpdate) {
+          setCepCoordsMap((prev) => ({ ...prev, ...newCoordsMap }));
+        }
+        setGeocoding(false);
+      }
+    }
+
+    resolveAllBranchCoords();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [branches]);
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -233,7 +346,7 @@ export default function BranchMap({
     const bounds = L.latLngBounds([]);
 
     branches.forEach((branch, idx) => {
-      const coords = getBranchCoords(branch, idx);
+      const coords = cepCoordsMap[branch.id] || getBranchCoords(branch, idx);
       const isSelected = branch.id === selectedBranchId;
       const icon = createBranchMarkerIcon(branch, isSelected);
 
@@ -255,13 +368,18 @@ export default function BranchMap({
           </div>
           ${
             branch.cnpj
-              ? `<div style="font-size: 11px; font-family: monospace; color: #64748b; margin-bottom: 6px;">CNPJ: ${branch.cnpj}</div>`
+              ? `<div style="font-size: 11px; font-family: monospace; color: #64748b; margin-bottom: 4px;">CNPJ: ${branch.cnpj}</div>`
+              : ""
+          }
+          ${
+            branch.cep
+              ? `<div style="font-size: 11px; font-weight: 700; color: #2563eb; margin-bottom: 6px;">📍 CEP: ${branch.cep}</div>`
               : ""
           }
           <div style="border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 6px; color: #334155;">
             ${
               branch.city || branch.state
-                ? `<div style="font-weight: 700; color: #1e293b; margin-bottom: 2px;">📍 ${branch.city || ""}${
+                ? `<div style="font-weight: 700; color: #1e293b; margin-bottom: 2px;">🏢 ${branch.city || ""}${
                     branch.state ? ` - ${branch.state}` : ""
                   }</div>`
                 : ""
@@ -330,13 +448,13 @@ export default function BranchMap({
     });
 
     if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 13 });
     }
 
     setTimeout(() => {
       map.invalidateSize();
     }, 200);
-  }, [branches, selectedBranchId, mapTileStyle]);
+  }, [branches, selectedBranchId, mapTileStyle, cepCoordsMap]);
 
   // Invalidate size on container resize / expand
   useEffect(() => {
@@ -361,10 +479,10 @@ export default function BranchMap({
           </div>
           <div>
             <h4 className="text-xs font-black text-zinc-900 leading-tight">
-              Mapa de Localização das Filiais
+              Mapa de Localização das Filiais (por CEP)
             </h4>
             <p className="text-[10px] font-bold text-zinc-500">
-              {branches.length} unidade(s) mapeada(s) • Clique no marcador para abrir o resumo
+              {branches.length} unidade(s) localizada(s) • Clique no marcador para abrir o resumo
             </p>
           </div>
         </div>
