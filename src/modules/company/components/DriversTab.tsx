@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { createClient } from "@supabase/supabase-js";
-import { CheckCircle2, Search, X, Plus, Key, ChevronLeft, ChevronRight, Edit2, User } from "lucide-react";
+import { CheckCircle2, Search, X, Plus, Key, ChevronLeft, ChevronRight, Edit2, User, FileSpreadsheet, Printer, FileText } from "lucide-react";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import { logSystemAudit } from "@/src/lib/systemAuditService";
+import { exportDriversToExcel, exportDriversToPDF } from "@/src/utils/exportDriverCatalog";
+import DriverListPrintModal from "@/src/modules/company/components/DriverListPrintModal";
 
 interface DriversTabProps {
   branchId?: string;
@@ -19,6 +21,7 @@ export default function DriversTab({ branchId }: DriversTabProps = {}) {
   const [currentUserIndex, setCurrentUserIndex] = useState(0);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
 
@@ -464,6 +467,24 @@ export default function DriversTab({ branchId }: DriversTabProps = {}) {
               />
             </div>
             
+            <button
+              type="button"
+              onClick={() => exportDriversToExcel(filteredUsers, branches, branchId ? "Motoristas_Filial" : "Relatorio_Motoristas")}
+              className="px-3.5 py-2 bg-emerald-50 border border-emerald-200/80 text-emerald-700 hover:bg-emerald-100 text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              title="Exportar motoristas em Excel (.xlsx)"
+            >
+              <FileSpreadsheet size={14} /> Excel
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowPrintModal(true)}
+              className="px-3.5 py-2 bg-blue-50 border border-blue-200/80 text-blue-700 hover:bg-blue-100 text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              title="Imprimir relação de motoristas"
+            >
+              <Printer size={14} /> Imprimir
+            </button>
+
             <button
               onClick={openCreateForm}
               className="flex-1 sm:flex-none px-4 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-all shadow-sm"
@@ -958,6 +979,14 @@ export default function DriversTab({ branchId }: DriversTabProps = {}) {
             </form>
           </div>
         </div>
+      )}
+      {showPrintModal && (
+        <DriverListPrintModal
+          drivers={filteredUsers}
+          branches={branches}
+          branchName={branches.find((b) => b.id === branchId)?.name}
+          onClose={() => setShowPrintModal(false)}
+        />
       )}
     </div>
   );
