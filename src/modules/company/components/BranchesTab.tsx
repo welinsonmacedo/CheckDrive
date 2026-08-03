@@ -21,11 +21,15 @@ import {
   Truck,
   Users,
   ChevronRight,
+  Map,
+  LayoutGrid,
+  Layers,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import VehiclesTab from "./VehiclesTab";
 import DriversTab from "./DriversTab";
 import MaintenanceTab from "./MaintenanceTab";
+import BranchMap from "./BranchMap";
 
 export interface Branch {
   id: string;
@@ -59,6 +63,7 @@ export default function BranchesTab() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [displayMode, setDisplayMode] = useState<"ambos" | "mapa" | "cards">("ambos");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dbError, setDbError] = useState(false);
@@ -511,103 +516,121 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-xs font-sans">
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    Nome da Filial / Unidade
-                  </span>
-                  <p className="text-sm font-bold text-zinc-800">
-                    {selectedBranch.name}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    Código Interno (ID)
-                  </span>
-                  <p className="text-xs font-mono font-bold text-zinc-700 break-all">
-                    {selectedBranch.id}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    CNPJ
-                  </span>
-                  <p className="text-sm font-bold text-zinc-800">
-                    {selectedBranch.cnpj || "Não informado"}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    CEP
-                  </span>
-                  <p className="text-sm font-bold text-zinc-800">
-                    {selectedBranch.cep || "Não informado"}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1 lg:col-span-2">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    Endereço / Bairro / Logradouro
-                  </span>
-                  <p className="text-sm font-bold text-zinc-800">
-                    {selectedBranch.location || "Não informado"}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    Cidade
-                  </span>
-                  <p className="text-sm font-bold text-zinc-800">
-                    {selectedBranch.city || "Não informada"}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    Estado (UF)
-                  </span>
-                  <p className="text-sm font-bold text-zinc-800">
-                    {selectedBranch.state || "Não informado"}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    Status
-                  </span>
-                  <div>
-                    <span
-                      className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                        selectedBranch.active !== false
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-zinc-100 text-zinc-600 border border-zinc-200"
-                      }`}
-                    >
-                      {selectedBranch.active !== false ? "Ativa" : "Inativa"}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
+                {/* Details Grid */}
+                <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      Nome da Filial / Unidade
                     </span>
+                    <p className="text-sm font-bold text-zinc-800">
+                      {selectedBranch.name}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      Código Interno (ID)
+                    </span>
+                    <p className="text-xs font-mono font-bold text-zinc-700 break-all">
+                      {selectedBranch.id}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      CNPJ
+                    </span>
+                    <p className="text-sm font-bold text-zinc-800">
+                      {selectedBranch.cnpj || "Não informado"}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      CEP
+                    </span>
+                    <p className="text-sm font-bold text-zinc-800">
+                      {selectedBranch.cep || "Não informado"}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1 sm:col-span-2">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      Endereço / Bairro / Logradouro
+                    </span>
+                    <p className="text-sm font-bold text-zinc-800">
+                      {selectedBranch.location || "Não informado"}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      Cidade
+                    </span>
+                    <p className="text-sm font-bold text-zinc-800">
+                      {selectedBranch.city || "Não informada"}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      Estado (UF)
+                    </span>
+                    <p className="text-sm font-bold text-zinc-800">
+                      {selectedBranch.state || "Não informado"}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      Status
+                    </span>
+                    <div>
+                      <span
+                        className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                          selectedBranch.active !== false
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-zinc-100 text-zinc-600 border border-zinc-200"
+                        }`}
+                      >
+                        {selectedBranch.active !== false ? "Ativa" : "Inativa"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      Telefone de Contato
+                    </span>
+                    <p className="text-sm font-bold text-zinc-800">
+                      {selectedBranch.phone || "Não informado"}
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1 sm:col-span-2">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
+                      Gerente / Responsável
+                    </span>
+                    <p className="text-sm font-bold text-zinc-800">
+                      {selectedBranch.manager || "Não informado"}
+                    </p>
                   </div>
                 </div>
 
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    Telefone de Contato
+                {/* Map View of Branch */}
+                <div className="lg:col-span-1 flex flex-col space-y-2">
+                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider px-1">
+                    Localização no Mapa
                   </span>
-                  <p className="text-sm font-bold text-zinc-800">
-                    {selectedBranch.phone || "Não informado"}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-1 lg:col-span-2">
-                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">
-                    Gerente / Responsável
-                  </span>
-                  <p className="text-sm font-bold text-zinc-800">
-                    {selectedBranch.manager || "Não informado"}
-                  </p>
+                  <div className="flex-1 min-h-[280px]">
+                    <BranchMap
+                      branches={[selectedBranch]}
+                      selectedBranchId={selectedBranch.id}
+                      onSelectBranch={() => {}}
+                      className="h-full min-h-[280px]"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -684,8 +707,8 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
             </div>
           )}
 
-          {/* Search Bar */}
-          <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-app-border shadow-sm">
+          {/* Search Bar & View Mode Toggle */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white p-2 rounded-2xl border border-app-border shadow-sm">
             <div className="relative flex-1">
               <Search
                 size={16}
@@ -699,7 +722,54 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
                 className="w-full pl-10 pr-4 py-2 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans"
               />
             </div>
+
+            <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl shrink-0 self-end sm:self-auto font-sans">
+              <button
+                type="button"
+                onClick={() => setDisplayMode("ambos")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  displayMode === "ambos"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                <Layers size={14} /> Mapa + Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisplayMode("mapa")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  displayMode === "mapa"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                <Map size={14} /> Mapa
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisplayMode("cards")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  displayMode === "cards"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                <LayoutGrid size={14} /> Cards
+              </button>
+            </div>
           </div>
+
+          {/* Interactive Branch Map */}
+          {!loading && filteredBranches.length > 0 && displayMode !== "cards" && (
+            <div className="animate-fade-in">
+              <BranchMap
+                branches={filteredBranches}
+                selectedBranchId={selectedBranchId}
+                onSelectBranch={(id) => handleSelectBranch(id)}
+              />
+            </div>
+          )}
 
           {/* Branch List */}
           {loading ? (
@@ -727,7 +797,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
                 Cadastrar Primeira Filial
               </button>
             </div>
-          ) : (
+          ) : displayMode !== "mapa" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredBranches.map((branch) => (
                 <motion.div
@@ -836,7 +906,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
                 </motion.div>
               ))}
             </div>
-          )}
+          ) : null}
         </>
       )}
 
