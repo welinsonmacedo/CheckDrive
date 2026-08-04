@@ -1,11 +1,17 @@
 export type RecordCategory =
   | "Combustível"
+  | "Diesel"
+  | "Arla"
+  | "Lava-jato"
+  | "Pneus Novos"
+  | "Recapagem"
+  | "Pneus"
+  | "Rastreamento"
   | "Pedágio"
   | "Multa"
   | "Seguro"
   | "Manutenção"
   | "Lubrificantes"
-  | "Pneus"
   | "Peças"
   | "Outros";
 

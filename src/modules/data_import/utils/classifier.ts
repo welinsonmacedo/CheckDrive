@@ -3,12 +3,48 @@ import { RecordCategory } from "../types";
 export function categorizeAccount(accountName: string, accountDescription?: string): RecordCategory {
   const combined = `${accountName || ""} ${accountDescription || ""}`.toLowerCase();
 
+  if (combined.includes("diesel") || combined.includes("s10") || combined.includes("s500")) {
+    return "Diesel";
+  }
+
+  if (combined.includes("arla") || combined.includes("arla32") || combined.includes("arla 32")) {
+    return "Arla";
+  }
+
   if (
-    combined.includes("diesel") ||
+    combined.includes("lava-jato") ||
+    combined.includes("lavajato") ||
+    combined.includes("lavagem") ||
+    combined.includes("ducha") ||
+    combined.includes("higieniza")
+  ) {
+    return "Lava-jato";
+  }
+
+  if (combined.includes("recapagem") || combined.includes("recap") || combined.includes("vulcanização")) {
+    return "Recapagem";
+  }
+
+  if (combined.includes("pneu novo") || combined.includes("pneus novos") || combined.includes("pneu n")) {
+    return "Pneus Novos";
+  }
+
+  if (
+    combined.includes("rastream") ||
+    combined.includes("rastreador") ||
+    combined.includes("telemetria") ||
+    combined.includes("sascar") ||
+    combined.includes("omnilink") ||
+    combined.includes("autotrac") ||
+    combined.includes("cobli")
+  ) {
+    return "Rastreamento";
+  }
+
+  if (
     combined.includes("gasolina") ||
     combined.includes("etanol") ||
     combined.includes("combust") ||
-    combined.includes("arla") ||
     combined.includes("gnv") ||
     combined.includes("post")
   ) {
@@ -60,8 +96,6 @@ export function categorizeAccount(accountName: string, accountDescription?: stri
 
   if (
     combined.includes("pneu") ||
-    combined.includes("recapagem") ||
-    combined.includes("vulcanização") ||
     combined.includes("alinhamento") ||
     combined.includes("balanceamento") ||
     combined.includes("câmara")
