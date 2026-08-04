@@ -66,6 +66,7 @@ import FeedbackTab from "@/src/modules/company/components/FeedbackTab";
 import NotificationsTab from "@/src/modules/company/components/NotificationsTab";
 import InsurancesTab from "@/src/modules/company/components/InsurancesTab";
 import BranchesTab from "@/src/modules/company/components/BranchesTab";
+import ImportModuleView from "@/src/modules/data_import/components/ImportModuleView";
 import MyVehicles from "@/src/modules/driver/pages/MyVehicles";
 import MyDrivers from "@/src/modules/driver/pages/MyDrivers";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
@@ -110,6 +111,7 @@ const tabToModuleMap: Record<string, string> = {
   database: "intelligence",
 
   checkdrive_ai: "checkdrive_ai",
+  data_import: "data_import",
 };
 
 const MODULES = [
@@ -255,6 +257,20 @@ const MODULES = [
     badgeBg: "bg-indigo-100 text-indigo-700",
     items: [
       { id: "checkdrive_ai", icon: Bot, label: "CheckDrive AI", color: "from-blue-600 via-indigo-600 to-purple-600" },
+    ],
+  },
+  {
+    id: "data_import",
+    title: "Importação de Dados",
+    subtitle: "Senior / SOFTran PDF",
+    description: "Módulo isolado para leitura de relatórios PDF, validação SHA-256 e staging area.",
+    icon: HardDrive,
+    color: "from-blue-600 via-indigo-700 to-slate-800",
+    bgGradient: "from-blue-50 via-indigo-50 to-slate-50/50",
+    borderHover: "hover:border-blue-300",
+    badgeBg: "bg-blue-100 text-blue-700",
+    items: [
+      { id: "data_import", icon: HardDrive, label: "Importação de Dados", color: "from-blue-600 to-indigo-700" },
     ],
   },
 ];
@@ -1052,6 +1068,11 @@ export default function AdminDashboard() {
             <div className="w-full h-full relative">
             <div className={activeTab === "checkdrive_ai" ? "block h-full animate-fadeIn" : "hidden"}>
               {visitedTabs.has("checkdrive_ai") && <CheckDriveAiTab />}
+            </div>
+            <div className={activeTab === "data_import" ? "block h-full animate-fadeIn" : "hidden"}>
+              {visitedTabs.has("data_import") && (
+                <ImportModuleView companyId={user?.company_id || "2988d70f-3c53-4563-a442-67c20ea40b7a"} />
+              )}
             </div>
             <div className={activeTab === "overview" ? "block h-full animate-fadeIn" : "hidden"}>
               {visitedTabs.has("overview") && <OverviewTab setActiveTab={setActiveTab} appSettings={appSettings} />}
