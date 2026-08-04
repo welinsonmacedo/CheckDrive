@@ -86,10 +86,26 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
       const result = await parseSeniorPdfFile(file, companyId);
       setProgress(70);
 
+      if (!result.records || result.records.length === 0) {
+        setErrorMessage(
+          "Nenhum lançamento com data e valor foi identificado no arquivo PDF selecionado. Certifique-se de enviar um relatório exportado do sistema Senior/SOFTran contendo lançamentos de despesas/frota."
+        );
+        setStep("upload");
+        return;
+      }
+
       // Filter by selected categories
       const filteredRecords = result.records.filter((r) =>
         selectedCategories.includes(r.tipo_registro)
       );
+
+      if (filteredRecords.length === 0) {
+        setErrorMessage(
+          "Nenhum lançamento do PDF corresponde às categorias selecionadas no filtro. Tente marcar todas as categorias para visualizá-los."
+        );
+        setStep("upload");
+        return;
+      }
 
       // Estimate duplicates/conflicts before saving
       let countNovos = 0;
