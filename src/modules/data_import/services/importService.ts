@@ -511,6 +511,57 @@ export class ImportService {
   }
 
   /**
+   * Delete an entire Import Job and its associated records, conflicts, and logs
+   */
+  static async deleteImportJob(jobId: string, companyId: string): Promise<boolean> {
+    const formattedCompanyId = formatUuid(companyId);
+
+    // 1. Supabase Deletions
+    try {
+      await supabase.from("import_records").delete().eq("import_job_id", jobId);
+      await supabase.from("import_logs").delete().eq("import_job_id", jobId);
+      await supabase.from("import_jobs").delete().eq("id", jobId);
+    } catch (e) {
+      console.warn("Supabase deleteImportJob error:", e);
+    }
+
+    // 2. Local Forage Deletions
+    await JOBS_STORE.removeItem(jobId);
+
+    const recordKeysToRemove: string[] = [];
+    await RECORDS_STORE.iterate((r: ImportRecord, key) => {
+      if (r.import_job_id === jobId) {
+        recordKeysToRemove.push(key);
+      }
+    });
+    for (const key of recordKeysToRemove) {
+      await RECORDS_STORE.removeItem(key);
+    }
+
+    const logKeysToRemove: string[] = [];
+    await LOGS_STORE.iterate((l: ImportLog, key) => {
+      if (l.import_job_id === jobId) {
+        logKeysToRemove.push(key);
+      }
+    });
+    for (const key of logKeysToRemove) {
+      await LOGS_STORE.removeItem(key);
+    }
+
+    const conflictKeysToRemove: string[] = [];
+    await CONFLICTS_STORE.iterate((c: ImportConflict, key) => {
+      if (c.empresa_id === companyId || c.empresa_id === formattedCompanyId) {
+        conflictKeysToRemove.push(key);
+      }
+    });
+    for (const key of conflictKeysToRemove) {
+      await CONFLICTS_STORE.removeItem(key);
+    }
+
+    return true;
+  }
+
+  /**
    * Fetch execution logs
    */
   static async getLogs(companyId: string, jobId?: string): Promise<ImportLog[]> {

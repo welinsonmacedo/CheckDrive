@@ -10,6 +10,7 @@ import {
   User,
   Layers,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { ImportJob } from "../types";
 import { ImportService } from "../services/importService";
@@ -45,6 +46,24 @@ export default function ImportFilesTab({ companyId, onSelectJob }: Props) {
       j.nome_arquivo.toLowerCase().includes(search.toLowerCase()) ||
       (j.periodo && j.periodo.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const handleDeleteJob = async (jobId: string, fileName: string) => {
+    if (
+      window.confirm(
+        `Tem certeza que deseja apagar o lote "${fileName}"?\n\nEsta ação removerá o lote e todos os seus registros importados do banco de dados.`
+      )
+    ) {
+      setLoading(true);
+      try {
+        await ImportService.deleteImportJob(jobId, companyId);
+        await loadJobs();
+      } catch (e: any) {
+        alert("Erro ao apagar lote: " + e?.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -142,23 +161,30 @@ export default function ImportFilesTab({ companyId, onSelectJob }: Props) {
                     <td className="p-4 text-center font-bold text-emerald-600">{job.novos}</td>
                     <td className="p-4 text-center font-bold text-amber-600">{job.duplicados}</td>
                     <td className="p-4 text-center font-bold text-rose-600">{job.conflitos}</td>
-                    <td className="p-4 text-right space-x-2">
+                    <td className="p-4 text-right space-x-1.5">
                       {job.status !== "aprovado" && (
                         <button
                           onClick={async () => {
                             await ImportService.approveJob(job.id, companyId);
                             await loadJobs();
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-colors inline-flex items-center gap-1 border border-emerald-200"
+                          className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-colors inline-flex items-center gap-1 border border-emerald-200"
                         >
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar Lote
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
                         </button>
                       )}
                       <button
                         onClick={() => onSelectJob(job.id)}
-                        className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-bold transition-colors inline-flex items-center gap-1"
+                        className="px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-bold transition-colors inline-flex items-center gap-1"
                       >
                         Visualizar <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteJob(job.id, job.nome_arquivo)}
+                        title="Apagar Lote"
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-colors inline-flex items-center gap-1 border border-rose-200"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Apagar
                       </button>
                     </td>
                   </tr>
