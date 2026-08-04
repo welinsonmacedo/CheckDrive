@@ -24,44 +24,44 @@ export async function parseSeniorPdfFile(
 
   try {
     const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    
+
     for (let i = 1; i <= pdfDoc.numPages; i++) {
       const page = await pdfDoc.getPage(i);
       const textContent = await page.getTextContent();
-      
+
       const items = textContent.items as any[];
       const textItems = items.filter((item) => typeof item.str === "string" && item.str.length > 0);
-      
-      // Group items into lines by Y coordinate (vertical positioning) with ~3.5px tolerance
+
+      // Group items into lines by Y coordinate (vertical positioning) with 3.5px tolerance
       const lineMap = new Map<number, { x: number; text: string }[]>();
-      
+
       for (const item of textItems) {
         const transform = item.transform || [1, 0, 0, 1, 0, 0];
         const x = transform[4] || 0;
         const yRaw = transform[5] || 0;
         const yBucket = Math.round(yRaw / 3.5) * 3.5;
-        
+
         if (!lineMap.has(yBucket)) {
           lineMap.set(yBucket, []);
         }
         lineMap.get(yBucket)!.push({ x, text: item.str });
       }
-      
+
       // Sort Y buckets descending (top to bottom on PDF page)
       const sortedY = Array.from(lineMap.keys()).sort((a, b) => b - a);
       const pageLines: string[] = [];
-      
+
       for (const y of sortedY) {
         const lineItems = lineMap.get(y)!;
         // Sort items on the same line left-to-right by X coordinate
         lineItems.sort((a, b) => a.x - b.x);
-        
+
         const lineString = lineItems.map((i) => i.text).join(" ").replace(/\s+/g, " ").trim();
         if (lineString) {
           pageLines.push(lineString);
         }
       }
-      
+
       fullText += pageLines.join("\n") + "\n";
     }
   } catch (err) {
@@ -82,7 +82,9 @@ export async function parseSeniorTextContent(
   empresa_id: string
 ): Promise<ParsedPdfResult> {
   // Extract Period if available
-  const periodoMatch = fullText.match(/(?:período|periodo|data\s+inicial|de|emissã[o0]):\s*([\d\/\.\-]+(?:\s*a\s*[\d\/\.\-]+)?)/i);
+  const periodoMatch =
+    fullText.match(/Período\s+de:\s*([\d\/\.\-]+(?:\s*at[ée]\s*[\d\/\.\-]+)?)/i) ||
+    fullText.match(/(?:período|periodo|data\s+inicial|de|emissã[o0]):\s*([\d\/\.\-]+(?:\s*a\s*[\d\/\.\-]+)?)/i);
   const periodo = periodoMatch ? periodoMatch[1].trim() : `${new Date().toLocaleDateString("pt-BR")}`;
 
   const lines = fullText
@@ -90,177 +92,157 @@ export async function parseSeniorTextContent(
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 
-  // Find first license plate in the entire document as a global document fallback
-  const globalPlacaMatch = fullText.match(/\b([A-Z]{3}-?\d[A-Z0-9]\d{2})\b/i);
-  const globalFallbackPlate = globalPlacaMatch ? globalPlacaMatch[1].toUpperCase().replace("-", "") : "GERAL";
-
-  let rawRecords: any[] = [];
-  let currentVehicle = "";
+  const rawRecords: any[] = [];
+  let currentVehicleCode = "";
   let currentFleet = "";
+  let currentPlaca = "";
+  let currentContaNumber = "";
+  let currentContaName = "";
+  let currentContaFull = "Lançamento Geral";
 
-  const placaRegex = /\b([A-Z]{3}-?\d[A-Z0-9]\d{2})\b/i;
-  const frotaRegex = /(?:frota|veículo|veiculo|unid\.?|cód\.?\s*veíc):\s*([A-Z0-9\-]+)/i;
-  // Dates: DD/MM/YYYY, DD/MM/YY, YYYY-MM-DD, DD-MM-YYYY
-  const dateRegex = /\b(\d{2}[\/\.-]\d{2}[\/\.-]\d{2,4}|\d{4}-\d{2}-\d{2})\b/;
+  const plateRegex = /\b([A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4})\b/i;
+  const dateRegex = /^(\d{2}\/\d{2}\/\d{4})\b/;
 
-  // PASS 1: Line by line standard report parsing
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // Check for vehicle/fleet header in line
-    const frotaMatch = line.match(frotaRegex);
-    if (frotaMatch) {
-      currentFleet = frotaMatch[1].trim();
-    }
-    const placaMatch = line.match(placaRegex);
-    if (placaMatch) {
-      currentVehicle = placaMatch[1].toUpperCase().replace("-", "");
+    // Ignore header and footer summary lines
+    if (
+      line.startsWith("Total ") ||
+      line.startsWith("GFV Versão") ||
+      line.startsWith("Receitas/Despesas") ||
+      line.startsWith("Período de:") ||
+      line.startsWith("Lançamento Hodômetro") ||
+      line.includes("Total da Conta:") ||
+      line.includes("Total de Receitas") ||
+      line.includes("Total de Despesas") ||
+      line.includes("Total Líquido:") ||
+      line.includes("Total Geral") ||
+      line.startsWith("SOFtran")
+    ) {
+      continue;
     }
 
-    // Look for lines containing date + numerical amounts
+    // Check for Veículo header line e.g., "Veículo: 0", "Veículo: 1 101 OOW9770", "Veículo: 17 HOA0893", "Veículo: 62 PARCEIRO AAA0000"
+    if (line.match(/^Ve[íi]culo:/i)) {
+      const vehicleText = line.replace(/^Ve[íi]culo:\s*/i, "").trim();
+      const plateMatch = vehicleText.match(plateRegex);
+
+      if (plateMatch) {
+        currentPlaca = plateMatch[1].replace("-", "").toUpperCase();
+      } else {
+        const firstWord = vehicleText.split(/\s+/)[0];
+        currentPlaca = firstWord ? `VEIC-${firstWord.padStart(2, "0")}` : "FROTA-GERAL";
+      }
+
+      const parts = vehicleText.split(/\s+/);
+      currentVehicleCode = parts[0] || "";
+      if (parts.length >= 3 && !parts[1].match(plateRegex)) {
+        currentFleet = parts[1];
+      } else {
+        currentFleet = currentVehicleCode;
+      }
+      continue;
+    }
+
+    // Check for Conta header line e.g., "Conta: 106 Gasolina 06.02.001", "Conta: 104 Diesel S10 06.01.002"
+    if (line.match(/^Conta:/i)) {
+      const contaText = line.replace(/^Conta:\s*/i, "").trim();
+      const contaMatch = contaText.match(/^(\d+)\s+(.*?)(?:\s+(\d{2}\.\d{2}\.\d{3}))?$/);
+
+      if (contaMatch) {
+        currentContaNumber = contaMatch[1];
+        currentContaName = contaMatch[2].trim();
+      } else {
+        currentContaNumber = "";
+        currentContaName = contaText;
+      }
+
+      currentContaFull = currentContaName
+        ? `${currentContaName}${currentContaNumber ? ` (${currentContaNumber})` : ""}`
+        : "Lançamento Geral";
+      continue;
+    }
+
+    // Check for Date line starting with DD/MM/YYYY
     const dMatch = line.match(dateRegex);
     if (dMatch) {
-      const recordDateStr = dMatch[1];
-      const isoDate = convertToIsoDate(recordDateStr);
+      const dateBr = dMatch[1];
+      const isoDate = convertBrDateToIso(dateBr);
 
-      // Extract numbers (monetary/quantity)
-      // Brazilian currency format e.g. 1.250,50 or 50,00 or standard 1250.50
-      const brMoneyMatches = line.match(/\b\d{1,3}(?:\.\d{3})*,\d{2}\b/g) || [];
-      const stdMoneyMatches = line.match(/\b\d+\.\d{2}\b/g) || [];
+      const afterDate = line.substring(dateBr.length).trim();
+
+      // Extract all Brazilian currency/number formatted tokens e.g. 69,08 or 462,15 or 251.753,0 or 1,00
+      const brNumberMatches = line.match(/\b\d{1,3}(?:\.\d{3})*,\d{1,2}\b/g) || [];
 
       let valor = 0;
       let quantidade = 1;
+      let hodometro: number | undefined = undefined;
 
-      if (brMoneyMatches.length > 0) {
-        valor = parseBrFloat(brMoneyMatches[brMoneyMatches.length - 1]);
-        if (brMoneyMatches.length > 1) {
-          quantidade = parseBrFloat(brMoneyMatches[0]);
+      if (brNumberMatches.length >= 2) {
+        // Last number is Valor, second to last is Quantity
+        valor = parseBrFloat(brNumberMatches[brNumberMatches.length - 1]);
+        quantidade = parseBrFloat(brNumberMatches[brNumberMatches.length - 2]);
+
+        // If there's a 3rd number, check if it's Hodômetro (e.g. 251.753,0)
+        if (brNumberMatches.length >= 3) {
+          const candidateKm = parseBrFloat(brNumberMatches[0]);
+          if (candidateKm > 0) {
+            hodometro = Math.round(candidateKm);
+          }
         }
-      } else if (stdMoneyMatches.length > 0) {
-        valor = parseFloat(stdMoneyMatches[stdMoneyMatches.length - 1]) || 0;
-        if (stdMoneyMatches.length > 1) {
-          quantidade = parseFloat(stdMoneyMatches[0]) || 1;
-        }
+      } else if (brNumberMatches.length === 1) {
+        valor = parseBrFloat(brNumberMatches[0]);
       }
 
-      // If no monetary format match, try extracting any standalone positive number at end of line
-      if (valor === 0) {
-        const numMatches = line.match(/\b\d+(?:[\.,]\d+)?\b/g) || [];
-        const candidateNums = numMatches
-          .map((n) => parseBrFloat(n))
-          .filter((n) => n > 0 && n < 1000000);
-        if (candidateNums.length > 0) {
-          valor = candidateNums[candidateNums.length - 1];
-        }
+      // Skip invalid or 0 value lines
+      if (valor === 0) continue;
+
+      // Extract Fornecedor and Document details from middle text
+      let middleText = afterDate;
+      brNumberMatches.forEach((numStr) => {
+        middleText = middleText.replace(numStr, "");
+      });
+      middleText = middleText.replace(/\s+/g, " ").trim();
+
+      // Look for document number (e.g., 13241, 110000408, SIC5119771, 76720)
+      let documento = "";
+      const docMatch = middleText.match(/\b(\d{5,10}|NF-?\d+|SIC\d+)\b/i);
+      if (docMatch) {
+        documento = docMatch[1];
       }
 
-      // Skip lines that have date but 0 value and no description
-      if (valor === 0 && !line.toLowerCase().match(/(diesel|pedag|multa|seguro|peça|óleo|mecanic)/)) {
-        continue;
-      }
+      // Extract supplier name by stripping known doc types / codes / numbers
+      const textCleaned = middleText
+        .replace(/\b(PÇS|Serv|Ext|Multas|Acerto|Via|SIC\d+)\b/gi, "")
+        .replace(/\b\d+\b/g, "")
+        .replace(/[-]/g, "")
+        .trim();
 
-      // Extract Odometer / Hodômetro if present (5-7 digits)
-      const kmMatch = line.match(/\b(\d{4,7})\s*(?:km|hodômetro|hodometro)?\b/i);
-      const hodometro = kmMatch ? parseInt(kmMatch[1], 10) : undefined;
+      const fornecedor = textCleaned || "Fornecedor Não Especificado";
 
-      // Extract Account / Descrição
-      let conta = "Lançamento Geral";
-      let descricao = line;
-
-      if (line.toLowerCase().includes("diesel")) {
-        conta = "Combustível - Diesel";
-      } else if (line.toLowerCase().includes("gasolina")) {
-        conta = "Combustível - Gasolina";
-      } else if (line.toLowerCase().includes("pedag") || line.toLowerCase().includes("pedág")) {
-        conta = "Pedágio";
-      } else if (line.toLowerCase().includes("multa")) {
-        conta = "Multas de Trânsito";
-      } else if (line.toLowerCase().includes("seguro")) {
-        conta = "Seguros de Frota";
-      } else if (line.toLowerCase().includes("peça") || line.toLowerCase().includes("peca")) {
-        conta = "Peças e Reposição";
-      } else if (line.toLowerCase().includes("óleo") || line.toLowerCase().includes("oleo") || line.toLowerCase().includes("lubrific")) {
-        conta = "Lubrificantes";
-      } else if (line.toLowerCase().includes("pneu") || line.toLowerCase().includes("recapagem")) {
-        conta = "Pneus";
-      } else if (line.toLowerCase().includes("mecanic") || line.toLowerCase().includes("serviço") || line.toLowerCase().includes("manuten")) {
-        conta = "Serviços Mecânicos / Manutenção";
-      }
-
-      // Extract document number
-      const docMatch = line.match(/(?:doc|nf|nfe|ctr|nº|n°|controle)\s*:?\s*([a-z0-9\-]+)/i);
-      const documento = docMatch ? docMatch[1] : undefined;
-
-      // Extract supplier
-      const fornecedorMatch = line.match(/(?:fornecedor|posto|oficina|empresa|estab):\s*([^,-]+)/i);
-      const fornecedor = fornecedorMatch ? fornecedorMatch[1].trim() : undefined;
-
-      // Plate priority: line plate > current section plate > global doc plate > "GERAL"
-      const linePlateMatch = line.match(placaRegex);
-      const placa = linePlateMatch
-        ? linePlateMatch[1].toUpperCase().replace("-", "")
-        : currentVehicle || globalFallbackPlate;
-
-      const tipo_registro: RecordCategory = categorizeAccount(conta, descricao);
+      // Categorize account using classifier
+      const tipo_registro: RecordCategory = categorizeAccount(currentContaName, line);
 
       rawRecords.push({
         tipo_registro,
-        placa,
+        placa: currentPlaca || "FROTA-GERAL",
         numero_frota: currentFleet || undefined,
         data: isoDate,
-        conta,
-        descricao_conta: descricao,
+        conta: currentContaFull,
+        descricao_conta: `${currentContaName} - ${fornecedor}${documento ? ` (Doc: ${documento})` : ""}`,
         quantidade: quantidade || 1,
         valor: valor || 0,
         hodometro,
         fornecedor,
-        documento,
-        numero_controle: documento,
-        observacoes: `Importado de relatório PDF - ${periodo}`,
+        documento: documento || undefined,
+        numero_controle: documento || undefined,
+        observacoes: `Importado de relatório SOFTran/GFV - Período ${periodo}`,
       });
     }
   }
 
-  // PASS 2: If Pass 1 yielded 0 records, try secondary permissive extraction
-  if (rawRecords.length === 0) {
-    for (const line of lines) {
-      const dMatch = line.match(dateRegex);
-      if (!dMatch) continue;
-
-      // Find any positive numbers in the line
-      const numbers = (line.match(/\b\d+(?:[\.,]\d+)?\b/g) || [])
-        .map((s) => parseBrFloat(s))
-        .filter((val) => val > 0 && val < 500000);
-
-      if (numbers.length === 0) continue;
-
-      const recordDateStr = dMatch[1];
-      const isoDate = convertToIsoDate(recordDateStr);
-      const valor = numbers[numbers.length - 1];
-      const quantidade = numbers.length > 1 ? numbers[0] : 1;
-
-      const linePlateMatch = line.match(placaRegex);
-      const placa = linePlateMatch
-        ? linePlateMatch[1].toUpperCase().replace("-", "")
-        : globalFallbackPlate;
-
-      const conta = "Lançamento Geral";
-      const tipo_registro = categorizeAccount(conta, line);
-
-      rawRecords.push({
-        tipo_registro,
-        placa,
-        data: isoDate,
-        conta,
-        descricao_conta: line,
-        quantidade: quantidade || 1,
-        valor: valor || 0,
-        observacoes: `Importado de relatório PDF - ${periodo}`,
-      });
-    }
-  }
-
-  // Calculate SHA-256 hashes for all extracted records
+  // Calculate SHA-256 hashes for all parsed records
   const recordsWithHash = await Promise.all(
     rawRecords.map(async (r) => {
       const hash = await generateRecordHash({
@@ -292,7 +274,6 @@ export async function parseSeniorTextContent(
 
 function parseBrFloat(strVal: string): number {
   if (!strVal) return 0;
-  // If format is 1.250,50 replace . with empty and , with .
   if (strVal.includes(",")) {
     const clean = strVal.replace(/\./g, "").replace(",", ".");
     return parseFloat(clean) || 0;
@@ -300,24 +281,10 @@ function parseBrFloat(strVal: string): number {
   return parseFloat(strVal) || 0;
 }
 
-function convertToIsoDate(dateStr: string): string {
-  if (!dateStr) return new Date().toISOString().split("T")[0];
-
-  // DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY
-  const brMatch = dateStr.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
-  if (brMatch) {
-    let [, day, month, year] = brMatch;
-    if (year.length === 2) {
-      year = `20${year}`;
-    }
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+function convertBrDateToIso(brDate: string): string {
+  const parts = brDate.split("/");
+  if (parts.length === 3) {
+    return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
   }
-
-  // YYYY-MM-DD
-  const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (isoMatch) {
-    return dateStr;
-  }
-
   return new Date().toISOString().split("T")[0];
 }
