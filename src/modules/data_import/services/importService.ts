@@ -1,11 +1,12 @@
 import { supabase } from "@/src/lib/supabase";
 import localforage from "localforage";
-import { ImportJob, ImportRecord, ImportConflict, ImportLog, ImportJobStatus } from "../types";
+import { ImportJob, ImportRecord, ImportConflict, ImportLog, ImportJobStatus, ReportMold } from "../types";
 
 const JOBS_STORE = localforage.createInstance({ name: "checkdrive_import_jobs" });
 const RECORDS_STORE = localforage.createInstance({ name: "checkdrive_import_records" });
 const CONFLICTS_STORE = localforage.createInstance({ name: "checkdrive_import_conflicts" });
 const LOGS_STORE = localforage.createInstance({ name: "checkdrive_import_logs" });
+const MOLDS_STORE = localforage.createInstance({ name: "checkdrive_import_molds" });
 
 /**
  * Ensures any string ID (like "caiapo" or "default_company") is formatted as a valid UUID v4 string for PostgreSQL UUID columns.
@@ -658,4 +659,123 @@ export class ImportService {
     });
     return logs.sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
   }
+
+  /**
+   * Fetch Report Molds (templates) for an enterprise, including defaults
+   */
+  static async getReportMolds(companyId: string): Promise<ReportMold[]> {
+    const formattedCompanyId = formatUuid(companyId);
+    
+    // Default built-in molds
+    const defaultMolds: ReportMold[] = [
+      {
+        id: "mold_default_1",
+        empresa_id: companyId,
+        nome: "Resumo de Gastos por Categoria",
+        descricao: "Agrupa todas as despesas importadas por tipo de registro (Combustível, Pedágio, Manutenção, etc).",
+        icon: "PieChart",
+        categoria_filtro: "Todas",
+        periodo_dias: 0,
+        agrupar_por: "categoria",
+        metrica: "soma_valor",
+        tipo_grafico: "bar",
+        e_padrao: true,
+      },
+      {
+        id: "mold_default_2",
+        empresa_id: companyId,
+        nome: "Custos por Placa e Frota",
+        descricao: "Analisa o acumulado financeiro de cada veículo/placa com número de lançamentos e totais.",
+        icon: "Truck",
+        categoria_filtro: "Todas",
+        periodo_dias: 0,
+        agrupar_por: "placa",
+        metrica: "soma_valor",
+        tipo_grafico: "bar",
+        e_padrao: true,
+      },
+      {
+        id: "mold_default_3",
+        empresa_id: companyId,
+        nome: "Consumo e Abastecimento de Combustível",
+        descricao: "Filtro exclusivo para Combustível com consumo em litros, valores R$ e variação de hodômetro.",
+        icon: "Fuel",
+        categoria_filtro: "Combustível",
+        periodo_dias: 0,
+        agrupar_por: "placa",
+        metrica: "soma_quantidade",
+        tipo_grafico: "pie",
+        e_padrao: true,
+      },
+      {
+        id: "mold_default_4",
+        empresa_id: companyId,
+        nome: "Despesas por Fornecedor / Posto",
+        descricao: "Mapeamento das maiores despesas concentradas por fornecedores e postos parceiros.",
+        icon: "Building2",
+        categoria_filtro: "Todas",
+        periodo_dias: 0,
+        agrupar_por: "fornecedor",
+        metrica: "soma_valor",
+        tipo_grafico: "pie",
+        e_padrao: true,
+      },
+      {
+        id: "mold_default_5",
+        empresa_id: companyId,
+        nome: "Evolução Mensal de Gastos",
+        descricao: "Acompanhamento da curva mensal de despesas ao longo do tempo.",
+        icon: "TrendingUp",
+        categoria_filtro: "Todas",
+        periodo_dias: 0,
+        agrupar_por: "mes",
+        metrica: "soma_valor",
+        tipo_grafico: "area",
+        e_padrao: true,
+      },
+    ];
+
+    const userMolds: ReportMold[] = [];
+    await MOLDS_STORE.iterate((mold: ReportMold) => {
+      if (mold.empresa_id === companyId || mold.empresa_id === formattedCompanyId) {
+        userMolds.push(mold);
+      }
+    });
+
+    return [...defaultMolds, ...userMolds];
+  }
+
+  /**
+   * Save a user report mold
+   */
+  static async saveReportMold(mold: Partial<ReportMold>): Promise<ReportMold> {
+    const newMold: ReportMold = {
+      id: mold.id || `mold_custom_${crypto.randomUUID()}`,
+      empresa_id: mold.empresa_id || "default_company",
+      nome: mold.nome || "Novo Molde de Relatório",
+      descricao: mold.descricao || "",
+      icon: mold.icon || "FileText",
+      categoria_filtro: mold.categoria_filtro || "Todas",
+      periodo_dias: mold.periodo_dias ?? 0,
+      placa_filtro: mold.placa_filtro || "",
+      fornecedor_filtro: mold.fornecedor_filtro || "",
+      agrupar_por: mold.agrupar_por || "categoria",
+      metrica: mold.metrica || "soma_valor",
+      tipo_grafico: mold.tipo_grafico || "bar",
+      e_padrao: false,
+      created_at: mold.created_at || new Date().toISOString(),
+    };
+
+    await MOLDS_STORE.setItem(newMold.id, newMold);
+    return newMold;
+  }
+
+  /**
+   * Delete a custom user report mold
+   */
+  static async deleteReportMold(moldId: string): Promise<boolean> {
+    await MOLDS_STORE.removeItem(moldId);
+    return true;
+  }
 }
+

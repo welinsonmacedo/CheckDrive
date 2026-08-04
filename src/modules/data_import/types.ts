@@ -83,3 +83,21 @@ export interface ImportFilterOptions {
   startDate?: string;
   endDate?: string;
 }
+
+export interface ReportMold {
+  id: string;
+  empresa_id: string;
+  nome: string;
+  descricao?: string;
+  icon?: string;
+  categoria_filtro?: string;
+  periodo_dias?: number; // 0 for all time, 30, 60, 90, 365
+  placa_filtro?: string;
+  fornecedor_filtro?: string;
+  agrupar_por: "categoria" | "placa" | "fornecedor" | "mes" | "status";
+  metrica: "soma_valor" | "quantidade" | "media_valor" | "soma_quantidade";
+  tipo_grafico: "bar" | "pie" | "line" | "area" | "table";
+  e_padrao?: boolean;
+  created_at?: string;
+}
+

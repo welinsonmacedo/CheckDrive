@@ -9,6 +9,7 @@ import {
   Settings,
   Sparkles,
   ArrowLeft,
+  FileSpreadsheet,
 } from "lucide-react";
 import ImportDashboardTab from "../pages/ImportDashboardTab";
 import ImportWizardTab from "../pages/ImportWizardTab";
@@ -17,6 +18,7 @@ import ImportRecordsTab from "../pages/ImportRecordsTab";
 import ImportValidationTab from "../pages/ImportValidationTab";
 import ImportHistoryTab from "../pages/ImportHistoryTab";
 import ImportSettingsTab from "../pages/ImportSettingsTab";
+import ImportReportsTab from "../pages/ImportReportsTab";
 
 interface Props {
   companyId: string;
@@ -27,6 +29,7 @@ type TabType =
   | "importacoes"
   | "arquivos"
   | "dados_importados"
+  | "relatorios"
   | "validacao"
   | "historico"
   | "configuracoes";
@@ -40,6 +43,7 @@ export default function ImportModuleView({ companyId }: Props) {
     { id: "importacoes", label: "Importações", icon: Upload },
     { id: "arquivos", label: "Arquivos", icon: FileText },
     { id: "dados_importados", label: "Dados Importados", icon: Database },
+    { id: "relatorios", label: "Relatórios & Dashboards", icon: FileSpreadsheet },
     { id: "validacao", label: "Validação", icon: CheckSquare },
     { id: "historico", label: "Histórico", icon: History },
     { id: "configuracoes", label: "Configurações", icon: Settings },
@@ -100,6 +104,8 @@ export default function ImportModuleView({ companyId }: Props) {
       {activeTab === "dados_importados" && (
         <ImportRecordsTab companyId={companyId} selectedJobId={selectedJobId} />
       )}
+
+      {activeTab === "relatorios" && <ImportReportsTab companyId={companyId} />}
 
       {activeTab === "validacao" && <ImportValidationTab companyId={companyId} />}
 
