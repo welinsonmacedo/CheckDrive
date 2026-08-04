@@ -62,6 +62,7 @@ export class ImportService {
   static async createImportJob(job: Partial<ImportJob>): Promise<ImportJob> {
     const companyId = job.empresa_id || "default_company";
     const formattedCompanyId = formatUuid(companyId);
+    const formattedUserId = formatUuid(job.usuario_id || "default_user");
 
     const newJob: ImportJob = {
       id: job.id || crypto.randomUUID(),
@@ -85,6 +86,7 @@ export class ImportService {
     const payloadForSupabase = {
       ...newJob,
       empresa_id: formattedCompanyId,
+      usuario_id: formattedUserId,
     };
 
     try {
@@ -245,25 +247,56 @@ export class ImportService {
     // Save records to Supabase with formatted UUID
     try {
       const supabaseRecords = savedRecords.map((r) => ({
-        ...r,
+        id: r.id,
+        import_job_id: r.import_job_id,
         empresa_id: formattedCompanyId,
+        tipo_registro: r.tipo_registro,
+        placa: r.placa,
+        numero_frota: r.numero_frota || null,
+        data: r.data || null,
+        conta: r.conta || null,
+        descricao_conta: r.descricao_conta || null,
+        quantidade: typeof r.quantidade === "number" && !isNaN(r.quantidade) ? r.quantidade : 1,
+        valor: typeof r.valor === "number" && !isNaN(r.valor) ? r.valor : 0,
+        hodometro: typeof r.hodometro === "number" && !isNaN(r.hodometro) ? Math.round(r.hodometro) : null,
+        fornecedor: r.fornecedor || null,
+        documento: r.documento || null,
+        numero_controle: r.numero_controle || null,
+        observacoes: r.observacoes || null,
+        hash_registro: r.hash_registro,
+        status: r.status,
+        conflito: Boolean(r.conflito),
+        criado_em: r.criado_em || new Date().toISOString(),
       }));
+
       const { error: recErr } = await supabase.from("import_records").insert(supabaseRecords);
       if (recErr) {
         console.warn("Supabase import_records batch save error:", recErr.message);
-        supabaseErrorMsg = recErr.message;
+        if (recErr.message.includes("does not exist") || recErr.message.includes("400") || recErr.message === "Bad Request") {
+          supabaseErrorMsg = "Tabela 'import_records' pendente no Supabase. Os dados foram salvos no Staging Local.";
+        } else {
+          supabaseErrorMsg = recErr.message;
+        }
       }
 
       if (conflictsList.length > 0) {
         const supabaseConflicts = conflictsList.map((c) => ({
-          ...c,
+          id: c.id,
+          import_record_id: c.import_record_id,
           empresa_id: formattedCompanyId,
+          motivo: c.motivo,
+          valor_pdf: c.valor_pdf || {},
+          valor_existente: c.valor_existente || {},
+          resolvido: Boolean(c.resolvido),
+          resolvido_por: c.resolvido_por || null,
+          data_resolucao: c.data_resolucao || null,
+          created_at: c.created_at || new Date().toISOString(),
         }));
         await supabase.from("import_conflicts").insert(supabaseConflicts);
       }
     } catch (e: any) {
       console.warn("Supabase import_records batch save fallback:", e);
-      supabaseErrorMsg = e?.message || "Fallbacked to local storage";
+      supabaseErrorMsg = e?.message || "Salvo em Staging Local";
     }
 
     // Save local copy
@@ -347,7 +380,11 @@ export class ImportService {
 
       if (error) {
         console.warn("Supabase approveRecords error:", error.message);
-        dbError = error.message;
+        if (error.message.includes("does not exist") || error.message.includes("400") || error.message === "Bad Request") {
+          dbError = "Tabela 'import_records' pendente no Supabase (Crie a tabela em 'Configurações' para sync em nuvem).";
+        } else {
+          dbError = error.message;
+        }
       }
     } catch (e: any) {
       console.warn("Supabase approveRecords exception:", e);
