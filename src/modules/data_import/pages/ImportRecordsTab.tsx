@@ -116,6 +116,33 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
     }
   };
 
+  const handleCategoryChangeSingle = async (recordId: string, newCategory: string) => {
+    try {
+      await ImportService.updateRecordCategory([recordId], newCategory, companyId);
+      setRecords((prev) =>
+        prev.map((r) => (r.id === recordId ? { ...r, tipo_registro: newCategory as any } : r))
+      );
+      setFeedbackMsg(`✓ Categoria atualizada para "${newCategory}".`);
+    } catch (e: any) {
+      alert("Erro ao atualizar categoria: " + e.message);
+    }
+  };
+
+  const handleCategoryChangeBulk = async (newCategory: string) => {
+    if (selectedIds.size === 0 || !newCategory) return;
+    try {
+      const ids = Array.from(selectedIds);
+      await ImportService.updateRecordCategory(ids, newCategory, companyId);
+      setRecords((prev) =>
+        prev.map((r) => (ids.includes(r.id) ? { ...r, tipo_registro: newCategory as any } : r))
+      );
+      setFeedbackMsg(`✓ Categoria de ${ids.length} lançamento(s) alterada para "${newCategory}".`);
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      alert("Erro ao atualizar categorias: " + e.message);
+    }
+  };
+
   const handleApproveAllNew = async () => {
     const newRecords = records.filter((r) => r.status === "novo" || r.status === "conflito");
     if (newRecords.length === 0) {
@@ -211,13 +238,35 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
           )}
 
           {selectedIds.size > 0 && (
-            <button
-              onClick={handleApproveSelected}
-              disabled={approving}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-md disabled:opacity-50"
-            >
-              <Check className="w-4 h-4" /> Aprovar Selecionados ({selectedIds.size})
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleCategoryChangeBulk(e.target.value);
+                    e.target.value = "";
+                  }
+                }}
+                className="px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold transition-all focus:outline-none cursor-pointer"
+              >
+                <option value="" disabled>
+                  Mudar Categoria ({selectedIds.size})...
+                </option>
+                {CATEGORIES.filter((c) => c !== "Todos").map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={handleApproveSelected}
+                disabled={approving}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-md disabled:opacity-50"
+              >
+                <Check className="w-4 h-4" /> Aprovar Selecionados ({selectedIds.size})
+              </button>
+            </div>
           )}
 
           <button
@@ -364,7 +413,19 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
                           )}
                         </button>
                       </td>
-                      <td className="p-4 font-bold text-blue-600">{r.tipo_registro}</td>
+                      <td className="p-4">
+                        <select
+                          value={r.tipo_registro}
+                          onChange={(e) => handleCategoryChangeSingle(r.id, e.target.value)}
+                          className="py-1 px-2.5 bg-blue-50/90 hover:bg-blue-100 text-blue-900 font-extrabold text-[11px] rounded-lg border border-blue-200/80 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer transition-colors"
+                        >
+                          {CATEGORIES.filter((c) => c !== "Todos").map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="p-4 font-black text-zinc-900">
                         {r.placa}
                         {r.numero_frota && (

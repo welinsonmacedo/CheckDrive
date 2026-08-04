@@ -386,6 +386,38 @@ export class ImportService {
   }
 
   /**
+   * Update category for a single or multiple import records
+   */
+  static async updateRecordCategory(
+    recordIds: string[],
+    newCategory: string,
+    companyId: string
+  ): Promise<boolean> {
+    if (!recordIds || recordIds.length === 0) return true;
+
+    // 1. Local storage update
+    for (const id of recordIds) {
+      const existing = await RECORDS_STORE.getItem<ImportRecord>(id);
+      if (existing) {
+        const updated: ImportRecord = { ...existing, tipo_registro: newCategory as any };
+        await RECORDS_STORE.setItem(id, updated);
+      }
+    }
+
+    // 2. Supabase update
+    try {
+      await supabase
+        .from("import_records")
+        .update({ tipo_registro: newCategory })
+        .in("id", recordIds);
+    } catch (e) {
+      console.warn("Supabase updateRecordCategory error:", e);
+    }
+
+    return true;
+  }
+
+  /**
    * Fetch imported records with optional filters
    */
   static async getImportRecords(companyId: string, jobId?: string): Promise<ImportRecord[]> {
