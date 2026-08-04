@@ -469,13 +469,28 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
       endMarkerRef.current = null;
     }
 
-    if (!selectedTripMetrics || selectedTripMetrics.locations.length < 2) {
+    if (!selectedTripMetrics || !selectedTripMetrics.locations || selectedTripMetrics.locations.length < 2) {
       return;
     }
 
     let isMounted = true;
-    const locs = selectedTripMetrics.locations;
-    const rawLatLngs: [number, number][] = locs.map((loc) => [
+    const locs = selectedTripMetrics.locations || [];
+    const validLocs = locs.filter(
+      (loc) =>
+        loc &&
+        typeof loc.latitude === "number" &&
+        typeof loc.longitude === "number" &&
+        !isNaN(loc.latitude) &&
+        !isNaN(loc.longitude) &&
+        isFinite(loc.latitude) &&
+        isFinite(loc.longitude)
+    );
+
+    if (validLocs.length < 2) {
+      return;
+    }
+
+    const rawLatLngs: [number, number][] = validLocs.map((loc) => [
       loc.latitude,
       loc.longitude,
     ]);
@@ -501,28 +516,30 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
     polylineRef.current = polyline;
 
     // 2. Add Start (A - Início) and End (B - Fim) markers
-    const startLoc = locs[0];
-    const endLoc = locs[locs.length - 1];
+    const startLoc = validLocs[0];
+    const endLoc = validLocs[validLocs.length - 1];
 
-    const startTime = startLoc.created_at
-      ? new Date(startLoc.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-      : "";
-    const endTime = endLoc.created_at
-      ? new Date(endLoc.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-      : "";
+    if (startLoc) {
+      const startTime = startLoc.created_at
+        ? new Date(startLoc.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+        : "";
+      const startMarker = L.marker([startLoc.latitude, startLoc.longitude], {
+        icon: createStartEndIcon("start", startTime),
+        zIndexOffset: 1500,
+      }).addTo(map);
+      startMarkerRef.current = startMarker;
+    }
 
-    const startMarker = L.marker([startLoc.latitude, startLoc.longitude], {
-      icon: createStartEndIcon("start", startTime),
-      zIndexOffset: 1500,
-    }).addTo(map);
-
-    const endMarker = L.marker([endLoc.latitude, endLoc.longitude], {
-      icon: createStartEndIcon("end", endTime),
-      zIndexOffset: 1500,
-    }).addTo(map);
-
-    startMarkerRef.current = startMarker;
-    endMarkerRef.current = endMarker;
+    if (endLoc) {
+      const endTime = endLoc.created_at
+        ? new Date(endLoc.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+        : "";
+      const endMarker = L.marker([endLoc.latitude, endLoc.longitude], {
+        icon: createStartEndIcon("end", endTime),
+        zIndexOffset: 1500,
+      }).addTo(map);
+      endMarkerRef.current = endMarker;
+    }
 
     // Fit route bounds
     try {
@@ -535,12 +552,26 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
     }
 
     // 3. Fetch street route geometry from OSRM to map along real roads
-    fetchRoadRouteGeometry(locs).then((streetCoords) => {
+    fetchRoadRouteGeometry(validLocs).then((streetCoords) => {
       if (!isMounted || !streetCoords || streetCoords.length < 2) return;
 
+      const validStreetCoords = streetCoords.filter(
+        (pt) =>
+          Array.isArray(pt) &&
+          pt.length >= 2 &&
+          typeof pt[0] === "number" &&
+          typeof pt[1] === "number" &&
+          !isNaN(pt[0]) &&
+          !isNaN(pt[1]) &&
+          isFinite(pt[0]) &&
+          isFinite(pt[1])
+      );
+
+      if (validStreetCoords.length < 2) return;
+
       if (polylineRef.current && routeOutlineRef.current) {
-        polylineRef.current.setLatLngs(streetCoords);
-        routeOutlineRef.current.setLatLngs(streetCoords);
+        polylineRef.current.setLatLngs(validStreetCoords);
+        routeOutlineRef.current.setLatLngs(validStreetCoords);
 
         try {
           const bounds = polylineRef.current.getBounds();
@@ -578,7 +609,15 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
     }
 
     const currLoc = selectedTripMetrics.locations[playbackIndex];
-    if (!currLoc || !currLoc.latitude || !currLoc.longitude) return;
+    if (
+      !currLoc ||
+      typeof currLoc.latitude !== "number" ||
+      typeof currLoc.longitude !== "number" ||
+      isNaN(currLoc.latitude) ||
+      isNaN(currLoc.longitude) ||
+      !isFinite(currLoc.latitude) ||
+      !isFinite(currLoc.longitude)
+    ) return;
 
     const bearing = currLoc.bearing || 0;
     const icon = createPlaybackIcon(bearing);
@@ -607,8 +646,17 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
     if (!showHeatmap) return;
 
     driverStates.forEach((ds) => {
-      const { latitude: lat, longitude: lng } = ds.latestLocation;
-      if (lat && lng) {
+      const lat = ds.latestLocation?.latitude;
+      const lng = ds.latestLocation?.longitude;
+      if (
+        typeof lat === "number" &&
+        typeof lng === "number" &&
+        !isNaN(lat) &&
+        !isNaN(lng) &&
+        isFinite(lat) &&
+        isFinite(lng) &&
+        (lat !== 0 || lng !== 0)
+      ) {
         const circle = L.circleMarker([lat, lng], {
           radius: 20,
           fillColor: "#ef4444",

@@ -76,8 +76,12 @@ const MAJOR_CITIES: Record<string, { lat: number; lng: number }> = {
 };
 
 function getBranchCoords(branch: Branch, index: number): { lat: number; lng: number } {
-  if (branch.lat && branch.lng) {
-    return { lat: branch.lat, lng: branch.lng };
+  if (branch.lat !== undefined && branch.lat !== null && branch.lng !== undefined && branch.lng !== null) {
+    const latNum = typeof branch.lat === "string" ? parseFloat(branch.lat) : Number(branch.lat);
+    const lngNum = typeof branch.lng === "string" ? parseFloat(branch.lng) : Number(branch.lng);
+    if (!isNaN(latNum) && !isNaN(lngNum) && isFinite(latNum) && isFinite(lngNum) && (latNum !== 0 || lngNum !== 0)) {
+      return { lat: latNum, lng: lngNum };
+    }
   }
 
   const cityKey = (branch.city || "").toLowerCase().trim();
@@ -421,7 +425,20 @@ export default function BranchMap({
     const bounds = L.latLngBounds([]);
 
     branches.forEach((branch, idx) => {
-      const coords = cepCoordsMap[branch.id] || getBranchCoords(branch, idx);
+      const rawCoords = cepCoordsMap[branch.id] || getBranchCoords(branch, idx);
+      if (
+        !rawCoords ||
+        typeof rawCoords.lat !== "number" ||
+        typeof rawCoords.lng !== "number" ||
+        isNaN(rawCoords.lat) ||
+        isNaN(rawCoords.lng) ||
+        !isFinite(rawCoords.lat) ||
+        !isFinite(rawCoords.lng)
+      ) {
+        return;
+      }
+
+      const coords = { lat: rawCoords.lat, lng: rawCoords.lng };
       const isSelected = branch.id === selectedBranchId;
       const icon = createBranchMarkerIcon(branch, isSelected);
 
