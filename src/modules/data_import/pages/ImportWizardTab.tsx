@@ -46,6 +46,9 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
     conflitos: 0,
   });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [createdJobId, setCreatedJobId] = useState<string | null>(null);
+  const [isApproved, setIsApproved] = useState<boolean>(false);
+  const [dbStatusMsg, setDbStatusMsg] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -143,7 +146,7 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
     }
   };
 
-  const handleConfirmImport = async () => {
+  const handleConfirmImport = async (autoApprove: boolean = true) => {
     if (!parsedData || !file) return;
 
     setStep("saving");
@@ -159,14 +162,32 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
         total_registros: parsedData.records.length,
       });
 
+      setCreatedJobId(job.id);
+
       await ImportService.addLog(job.id, companyId, "Upload", `Upload do arquivo PDF ${file.name} finalizado com sucesso.`);
-      setProgress(50);
+      setProgress(40);
 
       // 2. Save Records & Hash Duplicate Checking
       await ImportService.addLog(job.id, companyId, "Leitura", `Lido PDF Senior/SOFTran. ${parsedData.records.length} lançamentos identificados.`);
-      setProgress(80);
+      setProgress(70);
 
       const res = await ImportService.processAndSaveRecords(job.id, companyId, parsedData.records);
+      setProgress(85);
+
+      if (autoApprove) {
+        // Approve records automatically during confirm
+        const approveRes = await ImportService.approveJob(job.id, companyId);
+        setIsApproved(true);
+        if (approveRes.error) {
+          setDbStatusMsg(`Registros salvos localmente. Nota do banco de dados: ${approveRes.error}`);
+        } else {
+          setDbStatusMsg(`✓ ${approveRes.approvedCount} lançamentos aprovados e gravados com sucesso no banco de dados!`);
+        }
+      } else {
+        setIsApproved(false);
+        setDbStatusMsg("Lançamentos gravados em Staging (Pendente de aprovação).");
+      }
+
       setProgress(100);
 
       setSummary({
@@ -181,6 +202,17 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
       console.error(e);
       alert("Erro ao salvar registros no banco de dados.");
       setStep("preview");
+    }
+  };
+
+  const handleManualApproveJob = async () => {
+    if (!createdJobId) return;
+    try {
+      const approveRes = await ImportService.approveJob(createdJobId, companyId);
+      setIsApproved(true);
+      setDbStatusMsg(`✓ ${approveRes.approvedCount} lançamentos aprovados e confirmados no banco de dados com sucesso!`);
+    } catch (e: any) {
+      alert("Erro ao aprovar lançamentos: " + e.message);
     }
   };
 
@@ -444,12 +476,20 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
             <span className="text-xs text-zinc-400">
               * Exibindo os primeiros 100 registros para pré-visualização.
             </span>
-            <button
-              onClick={handleConfirmImport}
-              className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all"
-            >
-              <CheckCircle2 className="w-4 h-4" /> Confirmar e Gravar em Staging
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleConfirmImport(false)}
+                className="px-4 py-3 rounded-2xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs transition-all"
+              >
+                Gravar apenas em Staging
+              </button>
+              <button
+                onClick={() => handleConfirmImport(true)}
+                className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Aprovar Lançamentos & Gravar no Banco
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -461,9 +501,9 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
             <RefreshCw className="w-8 h-8" />
           </div>
           <div>
-            <h3 className="text-lg font-black text-zinc-900">Gravando no Banco de Dados (Staging)...</h3>
+            <h3 className="text-lg font-black text-zinc-900">Gravando e Aprovando no Banco de Dados...</h3>
             <p className="text-xs text-zinc-500 mt-1">
-              Salvando lote de importação, registros e registros de logs.
+              Salvando lote de importação, registros e confirmando gravações no banco de dados.
             </p>
           </div>
           <div className="w-full max-w-md mx-auto bg-zinc-100 rounded-full h-3 overflow-hidden">
@@ -485,9 +525,17 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
           <div>
             <h3 className="text-xl font-black text-zinc-900">Importação Concluída com Sucesso!</h3>
             <p className="text-xs text-zinc-500 mt-1">
-              Os dados do relatório PDF foram armazenados com segurança na área de Staging do CheckDrive.
+              Os dados do relatório PDF foram armazenados com segurança na área de Staging e Banco de Dados.
             </p>
           </div>
+
+          {dbStatusMsg && (
+            <div className={`p-4 rounded-2xl text-xs font-medium max-w-2xl mx-auto ${
+              isApproved ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-zinc-100 text-zinc-700 border border-zinc-200"
+            }`}>
+              {dbStatusMsg}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto">
             <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
@@ -508,11 +556,21 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-4 pt-4">
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+            {!isApproved && (
+              <button
+                onClick={handleManualApproveJob}
+                className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-lg shadow-emerald-500/25 transition-all flex items-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Aprovar e Confirmar no Banco Agora
+              </button>
+            )}
             <button
               onClick={() => {
                 setFile(null);
                 setStep("upload");
+                setIsApproved(false);
+                setDbStatusMsg(null);
               }}
               className="px-5 py-3 rounded-2xl border border-zinc-200 text-zinc-700 font-bold text-xs hover:bg-zinc-50 transition-colors"
             >
@@ -522,7 +580,7 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
               onClick={onFinished}
               className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-lg shadow-blue-500/25 transition-all"
             >
-              Ver Dados Importados
+              Ver Registros Aprovados / Tabela
             </button>
           </div>
         </div>

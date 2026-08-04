@@ -117,6 +117,11 @@ export default function ImportFilesTab({ companyId, onSelectJob }: Props) {
                       {new Date(job.data_importacao).toLocaleString("pt-BR")}
                     </td>
                     <td className="p-4">
+                      {job.status === "aprovado" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-200">
+                          <CheckCircle2 className="w-3 h-3" /> Aprovado
+                        </span>
+                      )}
                       {job.status === "concluido" && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200">
                           <CheckCircle2 className="w-3 h-3" /> Concluído
@@ -137,7 +142,18 @@ export default function ImportFilesTab({ companyId, onSelectJob }: Props) {
                     <td className="p-4 text-center font-bold text-emerald-600">{job.novos}</td>
                     <td className="p-4 text-center font-bold text-amber-600">{job.duplicados}</td>
                     <td className="p-4 text-center font-bold text-rose-600">{job.conflitos}</td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-right space-x-2">
+                      {job.status !== "aprovado" && (
+                        <button
+                          onClick={async () => {
+                            await ImportService.approveJob(job.id, companyId);
+                            await loadJobs();
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-colors inline-flex items-center gap-1 border border-emerald-200"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar Lote
+                        </button>
+                      )}
                       <button
                         onClick={() => onSelectJob(job.id)}
                         className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-bold transition-colors inline-flex items-center gap-1"

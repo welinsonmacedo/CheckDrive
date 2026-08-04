@@ -9,9 +9,9 @@ export type RecordCategory =
   | "Peças"
   | "Outros";
 
-export type ImportJobStatus = "processando" | "concluido" | "conflito" | "erro" | "cancelado";
+export type ImportJobStatus = "processando" | "concluido" | "conflito" | "erro" | "cancelado" | "aprovado";
 
-export type ImportRecordStatus = "novo" | "duplicado" | "conflito" | "erro";
+export type ImportRecordStatus = "novo" | "duplicado" | "conflito" | "erro" | "aprovado";
 
 export interface ImportJob {
   id: string;

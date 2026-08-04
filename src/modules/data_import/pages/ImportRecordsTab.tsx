@@ -10,6 +10,9 @@ import {
   AlertTriangle,
   CheckCircle2,
   Calendar,
+  CheckSquare,
+  Square,
+  Check,
 } from "lucide-react";
 import { ImportRecord, RecordCategory } from "../types";
 import { ImportService } from "../services/importService";
@@ -37,7 +40,10 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
   const [records, setRecords] = useState<ImportRecord[]>([]);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todos");
-  const [statusFilter, setStatusFilter] = useState<"todos" | "novo" | "duplicado" | "conflito">("todos");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "novo" | "duplicado" | "conflito" | "aprovado">("todos");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [approving, setApproving] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadRecords();
@@ -70,6 +76,71 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
 
     return matchesSearch && matchesCategory && matchesStatus;
   });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((r) => r.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const handleApproveSelected = async () => {
+    if (selectedIds.size === 0) return;
+    setApproving(true);
+    setFeedbackMsg(null);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await ImportService.approveRecords(ids, companyId);
+      if (res.error) {
+        setFeedbackMsg(`Salvo localmente. Aviso do banco: ${res.error}`);
+      } else {
+        setFeedbackMsg(`✓ ${res.approvedCount} lançamentos aprovados e confirmados no banco de dados!`);
+      }
+      setSelectedIds(new Set());
+      await loadRecords();
+    } catch (e: any) {
+      setFeedbackMsg(`Erro ao aprovar: ${e?.message}`);
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleApproveAllNew = async () => {
+    const newRecords = records.filter((r) => r.status === "novo" || r.status === "conflito");
+    if (newRecords.length === 0) {
+      alert("Nenhum lançamento pendente encontrado para aprovação.");
+      return;
+    }
+
+    setApproving(true);
+    setFeedbackMsg(null);
+    try {
+      const ids = newRecords.map((r) => r.id);
+      const res = await ImportService.approveRecords(ids, companyId);
+      if (res.error) {
+        setFeedbackMsg(`Salvo localmente. Aviso do banco: ${res.error}`);
+      } else {
+        setFeedbackMsg(`✓ Todos os ${res.approvedCount} lançamentos novos foram aprovados e salvos no banco de dados!`);
+      }
+      setSelectedIds(new Set());
+      await loadRecords();
+    } catch (e: any) {
+      setFeedbackMsg(`Erro ao aprovar: ${e?.message}`);
+    } finally {
+      setApproving(false);
+    }
+  };
 
   const exportCsv = () => {
     if (filtered.length === 0) return alert("Nenhum registro para exportar.");
@@ -124,11 +195,31 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
             Dados Importados (Staging Area)
           </h3>
           <p className="text-xs text-zinc-500">
-            Tabela própria <code className="font-mono text-blue-600 bg-blue-50 px-1 rounded">import_records</code> isolada do sistema principal.
+            Tabela própria <code className="font-mono text-blue-600 bg-blue-50 px-1 rounded">import_records</code> no banco de dados. Aprovação direta disponível.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {records.some((r) => r.status === "novo") && (
+            <button
+              onClick={handleApproveAllNew}
+              disabled={approving}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-md shadow-emerald-600/20 disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-4 h-4" /> Aprovar Todos os Novos
+            </button>
+          )}
+
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleApproveSelected}
+              disabled={approving}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-md disabled:opacity-50"
+            >
+              <Check className="w-4 h-4" /> Aprovar Selecionados ({selectedIds.size})
+            </button>
+          )}
+
           <button
             onClick={exportCsv}
             className="px-3.5 py-2 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors flex items-center gap-2"
@@ -144,6 +235,15 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
           </button>
         </div>
       </div>
+
+      {feedbackMsg && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center justify-between">
+          <span>{feedbackMsg}</span>
+          <button onClick={() => setFeedbackMsg(null)} className="text-emerald-600 hover:underline text-[11px]">
+            Fechar
+          </button>
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="bg-white rounded-3xl p-4 border border-zinc-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
@@ -191,6 +291,14 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
               Novos
             </button>
             <button
+              onClick={() => setStatusFilter("aprovado")}
+              className={`px-3 py-1 rounded-lg transition-colors ${
+                statusFilter === "aprovado" ? "bg-white text-blue-700 shadow-sm" : ""
+              }`}
+            >
+              Aprovados
+            </button>
+            <button
               onClick={() => setStatusFilter("duplicado")}
               className={`px-3 py-1 rounded-lg transition-colors ${
                 statusFilter === "duplicado" ? "bg-white text-amber-700 shadow-sm" : ""
@@ -216,6 +324,15 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
           <table className="w-full text-left text-xs">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-bold">
               <tr>
+                <th className="p-4 w-10 text-center">
+                  <button onClick={toggleSelectAll} className="p-1 hover:text-zinc-800">
+                    {selectedIds.size > 0 && selectedIds.size === filtered.length ? (
+                      <CheckSquare className="w-4 h-4 text-blue-600" />
+                    ) : (
+                      <Square className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+                </th>
                 <th className="p-4">Tipo</th>
                 <th className="p-4">Placa / Frota</th>
                 <th className="p-4">Data</th>
@@ -223,61 +340,78 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
                 <th className="p-4">Fornecedor / Doc</th>
                 <th className="p-4">Qtd</th>
                 <th className="p-4">Valor (R$)</th>
-                <th className="p-4">Status SHA-256</th>
+                <th className="p-4">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 text-zinc-700">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-12 text-center text-zinc-400">
+                  <td colSpan={9} className="p-12 text-center text-zinc-400">
                     Nenhum registro atende aos critérios de busca.
                   </td>
                 </tr>
               ) : (
-                filtered.map((r) => (
-                  <tr key={r.id} className="hover:bg-zinc-50/80 transition-colors">
-                    <td className="p-4 font-bold text-blue-600">{r.tipo_registro}</td>
-                    <td className="p-4 font-black text-zinc-900">
-                      {r.placa}
-                      {r.numero_frota && (
-                        <span className="ml-1 text-[10px] text-zinc-400 font-normal">
-                          ({r.numero_frota})
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-zinc-600 font-medium">{r.data}</td>
-                    <td className="p-4 max-w-xs truncate" title={r.descricao_conta}>
-                      {r.conta}
-                    </td>
-                    <td className="p-4 text-zinc-500">
-                      <div>{r.fornecedor || "N/I"}</div>
-                      {r.documento && (
-                        <div className="text-[10px] text-zinc-400">Doc: {r.documento}</div>
-                      )}
-                    </td>
-                    <td className="p-4 font-semibold text-zinc-800">{r.quantidade}</td>
-                    <td className="p-4 font-black text-zinc-900">
-                      R$ {Number(r.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-4">
-                      {r.status === "novo" && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3" /> Novo
-                        </span>
-                      )}
-                      {r.status === "duplicado" && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200">
-                          <Copy className="w-3 h-3" /> Duplicado
-                        </span>
-                      )}
-                      {r.status === "conflito" && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[10px] font-bold border border-rose-200">
-                          <AlertTriangle className="w-3 h-3" /> Conflito
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                filtered.map((r) => {
+                  const isChecked = selectedIds.has(r.id);
+                  return (
+                    <tr key={r.id} className={`hover:bg-zinc-50/80 transition-colors ${isChecked ? "bg-blue-50/30" : ""}`}>
+                      <td className="p-4 text-center">
+                        <button onClick={() => toggleSelect(r.id)} className="p-1">
+                          {isChecked ? (
+                            <CheckSquare className="w-4 h-4 text-blue-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-zinc-300 hover:text-zinc-500" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="p-4 font-bold text-blue-600">{r.tipo_registro}</td>
+                      <td className="p-4 font-black text-zinc-900">
+                        {r.placa}
+                        {r.numero_frota && (
+                          <span className="ml-1 text-[10px] text-zinc-400 font-normal">
+                            ({r.numero_frota})
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-zinc-600 font-medium">{r.data}</td>
+                      <td className="p-4 max-w-xs truncate" title={r.descricao_conta}>
+                        {r.conta}
+                      </td>
+                      <td className="p-4 text-zinc-500">
+                        <div>{r.fornecedor || "N/I"}</div>
+                        {r.documento && (
+                          <div className="text-[10px] text-zinc-400">Doc: {r.documento}</div>
+                        )}
+                      </td>
+                      <td className="p-4 font-semibold text-zinc-800">{r.quantidade}</td>
+                      <td className="p-4 font-black text-zinc-900">
+                        R$ {Number(r.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-4">
+                        {r.status === "aprovado" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
+                            <CheckCircle2 className="w-3 h-3" /> Aprovado
+                          </span>
+                        )}
+                        {r.status === "novo" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3" /> Novo
+                          </span>
+                        )}
+                        {r.status === "duplicado" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200">
+                            <Copy className="w-3 h-3" /> Duplicado
+                          </span>
+                        )}
+                        {r.status === "conflito" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[10px] font-bold border border-rose-200">
+                            <AlertTriangle className="w-3 h-3" /> Conflito
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

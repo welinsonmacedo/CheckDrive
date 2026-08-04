@@ -7,19 +7,37 @@ const RECORDS_STORE = localforage.createInstance({ name: "checkdrive_import_reco
 const CONFLICTS_STORE = localforage.createInstance({ name: "checkdrive_import_conflicts" });
 const LOGS_STORE = localforage.createInstance({ name: "checkdrive_import_logs" });
 
+/**
+ * Ensures any string ID (like "caiapo" or "default_company") is formatted as a valid UUID v4 string for PostgreSQL UUID columns.
+ */
+export function formatUuid(id: string | undefined): string {
+  if (!id) return "00000000-0000-0000-0000-000000000000";
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(id)) return id;
+
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash << 5) - hash + id.charCodeAt(i);
+    hash |= 0;
+  }
+  const hex = Math.abs(hash).toString(16).padStart(8, "0");
+  return `00000000-0000-4000-8000-${hex.padEnd(12, "0").substring(0, 12)}`;
+}
+
 export class ImportService {
   /**
    * Fetch all Import Jobs for an enterprise
    */
   static async getImportJobs(companyId: string): Promise<ImportJob[]> {
+    const formattedCompanyId = formatUuid(companyId);
     try {
       const { data, error } = await supabase
         .from("import_jobs")
         .select("*")
-        .eq("empresa_id", companyId)
+        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`)
         .order("created_at", { ascending: false });
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         return data as ImportJob[];
       }
     } catch (e) {
@@ -29,7 +47,7 @@ export class ImportService {
     // Local fallback
     const localJobs: ImportJob[] = [];
     await JOBS_STORE.iterate((value: ImportJob) => {
-      if (value.empresa_id === companyId) {
+      if (value.empresa_id === companyId || value.empresa_id === formattedCompanyId) {
         localJobs.push(value);
       }
     });
@@ -42,9 +60,12 @@ export class ImportService {
    * Create a new Import Job
    */
   static async createImportJob(job: Partial<ImportJob>): Promise<ImportJob> {
+    const companyId = job.empresa_id || "default_company";
+    const formattedCompanyId = formatUuid(companyId);
+
     const newJob: ImportJob = {
       id: job.id || crypto.randomUUID(),
-      empresa_id: job.empresa_id || "default_company",
+      empresa_id: companyId,
       usuario_id: job.usuario_id || "user",
       usuario_nome: job.usuario_nome || "Gestor de Frota",
       nome_arquivo: job.nome_arquivo || "relatorio.pdf",
@@ -61,14 +82,21 @@ export class ImportService {
       updated_at: new Date().toISOString(),
     };
 
+    const payloadForSupabase = {
+      ...newJob,
+      empresa_id: formattedCompanyId,
+    };
+
     try {
-      const { data, error } = await supabase.from("import_jobs").insert(newJob).select().single();
+      const { data, error } = await supabase.from("import_jobs").insert(payloadForSupabase).select().single();
       if (!error && data) {
         await JOBS_STORE.setItem(newJob.id, data);
-        return data as ImportJob;
+        return { ...data, empresa_id: companyId } as ImportJob;
+      } else if (error) {
+        console.warn("Supabase import_jobs insert error:", error.message);
       }
     } catch (e) {
-      console.warn("Supabase import_jobs insert fallback:", e);
+      console.warn("Supabase import_jobs insert exception:", e);
     }
 
     await JOBS_STORE.setItem(newJob.id, newJob);
@@ -103,7 +131,10 @@ export class ImportService {
     job: ImportJob;
     savedRecords: ImportRecord[];
     conflicts: ImportConflict[];
+    supabaseError?: string;
   }> {
+    const formattedCompanyId = formatUuid(companyId);
+
     // 1. Get existing records to check duplicates & conflicts
     const existingHashes = new Set<string>();
     const existingRecordsList: ImportRecord[] = [];
@@ -112,7 +143,7 @@ export class ImportService {
       const { data } = await supabase
         .from("import_records")
         .select("*")
-        .eq("empresa_id", companyId);
+        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`);
 
       if (data) {
         data.forEach((r: any) => {
@@ -122,13 +153,15 @@ export class ImportService {
       }
     } catch (e) {
       // Local check fallback
-      await RECORDS_STORE.iterate((r: ImportRecord) => {
-        if (r.empresa_id === companyId) {
-          if (r.hash_registro) existingHashes.add(r.hash_registro);
-          existingRecordsList.push(r);
-        }
-      });
     }
+
+    // Local check merge
+    await RECORDS_STORE.iterate((r: ImportRecord) => {
+      if (r.empresa_id === companyId || r.empresa_id === formattedCompanyId) {
+        if (r.hash_registro) existingHashes.add(r.hash_registro);
+        existingRecordsList.push(r);
+      }
+    });
 
     let countNovos = 0;
     let countDuplicados = 0;
@@ -150,7 +183,7 @@ export class ImportService {
         status = "duplicado";
         countDuplicados++;
       } else {
-        // 2. Check for potential conflict (same vehicle + same date + same doc/supplier, but different value)
+        // 2. Check for potential conflict
         const matchingExisting = existingRecordsList.find(
           (ex) =>
             ex.placa === raw.placa &&
@@ -207,14 +240,30 @@ export class ImportService {
       `Processados ${rawRecords.length} registros: ${countNovos} novos, ${countDuplicados} duplicados, ${countConflitos} conflitos.`
     );
 
-    // Save records to DB or Local
+    let supabaseErrorMsg: string | undefined = undefined;
+
+    // Save records to Supabase with formatted UUID
     try {
-      await supabase.from("import_records").insert(savedRecords);
-      if (conflictsList.length > 0) {
-        await supabase.from("import_conflicts").insert(conflictsList);
+      const supabaseRecords = savedRecords.map((r) => ({
+        ...r,
+        empresa_id: formattedCompanyId,
+      }));
+      const { error: recErr } = await supabase.from("import_records").insert(supabaseRecords);
+      if (recErr) {
+        console.warn("Supabase import_records batch save error:", recErr.message);
+        supabaseErrorMsg = recErr.message;
       }
-    } catch (e) {
+
+      if (conflictsList.length > 0) {
+        const supabaseConflicts = conflictsList.map((c) => ({
+          ...c,
+          empresa_id: formattedCompanyId,
+        }));
+        await supabase.from("import_conflicts").insert(supabaseConflicts);
+      }
+    } catch (e: any) {
       console.warn("Supabase import_records batch save fallback:", e);
+      supabaseErrorMsg = e?.message || "Fallbacked to local storage";
     }
 
     // Save local copy
@@ -253,26 +302,105 @@ export class ImportService {
       jobId,
       companyId,
       "Conclusão",
-      `Importação concluída com sucesso. Status final: ${finalJobStatus}.`
+      `Importação concluída com sucesso. ${countNovos} novos lançamentos armazenados. Status final: ${finalJobStatus}.`
     );
 
     return {
       job: updatedJob,
       savedRecords,
       conflicts: conflictsList,
+      supabaseError: supabaseErrorMsg,
     };
+  }
+
+  /**
+   * Approve records (Aprovar Lançamentos e Gravar/Confirmar no Banco)
+   */
+  static async approveRecords(
+    recordIds: string[],
+    companyId: string
+  ): Promise<{ success: boolean; approvedCount: number; error?: string }> {
+    if (!recordIds || recordIds.length === 0) {
+      return { success: true, approvedCount: 0 };
+    }
+
+    const formattedCompanyId = formatUuid(companyId);
+    let approvedCount = 0;
+    let dbError: string | undefined = undefined;
+
+    // 1. Update in local storage
+    for (const id of recordIds) {
+      const existing = await RECORDS_STORE.getItem<ImportRecord>(id);
+      if (existing) {
+        const updated: ImportRecord = { ...existing, status: "aprovado" };
+        await RECORDS_STORE.setItem(id, updated);
+        approvedCount++;
+      }
+    }
+
+    // 2. Update in Supabase
+    try {
+      const { error } = await supabase
+        .from("import_records")
+        .update({ status: "aprovado" })
+        .in("id", recordIds);
+
+      if (error) {
+        console.warn("Supabase approveRecords error:", error.message);
+        dbError = error.message;
+      }
+    } catch (e: any) {
+      console.warn("Supabase approveRecords exception:", e);
+      dbError = e?.message || "Exceção no banco de dados";
+    }
+
+    // 3. Add execution log
+    await this.addLog(
+      recordIds[0] || "batch",
+      companyId,
+      "Aprovação",
+      `${approvedCount} lançamento(s) aprovado(s) e confirmado(s) no banco de dados com sucesso.`
+    );
+
+    return {
+      success: !dbError,
+      approvedCount,
+      error: dbError,
+    };
+  }
+
+  /**
+   * Approve entire Job
+   */
+  static async approveJob(
+    jobId: string,
+    companyId: string
+  ): Promise<{ success: boolean; approvedCount: number; error?: string }> {
+    const records = await this.getImportRecords(companyId, jobId);
+    const toApproveIds = records.filter((r) => r.status !== "duplicado").map((r) => r.id);
+
+    const result = await this.approveRecords(toApproveIds, companyId);
+    await this.updateImportJob(jobId, { status: "aprovado" });
+
+    return result;
   }
 
   /**
    * Fetch imported records with optional filters
    */
   static async getImportRecords(companyId: string, jobId?: string): Promise<ImportRecord[]> {
+    const formattedCompanyId = formatUuid(companyId);
+
     try {
-      let query = supabase.from("import_records").select("*").eq("empresa_id", companyId);
+      let query = supabase
+        .from("import_records")
+        .select("*")
+        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`);
+
       if (jobId) query = query.eq("import_job_id", jobId);
 
       const { data, error } = await query.order("criado_em", { ascending: false });
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         return data as ImportRecord[];
       }
     } catch (e) {
@@ -281,7 +409,7 @@ export class ImportService {
 
     const records: ImportRecord[] = [];
     await RECORDS_STORE.iterate((r: ImportRecord) => {
-      if (r.empresa_id === companyId && (!jobId || r.import_job_id === jobId)) {
+      if ((r.empresa_id === companyId || r.empresa_id === formattedCompanyId) && (!jobId || r.import_job_id === jobId)) {
         records.push(r);
       }
     });
@@ -294,11 +422,13 @@ export class ImportService {
    * Fetch conflicts
    */
   static async getConflicts(companyId: string): Promise<ImportConflict[]> {
+    const formattedCompanyId = formatUuid(companyId);
+
     try {
       const { data, error } = await supabase
         .from("import_conflicts")
         .select("*")
-        .eq("empresa_id", companyId)
+        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`)
         .order("created_at", { ascending: false });
 
       if (!error && data) return data as ImportConflict[];
@@ -308,7 +438,7 @@ export class ImportService {
 
     const conflicts: ImportConflict[] = [];
     await CONFLICTS_STORE.iterate((c: ImportConflict) => {
-      if (c.empresa_id === companyId) {
+      if (c.empresa_id === companyId || c.empresa_id === formattedCompanyId) {
         conflicts.push(c);
       }
     });
@@ -337,6 +467,20 @@ export class ImportService {
         resolvido_por: resolvedBy,
         data_resolucao,
       });
+
+      // Also mark associated record as resolved / novo
+      const rec = await RECORDS_STORE.getItem<ImportRecord>(existing.import_record_id);
+      if (rec) {
+        await RECORDS_STORE.setItem(rec.id, { ...rec, status: "aprovado", conflito: false });
+        try {
+          await supabase
+            .from("import_records")
+            .update({ status: "aprovado", conflito: false })
+            .eq("id", rec.id);
+        } catch (e) {
+          // ignore
+        }
+      }
     }
   }
 
@@ -344,6 +488,7 @@ export class ImportService {
    * Add execution log
    */
   static async addLog(jobId: string, companyId: string, etapa: string, mensagem: string): Promise<void> {
+    const formattedCompanyId = formatUuid(companyId);
     const log: ImportLog = {
       id: crypto.randomUUID(),
       import_job_id: jobId,
@@ -354,7 +499,10 @@ export class ImportService {
     };
 
     try {
-      await supabase.from("import_logs").insert(log);
+      await supabase.from("import_logs").insert({
+        ...log,
+        empresa_id: formattedCompanyId,
+      });
     } catch (e) {
       // ignore
     }
@@ -366,8 +514,14 @@ export class ImportService {
    * Fetch execution logs
    */
   static async getLogs(companyId: string, jobId?: string): Promise<ImportLog[]> {
+    const formattedCompanyId = formatUuid(companyId);
+
     try {
-      let query = supabase.from("import_logs").select("*").eq("empresa_id", companyId);
+      let query = supabase
+        .from("import_logs")
+        .select("*")
+        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`);
+
       if (jobId) query = query.eq("import_job_id", jobId);
 
       const { data, error } = await query.order("criado_em", { ascending: false });
@@ -378,7 +532,7 @@ export class ImportService {
 
     const logs: ImportLog[] = [];
     await LOGS_STORE.iterate((l: ImportLog) => {
-      if (l.empresa_id === companyId && (!jobId || l.import_job_id === jobId)) {
+      if ((l.empresa_id === companyId || l.empresa_id === formattedCompanyId) && (!jobId || l.import_job_id === jobId)) {
         logs.push(l);
       }
     });
