@@ -20,6 +20,7 @@ import {
   Filter,
   Search,
   ChevronDown,
+  ChevronRight,
   Layers,
   ArrowUpRight,
   ArrowDownRight,
@@ -31,6 +32,12 @@ import {
   RefreshCw,
   Globe,
   SlidersHorizontal,
+  Flame,
+  Award,
+  Navigation,
+  Info,
+  X,
+  Eye,
 } from "lucide-react";
 import {
   BarChart,
@@ -114,7 +121,7 @@ export default function SharedReportPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [pinError, setPinError] = useState("");
 
-  // Report Filter State (initialized from shared report)
+  // Superior Filters State (locked if allow_filters is false)
   const [categoryFilter, setCategoryFilter] = useState<string>("Todas");
   const [tipoImportacaoFilter, setTipoImportacaoFilter] = useState<string>("Todas");
   const [selectedPeriod, setSelectedPeriod] = useState<string>("0");
@@ -124,8 +131,18 @@ export default function SharedReportPage() {
   const [agruparPor, setAgruparPor] = useState<"categoria" | "tipo_importacao" | "placa" | "fornecedor" | "mes" | "status">("categoria");
   const [metrica, setMetrica] = useState<"soma_valor" | "quantidade" | "media_valor" | "soma_quantidade">("soma_valor");
   const [tipoGrafico, setTipoGrafico] = useState<"bar" | "pie" | "line" | "area" | "table">("bar");
-  const [viewMode, setViewMode] = useState<"agrupado" | "detalhado">("agrupado");
+
+  // Internal Interactive Views (ALWAYS fully interactive for the reader)
+  const [topVehiclesTab, setTopVehiclesTab] = useState<"maior" | "menor" | "lado_a_lado">("lado_a_lado");
+  const [detalhadoTab, setDetalhadoTab] = useState<"categoria" | "placa" | "fornecedor" | "detalhado">("categoria");
   const [tableSearch, setTableSearch] = useState<string>("");
+
+  // Modals & Expanders State
+  const [selectedVehicleDetailKey, setSelectedVehicleDetailKey] = useState<string | null>(null);
+  const [selectedRecordDetail, setSelectedRecordDetail] = useState<ImportRecord | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [expandedVehicles, setExpandedVehicles] = useState<Record<string, boolean>>({});
+  const [expandedFornecedores, setExpandedFornecedores] = useState<Record<string, boolean>>({});
 
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
@@ -167,7 +184,6 @@ export default function SharedReportPage() {
           if (data.filters.agruparPor) setAgruparPor(data.filters.agruparPor as any);
           if (data.filters.metrica) setMetrica(data.filters.metrica as any);
           if (data.filters.tipoGrafico) setTipoGrafico(data.filters.tipoGrafico as any);
-          if (data.filters.viewMode) setViewMode(data.filters.viewMode as any);
         }
       }
     } catch (e) {
@@ -193,23 +209,6 @@ export default function SharedReportPage() {
     return report?.records_snapshot || [];
   }, [report]);
 
-  // Available options
-  const availablePlacas = useMemo(() => {
-    const setP = new Set<string>();
-    records.forEach((r) => {
-      if (r.placa) setP.add(r.placa.toUpperCase());
-    });
-    return Array.from(setP).sort();
-  }, [records]);
-
-  const availableFornecedores = useMemo(() => {
-    const setF = new Set<string>();
-    records.forEach((r) => {
-      if (r.fornecedor) setF.add(r.fornecedor.trim());
-    });
-    return Array.from(setF).sort();
-  }, [records]);
-
   // Period label
   const getPeriodLabel = () => {
     if (selectedPeriod === "0") return "Todo o Período";
@@ -217,7 +216,7 @@ export default function SharedReportPage() {
     return `Últimos ${selectedPeriod} dias`;
   };
 
-  // Filter records
+  // Filter records based on superior filters
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
       // 1. Tipo Importação
@@ -286,7 +285,7 @@ export default function SharedReportPage() {
     return totalRegistrosCount > 0 ? totalValorGeral / totalRegistrosCount : 0;
   }, [totalValorGeral, totalRegistrosCount]);
 
-  // Aggregated data
+  // Aggregated data for Chart
   const aggregatedData = useMemo(() => {
     const groups: Record<string, { count: number; valorTotal: number; totalQty: number }> = {};
 
@@ -294,7 +293,7 @@ export default function SharedReportPage() {
       let key = "Outros";
       if (agruparPor === "categoria") key = r.tipo_registro || "Sem Categoria";
       else if (agruparPor === "tipo_importacao") key = getImportTypeLabel(getRecordImportType(r));
-      else if (agruparPor === "placa") key = r.placa ? r.placa.toUpperCase() : "Sem Placa";
+      else if (agruparPor === "placa") key = r.placa ? `${r.placa.toUpperCase()}${r.numero_frota ? ` (${r.numero_frota})` : ""}` : "Sem Placa";
       else if (agruparPor === "fornecedor") key = r.fornecedor ? r.fornecedor.trim() : "Sem Fornecedor";
       else if (agruparPor === "status") key = r.status ? r.status.toUpperCase() : "DESCONHECIDO";
 
@@ -328,43 +327,126 @@ export default function SharedReportPage() {
       .sort((a, b) => b.value - a.value);
   }, [filteredRecords, agruparPor, metrica, totalValorGeral]);
 
-  // Vehicle Stats
+  // Vehicle Stats for Top 10 Highest & Lowest Cost Reports
   const vehicleStats = useMemo(() => {
-    const stats: Record<string, { count: number; totalValor: number; totalLitros: number; totalKm: number }> = {};
+    const map: Record<
+      string,
+      {
+        key: string;
+        placa: string;
+        numero_frota?: string;
+        viagensCount: number;
+        totalCost: number;
+        totalLiters: number;
+        categories: Record<string, { count: number; valor: number; liters: number }>;
+        items: ImportRecord[];
+      }
+    > = {};
 
     filteredRecords.forEach((r) => {
-      const p = r.placa ? r.placa.toUpperCase() : "SEM PLACA";
-      if (!stats[p]) {
-        stats[p] = { count: 0, totalValor: 0, totalLitros: 0, totalKm: 0 };
+      const rawPlaca = r.placa?.trim().toUpperCase() || "SEM PLACA";
+      const frota = r.numero_frota?.trim() || "";
+      const key = frota ? `${rawPlaca} (Frota ${frota})` : rawPlaca;
+
+      if (!map[key]) {
+        map[key] = {
+          key,
+          placa: rawPlaca,
+          numero_frota: frota,
+          viagensCount: 0,
+          totalCost: 0,
+          totalLiters: 0,
+          categories: {},
+          items: [],
+        };
       }
-      stats[p].count += 1;
-      stats[p].totalValor += Number(r.valor) || 0;
-      stats[p].totalLitros += Number(r.quantidade) || 0;
-      stats[p].totalKm += Number(r.km_rodado) || 0;
+
+      map[key].viagensCount += 1;
+      const val = Number(r.valor) || 0;
+      const qty = Number(r.quantidade) || 0;
+      map[key].totalCost += val;
+      map[key].totalLiters += qty;
+      map[key].items.push(r);
+
+      const cat = r.tipo_registro || "Outros";
+      if (!map[key].categories[cat]) {
+        map[key].categories[cat] = { count: 0, valor: 0, liters: 0 };
+      }
+      map[key].categories[cat].count += 1;
+      map[key].categories[cat].valor += val;
+      map[key].categories[cat].liters += qty;
     });
 
-    return Object.entries(stats)
-      .map(([placa, s]) => ({
-        placa,
-        count: s.count,
-        totalValor: s.totalValor,
-        totalLitros: s.totalLitros,
-        totalKm: s.totalKm,
-        mediaKmL: s.totalLitros > 0 && s.totalKm > 0 ? s.totalKm / s.totalLitros : 0,
-      }))
-      .sort((a, b) => b.totalValor - a.totalValor);
+    const allVehicles = Object.values(map);
+
+    const top10Highest = [...allVehicles]
+      .sort((a, b) => b.totalCost - a.totalCost)
+      .slice(0, 10);
+
+    const top10Lowest = [...allVehicles]
+      .filter((v) => v.totalCost > 0)
+      .sort((a, b) => a.totalCost - b.totalCost)
+      .slice(0, 10);
+
+    return {
+      allVehicles,
+      top10Highest,
+      top10Lowest,
+    };
+  }, [filteredRecords]);
+
+  // Selected vehicle detail
+  const selectedVehicleDetail = useMemo(() => {
+    if (!selectedVehicleDetailKey) return null;
+    return vehicleStats.allVehicles.find((v) => v.key === selectedVehicleDetailKey) || null;
+  }, [selectedVehicleDetailKey, vehicleStats]);
+
+  // Categories Breakdown for interactive detail view
+  const categoryBreakdown = useMemo(() => {
+    const map: Record<string, { name: string; valorTotal: number; totalQty: number; count: number; items: ImportRecord[] }> = {};
+
+    filteredRecords.forEach((r) => {
+      const cat = r.tipo_registro || "Outros";
+      if (!map[cat]) {
+        map[cat] = { name: cat, valorTotal: 0, totalQty: 0, count: 0, items: [] };
+      }
+      map[cat].valorTotal += Number(r.valor) || 0;
+      map[cat].totalQty += Number(r.quantidade) || 0;
+      map[cat].count += 1;
+      map[cat].items.push(r);
+    });
+
+    return Object.values(map).sort((a, b) => b.valorTotal - a.valorTotal);
+  }, [filteredRecords]);
+
+  // Suppliers Breakdown
+  const supplierBreakdown = useMemo(() => {
+    const map: Record<string, { name: string; valorTotal: number; count: number; items: ImportRecord[] }> = {};
+
+    filteredRecords.forEach((r) => {
+      const sup = r.fornecedor?.trim() || "Não Informado";
+      if (!map[sup]) {
+        map[sup] = { name: sup, valorTotal: 0, count: 0, items: [] };
+      }
+      map[sup].valorTotal += Number(r.valor) || 0;
+      map[sup].count += 1;
+      map[sup].items.push(r);
+    });
+
+    return Object.values(map).sort((a, b) => b.valorTotal - a.valorTotal);
   }, [filteredRecords]);
 
   // Table records search
   const tableFilteredRecords = useMemo(() => {
-    if (!tableSearch) return filteredRecords;
-    const term = tableSearch.toLowerCase();
+    if (!tableSearch.trim()) return filteredRecords;
+    const term = tableSearch.toLowerCase().trim();
     return filteredRecords.filter(
       (r) =>
         r.placa?.toLowerCase().includes(term) ||
         r.tipo_registro?.toLowerCase().includes(term) ||
         r.fornecedor?.toLowerCase().includes(term) ||
-        r.descricao_conta?.toLowerCase().includes(term)
+        r.descricao_conta?.toLowerCase().includes(term) ||
+        r.numero_frota?.toLowerCase().includes(term)
     );
   }, [filteredRecords, tableSearch]);
 
@@ -389,7 +471,16 @@ export default function SharedReportPage() {
           mediaValorGeral,
         },
         aggregatedData,
-        vehicleStats,
+        vehicleStats: {
+          allVehicles: vehicleStats.allVehicles.map((v) => ({
+            placa: v.placa,
+            count: v.viagensCount,
+            totalValor: v.totalCost,
+            totalLitros: v.totalLiters,
+            totalKm: 0,
+            mediaKmL: 0,
+          })),
+        },
         tableFilteredRecords,
       });
     } catch (e: any) {
@@ -420,7 +511,16 @@ export default function SharedReportPage() {
           mediaValorGeral,
         },
         aggregatedData,
-        vehicleStats,
+        vehicleStats: {
+          allVehicles: vehicleStats.allVehicles.map((v) => ({
+            placa: v.placa,
+            count: v.viagensCount,
+            totalValor: v.totalCost,
+            totalLitros: v.totalLiters,
+            totalKm: 0,
+            mediaKmL: 0,
+          })),
+        },
         tableFilteredRecords,
       });
     } catch (e: any) {
@@ -432,6 +532,131 @@ export default function SharedReportPage() {
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
+  };
+
+  // Helper to render individual vehicle card in Top 10 lists
+  const renderVehicleCard = (vehicle: typeof vehicleStats.top10Highest[0], rank: number, isHighCost: boolean) => {
+    const avgCostPerTrip = vehicle.viagensCount > 0 ? vehicle.totalCost / vehicle.viagensCount : 0;
+    const categoriesList = Object.entries(vehicle.categories)
+      .map(([catName, catData]) => ({
+        name: catName,
+        valor: catData.valor,
+        count: catData.count,
+        percent: vehicle.totalCost > 0 ? (catData.valor / vehicle.totalCost) * 100 : 0,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+
+    const rankBadgeBg =
+      rank === 1
+        ? "bg-amber-400 text-amber-950 border-amber-300 font-black shadow-xs"
+        : rank === 2
+        ? "bg-slate-300 text-slate-900 border-slate-200 font-black"
+        : rank === 3
+        ? "bg-amber-700 text-amber-100 border-amber-600 font-black"
+        : "bg-zinc-100 text-zinc-700 border-zinc-200 font-bold";
+
+    return (
+      <div
+        key={vehicle.key}
+        className={`p-4 rounded-2xl border transition-all ${
+          isHighCost
+            ? "bg-gradient-to-br from-rose-50/40 via-white to-amber-50/20 border-rose-200/80 hover:border-rose-300 hover:shadow-sm"
+            : "bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/20 border-emerald-200/80 hover:border-emerald-300 hover:shadow-sm"
+        }`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100">
+          <div className="flex items-center gap-3">
+            <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs border ${rankBadgeBg}`}>
+              #{rank}
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-black text-zinc-900 text-sm tracking-wide">{vehicle.placa}</h4>
+                {vehicle.numero_frota && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 border border-zinc-200">
+                    Frota {vehicle.numero_frota}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-zinc-500 font-medium">
+                <span className="inline-flex items-center gap-1 font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                  <Navigation className="w-3 h-3 text-indigo-600" />
+                  {vehicle.viagensCount} {vehicle.viagensCount === 1 ? "lançamento" : "lançamentos"}
+                </span>
+                {vehicle.totalLiters > 0 && (
+                  <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+                    <Fuel className="w-3 h-3 text-amber-600" />
+                    {vehicle.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="text-right flex sm:flex-col items-center sm:items-end justify-between gap-1">
+            <div>
+              <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Custo Total</p>
+              <p className={`text-base font-black ${isHighCost ? "text-rose-700" : "text-emerald-700"}`}>
+                {formatCurrency(vehicle.totalCost)}
+              </p>
+            </div>
+            <p className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
+              Média: {formatCurrency(avgCostPerTrip)} / lançamento
+            </p>
+          </div>
+        </div>
+
+        {/* Cost Breakdown Description */}
+        <div className="mt-3 space-y-2">
+          <p className="text-[11px] font-extrabold text-zinc-700 flex items-center justify-between">
+            <span>Distribuição por Categoria:</span>
+            <span className="text-[10px] text-zinc-400 font-semibold">{categoriesList.length} categoria(s)</span>
+          </p>
+
+          {/* Visual Progress Bar */}
+          <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden flex">
+            {categoriesList.map((cat, idx) => (
+              <div
+                key={cat.name}
+                style={{ width: `${cat.percent}%`, backgroundColor: COLORS[idx % COLORS.length] }}
+                title={`${cat.name}: ${formatCurrency(cat.valor)} (${cat.percent.toFixed(1)}%)`}
+              />
+            ))}
+          </div>
+
+          {/* Categories Chips */}
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {categoriesList.map((cat, idx) => (
+              <div
+                key={cat.name}
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] bg-zinc-50 border border-zinc-200/80"
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                />
+                <span className="font-semibold text-zinc-700">{cat.name}:</span>
+                <span className="font-black text-zinc-900">{formatCurrency(cat.valor)}</span>
+                <span className="text-[9px] text-zinc-400 font-bold">({cat.percent.toFixed(0)}%)</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer Action */}
+        <div className="mt-3 pt-2 border-t border-zinc-100 flex items-center justify-between">
+          <span className="text-[10px] text-zinc-400 font-medium">
+            {vehicle.items.length} registro(s) associado(s)
+          </span>
+          <button
+            onClick={() => setSelectedVehicleDetailKey(vehicle.key)}
+            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline cursor-pointer"
+          >
+            Ver Detalhes / Lançamentos <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -520,7 +745,7 @@ export default function SharedReportPage() {
     );
   }
 
-  // Unlocked Report Display
+  // Superior filters lock state
   const filtersDisabled = report.allow_filters === false;
 
   return (
@@ -536,18 +761,18 @@ export default function SharedReportPage() {
 
               {filtersDisabled ? (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold border border-purple-400/30">
-                  <Lock className="w-3.5 h-3.5" /> Visão Congelada (Filtros Bloqueados)
+                  <Lock className="w-3.5 h-3.5" /> Visão Congelada (Filtros Superiores Bloqueados)
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold border border-blue-400/30">
-                  <Unlock className="w-3.5 h-3.5" /> Filtros Interativos Liberados
+                  <Unlock className="w-3.5 h-3.5" /> Filtros Superiores Interativos
                 </span>
               )}
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">{report.title}</h1>
             <p className="text-slate-300 text-xs sm:text-sm mt-1">
-              Gerado via CheckDrive • {getPeriodLabel()} • {totalRegistrosCount} registros localizados
+              Gerado via CheckDrive • {getPeriodLabel()} • {totalRegistrosCount} registros localizados • Interatividade completa na página
             </p>
           </div>
 
@@ -572,15 +797,15 @@ export default function SharedReportPage() {
         </div>
       </div>
 
-      {/* Filter Control Bar */}
+      {/* Superior Filter Control Bar (Locked ONLY if allow_filters is false) */}
       <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Filter className="w-5 h-5 text-indigo-600" />
-            <h3 className="font-black text-slate-900 text-sm">Filtros & Parâmetros de Análise</h3>
+            <h3 className="font-black text-slate-900 text-sm">Filtros Superiores do Relatório</h3>
             {filtersDisabled && (
-              <span className="text-[11px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md font-bold border border-purple-200 flex items-center gap-1">
-                <Lock className="w-3 h-3" /> Travado pelo Emissor
+              <span className="text-[11px] text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-md font-bold border border-purple-200 flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Fixado pelo Emissor ao Gerar
               </span>
             )}
           </div>
@@ -704,7 +929,7 @@ export default function SharedReportPage() {
             </div>
           </div>
           <h4 className="text-2xl font-black text-slate-900 mt-2">{totalRegistrosCount}</h4>
-          <p className="text-[11px] text-slate-500 mt-1">Total de registros extraídos</p>
+          <p className="text-[11px] text-slate-500 mt-1">Total de registros no relatório</p>
         </div>
 
         <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-sm relative overflow-hidden">
@@ -800,64 +1025,720 @@ export default function SharedReportPage() {
         </div>
       </div>
 
-      {/* Data Table */}
-      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      {/* TOP 10 VEÍCULOS (MAIORES E MENORES GASTOS) */}
+      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
           <div>
-            <h3 className="font-black text-slate-900 text-base">Detalhamento dos Registros</h3>
-            <p className="text-xs text-slate-500">Tabela completa de itens e lançamentos do relatório.</p>
-          </div>
-
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar por placa, categoria..."
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                <th className="p-3 rounded-l-xl">Data</th>
-                <th className="p-3">Categoria</th>
-                <th className="p-3">Placa / Frota</th>
-                <th className="p-3">Conta / Descrição</th>
-                <th className="p-3 text-right">Qtd</th>
-                <th className="p-3 text-right">Valor (R$)</th>
-                <th className="p-3 rounded-r-xl">Fornecedor</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {tableFilteredRecords.slice(0, 100).map((r, idx) => (
-                <tr key={r.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="p-3 font-medium text-slate-700">{r.data || "-"}</td>
-                  <td className="p-3">
-                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold text-[11px]">
-                      {r.tipo_registro}
-                    </span>
-                  </td>
-                  <td className="p-3 font-mono font-bold text-slate-900">{r.placa || "-"}</td>
-                  <td className="p-3 text-slate-600 max-w-xs truncate">{r.descricao_conta || r.conta || "-"}</td>
-                  <td className="p-3 text-right font-medium text-slate-700">{Number(r.quantidade || 0).toFixed(2)}</td>
-                  <td className="p-3 text-right font-black text-slate-900">{formatCurrency(Number(r.valor || 0))}</td>
-                  <td className="p-3 text-slate-600 truncate max-w-xs">{r.fornecedor || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {tableFilteredRecords.length > 100 && (
-            <div className="p-3 text-center text-xs text-slate-500 border-t border-slate-100">
-              Exibindo os primeiros 100 de {tableFilteredRecords.length} registros.
+            <div className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-indigo-600" />
+              <h3 className="font-black text-slate-900 text-lg">Ranking de Veículos (Top 10)</h3>
             </div>
-          )}
+            <p className="text-xs text-slate-500 mt-0.5">
+              Análise comparativa dos 10 veículos com maiores e 10 veículos com menores gastos.
+            </p>
+          </div>
+
+          {/* Tab Switcher for Top 10 */}
+          <div className="inline-flex p-1 bg-zinc-100 rounded-2xl border border-zinc-200 shrink-0">
+            <button
+              onClick={() => setTopVehiclesTab("lado_a_lado")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                topVehiclesTab === "lado_a_lado"
+                  ? "bg-white text-zinc-900 shadow-xs border border-zinc-200/80"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              📊 Lado a Lado
+            </button>
+            <button
+              onClick={() => setTopVehiclesTab("maior")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
+                topVehiclesTab === "maior"
+                  ? "bg-rose-600 text-white shadow-xs"
+                  : "text-rose-700 hover:bg-rose-50"
+              }`}
+            >
+              <Flame className="w-3.5 h-3.5" /> 10 Maiores Gastos
+            </button>
+            <button
+              onClick={() => setTopVehiclesTab("menor")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
+                topVehiclesTab === "menor"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "text-emerald-700 hover:bg-emerald-50"
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" /> 10 Menores Gastos
+            </button>
+          </div>
         </div>
+
+        {/* TOP 10 CONTENT */}
+        {vehicleStats.allVehicles.length === 0 ? (
+          <div className="p-8 text-center text-xs text-zinc-400 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200">
+            Nenhum veículo identificado para os filtros selecionados.
+          </div>
+        ) : topVehiclesTab === "lado_a_lado" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 10 Maiores Gastos Column */}
+            <div className="space-y-3">
+              <div className="p-3.5 bg-gradient-to-r from-rose-500 to-amber-600 rounded-2xl text-white flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-amber-200" />
+                  <div>
+                    <h4 className="font-black text-sm">10 Veículos com MAIORES Gastos</h4>
+                    <p className="text-[11px] text-rose-100">Top despesas no período selecionado</p>
+                  </div>
+                </div>
+                <span className="text-xs font-extrabold bg-white/20 px-2.5 py-1 rounded-xl">
+                  {vehicleStats.top10Highest.length} veículos
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {vehicleStats.top10Highest.map((v, idx) => renderVehicleCard(v, idx + 1, true))}
+              </div>
+            </div>
+
+            {/* 10 Menores Gastos Column */}
+            <div className="space-y-3">
+              <div className="p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl text-white flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-2">
+                  <Award className="w-5 h-5 text-emerald-200" />
+                  <div>
+                    <h4 className="font-black text-sm">10 Veículos com MENORES Gastos</h4>
+                    <p className="text-[11px] text-emerald-100">Top veículos econômicos com despesas</p>
+                  </div>
+                </div>
+                <span className="text-xs font-extrabold bg-white/20 px-2.5 py-1 rounded-xl">
+                  {vehicleStats.top10Lowest.length} veículos
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {vehicleStats.top10Lowest.map((v, idx) => renderVehicleCard(v, idx + 1, false))}
+              </div>
+            </div>
+          </div>
+        ) : topVehiclesTab === "maior" ? (
+          <div className="space-y-3">
+            <div className="p-3.5 bg-gradient-to-r from-rose-500 to-amber-600 rounded-2xl text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Flame className="w-5 h-5 text-amber-200" />
+                <h4 className="font-black text-sm">Top 10 Veículos com MAIORES Gastos</h4>
+              </div>
+              <span className="text-xs font-bold text-rose-100">Ordenado por Custo Total Descrecente</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {vehicleStats.top10Highest.map((v, idx) => renderVehicleCard(v, idx + 1, true))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Award className="w-5 h-5 text-emerald-200" />
+                <h4 className="font-black text-sm">Top 10 Veículos com MENORES Gastos</h4>
+              </div>
+              <span className="text-xs font-bold text-emerald-100">Ordenado por Custo Total Crescente</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {vehicleStats.top10Lowest.map((v, idx) => renderVehicleCard(v, idx + 1, false))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* DETALHAMENTO INTERATIVO DOS REGISTROS */}
+      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Layers className="w-5 h-5 text-blue-600" />
+              <h3 className="font-black text-slate-900 text-base">Detalhamento Interativo dos Registros</h3>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Escolha como deseja explorar os dados: agrupado por Categoria, por Veículo, por Fornecedor ou Lançamento a Lançamento.
+            </p>
+          </div>
+
+          {/* Detalhado View Mode Switcher */}
+          <div className="inline-flex p-1 bg-zinc-100 rounded-2xl border border-zinc-200 shrink-0">
+            <button
+              onClick={() => setDetalhadoTab("categoria")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                detalhadoTab === "categoria"
+                  ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              📂 Por Categoria
+            </button>
+            <button
+              onClick={() => setDetalhadoTab("placa")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                detalhadoTab === "placa"
+                  ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              🚛 Por Veículo
+            </button>
+            <button
+              onClick={() => setDetalhadoTab("fornecedor")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                detalhadoTab === "fornecedor"
+                  ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              🏪 Por Fornecedor
+            </button>
+            <button
+              onClick={() => setDetalhadoTab("detalhado")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                detalhadoTab === "detalhado"
+                  ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              📋 Lançamentos Individuais
+            </button>
+          </div>
+        </div>
+
+        {/* DETALHAMENTO: POR CATEGORIA */}
+        {detalhadoTab === "categoria" && (
+          <div className="space-y-3">
+            {categoryBreakdown.length === 0 ? (
+              <p className="text-xs text-zinc-400 p-4 text-center">Nenhuma categoria encontrada.</p>
+            ) : (
+              categoryBreakdown.map((cat) => {
+                const isOpen = expandedCategories[cat.name];
+                const percent = totalValorGeral > 0 ? (cat.valorTotal / totalValorGeral) * 100 : 0;
+                const media = cat.count > 0 ? cat.valorTotal / cat.count : 0;
+
+                return (
+                  <div key={cat.name} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                    <div
+                      onClick={() =>
+                        setExpandedCategories((prev) => ({ ...prev, [cat.name]: !prev[cat.name] }))
+                      }
+                      className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                          <Layers className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-black text-slate-900 text-sm">{cat.name}</h4>
+                            <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">
+                              {cat.count} lançamento(s)
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Representa {percent.toFixed(1)}% do total do relatório • Média de {formatCurrency(media)} por registro
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                        <div className="text-right">
+                          <p className="text-[10px] uppercase font-bold text-slate-400">Total Categoria</p>
+                          <p className="text-base font-black text-slate-900">{formatCurrency(cat.valorTotal)}</p>
+                        </div>
+                        <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expandable items inside category */}
+                    {isOpen && (
+                      <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs bg-white rounded-xl border border-slate-200">
+                            <thead>
+                              <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                <th className="p-2.5">Data</th>
+                                <th className="p-2.5">Placa</th>
+                                <th className="p-2.5">Descrição</th>
+                                <th className="p-2.5 text-right">Qtd</th>
+                                <th className="p-2.5 text-right">Valor</th>
+                                <th className="p-2.5">Fornecedor</th>
+                                <th className="p-2.5 text-center">Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {cat.items.map((r, i) => (
+                                <tr key={r.id || i} className="hover:bg-slate-50">
+                                  <td className="p-2.5 font-medium">{r.data || "-"}</td>
+                                  <td className="p-2.5 font-bold font-mono text-slate-900">{r.placa || "-"}</td>
+                                  <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
+                                  <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
+                                  <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
+                                  <td className="p-2.5 text-slate-600">{r.fornecedor || "-"}</td>
+                                  <td className="p-2.5 text-center">
+                                    <button
+                                      onClick={() => setSelectedRecordDetail(r)}
+                                      className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" /> Ver
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* DETALHAMENTO: POR VEÍCULO */}
+        {detalhadoTab === "placa" && (
+          <div className="space-y-3">
+            {vehicleStats.allVehicles.length === 0 ? (
+              <p className="text-xs text-zinc-400 p-4 text-center">Nenhum veículo encontrado.</p>
+            ) : (
+              vehicleStats.allVehicles.map((v) => {
+                const isOpen = expandedVehicles[v.key];
+                const avg = v.viagensCount > 0 ? v.totalCost / v.viagensCount : 0;
+
+                return (
+                  <div key={v.key} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                    <div
+                      onClick={() =>
+                        setExpandedVehicles((prev) => ({ ...prev, [v.key]: !prev[v.key] }))
+                      }
+                      className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                          <Truck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-black text-slate-900 text-sm tracking-wide">{v.placa}</h4>
+                            {v.numero_frota && (
+                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200">
+                                Frota {v.numero_frota}
+                              </span>
+                            )}
+                            <span className="text-[10px] font-extrabold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md">
+                              {v.viagensCount} lançamento(s)
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Volume: {v.totalLiters.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L • Média de {formatCurrency(avg)} / registro
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                        <div className="text-right">
+                          <p className="text-[10px] uppercase font-bold text-slate-400">Custo Total</p>
+                          <p className="text-base font-black text-slate-900">{formatCurrency(v.totalCost)}</p>
+                        </div>
+                        <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {isOpen && (
+                      <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs bg-white rounded-xl border border-slate-200">
+                            <thead>
+                              <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                <th className="p-2.5">Data</th>
+                                <th className="p-2.5">Categoria</th>
+                                <th className="p-2.5">Descrição</th>
+                                <th className="p-2.5 text-right">Qtd</th>
+                                <th className="p-2.5 text-right">Valor</th>
+                                <th className="p-2.5">Fornecedor</th>
+                                <th className="p-2.5 text-center">Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {v.items.map((r, i) => (
+                                <tr key={r.id || i} className="hover:bg-slate-50">
+                                  <td className="p-2.5 font-medium">{r.data || "-"}</td>
+                                  <td className="p-2.5">
+                                    <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px]">
+                                      {r.tipo_registro}
+                                    </span>
+                                  </td>
+                                  <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
+                                  <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
+                                  <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
+                                  <td className="p-2.5 text-slate-600">{r.fornecedor || "-"}</td>
+                                  <td className="p-2.5 text-center">
+                                    <button
+                                      onClick={() => setSelectedRecordDetail(r)}
+                                      className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" /> Ver
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* DETALHAMENTO: POR FORNECEDOR */}
+        {detalhadoTab === "fornecedor" && (
+          <div className="space-y-3">
+            {supplierBreakdown.length === 0 ? (
+              <p className="text-xs text-zinc-400 p-4 text-center">Nenhum fornecedor encontrado.</p>
+            ) : (
+              supplierBreakdown.map((s) => {
+                const isOpen = expandedFornecedores[s.name];
+
+                return (
+                  <div key={s.name} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                    <div
+                      onClick={() =>
+                        setExpandedFornecedores((prev) => ({ ...prev, [s.name]: !prev[s.name] }))
+                      }
+                      className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                          <Building2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-black text-slate-900 text-sm">{s.name}</h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5">{s.count} registro(s) vinculado(s)</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                        <div className="text-right">
+                          <p className="text-[10px] uppercase font-bold text-slate-400">Total Faturado</p>
+                          <p className="text-base font-black text-slate-900">{formatCurrency(s.valorTotal)}</p>
+                        </div>
+                        <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {isOpen && (
+                      <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs bg-white rounded-xl border border-slate-200">
+                            <thead>
+                              <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                <th className="p-2.5">Data</th>
+                                <th className="p-2.5">Categoria</th>
+                                <th className="p-2.5">Placa</th>
+                                <th className="p-2.5">Descrição</th>
+                                <th className="p-2.5 text-right">Qtd</th>
+                                <th className="p-2.5 text-right">Valor</th>
+                                <th className="p-2.5 text-center">Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {s.items.map((r, i) => (
+                                <tr key={r.id || i} className="hover:bg-slate-50">
+                                  <td className="p-2.5 font-medium">{r.data || "-"}</td>
+                                  <td className="p-2.5 font-bold">{r.tipo_registro}</td>
+                                  <td className="p-2.5 font-mono font-bold">{r.placa || "-"}</td>
+                                  <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
+                                  <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
+                                  <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
+                                  <td className="p-2.5 text-center">
+                                    <button
+                                      onClick={() => setSelectedRecordDetail(r)}
+                                      className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" /> Ver
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* DETALHAMENTO: LANÇAMENTOS INDIVIDUAIS (TABELA COMPLETA) */}
+        {detalhadoTab === "detalhado" && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+              <span className="text-xs font-bold text-slate-700">
+                Mostrando {tableFilteredRecords.length} de {filteredRecords.length} lançamentos
+              </span>
+
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar por placa, categoria, fornecedor..."
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                    <th className="p-3 rounded-l-xl">Data</th>
+                    <th className="p-3">Categoria</th>
+                    <th className="p-3">Placa / Frota</th>
+                    <th className="p-3">Conta / Descrição</th>
+                    <th className="p-3 text-right">Qtd</th>
+                    <th className="p-3 text-right">Valor (R$)</th>
+                    <th className="p-3">Fornecedor</th>
+                    <th className="p-3 text-center rounded-r-xl">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {tableFilteredRecords.slice(0, 150).map((r, idx) => (
+                    <tr key={r.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-medium text-slate-700">{r.data || "-"}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold text-[11px]">
+                          {r.tipo_registro}
+                        </span>
+                      </td>
+                      <td className="p-3 font-mono font-bold text-slate-900">
+                        {r.placa || "-"} {r.numero_frota ? `(${r.numero_frota})` : ""}
+                      </td>
+                      <td className="p-3 text-slate-600 max-w-xs truncate">{r.descricao_conta || r.conta || "-"}</td>
+                      <td className="p-3 text-right font-medium text-slate-700">{Number(r.quantidade || 0).toFixed(2)}</td>
+                      <td className="p-3 text-right font-black text-slate-900">{formatCurrency(Number(r.valor || 0))}</td>
+                      <td className="p-3 text-slate-600 truncate max-w-xs">{r.fornecedor || "-"}</td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => setSelectedRecordDetail(r)}
+                          className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold hover:bg-blue-100 text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> Ver Detalhes
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {tableFilteredRecords.length > 150 && (
+                <div className="p-3 text-center text-xs text-slate-500 border-t border-slate-100">
+                  Exibindo os primeiros 150 de {tableFilteredRecords.length} registros.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* VEHICLE DETAIL MODAL */}
+      {selectedVehicleDetail && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-slate-200 shadow-2xl p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Truck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-lg">{selectedVehicleDetail.placa}</h3>
+                  <p className="text-xs text-slate-500">
+                    {selectedVehicleDetail.numero_frota ? `Frota ${selectedVehicleDetail.numero_frota} • ` : ""}
+                    {selectedVehicleDetail.viagensCount} lançamento(s) vinculados
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedVehicleDetailKey(null)}
+                className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Vehicle Metrics Summary */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Custo Total</span>
+                <p className="text-lg font-black text-slate-900">{formatCurrency(selectedVehicleDetail.totalCost)}</p>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Total Litros / Volume</span>
+                <p className="text-lg font-black text-amber-700">
+                  {selectedVehicleDetail.totalLiters.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L
+                </p>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 col-span-2 sm:col-span-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Média por Lançamento</span>
+                <p className="text-lg font-black text-indigo-700">
+                  {formatCurrency(
+                    selectedVehicleDetail.viagensCount > 0
+                      ? selectedVehicleDetail.totalCost / selectedVehicleDetail.viagensCount
+                      : 0
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Table of vehicle items */}
+            <div className="space-y-2">
+              <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider">Histórico de Lançamentos do Veículo</h4>
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                      <th className="p-2.5">Data</th>
+                      <th className="p-2.5">Categoria</th>
+                      <th className="p-2.5">Descrição</th>
+                      <th className="p-2.5 text-right">Qtd</th>
+                      <th className="p-2.5 text-right">Valor</th>
+                      <th className="p-2.5">Fornecedor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {selectedVehicleDetail.items.map((r, i) => (
+                      <tr key={r.id || i} className="hover:bg-slate-50">
+                        <td className="p-2.5 font-medium">{r.data || "-"}</td>
+                        <td className="p-2.5 font-bold text-blue-700">{r.tipo_registro}</td>
+                        <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
+                        <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
+                        <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
+                        <td className="p-2.5 text-slate-600">{r.fornecedor || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setSelectedVehicleDetailKey(null)}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECORD DETAIL MODAL */}
+      {selectedRecordDetail && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-900 text-base">Detalhes do Registro</h3>
+              </div>
+              <button
+                onClick={() => setSelectedRecordDetail(null)}
+                className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-700">
+              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Data</span>
+                  <p className="font-black text-slate-900">{selectedRecordDetail.data || "-"}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Categoria</span>
+                  <p className="font-black text-blue-700">{selectedRecordDetail.tipo_registro}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Placa</span>
+                  <p className="font-mono font-black text-slate-900">{selectedRecordDetail.placa || "-"}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Frota</span>
+                  <p className="font-bold text-slate-800">{selectedRecordDetail.numero_frota || "-"}</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Conta / Descrição</span>
+                <p className="font-bold text-slate-900">{selectedRecordDetail.descricao_conta || selectedRecordDetail.conta || "-"}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Quantidade / Litros</span>
+                  <p className="font-bold text-slate-900">{Number(selectedRecordDetail.quantidade || 0).toFixed(2)}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Valor Total</span>
+                  <p className="font-black text-emerald-700 text-sm">{formatCurrency(Number(selectedRecordDetail.valor || 0))}</p>
+                </div>
+                {selectedRecordDetail.preco_litro !== undefined && (
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Preço / Litro</span>
+                    <p className="font-bold text-slate-800">{formatCurrency(Number(selectedRecordDetail.preco_litro || 0))}</p>
+                  </div>
+                )}
+                {selectedRecordDetail.km_rodado !== undefined && (
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Km Rodado</span>
+                    <p className="font-bold text-slate-800">{selectedRecordDetail.km_rodado} km</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Fornecedor / Posto</span>
+                <p className="font-semibold text-slate-800">{selectedRecordDetail.fornecedor || "-"}</p>
+              </div>
+
+              {selectedRecordDetail.observacoes && (
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Observações</span>
+                  <p className="text-slate-600 text-[11px]">{selectedRecordDetail.observacoes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setSelectedRecordDetail(null)}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
