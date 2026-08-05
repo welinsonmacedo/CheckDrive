@@ -4,6 +4,7 @@ import {
   PieChart as PieChartIcon,
   BarChart3,
   TrendingUp,
+  TrendingDown,
   Truck,
   Fuel,
   Building2,
@@ -16,6 +17,7 @@ import {
   Check,
   Search,
   ChevronDown,
+  ChevronRight,
   Layers,
   X,
   FileText,
@@ -23,6 +25,12 @@ import {
   Hash,
   Calculator,
   RefreshCw,
+  Flame,
+  Award,
+  Navigation,
+  Info,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 import {
   BarChart,
@@ -164,6 +172,10 @@ export default function ImportReportsTab({ companyId }: Props) {
   const [viewMode, setViewMode] = useState<"agrupado" | "detalhado">("agrupado");
   const [tableSearch, setTableSearch] = useState<string>("");
 
+  // Top 10 Vehicles Report State
+  const [topVehiclesTab, setTopVehiclesTab] = useState<"maior" | "menor" | "lado_a_lado">("lado_a_lado");
+  const [selectedVehicleDetailKey, setSelectedVehicleDetailKey] = useState<string | null>(null);
+
   // Modal State
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [newMoldName, setNewMoldName] = useState("");
@@ -201,6 +213,12 @@ export default function ImportReportsTab({ companyId }: Props) {
     if (mold.agrupar_por) setAgruparPor(mold.agrupar_por);
     if (mold.metrica) setMetrica(mold.metrica);
     if (mold.tipo_grafico) setTipoGrafico(mold.tipo_grafico);
+
+    if (mold.id === "mold_default_top_high") {
+      setTopVehiclesTab("maior");
+    } else if (mold.id === "mold_default_top_low") {
+      setTopVehiclesTab("menor");
+    }
   };
 
   // Helper for period label
@@ -337,6 +355,204 @@ export default function ImportReportsTab({ companyId }: Props) {
       })
       .sort((a, b) => b.value - a.value);
   }, [filteredRecords, agruparPor, metrica]);
+
+  // Vehicle Stats for Top 10 Highest & Lowest Cost Reports
+  const vehicleStats = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        key: string;
+        placa: string;
+        numero_frota?: string;
+        viagensCount: number; // Cada abastecimento / lançamento = 1 viagem
+        totalCost: number;
+        totalLiters: number;
+        categories: Record<string, { count: number; valor: number; liters: number }>;
+        items: ImportRecord[];
+      }
+    > = {};
+
+    filteredRecords.forEach((r) => {
+      const rawPlaca = r.placa?.trim().toUpperCase() || "SEM PLACA";
+      const frota = r.numero_frota?.trim() || "";
+      const key = frota ? `${rawPlaca} (Frota ${frota})` : rawPlaca;
+
+      if (!map[key]) {
+        map[key] = {
+          key,
+          placa: rawPlaca,
+          numero_frota: frota,
+          viagensCount: 0,
+          totalCost: 0,
+          totalLiters: 0,
+          categories: {},
+          items: [],
+        };
+      }
+
+      map[key].viagensCount += 1;
+      const val = Number(r.valor) || 0;
+      const qty = Number(r.quantidade) || 0;
+      map[key].totalCost += val;
+      map[key].totalLiters += qty;
+      map[key].items.push(r);
+
+      const cat = r.tipo_registro || "Outros";
+      if (!map[key].categories[cat]) {
+        map[key].categories[cat] = { count: 0, valor: 0, liters: 0 };
+      }
+      map[key].categories[cat].count += 1;
+      map[key].categories[cat].valor += val;
+      map[key].categories[cat].liters += qty;
+    });
+
+    const allVehicles = Object.values(map);
+
+    const top10Highest = [...allVehicles]
+      .sort((a, b) => b.totalCost - a.totalCost)
+      .slice(0, 10);
+
+    const top10Lowest = [...allVehicles]
+      .filter((v) => v.totalCost > 0)
+      .sort((a, b) => a.totalCost - b.totalCost)
+      .slice(0, 10);
+
+    return {
+      allVehicles,
+      top10Highest,
+      top10Lowest,
+    };
+  }, [filteredRecords]);
+
+  const selectedVehicleDetail = useMemo(() => {
+    if (!selectedVehicleDetailKey) return null;
+    return vehicleStats.allVehicles.find((v) => v.key === selectedVehicleDetailKey) || null;
+  }, [selectedVehicleDetailKey, vehicleStats]);
+
+  // Helper to render individual vehicle card in Top 10 lists
+  const renderVehicleCard = (vehicle: typeof vehicleStats.top10Highest[0], rank: number, isHighCost: boolean) => {
+    const avgCostPerTrip = vehicle.viagensCount > 0 ? vehicle.totalCost / vehicle.viagensCount : 0;
+    const categoriesList = Object.entries(vehicle.categories)
+      .map(([catName, catData]) => ({
+        name: catName,
+        valor: catData.valor,
+        count: catData.count,
+        percent: vehicle.totalCost > 0 ? (catData.valor / vehicle.totalCost) * 100 : 0,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+
+    const rankBadgeBg =
+      rank === 1
+        ? "bg-amber-400 text-amber-950 border-amber-300 font-black shadow-xs"
+        : rank === 2
+        ? "bg-slate-300 text-slate-900 border-slate-200 font-black"
+        : rank === 3
+        ? "bg-amber-700 text-amber-100 border-amber-600 font-black"
+        : "bg-zinc-100 text-zinc-700 border-zinc-200 font-bold";
+
+    return (
+      <div
+        key={vehicle.key}
+        className={`p-4 rounded-2xl border transition-all ${
+          isHighCost
+            ? "bg-gradient-to-br from-rose-50/40 via-white to-amber-50/20 border-rose-200/80 hover:border-rose-300 hover:shadow-sm"
+            : "bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/20 border-emerald-200/80 hover:border-emerald-300 hover:shadow-sm"
+        }`}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100">
+          <div className="flex items-center gap-3">
+            <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs border ${rankBadgeBg}`}>
+              #{rank}
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-black text-zinc-900 text-sm tracking-wide">{vehicle.placa}</h4>
+                {vehicle.numero_frota && (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 border border-zinc-200">
+                    Frota {vehicle.numero_frota}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-zinc-500 font-medium">
+                <span className="inline-flex items-center gap-1 font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                  <Navigation className="w-3 h-3 text-indigo-600" />
+                  {vehicle.viagensCount} {vehicle.viagensCount === 1 ? "viagem (abastecimento)" : "viagens (abastecimentos)"}
+                </span>
+                {vehicle.totalLiters > 0 && (
+                  <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+                    <Fuel className="w-3 h-3 text-amber-600" />
+                    {vehicle.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="text-right flex sm:flex-col items-center sm:items-end justify-between gap-1">
+            <div>
+              <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Custo Total</p>
+              <p className={`text-base font-black ${isHighCost ? "text-rose-700" : "text-emerald-700"}`}>
+                {formatCurrency(vehicle.totalCost)}
+              </p>
+            </div>
+            <p className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
+              Média: {formatCurrency(avgCostPerTrip)} / viagem
+            </p>
+          </div>
+        </div>
+
+        {/* Cost Breakdown Description / Detalhamento de Custos */}
+        <div className="mt-3 space-y-2">
+          <p className="text-[11px] font-extrabold text-zinc-700 flex items-center justify-between">
+            <span>Detalhamento dos Custos por Categoria:</span>
+            <span className="text-[10px] text-zinc-400 font-semibold">{categoriesList.length} categoria(s)</span>
+          </p>
+
+          {/* Visual Progress Bar */}
+          <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden flex">
+            {categoriesList.map((cat, idx) => (
+              <div
+                key={cat.name}
+                style={{ width: `${cat.percent}%`, backgroundColor: COLORS[idx % COLORS.length] }}
+                title={`${cat.name}: ${formatCurrency(cat.valor)} (${cat.percent.toFixed(1)}%)`}
+              />
+            ))}
+          </div>
+
+          {/* Categories Chips */}
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {categoriesList.map((cat, idx) => (
+              <div
+                key={cat.name}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] bg-zinc-50 border border-zinc-200/80"
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                />
+                <span className="font-semibold text-zinc-700">{cat.name}:</span>
+                <span className="font-black text-zinc-900">{formatCurrency(cat.valor)}</span>
+                <span className="text-[10px] text-zinc-400 font-bold">({cat.percent.toFixed(0)}%)</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer Action */}
+        <div className="mt-3 pt-2.5 border-t border-zinc-100 flex items-center justify-between">
+          <span className="text-[10px] text-zinc-400 font-medium">
+            {vehicle.items.length} lançamento(s) vinculados (cada lançamento = 1 viagem)
+          </span>
+          <button
+            onClick={() => setSelectedVehicleDetailKey(vehicle.key)}
+            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline cursor-pointer"
+          >
+            Ver Viagens / Detalhes <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   // Overall Metrics
   const totalValorGeral = useMemo(
@@ -841,6 +1057,134 @@ export default function ImportReportsTab({ companyId }: Props) {
         </div>
       </div>
 
+      {/* Top 10 Vehicles Cost Analysis Block */}
+      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-extrabold mb-1.5 border border-rose-200">
+              <Truck className="w-3.5 h-3.5" /> Relatório Especial de Frotas & Veículos
+            </div>
+            <h3 className="text-lg font-black text-zinc-900">
+              Top 10 Veículos de Maior e Menor Custo
+            </h3>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Análise com detalhamento descritivo de custos por categoria e contagem de viagens (considerando <strong>cada abastecimento / lançamento como 1 viagem</strong>).
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 p-1.5 bg-zinc-100 rounded-2xl border border-zinc-200/80 shrink-0">
+            <button
+              onClick={() => setTopVehiclesTab("lado_a_lado")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                topVehiclesTab === "lado_a_lado"
+                  ? "bg-white text-blue-700 shadow-xs"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Lado a Lado
+            </button>
+            <button
+              onClick={() => setTopVehiclesTab("maior")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                topVehiclesTab === "maior"
+                  ? "bg-rose-600 text-white shadow-xs"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" /> Top 10 Maior Custo
+            </button>
+            <button
+              onClick={() => setTopVehiclesTab("menor")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                topVehiclesTab === "menor"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              <ArrowDownRight className="w-3.5 h-3.5" /> Top 10 Menor Custo
+            </button>
+          </div>
+        </div>
+
+        {topVehiclesTab === "lado_a_lado" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Top 10 Maior Custo */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-rose-50/80 p-3.5 rounded-2xl border border-rose-200">
+                <div className="flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-rose-600" />
+                  <h4 className="font-black text-rose-950 text-sm">10 Veículos com Maior Custo</h4>
+                </div>
+                <span className="text-[11px] font-bold text-rose-800 bg-white/80 px-2.5 py-0.5 rounded-md border border-rose-200">
+                  {vehicleStats.top10Highest.length} veículos
+                </span>
+              </div>
+
+              {vehicleStats.top10Highest.length === 0 ? (
+                <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo encontrado para este filtro.</p>
+              ) : (
+                <div className="space-y-3">
+                  {vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))}
+                </div>
+              )}
+            </div>
+
+            {/* Top 10 Menor Custo */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-emerald-50/80 p-3.5 rounded-2xl border border-emerald-200">
+                <div className="flex items-center gap-2">
+                  <Award className="w-5 h-5 text-emerald-600" />
+                  <h4 className="font-black text-emerald-950 text-sm">10 Veículos com Menor Custo</h4>
+                </div>
+                <span className="text-[11px] font-bold text-emerald-800 bg-white/80 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                  {vehicleStats.top10Lowest.length} veículos
+                </span>
+              </div>
+
+              {vehicleStats.top10Lowest.length === 0 ? (
+                <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo encontrado para este filtro.</p>
+              ) : (
+                <div className="space-y-3">
+                  {vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : topVehiclesTab === "maior" ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between bg-rose-50/80 p-4 rounded-2xl border border-rose-200">
+              <div className="flex items-center gap-2">
+                <Flame className="w-5 h-5 text-rose-600" />
+                <h4 className="font-black text-rose-950 text-base">Top 10 Veículos de Maior Custo Acumulado</h4>
+              </div>
+              <span className="text-xs font-extrabold text-rose-800 bg-white px-3 py-1 rounded-xl border border-rose-200">
+                Total acumulado: {formatCurrency(vehicleStats.top10Highest.reduce((s, v) => s + v.totalCost, 0))}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between bg-emerald-50/80 p-4 rounded-2xl border border-emerald-200">
+              <div className="flex items-center gap-2">
+                <Award className="w-5 h-5 text-emerald-600" />
+                <h4 className="font-black text-emerald-950 text-base">Top 10 Veículos de Menor Custo Registrado</h4>
+              </div>
+              <span className="text-xs font-extrabold text-emerald-800 bg-white px-3 py-1 rounded-xl border border-emerald-200">
+                Total acumulado: {formatCurrency(vehicleStats.top10Lowest.reduce((s, v) => s + v.totalCost, 0))}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Chart Section */}
       {tipoGrafico !== "table" && (
         <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
@@ -1179,6 +1523,131 @@ export default function ImportReportsTab({ companyId }: Props) {
                   <Check className="w-4 h-4" />
                 )}
                 Salvar Molde
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal / Drawer for Vehicle Trips & Cost Details */}
+      {selectedVehicleDetail && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-zinc-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white p-6 flex items-center justify-between shrink-0">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold mb-2">
+                  <Truck className="w-3.5 h-3.5" /> Detalhamento de Viagens & Custos do Veículo
+                </div>
+                <h3 className="text-xl font-black">
+                  Veículo: {selectedVehicleDetail.placa}
+                  {selectedVehicleDetail.numero_frota && ` (Frota ${selectedVehicleDetail.numero_frota})`}
+                </h3>
+                <p className="text-xs text-slate-300 mt-1">
+                  Exibindo todas as {selectedVehicleDetail.viagensCount} viagens (cada abastecimento / lançamento = 1 viagem).
+                </p>
+              </div>
+
+              <button
+                onClick={() => setSelectedVehicleDetailKey(null)}
+                className="p-2 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-200">
+                  <p className="text-xs font-extrabold text-zinc-500">Custo Total Acumulado</p>
+                  <p className="text-lg font-black text-zinc-900 mt-1">{formatCurrency(selectedVehicleDetail.totalCost)}</p>
+                </div>
+                <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-200">
+                  <p className="text-xs font-extrabold text-indigo-700">Qtd de Viagens (Abastecimentos)</p>
+                  <p className="text-lg font-black text-indigo-950 mt-1">{selectedVehicleDetail.viagensCount} viagens</p>
+                </div>
+                <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200">
+                  <p className="text-xs font-extrabold text-amber-700">Consumo de Combustível</p>
+                  <p className="text-lg font-black text-amber-950 mt-1">
+                    {selectedVehicleDetail.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L
+                  </p>
+                </div>
+              </div>
+
+              {/* Categories Breakdown Table */}
+              <div>
+                <h4 className="font-extrabold text-zinc-900 text-sm mb-3">
+                  Resumo de Custos Descritivos por Categoria
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {Object.entries(selectedVehicleDetail.categories).map(([catName, catData]) => (
+                    <div key={catName} className="p-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-zinc-800 text-xs">{catName}</p>
+                        <p className="text-[11px] text-zinc-500">{catData.count} lançamento(s)</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-black text-blue-700 text-sm">{formatCurrency(catData.valor)}</p>
+                        <p className="text-[10px] text-zinc-400 font-bold">
+                          {((catData.valor / selectedVehicleDetail.totalCost) * 100).toFixed(1)}% do total
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Trips List / Table */}
+              <div>
+                <h4 className="font-extrabold text-zinc-900 text-sm mb-3">
+                  Lista Detalhada de Viagens e Lançamentos
+                </h4>
+                <div className="overflow-x-auto rounded-2xl border border-zinc-200">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-zinc-100 text-zinc-600 border-b border-zinc-200 uppercase text-[10px] font-extrabold">
+                        <th className="p-3">Data</th>
+                        <th className="p-3">Categoria</th>
+                        <th className="p-3">Descrição / Conta</th>
+                        <th className="p-3">Fornecedor / Posto</th>
+                        <th className="p-3 text-center">Litros / Qtd</th>
+                        <th className="p-3 text-right">Valor (R$)</th>
+                        <th className="p-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 font-medium">
+                      {selectedVehicleDetail.items.map((r, i) => (
+                        <tr key={r.id || i} className="hover:bg-zinc-50">
+                          <td className="p-3 whitespace-nowrap text-zinc-600">{r.data || "-"}</td>
+                          <td className="p-3 font-bold text-blue-700">{r.tipo_registro}</td>
+                          <td className="p-3 text-zinc-800">{r.descricao_conta || r.conta || "-"}</td>
+                          <td className="p-3 text-zinc-600">{r.fornecedor || "-"}</td>
+                          <td className="p-3 text-center text-zinc-700 font-bold">
+                            {Number(r.quantidade || 0) > 0 ? `${Number(r.quantidade).toFixed(1)}` : "-"}
+                          </td>
+                          <td className="p-3 text-right font-black text-zinc-900">{formatCurrency(Number(r.valor) || 0)}</td>
+                          <td className="p-3 text-center">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 uppercase">
+                              {r.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-zinc-50 p-4 border-t border-zinc-200 flex justify-end shrink-0">
+              <button
+                onClick={() => setSelectedVehicleDetailKey(null)}
+                className="px-5 py-2 rounded-xl bg-zinc-900 text-white font-bold text-xs hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                Fechar
               </button>
             </div>
           </div>
