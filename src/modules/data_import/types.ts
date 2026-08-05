@@ -20,6 +20,7 @@ export type RecordCategory =
   | "Manutenção"
   | "Lubrificantes"
   | "Peças"
+  | "Mecanica / Pecas"
   | "Outros";
 
 export type ImportJobStatus = "processando" | "concluido" | "conflito" | "erro" | "cancelado" | "aprovado";

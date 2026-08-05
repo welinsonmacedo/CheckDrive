@@ -46,8 +46,9 @@ export interface ExportReportData {
   };
   aggregatedData: AggregatedReportRow[];
   vehicleStats: {
-    top10Highest: VehicleReportStat[];
-    top10Lowest: VehicleReportStat[];
+    top10Highest?: VehicleReportStat[];
+    top10Lowest?: VehicleReportStat[];
+    allVehicles?: any[];
   };
   tableFilteredRecords: ImportRecord[];
 }
@@ -201,7 +202,7 @@ export async function exportReportToExcel(data: ExportReportData) {
     };
   });
 
-  vehicleStats.top10Highest.forEach((v, idx) => {
+  (vehicleStats?.top10Highest || []).forEach((v, idx) => {
     currentRow++;
     const avgCost = v.viagensCount > 0 ? v.totalCost / v.viagensCount : 0;
     const catDesc = Object.entries(v.categories)
@@ -265,7 +266,7 @@ export async function exportReportToExcel(data: ExportReportData) {
     };
   });
 
-  vehicleStats.top10Lowest.forEach((v, idx) => {
+  (vehicleStats?.top10Lowest || []).forEach((v, idx) => {
     currentRow++;
     const avgCost = v.viagensCount > 0 ? v.totalCost / v.viagensCount : 0;
     const catDesc = Object.entries(v.categories)
@@ -329,7 +330,7 @@ export async function exportReportToExcel(data: ExportReportData) {
     cell.alignment = { vertical: "middle", horizontal: "center" };
   });
 
-  aggregatedData.forEach((g, idx) => {
+  (aggregatedData || []).forEach((g, idx) => {
     currentRow++;
     const row = wsExec.getRow(currentRow);
     row.values = [
@@ -406,7 +407,7 @@ export async function exportReportToExcel(data: ExportReportData) {
   detailTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "0F172A" } };
   detailTitle.alignment = { vertical: "middle", horizontal: "center" };
 
-  wsDetail.getCell("A4").value = `Total de Lançamentos Exibidos: ${tableFilteredRecords.length} registros`;
+  wsDetail.getCell("A4").value = `Total de Lançamentos Exibidos: ${(tableFilteredRecords || []).length} registros`;
   wsDetail.getCell("A4").font = { italic: true, size: 9, color: { argb: "475569" } };
 
   const detailHeaders = [
@@ -436,7 +437,7 @@ export async function exportReportToExcel(data: ExportReportData) {
     };
   });
 
-  tableFilteredRecords.forEach((r, idx) => {
+  (tableFilteredRecords || []).forEach((r, idx) => {
     const rowNum = idx + 6;
     const isGFV = r.import_job_id?.includes("combustivel") || r.tipo_registro === "Combustível" || r.quantidade > 0;
     const impTypeStr = isGFV ? "GFV (Combustível)" : "SOFtran (Despesas)";
@@ -578,7 +579,8 @@ export function exportReportToPDF(data: ExportReportData) {
   let currentY = 67;
 
   // 4. TOP 10 MAIOR CUSTO TABLE
-  if (vehicleStats.top10Highest.length > 0) {
+  const top10HighList = vehicleStats?.top10Highest || [];
+  if (top10HighList.length > 0) {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(159, 18, 57); // Rose 800
@@ -595,9 +597,9 @@ export function exportReportToPDF(data: ExportReportData) {
       "Categorias de Custo",
     ];
 
-    const highRows = vehicleStats.top10Highest.map((v, i) => {
+    const highRows = top10HighList.map((v, i) => {
       const avg = v.viagensCount > 0 ? v.totalCost / v.viagensCount : 0;
-      const catDesc = Object.entries(v.categories)
+      const catDesc = Object.entries(v.categories || {})
         .map(([cName, cVal]) => `${cName}: ${formatCurrency(cVal.valor)}`)
         .join(" | ");
 
@@ -649,7 +651,8 @@ export function exportReportToPDF(data: ExportReportData) {
   }
 
   // 5. TOP 10 MENOR CUSTO TABLE
-  if (vehicleStats.top10Lowest.length > 0) {
+  const top10LowList = vehicleStats?.top10Lowest || [];
+  if (top10LowList.length > 0) {
     if (currentY + 45 > pageHeight) {
       doc.addPage();
       currentY = 18;
@@ -671,9 +674,9 @@ export function exportReportToPDF(data: ExportReportData) {
       "Categorias de Custo",
     ];
 
-    const lowRows = vehicleStats.top10Lowest.map((v, i) => {
+    const lowRows = top10LowList.map((v, i) => {
       const avg = v.viagensCount > 0 ? v.totalCost / v.viagensCount : 0;
-      const catDesc = Object.entries(v.categories)
+      const catDesc = Object.entries(v.categories || {})
         .map(([cName, cVal]) => `${cName}: ${formatCurrency(cVal.valor)}`)
         .join(" | ");
 
@@ -725,7 +728,8 @@ export function exportReportToPDF(data: ExportReportData) {
   }
 
   // 6. AGRUPADO TABLE
-  if (aggregatedData.length > 0) {
+  const aggList = aggregatedData || [];
+  if (aggList.length > 0) {
     if (currentY + 45 > pageHeight) {
       doc.addPage();
       currentY = 18;
@@ -745,7 +749,7 @@ export function exportReportToPDF(data: ExportReportData) {
       "% do Custo Total",
     ];
 
-    const groupRows = aggregatedData.map((g) => [
+    const groupRows = aggList.map((g) => [
       g.name,
       g.count,
       formatNumber(g.totalQty, 2),
@@ -804,7 +808,8 @@ export function exportReportToPDF(data: ExportReportData) {
   }
 
   // 7. DETALHAMENTO DE LANÇAMENTOS (ITEMIZED TABLE)
-  if (tableFilteredRecords.length > 0) {
+  const detailList = tableFilteredRecords || [];
+  if (detailList.length > 0) {
     if (currentY + 45 > pageHeight) {
       doc.addPage();
       currentY = 18;
@@ -813,7 +818,7 @@ export function exportReportToPDF(data: ExportReportData) {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 41, 59);
-    doc.text(`LANÇAMENTOS DETALHADOS (${tableFilteredRecords.length} REGISTROS)`, 14, currentY);
+    doc.text(`LANÇAMENTOS DETALHADOS (${detailList.length} REGISTROS)`, 14, currentY);
 
     const detailColumns = [
       "Data",
@@ -828,7 +833,7 @@ export function exportReportToPDF(data: ExportReportData) {
     ];
 
     // Show up to 300 records in PDF to keep file size performant
-    const detailRows = tableFilteredRecords.slice(0, 300).map((r) => {
+    const detailRows = detailList.slice(0, 300).map((r) => {
       const isGFV = r.import_job_id?.includes("combustivel") || r.quantidade > 0;
       return [
         r.data || "-",

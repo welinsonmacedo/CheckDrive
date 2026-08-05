@@ -475,6 +475,7 @@ ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
         name: "",
         cnpj: "",
         cep: "",
+        number: "",
         location: "",
         city: "",
         state: "",

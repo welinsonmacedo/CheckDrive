@@ -455,6 +455,7 @@ export default function SharedReportPage() {
     try {
       await exportReportToExcel({
         filters: {
+          companyName: report?.title ? `CheckDrive - ${report.title}` : undefined,
           periodLabel: getPeriodLabel(),
           categoryFilter,
           tipoImportacaoFilter,
@@ -471,20 +472,11 @@ export default function SharedReportPage() {
           mediaValorGeral,
         },
         aggregatedData,
-        vehicleStats: {
-          allVehicles: vehicleStats.allVehicles.map((v) => ({
-            placa: v.placa,
-            count: v.viagensCount,
-            totalValor: v.totalCost,
-            totalLitros: v.totalLiters,
-            totalKm: 0,
-            mediaKmL: 0,
-          })),
-        },
+        vehicleStats,
         tableFilteredRecords,
       });
     } catch (e: any) {
-      alert("Erro ao exportar Excel: " + e.message);
+      alert("Erro ao exportar Excel: " + (e?.message || e));
     } finally {
       setIsExportingExcel(false);
     }
@@ -495,6 +487,7 @@ export default function SharedReportPage() {
     try {
       exportReportToPDF({
         filters: {
+          companyName: report?.title ? `CheckDrive - ${report.title}` : undefined,
           periodLabel: getPeriodLabel(),
           categoryFilter,
           tipoImportacaoFilter,
@@ -511,20 +504,11 @@ export default function SharedReportPage() {
           mediaValorGeral,
         },
         aggregatedData,
-        vehicleStats: {
-          allVehicles: vehicleStats.allVehicles.map((v) => ({
-            placa: v.placa,
-            count: v.viagensCount,
-            totalValor: v.totalCost,
-            totalLitros: v.totalLiters,
-            totalKm: 0,
-            mediaKmL: 0,
-          })),
-        },
+        vehicleStats,
         tableFilteredRecords,
       });
     } catch (e: any) {
-      alert("Erro ao exportar PDF: " + e.message);
+      alert("Erro ao exportar PDF: " + (e?.message || e));
     } finally {
       setIsExportingPDF(false);
     }
