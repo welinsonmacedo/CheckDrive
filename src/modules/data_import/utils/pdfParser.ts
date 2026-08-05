@@ -398,66 +398,90 @@ export async function parseFuelConsumptionTextContent(
       let mediaKmL: number | undefined = undefined;
       let precoPorKm: number | undefined = undefined;
 
-      if (parsedFloats.length >= 2) {
-        // 1. Find triple match: Math.abs(val - qty * pLitro) < 0.20
-        let foundMatch = false;
-        for (let qIdx = 0; qIdx < parsedFloats.length; qIdx++) {
-          for (let pIdx = 0; pIdx < parsedFloats.length; pIdx++) {
-            if (qIdx === pIdx) continue;
-            const qCand = parsedFloats[qIdx];
-            const pCand = parsedFloats[pIdx];
+      // Standard GFV Consumo por Veículo report format has 7 floats in exact order:
+      // [0] Qt.Combustível (Liters)
+      // [1] Hodôm./Horim. (Odometer)
+      // [2] Km/Horas (Km driven)
+      // [3] Média (Km/L)
+      // [4] Valor (Total R$)
+      // [5] P/Litro (R$/L)
+      // [6] P/Km (R$/Km)
+      if (parsedFloats.length >= 7) {
+        const candidateQt = parsedFloats[0];
+        const candidateHod = parsedFloats[1];
+        const candidateKm = parsedFloats[2];
+        const candidateMedia = parsedFloats[3];
+        const candidateVal = parsedFloats[4];
+        const candidatePLitro = parsedFloats[5];
+        const candidatePKm = parsedFloats[6];
 
-            if (qCand > 0 && pCand > 0 && pCand < 30) {
-              const calcVal = qCand * pCand;
-              const vCand = parsedFloats.find((v, idx) => idx !== qIdx && idx !== pIdx && Math.abs(v - calcVal) < 0.20);
-              if (vCand !== undefined) {
-                quantidade = qCand;
-                pLitro = pCand;
-                valor = vCand;
-                foundMatch = true;
+        // Check if math holds for standard positional layout:
+        // Qt * P/Litro ≈ Valor OR Qt * Média ≈ Km
+        const valMathMatches = candidateQt > 0 && Math.abs(candidateQt * candidatePLitro - candidateVal) < 2.0;
+        const kmMathMatches = candidateQt > 0 && Math.abs(candidateQt * candidateMedia - candidateKm) < 2.0;
+
+        if (valMathMatches || kmMathMatches || candidateHod > 1000) {
+          quantidade = candidateQt;
+          hodometro = Math.round(candidateHod);
+          kmRodado = candidateKm;
+          mediaKmL = candidateMedia;
+          valor = candidateVal;
+          pLitro = candidatePLitro;
+          precoPorKm = candidatePKm;
+        }
+      }
+
+      // Fallback if positional layout wasn't matched (e.g. fewer than 7 floats)
+      if (valor === 0 && quantidade === 0 && parsedFloats.length >= 2) {
+        // Find hodometro (> 1000)
+        const hodCand = parsedFloats.find((f) => f > 1000);
+        if (hodCand) hodometro = Math.round(hodCand);
+
+        const remaining = parsedFloats.filter((f) => f !== hodCand);
+
+        // Try finding (quantidade, pLitro, valor) where valor = quantidade * pLitro and pLitro is between 2.0 and 20.0
+        let foundFinancial = false;
+        for (let qI = 0; qI < remaining.length; qI++) {
+          for (let pI = 0; pI < remaining.length; pI++) {
+            if (qI === pI) continue;
+            const q = remaining[qI];
+            const p = remaining[pI];
+
+            if (q > 0 && p >= 2.0 && p <= 20.0) {
+              const calcV = q * p;
+              const vMatch = remaining.find((v, vI) => vI !== qI && vI !== pI && Math.abs(v - calcV) < 1.0);
+              if (vMatch !== undefined) {
+                quantidade = q;
+                pLitro = p;
+                valor = vMatch;
+                foundFinancial = true;
                 break;
               }
             }
           }
-          if (foundMatch) break;
+          if (foundFinancial) break;
         }
 
-        // Fallback if math match wasn't found directly:
-        if (!foundMatch) {
-          const largeHod = parsedFloats.find((f) => f > 1000);
-          if (largeHod) hodometro = Math.round(largeHod);
-
-          const nonHod = parsedFloats.filter((f) => f !== largeHod);
-          if (nonHod.length >= 2) {
-            valor = nonHod[nonHod.length - 2] || nonHod[0];
-            quantidade = nonHod[0];
-          } else if (nonHod.length === 1) {
-            valor = nonHod[0];
-          }
-        } else {
-          // Check for Hodômetro among floats (usually > 1000)
-          const candidateHod = parsedFloats.find((f) => f > 1000 && f !== valor);
-          if (candidateHod) {
-            hodometro = Math.round(candidateHod);
-          }
-        }
-
-        // 2. Extract km_rodado (Km/Horas) and media_km_l (Média) from remaining floats
+        // Try finding (kmRodado, mediaKmL) among remaining floats where kmRodado = quantidade * mediaKmL
         if (quantidade > 0) {
-          for (let kmIdx = 0; kmIdx < parsedFloats.length; kmIdx++) {
-            const kmCand = parsedFloats[kmIdx];
-            if (kmCand >= 0 && kmCand !== hodometro && kmCand !== valor && kmCand !== quantidade) {
-              const expectedMedia = kmCand / quantidade;
-              const mediaMatch = parsedFloats.find(
-                (m, idx) => idx !== kmIdx && Math.abs(m - expectedMedia) < 0.15
-              );
-              if (mediaMatch !== undefined) {
-                kmRodado = kmCand;
-                mediaKmL = mediaMatch;
+          for (let kmI = 0; kmI < remaining.length; kmI++) {
+            const km = remaining[kmI];
+            if (km >= 0 && km !== valor && km !== quantidade) {
+              const expectedM = km / quantidade;
+              const mMatch = remaining.find((m, mI) => mI !== kmI && Math.abs(m - expectedM) < 0.25);
+              if (mMatch !== undefined && mMatch <= 30) {
+                kmRodado = km;
+                mediaKmL = mMatch;
                 break;
               }
             }
           }
+        }
+
+        // Basic fallback for remaining
+        if (valor === 0 && remaining.length > 0) {
+          valor = remaining[remaining.length - 1];
+          if (quantidade === 0) quantidade = remaining[0] || 1;
         }
       } else if (parsedFloats.length === 1) {
         valor = parsedFloats[0];
@@ -465,14 +489,14 @@ export async function parseFuelConsumptionTextContent(
 
       if (valor === 0 && quantidade === 0) continue;
 
-      // Fallbacks if not explicitly matched from floats:
-      if (pLitro === undefined && quantidade > 0 && valor > 0) {
+      // Ensure fallbacks for derived fields if missing
+      if ((pLitro === undefined || pLitro === 0) && quantidade > 0 && valor > 0) {
         pLitro = valor / quantidade;
       }
-      if (mediaKmL === undefined && kmRodado !== undefined && kmRodado > 0 && quantidade > 0) {
+      if ((mediaKmL === undefined || mediaKmL === 0) && kmRodado !== undefined && kmRodado > 0 && quantidade > 0) {
         mediaKmL = kmRodado / quantidade;
       }
-      if (precoPorKm === undefined && kmRodado !== undefined && kmRodado > 0 && valor > 0) {
+      if ((precoPorKm === undefined || precoPorKm === 0) && kmRodado !== undefined && kmRodado > 0 && valor > 0) {
         precoPorKm = valor / kmRodado;
       }
 
