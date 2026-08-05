@@ -52,6 +52,7 @@ import {
 } from "recharts";
 import { ImportRecord, RecordCategory } from "../types";
 import { SharedReportService, SharedReportConfig } from "../services/sharedReportService";
+import { ImportService } from "../services/importService";
 import { exportReportToExcel, exportReportToPDF } from "../utils/exportReportUtils";
 import { getRecordImportType, getImportTypeLabel } from "./ImportReportsTab";
 
@@ -95,7 +96,15 @@ const COLORS = [
 ];
 
 export default function SharedReportPage() {
-  const { shareId } = useParams<{ shareId: string }>();
+  const { shareId: paramShareId } = useParams<{ shareId: string }>();
+
+  // Extract shareId reliably from route param or location path/hash
+  const shareId = useMemo(() => {
+    if (paramShareId) return paramShareId;
+    const fullLoc = window.location.pathname + window.location.hash + window.location.search;
+    const match = fullLoc.match(/relatorio-compartilhado\/([^/?#]+)/);
+    return match ? match[1] : "";
+  }, [paramShareId]);
 
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<SharedReportConfig | null>(null);
@@ -134,6 +143,18 @@ export default function SharedReportPage() {
     try {
       const data = await SharedReportService.getSharedReport(id);
       if (data) {
+        // Fallback: If records_snapshot is empty or missing, fetch from ImportService
+        if ((!data.records_snapshot || data.records_snapshot.length === 0) && data.company_id) {
+          try {
+            const fallbackRecords = await ImportService.getImportRecords(data.company_id);
+            if (fallbackRecords && fallbackRecords.length > 0) {
+              data.records_snapshot = fallbackRecords;
+            }
+          } catch (e) {
+            console.warn("Fallback records fetch error:", e);
+          }
+        }
+
         setReport(data);
         // Load initial filters
         if (data.filters) {

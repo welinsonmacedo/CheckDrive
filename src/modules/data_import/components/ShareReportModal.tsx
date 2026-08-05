@@ -80,6 +80,27 @@ export default function ShareReportModal({
     }
   }, [isOpen, currentTitle]);
 
+  // Auto-save active report configuration whenever key fields change
+  useEffect(() => {
+    if (isOpen && shareId && accessCode) {
+      const reportConfig: SharedReportConfig = {
+        id: shareId,
+        company_id: companyId,
+        title: title || "Relatório Compartilhado",
+        access_code: accessCode,
+        allow_filters: allowFilters,
+        created_at: new Date().toISOString(),
+        created_by_name: "CheckDrive Admin",
+        filters,
+        records_snapshot: records,
+        overall_metrics: overallMetrics,
+      };
+      SharedReportService.saveSharedReport(reportConfig).then(() => {
+        setSavedSuccess(true);
+      });
+    }
+  }, [isOpen, shareId, accessCode, allowFilters, title, companyId, filters, records, overallMetrics]);
+
   if (!isOpen) return null;
 
   const fullShareUrl = `${window.location.origin}/relatorio-compartilhado/${shareId}`;
@@ -89,6 +110,22 @@ export default function ShareReportModal({
   };
 
   const handleCopyLink = () => {
+    // Ensure saved
+    if (shareId && accessCode) {
+      const reportConfig: SharedReportConfig = {
+        id: shareId,
+        company_id: companyId,
+        title: title || "Relatório Compartilhado",
+        access_code: accessCode,
+        allow_filters: allowFilters,
+        created_at: new Date().toISOString(),
+        created_by_name: "CheckDrive Admin",
+        filters,
+        records_snapshot: records,
+        overall_metrics: overallMetrics,
+      };
+      SharedReportService.saveSharedReport(reportConfig);
+    }
     navigator.clipboard.writeText(fullShareUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
@@ -108,6 +145,21 @@ ${allowFilters ? "⚡ *Filtros*: Liberados para navegação do leitor." : "🔒 
 _Acesse o link e informe o código de acesso para visualizar._`;
 
   const handleCopyFullMessage = () => {
+    if (shareId && accessCode) {
+      const reportConfig: SharedReportConfig = {
+        id: shareId,
+        company_id: companyId,
+        title: title || "Relatório Compartilhado",
+        access_code: accessCode,
+        allow_filters: allowFilters,
+        created_at: new Date().toISOString(),
+        created_by_name: "CheckDrive Admin",
+        filters,
+        records_snapshot: records,
+        overall_metrics: overallMetrics,
+      };
+      SharedReportService.saveSharedReport(reportConfig);
+    }
     navigator.clipboard.writeText(fullMessageText);
     setCopiedMessage(true);
     setTimeout(() => setCopiedMessage(false), 2500);

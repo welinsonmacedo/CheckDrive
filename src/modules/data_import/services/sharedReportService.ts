@@ -57,13 +57,24 @@ export class SharedReportService {
   }
 
   /**
-   * Saves a shared report configuration (local storage + Supabase fallback)
+   * Saves a shared report configuration (local storage + localforage + Supabase)
    */
   static async saveSharedReport(report: SharedReportConfig): Promise<SharedReportConfig> {
     // 1. Save in local storage (localforage)
-    await SHARED_REPORTS_STORE.setItem(report.id, report);
+    try {
+      await SHARED_REPORTS_STORE.setItem(report.id, report);
+    } catch (e) {
+      console.warn("localforage save error:", e);
+    }
 
-    // 2. Attempt to save in Supabase if table exists
+    // 2. Save in localStorage as synchronous backup
+    try {
+      localStorage.setItem(`checkdrive_shared_report_${report.id}`, JSON.stringify(report));
+    } catch (e) {
+      console.warn("localStorage save error:", e);
+    }
+
+    // 3. Attempt to save in Supabase if table exists
     try {
       const { error } = await supabase.from("shared_reports").upsert({
         id: report.id,
@@ -91,15 +102,19 @@ export class SharedReportService {
    * Fetches a shared report configuration by ID
    */
   static async getSharedReport(shareId: string): Promise<SharedReportConfig | null> {
+    if (!shareId) return null;
+
+    const cleanShareId = shareId.trim();
+
     // 1. Try Supabase
     try {
       const { data, error } = await supabase
         .from("shared_reports")
         .select("*")
-        .eq("id", shareId)
+        .eq("id", cleanShareId)
         .maybeSingle();
 
-      if (!error && data) {
+      if (!error && data && data.id) {
         return data as SharedReportConfig;
       }
     } catch (e) {
@@ -107,7 +122,37 @@ export class SharedReportService {
     }
 
     // 2. Fallback to localforage
-    const localReport = await SHARED_REPORTS_STORE.getItem<SharedReportConfig>(shareId);
-    return localReport || null;
+    try {
+      const localReport = await SHARED_REPORTS_STORE.getItem<SharedReportConfig>(cleanShareId);
+      if (localReport && localReport.id) return localReport;
+    } catch (e) {
+      console.warn("localforage fetch error:", e);
+    }
+
+    // 3. Fallback to localStorage
+    try {
+      const lsRaw = localStorage.getItem(`checkdrive_shared_report_${cleanShareId}`);
+      if (lsRaw) {
+        const parsed = JSON.parse(lsRaw);
+        if (parsed && parsed.id) return parsed;
+      }
+    } catch (e) {
+      console.warn("localStorage fetch error:", e);
+    }
+
+    // 4. Scan all localforage records as last resort
+    try {
+      let found: SharedReportConfig | null = null;
+      await SHARED_REPORTS_STORE.iterate((val: SharedReportConfig) => {
+        if (val && val.id === cleanShareId) {
+          found = val;
+        }
+      });
+      if (found) return found;
+    } catch (e) {
+      // ignore
+    }
+
+    return null;
   }
 }
