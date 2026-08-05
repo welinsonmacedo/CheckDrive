@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { exportReportToExcel, exportReportToPDF } from "../utils/exportReportUtils";
 import {
   FileSpreadsheet,
   PieChart as PieChartIcon,
@@ -181,6 +182,8 @@ export default function ImportReportsTab({ companyId }: Props) {
   const [newMoldName, setNewMoldName] = useState("");
   const [newMoldDesc, setNewMoldDesc] = useState("");
   const [savingMold, setSavingMold] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -627,41 +630,70 @@ export default function ImportReportsTab({ companyId }: Props) {
     }
   };
 
-  // Export Excel (.xlsx / .csv)
-  const exportExcel = () => {
-    let csvContent = "\uFEFF"; // UTF-8 BOM for Excel
-    csvContent += `RELATÓRIO DE DADOS IMPORTADOS - ${agruparPor.toUpperCase()}\n`;
-    csvContent += `Gerado em: ${new Date().toLocaleString("pt-BR")}\n`;
-    csvContent += `Filtro Categoria: ${categoryFilter}; Período: ${getPeriodLabel()}\n\n`;
-
-    if (viewMode === "agrupado" || tipoGrafico !== "table") {
-      csvContent += "=== RESUMO AGRUPADO ===\n";
-      csvContent += `Agrupamento (${agruparPor});Qtd Lançamentos;Soma Unidades/Litros;Valor Total (R$);Média Valor (R$);% do Total\n`;
-      aggregatedData.forEach((row) => {
-        csvContent += `"${row.name}";${row.count};"${row.totalQty.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${row.valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${row.mediaValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${row.percent}%"\n`;
+  // Export Excel (.xlsx) profissional
+  const handleExportExcel = async () => {
+    setIsExportingExcel(true);
+    try {
+      await exportReportToExcel({
+        filters: {
+          periodLabel: getPeriodLabel(),
+          categoryFilter,
+          tipoImportacaoFilter,
+          agruparPor,
+          metrica,
+          tipoGrafico,
+          fornecedorFilter,
+          placaFilter,
+        },
+        overallMetrics: {
+          totalValorGeral,
+          totalQtyGeral,
+          totalRegistrosCount,
+          mediaValorGeral,
+        },
+        aggregatedData,
+        vehicleStats,
+        tableFilteredRecords,
       });
-      csvContent += "\n";
+    } catch (e: any) {
+      console.error("Erro ao exportar Excel:", e);
+      alert("Ocorreu um erro ao gerar a planilha Excel: " + (e?.message || e));
+    } finally {
+      setIsExportingExcel(false);
     }
-
-    csvContent += "=== DETALHAMENTO DOS REGISTROS ===\n";
-    csvContent += `Data;Categoria;Placa;Frota;Conta;Descrição;Quantidade;Valor (R$);Fornecedor;Status\n`;
-    tableFilteredRecords.forEach((r) => {
-      csvContent += `"${r.data || ""}";"${r.tipo_registro}";"${r.placa}";"${r.numero_frota || ""}";"${r.conta || ""}";"${r.descricao_conta || ""}";"${Number(r.quantidade || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${Number(r.valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${r.fornecedor || ""}";"${r.status}"\n`;
-    });
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `relatorio_importacao_${agruparPor}_${new Date().toISOString().substring(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
-  // Print Report
-  const printReport = () => {
-    window.print();
+  // Export PDF (.pdf) profissional
+  const handleExportPDF = () => {
+    setIsExportingPDF(true);
+    try {
+      exportReportToPDF({
+        filters: {
+          periodLabel: getPeriodLabel(),
+          categoryFilter,
+          tipoImportacaoFilter,
+          agruparPor,
+          metrica,
+          tipoGrafico,
+          fornecedorFilter,
+          placaFilter,
+        },
+        overallMetrics: {
+          totalValorGeral,
+          totalQtyGeral,
+          totalRegistrosCount,
+          mediaValorGeral,
+        },
+        aggregatedData,
+        vehicleStats,
+        tableFilteredRecords,
+      });
+    } catch (e: any) {
+      console.error("Erro ao exportar PDF:", e);
+      alert("Ocorreu um erro ao gerar o relatório PDF: " + (e?.message || e));
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
   const formatCurrency = (val: number) => {
@@ -678,7 +710,7 @@ export default function ImportReportsTab({ companyId }: Props) {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden no-print">
         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
           <FileSpreadsheet size={240} />
         </div>
@@ -702,25 +734,29 @@ export default function ImportReportsTab({ companyId }: Props) {
               <Plus className="w-4 h-4" /> Salvar Molde
             </button>
             <button
-              onClick={exportExcel}
-              className="px-3.5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-emerald-600/20"
-              title="Exportar dados para Excel (.xlsx / .csv)"
+              onClick={handleExportExcel}
+              disabled={isExportingExcel}
+              className="px-3.5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-emerald-600/20"
+              title="Exportar dados formatados para Excel (.xlsx)"
             >
-              <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
+              <FileSpreadsheet className="w-4 h-4" />
+              {isExportingExcel ? "Gerando Excel..." : "Exportar Excel"}
             </button>
             <button
-              onClick={printReport}
-              className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Exportar ou Imprimir relatório em PDF"
+              onClick={handleExportPDF}
+              disabled={isExportingPDF}
+              className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Exportar relatório em PDF profissional"
             >
-              <Printer className="w-4 h-4" /> Exportar PDF
+              <Printer className="w-4 h-4" />
+              {isExportingPDF ? "Gerando PDF..." : "Exportar PDF"}
             </button>
           </div>
         </div>
       </div>
 
       {/* Gallery of Report Models / Moldes */}
-      <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4">
+      <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4 no-print">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers className="w-5 h-5 text-blue-600" />
