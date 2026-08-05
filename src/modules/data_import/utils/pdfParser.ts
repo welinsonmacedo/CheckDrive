@@ -81,7 +81,18 @@ export async function parseSeniorTextContent(
   fullText: string,
   empresa_id: string
 ): Promise<ParsedPdfResult> {
-  // Extract Period if available
+  // Check if PDF is a fuel consumption report ("Consumo de Combustíveis por Veículo")
+  const isFuelConsumptionReport =
+    fullText.includes("Consumo de Combustíveis por Veículo") ||
+    fullText.includes("Qt.Combustível") ||
+    fullText.includes("Hodôm./Horim.") ||
+    (fullText.includes("Hodômetro Inicial:") && fullText.includes("GFV Versão"));
+
+  if (isFuelConsumptionReport) {
+    return parseFuelConsumptionTextContent(fullText, empresa_id);
+  }
+
+  // Format 1: Senior / SOFtran "Receitas/Despesas por Veículo" / Relatório de Contas
   const periodoMatch =
     fullText.match(/Período\s+de:\s*([\d\/\.\-]+(?:\s*at[ée]\s*[\d\/\.\-]+)?)/i) ||
     fullText.match(/(?:período|periodo|data\s+inicial|de|emissã[o0]):\s*([\d\/\.\-]+(?:\s*a\s*[\d\/\.\-]+)?)/i);
@@ -237,7 +248,227 @@ export async function parseSeniorTextContent(
         fornecedor,
         documento: documento || undefined,
         numero_controle: documento || undefined,
-        observacoes: `Importado de relatório SOFTran/GFV - Período ${periodo}`,
+        observacoes: `Importado de relatório SOFTran/Senior - Período ${periodo}`,
+      });
+    }
+  }
+
+  // Calculate SHA-256 hashes for all parsed records
+  const recordsWithHash = await Promise.all(
+    rawRecords.map(async (r) => {
+      const hash = await generateRecordHash({
+        empresa_id,
+        placa: r.placa,
+        conta: r.conta,
+        data: r.data,
+        valor: r.valor,
+        quantidade: r.quantidade,
+        fornecedor: r.fornecedor,
+        documento: r.documento,
+        hodometro: r.hodometro,
+      });
+
+      return {
+        ...r,
+        hash_registro: hash,
+      };
+    })
+  );
+
+  return {
+    periodo,
+    records: recordsWithHash,
+    rawText: fullText,
+    totalExtracted: recordsWithHash.length,
+  };
+}
+
+export async function parseFuelConsumptionTextContent(
+  fullText: string,
+  empresa_id: string
+): Promise<ParsedPdfResult> {
+  // Extract Period e.g. "Período de: 01/07/2026 até 31/07/2026;"
+  const periodoMatch =
+    fullText.match(/Período\s+de:\s*([\d\/\.\-]+(?:\s*at[ée]\s*[\d\/\.\-]+)?)/i) ||
+    fullText.match(/(?:período|periodo):\s*([\d\/\.\-]+(?:\s*a\s*[\d\/\.\-]+)?)/i);
+  const periodo = periodoMatch ? periodoMatch[1].replace(";", "").trim() : `${new Date().toLocaleDateString("pt-BR")}`;
+
+  const lines = fullText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const rawRecords: any[] = [];
+  let currentFleet = "";
+  let currentPlaca = "";
+  let currentVehicleModel = "";
+
+  const plateRegex = /\b([A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4}|[A-Z]{3}\s+[0-9][A-Z0-9][0-9]{2})\b/i;
+  const dateRegex = /^(\d{2}\/\d{2}\/\d{4})\b/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Ignore headers, totals, footers
+    if (
+      line.startsWith("Total por ") ||
+      line.startsWith("Total ") ||
+      line.startsWith("TOTAL GERAL") ||
+      line.startsWith("GFV Versão") ||
+      line.startsWith("Consumo de Combustíveis") ||
+      line.startsWith("Período de:") ||
+      line.startsWith("Abastecimento Fornecedor") ||
+      line.startsWith("SOFtran")
+    ) {
+      continue;
+    }
+
+    // Vehicle header e.g. "Veículo: 1 OOW9770 Hodômetro Inicial: 251.541,000 VW/8.160 DRC 4x2 CAMIONETE 3/4"
+    if (line.match(/^Ve[íi]culo:/i)) {
+      const vehicleText = line.replace(/^Ve[íi]culo:\s*/i, "").trim();
+
+      // Extract plate
+      const plateMatch = vehicleText.match(plateRegex);
+      if (plateMatch) {
+        currentPlaca = plateMatch[1].replace(/[\s-]/g, "").toUpperCase();
+      } else {
+        const firstWord = vehicleText.split(/\s+/)[0];
+        currentPlaca = firstWord ? `VEIC-${firstWord.padStart(2, "0")}` : "FROTA-GERAL";
+      }
+
+      // Extract fleet/code
+      const parts = vehicleText.split(/\s+/);
+      currentFleet = parts[0] || "";
+
+      // Extract vehicle model (after Hodômetro Inicial or after plate)
+      const hodometroIdx = vehicleText.indexOf("Hodômetro Inicial:");
+      if (hodometroIdx !== -1) {
+        const afterHod = vehicleText.substring(hodometroIdx);
+        currentVehicleModel = afterHod.replace(/^Hod[ôo]metro\s+Inicial:\s*[\d\.\,]+/i, "").trim();
+      } else {
+        currentVehicleModel = vehicleText;
+      }
+      continue;
+    }
+
+    // Date line starting with DD/MM/YYYY
+    const dMatch = line.match(dateRegex);
+    if (dMatch) {
+      const dateBr = dMatch[1];
+      const isoDate = convertBrDateToIso(dateBr);
+
+      const afterDate = line.substring(dateBr.length).trim();
+
+      // Find all BR float tokens e.g. 72,731 or 251.753,000 or 512,02 or 7,040 or 2,415
+      const brNumberMatches = line.match(/\b\d{1,3}(?:\.\d{3})*,\d{1,3}\b/g) || [];
+
+      // Extract document number (typically 5 to 10 digits e.g. 1100004085)
+      let documento = "";
+      const docMatch = afterDate.match(/\b(\d{7,10})\b/);
+      if (docMatch) {
+        documento = docMatch[1];
+      }
+
+      // Extract supplier name by stripping date, doc number, float numbers, sequence numbers
+      let textCleaned = afterDate;
+      if (documento) {
+        textCleaned = textCleaned.replace(documento, "");
+      }
+      brNumberMatches.forEach((numStr) => {
+        textCleaned = textCleaned.replace(numStr, "");
+      });
+
+      // Remove standalone single/double digit numbers (sequence numbers e.g. 4, 3, 11)
+      textCleaned = textCleaned
+        .replace(/\b\d{1,2}\b/g, "")
+        .replace(/[-]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const fornecedor = textCleaned || "Posto / Fornecedor Não Especificado";
+
+      // Parse numbers
+      const parsedFloats = brNumberMatches.map(parseBrFloat);
+
+      let quantidade = 0;
+      let hodometro: number | undefined = undefined;
+      let valor = 0;
+      let pLitro = 0;
+
+      if (parsedFloats.length >= 2) {
+        // Find if any pair of numbers satisfy: Math.abs(val - qty * pLitro) < 0.15
+        let foundMatch = false;
+        for (let qIdx = 0; qIdx < parsedFloats.length; qIdx++) {
+          for (let pIdx = 0; pIdx < parsedFloats.length; pIdx++) {
+            if (qIdx === pIdx) continue;
+            const qCand = parsedFloats[qIdx];
+            const pCand = parsedFloats[pIdx];
+
+            if (qCand > 0 && pCand > 0 && pCand < 25) {
+              const calcVal = qCand * pCand;
+              const vCand = parsedFloats.find((v, idx) => idx !== qIdx && idx !== pIdx && Math.abs(v - calcVal) < 0.15);
+              if (vCand !== undefined) {
+                quantidade = qCand;
+                pLitro = pCand;
+                valor = vCand;
+                foundMatch = true;
+                break;
+              }
+            }
+          }
+          if (foundMatch) break;
+        }
+
+        // Fallback if math match wasn't found directly:
+        if (!foundMatch) {
+          const largeHod = parsedFloats.find((f) => f > 1000);
+          if (largeHod) hodometro = Math.round(largeHod);
+
+          const nonHod = parsedFloats.filter((f) => f !== largeHod);
+          if (nonHod.length >= 2) {
+            valor = nonHod[nonHod.length - 2] || nonHod[0];
+            quantidade = nonHod[0];
+          } else if (nonHod.length === 1) {
+            valor = nonHod[0];
+          }
+        } else {
+          // Also check for Hodômetro among floats (usually > 1000)
+          const candidateHod = parsedFloats.find((f) => f > 1000);
+          if (candidateHod) {
+            hodometro = Math.round(candidateHod);
+          }
+        }
+      } else if (parsedFloats.length === 1) {
+        valor = parsedFloats[0];
+      }
+
+      if (valor === 0 && quantidade === 0) continue;
+
+      // Categorize account
+      const categoryText = `${currentVehicleModel} ${fornecedor} ${line}`;
+      const tipo_registro: RecordCategory = categorizeAccount("Combustível", categoryText);
+
+      const contaFull = "Consumo de Combustível";
+      const obsInfo = [
+        currentVehicleModel ? `Veículo: ${currentVehicleModel}` : "",
+        pLitro > 0 ? `P/Litro: R$ ${pLitro.toFixed(3)}` : "",
+        "Relatório GFV - Consumo por Veículo",
+      ].filter(Boolean).join(" | ");
+
+      rawRecords.push({
+        tipo_registro,
+        placa: currentPlaca || "FROTA-GERAL",
+        numero_frota: currentFleet || undefined,
+        data: isoDate,
+        conta: contaFull,
+        descricao_conta: `Abastecimento - ${fornecedor}${documento ? ` (Doc: ${documento})` : ""}`,
+        quantidade: quantidade || 1,
+        valor: valor || 0,
+        hodometro,
+        fornecedor,
+        documento: documento || undefined,
+        numero_controle: documento || undefined,
+        observacoes: obsInfo,
       });
     }
   }

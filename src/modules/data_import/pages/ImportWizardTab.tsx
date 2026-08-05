@@ -24,13 +24,19 @@ interface Props {
 
 const CATEGORIES: RecordCategory[] = [
   "Combustível",
+  "Gasolina",
+  "Diesel",
+  "Arla",
+  "Estoque",
   "Pedágio",
   "Multa",
   "Seguro",
   "Manutenção",
   "Lubrificantes",
-  "Pneus",
-  "Peças",
+  "Pneus Novos",
+  "Recapagem",
+  "Lava-jato",
+  "Mecanica / Pecas",
 ];
 
 export default function ImportWizardTab({ companyId, onFinished }: Props) {
