@@ -93,11 +93,26 @@ CREATE TABLE IF NOT EXISTS public.import_logs (
     criado_em TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 5. Tabela de Compartilhamento de Relatórios Protegidos por PIN (shared_reports)
+CREATE TABLE IF NOT EXISTS public.shared_reports (
+    id TEXT PRIMARY KEY,
+    company_id TEXT,
+    title TEXT,
+    access_code TEXT NOT NULL,
+    allow_filters BOOLEAN DEFAULT TRUE,
+    filters JSONB,
+    records_snapshot JSONB,
+    overall_metrics JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by_name TEXT
+);
+
 -- Habilitar RLS (Row Level Security)
 ALTER TABLE public.import_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_conflicts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shared_reports ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de Permissão Multiempresa (RLS)
 CREATE POLICY "Acesso por Empresa em import_jobs" ON public.import_jobs
@@ -110,6 +125,9 @@ CREATE POLICY "Acesso por Empresa em import_conflicts" ON public.import_conflict
     FOR ALL USING (true);
 
 CREATE POLICY "Acesso por Empresa em import_logs" ON public.import_logs
+    FOR ALL USING (true);
+
+CREATE POLICY "Acesso em shared_reports" ON public.shared_reports
     FOR ALL USING (true);
 `;
 

@@ -18,6 +18,8 @@ import CompanyRoutes from '@/src/modules/company/routes/CompanyRoutes';
 import SuperAdminRoutes from '@/src/modules/superadmin/routes/SuperAdminRoutes';
 import AppLayout from '@/src/modules/shared/layouts/AppLayout';
 
+import SharedReportPage from '@/src/modules/data_import/pages/SharedReportPage';
+
 export default function AppRoutes() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -30,7 +32,8 @@ export default function AppRoutes() {
       path !== '/landing' &&
       path !== '/reset-password' &&
       path !== '/privacy' &&
-      !path.startsWith('/login')
+      !path.startsWith('/login') &&
+      !path.startsWith('/relatorio-compartilhado')
     ) {
       localStorage.setItem('checkdrive_last_visited_path', path + location.search);
     }
@@ -44,6 +47,7 @@ export default function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/quick-login" element={<QuickLogin />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/relatorio-compartilhado/:shareId" element={<SharedReportPage />} />
       
       {/* Module independent root routes */}
       <Route path="/driver/*" element={

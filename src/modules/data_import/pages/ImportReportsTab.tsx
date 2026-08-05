@@ -53,6 +53,8 @@ import {
 } from "recharts";
 import { ImportRecord, ReportMold, RecordCategory } from "../types";
 import { ImportService } from "../services/importService";
+import ShareReportModal from "../components/ShareReportModal";
+import { Share2 } from "lucide-react";
 
 interface Props {
   companyId: string;
@@ -179,6 +181,7 @@ export default function ImportReportsTab({ companyId }: Props) {
 
   // Modal State
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [newMoldName, setNewMoldName] = useState("");
   const [newMoldDesc, setNewMoldDesc] = useState("");
   const [savingMold, setSavingMold] = useState(false);
@@ -727,6 +730,13 @@ export default function ImportReportsTab({ companyId }: Props) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all cursor-pointer"
+              title="Compartilhar link de acesso protegido por PIN"
+            >
+              <Share2 className="w-4 h-4" /> Compartilhar Link
+            </button>
             <button
               onClick={() => setShowSaveModal(true)}
               className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all cursor-pointer"
@@ -1689,6 +1699,33 @@ export default function ImportReportsTab({ companyId }: Props) {
           </div>
         </div>
       )}
+
+      {/* Modal de Compartilhamento Protegido por PIN */}
+      <ShareReportModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        companyId={companyId}
+        currentTitle={`Relatório de Análise - ${categoryFilter !== "Todas" ? categoryFilter : "Geral"}`}
+        filters={{
+          categoryFilter,
+          tipoImportacaoFilter,
+          selectedPeriod,
+          customMonth,
+          placaFilter,
+          fornecedorFilter,
+          agruparPor,
+          metrica,
+          tipoGrafico,
+          viewMode,
+        }}
+        records={records}
+        overallMetrics={{
+          totalValorGeral,
+          totalQtyGeral,
+          totalRegistrosCount,
+          mediaValorGeral,
+        }}
+      />
     </div>
   );
 }
