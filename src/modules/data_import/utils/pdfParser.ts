@@ -393,10 +393,13 @@ export async function parseFuelConsumptionTextContent(
       let quantidade = 0;
       let hodometro: number | undefined = undefined;
       let valor = 0;
-      let pLitro = 0;
+      let pLitro: number | undefined = undefined;
+      let kmRodado: number | undefined = undefined;
+      let mediaKmL: number | undefined = undefined;
+      let precoPorKm: number | undefined = undefined;
 
       if (parsedFloats.length >= 2) {
-        // Find if any pair of numbers satisfy: Math.abs(val - qty * pLitro) < 0.15
+        // 1. Find triple match: Math.abs(val - qty * pLitro) < 0.20
         let foundMatch = false;
         for (let qIdx = 0; qIdx < parsedFloats.length; qIdx++) {
           for (let pIdx = 0; pIdx < parsedFloats.length; pIdx++) {
@@ -404,9 +407,9 @@ export async function parseFuelConsumptionTextContent(
             const qCand = parsedFloats[qIdx];
             const pCand = parsedFloats[pIdx];
 
-            if (qCand > 0 && pCand > 0 && pCand < 25) {
+            if (qCand > 0 && pCand > 0 && pCand < 30) {
               const calcVal = qCand * pCand;
-              const vCand = parsedFloats.find((v, idx) => idx !== qIdx && idx !== pIdx && Math.abs(v - calcVal) < 0.15);
+              const vCand = parsedFloats.find((v, idx) => idx !== qIdx && idx !== pIdx && Math.abs(v - calcVal) < 0.20);
               if (vCand !== undefined) {
                 quantidade = qCand;
                 pLitro = pCand;
@@ -432,10 +435,28 @@ export async function parseFuelConsumptionTextContent(
             valor = nonHod[0];
           }
         } else {
-          // Also check for Hodômetro among floats (usually > 1000)
-          const candidateHod = parsedFloats.find((f) => f > 1000);
+          // Check for Hodômetro among floats (usually > 1000)
+          const candidateHod = parsedFloats.find((f) => f > 1000 && f !== valor);
           if (candidateHod) {
             hodometro = Math.round(candidateHod);
+          }
+        }
+
+        // 2. Extract km_rodado (Km/Horas) and media_km_l (Média) from remaining floats
+        if (quantidade > 0) {
+          for (let kmIdx = 0; kmIdx < parsedFloats.length; kmIdx++) {
+            const kmCand = parsedFloats[kmIdx];
+            if (kmCand >= 0 && kmCand !== hodometro && kmCand !== valor && kmCand !== quantidade) {
+              const expectedMedia = kmCand / quantidade;
+              const mediaMatch = parsedFloats.find(
+                (m, idx) => idx !== kmIdx && Math.abs(m - expectedMedia) < 0.15
+              );
+              if (mediaMatch !== undefined) {
+                kmRodado = kmCand;
+                mediaKmL = mediaMatch;
+                break;
+              }
+            }
           }
         }
       } else if (parsedFloats.length === 1) {
@@ -444,6 +465,17 @@ export async function parseFuelConsumptionTextContent(
 
       if (valor === 0 && quantidade === 0) continue;
 
+      // Fallbacks if not explicitly matched from floats:
+      if (pLitro === undefined && quantidade > 0 && valor > 0) {
+        pLitro = valor / quantidade;
+      }
+      if (mediaKmL === undefined && kmRodado !== undefined && kmRodado > 0 && quantidade > 0) {
+        mediaKmL = kmRodado / quantidade;
+      }
+      if (precoPorKm === undefined && kmRodado !== undefined && kmRodado > 0 && valor > 0) {
+        precoPorKm = valor / kmRodado;
+      }
+
       // Categorize account
       const categoryText = `${currentVehicleModel} ${fornecedor} ${line}`;
       const tipo_registro: RecordCategory = categorizeAccount("Combustível", categoryText);
@@ -451,7 +483,9 @@ export async function parseFuelConsumptionTextContent(
       const contaFull = "Consumo de Combustível";
       const obsInfo = [
         currentVehicleModel ? `Veículo: ${currentVehicleModel}` : "",
-        pLitro > 0 ? `P/Litro: R$ ${pLitro.toFixed(3)}` : "",
+        pLitro && pLitro > 0 ? `P/Litro: R$ ${pLitro.toFixed(3)}` : "",
+        mediaKmL && mediaKmL > 0 ? `Média: ${mediaKmL.toFixed(2)} Km/L` : "",
+        kmRodado && kmRodado > 0 ? `Km Rodados: ${kmRodado.toFixed(0)} km` : "",
         "Relatório GFV - Consumo por Veículo",
       ].filter(Boolean).join(" | ");
 
@@ -465,6 +499,10 @@ export async function parseFuelConsumptionTextContent(
         quantidade: quantidade || 1,
         valor: valor || 0,
         hodometro,
+        preco_litro: pLitro ? Number(pLitro.toFixed(3)) : undefined,
+        media_km_l: mediaKmL ? Number(mediaKmL.toFixed(2)) : undefined,
+        km_rodado: kmRodado ? Number(kmRodado.toFixed(1)) : undefined,
+        preco_por_km: precoPorKm ? Number(precoPorKm.toFixed(3)) : undefined,
         fornecedor,
         documento: documento || undefined,
         numero_controle: documento || undefined,

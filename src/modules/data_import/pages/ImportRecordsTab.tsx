@@ -188,10 +188,15 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
     if (filtered.length === 0) return alert("Nenhum registro para exportar.");
 
     let csvContent = "\uFEFF"; // UTF-8 BOM
-    csvContent += "ID;Categoria;Placa;Frota;Data;Conta;Valor (R$);Quantidade;Hodômetro;Fornecedor;Documento;Status;Hash SHA-256\n";
+    csvContent += "ID;Categoria;Placa;Frota;Data;Conta;Valor (R$);Quantidade;Preço/Litro (R$);Média (Km/L);Km Rodado;Preço/Km (R$);Hodômetro;Fornecedor;Documento;Status;Hash SHA-256\n";
 
     filtered.forEach((r) => {
-      csvContent += `"${r.id}";"${r.tipo_registro}";"${r.placa}";"${r.numero_frota || ""}";"${r.data}";"${r.conta.replace(/"/g, '""')}";"${Number(r.valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${Number(r.quantidade || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${r.hodometro || ""}";"${(r.fornecedor || "").replace(/"/g, '""')}";"${(r.documento || "").replace(/"/g, '""')}";"${r.status}";"${r.hash_registro}"\n`;
+      const pLitro = r.preco_litro !== undefined ? Number(r.preco_litro).toLocaleString("pt-BR", { minimumFractionDigits: 3 }) : "";
+      const media = r.media_km_l !== undefined ? Number(r.media_km_l).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "";
+      const kmRod = r.km_rodado !== undefined ? Number(r.km_rodado).toLocaleString("pt-BR", { minimumFractionDigits: 1 }) : "";
+      const pKm = r.preco_por_km !== undefined ? Number(r.preco_por_km).toLocaleString("pt-BR", { minimumFractionDigits: 3 }) : "";
+
+      csvContent += `"${r.id}";"${r.tipo_registro}";"${r.placa}";"${r.numero_frota || ""}";"${r.data}";"${r.conta.replace(/"/g, '""')}";"${Number(r.valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${Number(r.quantidade || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${pLitro}";"${media}";"${kmRod}";"${pKm}";"${r.hodometro || ""}";"${(r.fornecedor || "").replace(/"/g, '""')}";"${(r.documento || "").replace(/"/g, '""')}";"${r.status}";"${r.hash_registro}"\n`;
     });
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -390,15 +395,16 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
                 <th className="p-4">Data</th>
                 <th className="p-4">Conta</th>
                 <th className="p-4">Fornecedor / Doc</th>
-                <th className="p-4">Qtd</th>
-                <th className="p-4">Valor (R$)</th>
+                <th className="p-4">Qtd / P.Litro</th>
+                <th className="p-4">Valor / Km Média</th>
+                <th className="p-4">Hodômetro / Rodado</th>
                 <th className="p-4">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 text-zinc-700">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-zinc-400">
+                  <td colSpan={10} className="p-12 text-center text-zinc-400">
                     Nenhum registro atende aos critérios de busca.
                   </td>
                 </tr>
@@ -437,7 +443,7 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
                           </span>
                         )}
                       </td>
-                      <td className="p-4 text-zinc-600 font-medium">{r.data}</td>
+                      <td className="p-4 text-zinc-600 font-medium whitespace-nowrap">{r.data}</td>
                       <td className="p-4 max-w-xs truncate" title={r.descricao_conta}>
                         {r.conta}
                       </td>
@@ -447,9 +453,29 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
                           <div className="text-[10px] text-zinc-400">Doc: {r.documento}</div>
                         )}
                       </td>
-                      <td className="p-4 font-semibold text-zinc-800">{r.quantidade}</td>
-                      <td className="p-4 font-black text-zinc-900">
-                        R$ {Number(r.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      <td className="p-4 font-semibold text-zinc-800 whitespace-nowrap">
+                        <div>{r.quantidade} L</div>
+                        {r.preco_litro !== undefined && r.preco_litro > 0 && (
+                          <div className="text-[10px] text-emerald-700 font-bold">
+                            R$ {Number(r.preco_litro).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 3 })}/L
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-4 font-black text-zinc-900 whitespace-nowrap">
+                        <div>R$ {Number(r.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
+                        {r.media_km_l !== undefined && r.media_km_l > 0 && (
+                          <div className="text-[10px] text-blue-600 font-bold">
+                            {Number(r.media_km_l).toFixed(2)} Km/L
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-4 text-zinc-700 font-medium whitespace-nowrap">
+                        <div>{r.hodometro ? Number(r.hodometro).toLocaleString("pt-BR") : "-"}</div>
+                        {r.km_rodado !== undefined && r.km_rodado > 0 && (
+                          <div className="text-[10px] text-zinc-500 font-semibold">
+                            +{Number(r.km_rodado).toLocaleString("pt-BR")} km
+                          </div>
+                        )}
                       </td>
                       <td className="p-4">
                         {r.status === "aprovado" && (

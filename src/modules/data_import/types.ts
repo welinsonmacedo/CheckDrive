@@ -58,6 +58,10 @@ export interface ImportRecord {
   quantidade: number;
   valor: number;
   hodometro?: number;
+  preco_litro?: number;
+  media_km_l?: number;
+  km_rodado?: number;
+  preco_por_km?: number;
   fornecedor?: string;
   documento?: string;
   numero_controle?: string;
