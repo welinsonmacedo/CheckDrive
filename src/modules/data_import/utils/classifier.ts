@@ -3,12 +3,32 @@ import { RecordCategory } from "../types";
 export function categorizeAccount(accountName: string, accountDescription?: string): RecordCategory {
   const combined = `${accountName || ""} ${accountDescription || ""}`.toLowerCase();
 
+  if (combined.includes("gasolina adm") || combined.includes("gasolina admin") || combined.includes("gasolina ad") || combined.includes("gas. adm")) {
+    return "Gasolina Administrativo";
+  }
+
+  if (combined.includes("diesel ter") || combined.includes("diesel terceiro") || combined.includes("diesel terc")) {
+    return "Diesel Terceiro";
+  }
+
   if (combined.includes("diesel") || combined.includes("s10") || combined.includes("s500")) {
     return "Diesel";
   }
 
+  if (combined.includes("arla estoque") || combined.includes("estoque arla") || combined.includes("arla est")) {
+    return "Arla Estoque";
+  }
+
   if (combined.includes("arla") || combined.includes("arla32") || combined.includes("arla 32")) {
     return "Arla";
+  }
+
+  if (combined.includes("freio") || combined.includes("freios") || combined.includes("pastilha") || combined.includes("disco de freio") || combined.includes("lona de freio")) {
+    return "Freios";
+  }
+
+  if (combined.includes("eletrica") || combined.includes("elétrica") || combined.includes("bateria") || combined.includes("alternador") || combined.includes("lampada") || combined.includes("lâmpada") || combined.includes("chicote")) {
+    return "Elétrica";
   }
 
   if (
