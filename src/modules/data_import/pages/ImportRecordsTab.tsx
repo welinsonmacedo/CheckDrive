@@ -454,7 +454,10 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
                         )}
                       </td>
                       <td className="p-4 font-semibold text-zinc-800 whitespace-nowrap">
-                        <div>{r.quantidade} L</div>
+                        <div>
+                          {r.quantidade}
+                          {(r.preco_litro || ["Combustível", "Gasolina", "Gasolina Administrativo", "Diesel", "Diesel Terceiro", "Arla", "Arla Estoque"].includes(r.tipo_registro)) ? " L" : ""}
+                        </div>
                         {r.preco_litro !== undefined && r.preco_litro > 0 && (
                           <div className="text-[10px] text-emerald-700 font-bold">
                             R$ {Number(r.preco_litro).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 3 })}/L
