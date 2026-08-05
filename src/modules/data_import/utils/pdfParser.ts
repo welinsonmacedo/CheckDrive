@@ -2,6 +2,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import { ImportRecord, RecordCategory } from "../types";
 import { categorizeAccount } from "./classifier";
 import { generateRecordHash } from "./hashUtils";
+import { AccountMappingService, AccountMapping } from "../services/accountMappingService";
 
 // Configure pdfjs worker safely using jsdelivr for the exact pdfjs-dist version
 if (typeof window !== "undefined") {
@@ -81,6 +82,14 @@ export async function parseSeniorTextContent(
   fullText: string,
   empresa_id: string
 ): Promise<ParsedPdfResult> {
+  // Load custom account mappings (De-Para)
+  let customMappings: AccountMapping[] = [];
+  try {
+    customMappings = await AccountMappingService.getAccountMappings(empresa_id);
+  } catch (e) {
+    console.warn("Could not load account mappings in pdfParser:", e);
+  }
+
   // Check if PDF is a fuel consumption report ("Consumo de Combustíveis por Veículo")
   const isFuelConsumptionReport =
     fullText.includes("Consumo de Combustíveis por Veículo") ||
@@ -89,7 +98,7 @@ export async function parseSeniorTextContent(
     (fullText.includes("Hodômetro Inicial:") && fullText.includes("GFV Versão"));
 
   if (isFuelConsumptionReport) {
-    return parseFuelConsumptionTextContent(fullText, empresa_id);
+    return parseFuelConsumptionTextContent(fullText, empresa_id, customMappings);
   }
 
   // Format 1: Senior / SOFtran "Receitas/Despesas por Veículo" / Relatório de Contas
@@ -169,6 +178,16 @@ export async function parseSeniorTextContent(
         currentContaName = contaText;
       }
 
+      // Apply smart de-para lookup for account code e.g. 104 -> Diesel S10, 106 -> Gasolina
+      if (currentContaNumber && customMappings.length > 0) {
+        const matched = AccountMappingService.findMatchingMapping(currentContaNumber, customMappings);
+        if (matched) {
+          if (!currentContaName || currentContaName.length < 3 || currentContaName.toLowerCase().includes("conta")) {
+            currentContaName = matched.target_name;
+          }
+        }
+      }
+
       currentContaFull = currentContaName
         ? `${currentContaName}${currentContaNumber ? ` (${currentContaNumber})` : ""}`
         : "Lançamento Geral";
@@ -233,7 +252,7 @@ export async function parseSeniorTextContent(
       const fornecedor = textCleaned || "Fornecedor Não Especificado";
 
       // Categorize account using classifier
-      const tipo_registro: RecordCategory = categorizeAccount(currentContaName, line);
+      const tipo_registro: RecordCategory = categorizeAccount(currentContaName, line, customMappings);
 
       rawRecords.push({
         tipo_registro,
@@ -285,8 +304,17 @@ export async function parseSeniorTextContent(
 
 export async function parseFuelConsumptionTextContent(
   fullText: string,
-  empresa_id: string
+  empresa_id: string,
+  providedMappings?: AccountMapping[]
 ): Promise<ParsedPdfResult> {
+  let customMappings = providedMappings || [];
+  if (!customMappings || customMappings.length === 0) {
+    try {
+      customMappings = await AccountMappingService.getAccountMappings(empresa_id);
+    } catch (e) {
+      // ignore
+    }
+  }
   // Extract Period e.g. "Período de: 01/07/2026 até 31/07/2026;"
   const periodoMatch =
     fullText.match(/Período\s+de:\s*([\d\/\.\-]+(?:\s*at[ée]\s*[\d\/\.\-]+)?)/i) ||
@@ -502,7 +530,7 @@ export async function parseFuelConsumptionTextContent(
 
       // Categorize account
       const categoryText = `${currentVehicleModel} ${fornecedor} ${line}`;
-      const tipo_registro: RecordCategory = categorizeAccount("Combustível", categoryText);
+      const tipo_registro: RecordCategory = categorizeAccount("Combustível", categoryText, customMappings);
 
       const contaFull = "Consumo de Combustível";
       const obsInfo = [

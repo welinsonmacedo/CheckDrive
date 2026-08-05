@@ -1,7 +1,12 @@
 import React, { useState } from "react";
-import { Settings, Database, Copy, Check, Shield, Code2, Sparkles } from "lucide-react";
+import { Settings, Database, Copy, Check, Shield, Code2, Sparkles, Link2 } from "lucide-react";
+import AccountMappingsManager from "../components/AccountMappingsManager";
 
-export default function ImportSettingsTab() {
+interface Props {
+  companyId?: string;
+}
+
+export default function ImportSettingsTab({ companyId = "global" }: Props) {
   const [copied, setCopied] = useState(false);
 
   const sqlCode = `-- =========================================================
@@ -107,28 +112,34 @@ CREATE TABLE IF NOT EXISTS public.shared_reports (
     created_by_name TEXT
 );
 
+-- 6. Tabela de Vínculos de Contas e De-Para (import_account_mappings)
+CREATE TABLE IF NOT EXISTS public.import_account_mappings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id TEXT DEFAULT 'global',
+    code TEXT NOT NULL,
+    target_name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    keywords TEXT[],
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Habilitar RLS (Row Level Security)
 ALTER TABLE public.import_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_conflicts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.import_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shared_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.import_account_mappings ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de Permissão Multiempresa (RLS)
-CREATE POLICY "Acesso por Empresa em import_jobs" ON public.import_jobs
-    FOR ALL USING (true);
-
-CREATE POLICY "Acesso por Empresa em import_records" ON public.import_records
-    FOR ALL USING (true);
-
-CREATE POLICY "Acesso por Empresa em import_conflicts" ON public.import_conflicts
-    FOR ALL USING (true);
-
-CREATE POLICY "Acesso por Empresa em import_logs" ON public.import_logs
-    FOR ALL USING (true);
-
-CREATE POLICY "Acesso em shared_reports" ON public.shared_reports
-    FOR ALL USING (true);
+CREATE POLICY "Acesso por Empresa em import_jobs" ON public.import_jobs FOR ALL USING (true);
+CREATE POLICY "Acesso por Empresa em import_records" ON public.import_records FOR ALL USING (true);
+CREATE POLICY "Acesso por Empresa em import_conflicts" ON public.import_conflicts FOR ALL USING (true);
+CREATE POLICY "Acesso por Empresa em import_logs" ON public.import_logs FOR ALL USING (true);
+CREATE POLICY "Acesso em shared_reports" ON public.shared_reports FOR ALL USING (true);
+CREATE POLICY "Acesso em import_account_mappings" ON public.import_account_mappings FOR ALL USING (true);
 `;
 
   const copySql = () => {
@@ -143,10 +154,13 @@ CREATE POLICY "Acesso em shared_reports" ON public.shared_reports
         <div>
           <h3 className="text-lg font-black text-zinc-900">Configurações & Estrutura de Dados</h3>
           <p className="text-xs text-zinc-500">
-            Parâmetros de isolamento do módulo de Importação (Staging Area) e script DDL.
+            Parâmetros de isolamento do módulo de Importação (Staging Area), Regras de Vínculos de Contas (De-Para) e Script SQL DDL.
           </p>
         </div>
       </div>
+
+      {/* Account Mappings Manager Component */}
+      <AccountMappingsManager companyId={companyId} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-5 bg-white rounded-3xl border border-zinc-200/80 shadow-sm space-y-2">
@@ -187,14 +201,14 @@ CREATE POLICY "Acesso em shared_reports" ON public.shared_reports
             <div>
               <h4 className="text-sm font-black text-zinc-900">Script SQL Supabase / PostgreSQL</h4>
               <p className="text-xs text-zinc-500">
-                Execute no Editor SQL do seu projeto Supabase para criar as tabelas do módulo.
+                Execute no Editor SQL do seu projeto Supabase para criar as tabelas do módulo (incluindo De-Para de Contas).
               </p>
             </div>
           </div>
 
           <button
             onClick={copySql}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 shadow-md transition-all"
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer"
           >
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             {copied ? "Copiado!" : "Copiar SQL"}

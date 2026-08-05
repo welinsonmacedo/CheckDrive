@@ -1,7 +1,44 @@
 import { RecordCategory } from "../types";
+import { AccountMapping } from "../services/accountMappingService";
 
-export function categorizeAccount(accountName: string, accountDescription?: string): RecordCategory {
+export function categorizeAccount(
+  accountName: string,
+  accountDescription?: string,
+  customMappings?: AccountMapping[]
+): RecordCategory {
   const combined = `${accountName || ""} ${accountDescription || ""}`.toLowerCase();
+
+  // 0. Check custom mappings first if provided
+  if (customMappings && customMappings.length > 0) {
+    for (const m of customMappings) {
+      if (!m.active) continue;
+      const mCode = m.code.toLowerCase();
+
+      // Check exact code match or word boundary code match
+      const codeRegex = new RegExp(`\\b${mCode}\\b`, "i");
+      if (codeRegex.test(combined) || (m.target_name && combined.includes(m.target_name.toLowerCase()))) {
+        return m.category as RecordCategory;
+      }
+
+      if (m.keywords && m.keywords.some((kw) => kw && combined.includes(kw.toLowerCase()))) {
+        return m.category as RecordCategory;
+      }
+    }
+  }
+
+  // Check code numbers directly (e.g. 104 = Diesel S10, 106 = Gasolina, 101 = Gasolina Adm, 105 = Diesel Terceiro)
+  if (/\b104\b/.test(combined)) return "Diesel";
+  if (/\b106\b/.test(combined)) return "Gasolina";
+  if (/\b101\b/.test(combined)) return "Gasolina Administrativo";
+  if (/\b105\b/.test(combined)) return "Diesel Terceiro";
+  if (/\b102\b/.test(combined)) return "Arla";
+  if (/\b103\b/.test(combined)) return "Arla Estoque";
+  if (/\b107\b/.test(combined)) return "Lava-jato";
+  if (/\b108\b/.test(combined)) return "Manutenção";
+  if (/\b109\b/.test(combined)) return "Pneus Novos";
+  if (/\b110\b/.test(combined)) return "Pedágio";
+  if (/\b111\b/.test(combined)) return "Seguro";
+  if (/\b112\b/.test(combined)) return "Multa";
 
   if (combined.includes("gasolina adm") || combined.includes("gasolina admin") || combined.includes("gasolina ad") || combined.includes("gas. adm")) {
     return "Gasolina Administrativo";

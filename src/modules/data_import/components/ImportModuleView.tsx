@@ -111,7 +111,7 @@ export default function ImportModuleView({ companyId }: Props) {
 
       {activeTab === "historico" && <ImportHistoryTab companyId={companyId} />}
 
-      {activeTab === "configuracoes" && <ImportSettingsTab />}
+      {activeTab === "configuracoes" && <ImportSettingsTab companyId={companyId} />}
     </div>
   );
 }

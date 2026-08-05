@@ -12,10 +12,13 @@ import {
   Database,
   Check,
   Sparkles,
+  Link2,
+  X,
 } from "lucide-react";
 import { RecordCategory } from "../types";
 import { parseSeniorPdfFile } from "../utils/pdfParser";
 import { ImportService } from "../services/importService";
+import AccountMappingsManager from "../components/AccountMappingsManager";
 
 interface Props {
   companyId: string;
@@ -55,6 +58,7 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
   const [createdJobId, setCreatedJobId] = useState<string | null>(null);
   const [isApproved, setIsApproved] = useState<boolean>(false);
   const [dbStatusMsg, setDbStatusMsg] = useState<string | null>(null);
+  const [showMappingsModal, setShowMappingsModal] = useState<boolean>(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -286,12 +290,23 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
       {/* Main Form Box */}
       {step === "upload" && (
         <div className="bg-white rounded-3xl p-8 border border-zinc-200/80 shadow-sm space-y-8">
-          <div>
-            <h3 className="text-lg font-black text-zinc-900">Importar Relatório Senior / SOFTran</h3>
-            <p className="text-xs text-zinc-500">
-              Selecione o arquivo PDF exportado pelo sistema Senior. O parser lerá os lançamentos,
-              categorizará as contas e verificará o hash SHA-256 para evitar duplicidades.
-            </p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-black text-zinc-900">Importar Relatório Senior / SOFTran</h3>
+              <p className="text-xs text-zinc-500">
+                Selecione o arquivo PDF exportado pelo sistema Senior. O parser lerá os lançamentos,
+                categorizará as contas e aplicará as regras inteligentes de De-Para (ex: 104 = Diesel S10, 106 = Gasolina).
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowMappingsModal(true)}
+              className="px-4 py-2.5 rounded-2xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shrink-0"
+            >
+              <Link2 className="w-4 h-4 text-blue-600" />
+              <span>Ver / Editar Vínculos (De-Para)</span>
+            </button>
           </div>
 
           {errorMessage && (
@@ -588,6 +603,24 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
             >
               Ver Registros Aprovados / Tabela
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Account Mappings Modal */}
+      {showMappingsModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="max-w-4xl w-full my-8 animate-in fade-in zoom-in duration-200">
+            <div className="bg-white rounded-3xl p-2 shadow-2xl relative">
+              <button
+                onClick={() => setShowMappingsModal(false)}
+                className="absolute top-4 right-4 p-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full z-10 transition-colors cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <AccountMappingsManager companyId={companyId} />
+            </div>
           </div>
         </div>
       )}
