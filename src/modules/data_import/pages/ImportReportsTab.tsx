@@ -86,6 +86,45 @@ const COLORS = [
   "#d97706",
 ];
 
+const MONTH_NAMES_PT: Record<string, string> = {
+  "01": "Janeiro",
+  "02": "Fevereiro",
+  "03": "Março",
+  "04": "Abril",
+  "05": "Maio",
+  "06": "Junho",
+  "07": "Julho",
+  "08": "Agosto",
+  "09": "Setembro",
+  "10": "Outubro",
+  "11": "Novembro",
+  "12": "Dezembro",
+};
+
+function parseRecordMonthYear(dateStr?: string): { month: string; year: string } | null {
+  if (!dateStr) return null;
+  const s = dateStr.trim();
+  if (s.includes("-")) {
+    const parts = s.split("-");
+    if (parts.length >= 2) {
+      if (parts[0].length === 4) {
+        return { year: parts[0], month: parts[1].padStart(2, "0") };
+      } else if (parts[2]?.length === 4) {
+        return { year: parts[2], month: parts[1].padStart(2, "0") };
+      }
+    }
+  }
+  if (s.includes("/")) {
+    const parts = s.split("/");
+    if (parts.length === 3) {
+      return { year: parts[2], month: parts[1].padStart(2, "0") };
+    } else if (parts.length === 2) {
+      return { year: parts[1], month: parts[0].padStart(2, "0") };
+    }
+  }
+  return null;
+}
+
 export default function ImportReportsTab({ companyId }: Props) {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<ImportRecord[]>([]);
@@ -94,7 +133,8 @@ export default function ImportReportsTab({ companyId }: Props) {
 
   // Filter & Config state
   const [categoryFilter, setCategoryFilter] = useState<string>("Todas");
-  const [periodDays, setPeriodDays] = useState<number>(0); // 0 = Todos
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("0"); // "0", "30", "60", "90", "365", "m:01/2026", "custom", etc.
+  const [customMonth, setCustomMonth] = useState<string>(""); // "YYYY-MM"
   const [placaFilter, setPlacaFilter] = useState<string>("");
   const [fornecedorFilter, setFornecedorFilter] = useState<string>("");
   const [agruparPor, setAgruparPor] = useState<"categoria" | "placa" | "fornecedor" | "mes" | "status">("categoria");
@@ -133,12 +173,32 @@ export default function ImportReportsTab({ companyId }: Props) {
   const applyMold = (mold: ReportMold) => {
     setActiveMoldId(mold.id);
     if (mold.categoria_filtro) setCategoryFilter(mold.categoria_filtro);
-    if (mold.periodo_dias !== undefined) setPeriodDays(mold.periodo_dias);
+    if (mold.periodo_dias !== undefined) setSelectedPeriod(String(mold.periodo_dias));
     if (mold.placa_filtro !== undefined) setPlacaFilter(mold.placa_filtro);
     if (mold.fornecedor_filtro !== undefined) setFornecedorFilter(mold.fornecedor_filtro);
     if (mold.agrupar_por) setAgruparPor(mold.agrupar_por);
     if (mold.metrica) setMetrica(mold.metrica);
     if (mold.tipo_grafico) setTipoGrafico(mold.tipo_grafico);
+  };
+
+  // Helper for period label
+  const getPeriodLabel = () => {
+    if (selectedPeriod === "custom") {
+      if (!customMonth) return "Mês Selecionado";
+      const [y, m] = customMonth.split("-");
+      const name = MONTH_NAMES_PT[m] || m;
+      return `Mês ${m}/${y} (${name})`;
+    }
+    if (selectedPeriod.startsWith("m:")) {
+      const my = selectedPeriod.substring(2);
+      const [m, y] = my.split("/");
+      const name = MONTH_NAMES_PT[m] || m;
+      return `Mês ${my} (${name})`;
+    }
+    const days = Number(selectedPeriod);
+    if (days === 0) return "Todo o Histórico";
+    if (days === 365) return "Este Ano (365d)";
+    return `Últimos ${days} dias`;
   };
 
   // Filtered records
@@ -162,17 +222,29 @@ export default function ImportReportsTab({ companyId }: Props) {
         if (!rForn.includes(fTerm)) return false;
       }
 
-      // Period filter
-      if (periodDays > 0 && r.data) {
-        const rDate = new Date(r.data).getTime();
-        const now = new Date().getTime();
-        const diffDays = (now - rDate) / (1000 * 3600 * 24);
-        if (diffDays > periodDays) return false;
+      // Period / Month filter
+      if (selectedPeriod === "custom" && customMonth) {
+        const [cYear, cMonth] = customMonth.split("-");
+        const parsed = parseRecordMonthYear(r.data);
+        if (!parsed || parsed.month !== cMonth || parsed.year !== cYear) return false;
+      } else if (selectedPeriod.startsWith("m:")) {
+        const monthYearStr = selectedPeriod.substring(2); // e.g. "01/2026"
+        const [targetMonth, targetYear] = monthYearStr.split("/");
+        const parsed = parseRecordMonthYear(r.data);
+        if (!parsed || parsed.month !== targetMonth || parsed.year !== targetYear) return false;
+      } else {
+        const days = Number(selectedPeriod);
+        if (days > 0 && r.data) {
+          const rDate = new Date(r.data).getTime();
+          const now = new Date().getTime();
+          const diffDays = (now - rDate) / (1000 * 3600 * 24);
+          if (diffDays > days) return false;
+        }
       }
 
       return true;
     });
-  }, [records, categoryFilter, placaFilter, fornecedorFilter, periodDays]);
+  }, [records, categoryFilter, placaFilter, fornecedorFilter, selectedPeriod, customMonth]);
 
   // Aggregated data for grouping & charts
   const aggregatedData = useMemo(() => {
@@ -311,7 +383,7 @@ export default function ImportReportsTab({ companyId }: Props) {
     let csvContent = "\uFEFF"; // UTF-8 BOM for Excel
     csvContent += `RELATÓRIO DE DADOS IMPORTADOS - ${agruparPor.toUpperCase()}\n`;
     csvContent += `Gerado em: ${new Date().toLocaleString("pt-BR")}\n`;
-    csvContent += `Filtro Categoria: ${categoryFilter}; Período: ${periodDays === 0 ? "Todo histórico" : periodDays + " dias"}\n\n`;
+    csvContent += `Filtro Categoria: ${categoryFilter}; Período: ${getPeriodLabel()}\n\n`;
 
     if (viewMode === "agrupado" || tipoGrafico !== "table") {
       csvContent += "=== RESUMO AGRUPADO ===\n";
@@ -504,22 +576,69 @@ export default function ImportReportsTab({ companyId }: Props) {
             </select>
           </div>
 
-          {/* Período */}
+          {/* Período / Mês */}
           <div>
-            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-              Período
+            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1 flex items-center justify-between">
+              <span>Período / Mês</span>
+              {selectedPeriod.startsWith("m:") && (
+                <span className="text-[10px] text-blue-600 font-bold">Por Mês</span>
+              )}
             </label>
-            <select
-              value={periodDays}
-              onChange={(e) => setPeriodDays(Number(e.target.value))}
-              className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            >
-              <option value={0}>Todo o Histórico</option>
-              <option value={30}>Últimos 30 dias</option>
-              <option value={60}>Últimos 60 dias</option>
-              <option value={90}>Últimos 90 dias</option>
-              <option value={365}>Este Ano (365d)</option>
-            </select>
+            <div className="space-y-1">
+              <select
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                <optgroup label="Períodos Relativos">
+                  <option value="0">Todo o Histórico</option>
+                  <option value="30">Últimos 30 dias</option>
+                  <option value="60">Últimos 60 dias</option>
+                  <option value="90">Últimos 90 dias</option>
+                  <option value="365">Este Ano (365d)</option>
+                </optgroup>
+                <optgroup label="Ano 2026">
+                  <option value="m:01/2026">Mês 01/2026 (Janeiro)</option>
+                  <option value="m:02/2026">Mês 02/2026 (Fevereiro)</option>
+                  <option value="m:03/2026">Mês 03/2026 (Março)</option>
+                  <option value="m:04/2026">Mês 04/2026 (Abril)</option>
+                  <option value="m:05/2026">Mês 05/2026 (Maio)</option>
+                  <option value="m:06/2026">Mês 06/2026 (Junho)</option>
+                  <option value="m:07/2026">Mês 07/2026 (Julho)</option>
+                  <option value="m:08/2026">Mês 08/2026 (Agosto)</option>
+                  <option value="m:09/2026">Mês 09/2026 (Setembro)</option>
+                  <option value="m:10/2026">Mês 10/2026 (Outubro)</option>
+                  <option value="m:11/2026">Mês 11/2026 (Novembro)</option>
+                  <option value="m:12/2026">Mês 12/2026 (Dezembro)</option>
+                </optgroup>
+                <optgroup label="Ano 2025">
+                  <option value="m:01/2025">Mês 01/2025 (Janeiro)</option>
+                  <option value="m:02/2025">Mês 02/2025 (Fevereiro)</option>
+                  <option value="m:03/2025">Mês 03/2025 (Março)</option>
+                  <option value="m:04/2025">Mês 04/2025 (Abril)</option>
+                  <option value="m:05/2025">Mês 05/2025 (Maio)</option>
+                  <option value="m:06/2025">Mês 06/2025 (Junho)</option>
+                  <option value="m:07/2025">Mês 07/2025 (Julho)</option>
+                  <option value="m:08/2025">Mês 08/2025 (Agosto)</option>
+                  <option value="m:09/2025">Mês 09/2025 (Setembro)</option>
+                  <option value="m:10/2025">Mês 10/2025 (Outubro)</option>
+                  <option value="m:11/2025">Mês 11/2025 (Novembro)</option>
+                  <option value="m:12/2025">Mês 12/2025 (Dezembro)</option>
+                </optgroup>
+                <optgroup label="Personalizado">
+                  <option value="custom">Selecionar Mês Específico (Seletor)</option>
+                </optgroup>
+              </select>
+
+              {selectedPeriod === "custom" && (
+                <input
+                  type="month"
+                  value={customMonth}
+                  onChange={(e) => setCustomMonth(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-xl bg-blue-50 border border-blue-300 text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                />
+              )}
+            </div>
           </div>
 
           {/* Agrupar Por */}
