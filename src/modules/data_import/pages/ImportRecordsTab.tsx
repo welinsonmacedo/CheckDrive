@@ -13,6 +13,8 @@ import {
   CheckSquare,
   Square,
   Check,
+  FileSpreadsheet,
+  Printer,
 } from "lucide-react";
 import { ImportRecord, RecordCategory } from "../types";
 import { ImportService } from "../services/importService";
@@ -180,49 +182,28 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
     }
   };
 
-  const exportCsv = () => {
+  const exportExcel = () => {
     if (filtered.length === 0) return alert("Nenhum registro para exportar.");
 
-    const headers = [
-      "ID",
-      "Tipo",
-      "Placa",
-      "Frota",
-      "Data",
-      "Conta",
-      "Valor (R$)",
-      "Quantidade",
-      "Hodometro",
-      "Fornecedor",
-      "Documento",
-      "Status",
-      "Hash SHA-256",
-    ];
+    let csvContent = "\uFEFF"; // UTF-8 BOM
+    csvContent += "ID;Categoria;Placa;Frota;Data;Conta;Valor (R$);Quantidade;Hodômetro;Fornecedor;Documento;Status;Hash SHA-256\n";
 
-    const rows = filtered.map((r) => [
-      r.id,
-      r.tipo_registro,
-      r.placa,
-      r.numero_frota || "",
-      r.data,
-      `"${r.conta.replace(/"/g, '""')}"`,
-      r.valor,
-      r.quantidade,
-      r.hodometro || "",
-      `"${(r.fornecedor || "").replace(/"/g, '""')}"`,
-      `"${(r.documento || "").replace(/"/g, '""')}"`,
-      r.status,
-      r.hash_registro,
-    ]);
+    filtered.forEach((r) => {
+      csvContent += `"${r.id}";"${r.tipo_registro}";"${r.placa}";"${r.numero_frota || ""}";"${r.data}";"${r.conta.replace(/"/g, '""')}";"${Number(r.valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${Number(r.quantidade || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${r.hodometro || ""}";"${(r.fornecedor || "").replace(/"/g, '""')}";"${(r.documento || "").replace(/"/g, '""')}";"${r.status}";"${r.hash_registro}"\n`;
+    });
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `import_records_staging_${new Date().toISOString().split("T")[0]}.csv`);
+    link.href = url;
+    link.setAttribute("download", `dados_importados_${new Date().toISOString().substring(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const exportPDF = () => {
+    window.print();
   };
 
   return (
@@ -281,10 +262,19 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
           )}
 
           <button
-            onClick={exportCsv}
-            className="px-3.5 py-2 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors flex items-center gap-2"
+            onClick={exportExcel}
+            className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="Exportar registros filtrados para Excel"
           >
-            <Download className="w-4 h-4 text-zinc-500" /> Exportar CSV
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Exportar Excel
+          </button>
+
+          <button
+            onClick={exportPDF}
+            className="px-3.5 py-2 rounded-xl bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="Exportar ou Imprimir registros em PDF"
+          >
+            <Printer className="w-4 h-4 text-zinc-500" /> Exportar PDF
           </button>
 
           <button

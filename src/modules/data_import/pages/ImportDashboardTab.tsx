@@ -10,8 +10,10 @@ import {
   CheckCircle2,
   PieChart as PieChartIcon,
   RefreshCw,
-  ArrowUpRight,
   Sparkles,
+  Download,
+  Printer,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   BarChart,
@@ -24,6 +26,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  LabelList,
 } from "recharts";
 import { ImportJob, ImportRecord } from "../types";
 import { ImportService } from "../services/importService";
@@ -111,6 +114,31 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
 
   const COLORS = ["#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4"];
 
+  const exportExcelDashboard = () => {
+    let csvContent = "\uFEFF"; // UTF-8 BOM
+    csvContent += "Mês;Volume Lançamentos Importados\n";
+    monthlyChartData.forEach((row) => {
+      csvContent += `"${row.month}";${row.count}\n`;
+    });
+    csvContent += "\nCategoria;Quantidade Lançamentos\n";
+    categoryChartData.forEach((row) => {
+      csvContent += `"${row.name}";${row.value}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `dashboard_importacao_${new Date().toISOString().substring(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const printDashboardPDF = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -131,17 +159,31 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={loadData}
-              className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
               title="Atualizar Dados"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             </button>
             <button
+              onClick={exportExcelDashboard}
+              className="px-3.5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-emerald-600/20"
+              title="Exportar dados para Excel (.xlsx / .csv)"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Excel
+            </button>
+            <button
+              onClick={printDashboardPDF}
+              className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Exportar ou Imprimir em PDF"
+            >
+              <Printer className="w-4 h-4" /> Exportar PDF
+            </button>
+            <button
               onClick={onNavigateToWizard}
-              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all"
+              className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all cursor-pointer"
             >
               <FileText className="w-4 h-4" /> Nova Importação em PDF
             </button>
@@ -247,7 +289,7 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
 
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={monthlyChartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} />
@@ -260,7 +302,9 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
                     fontSize: "12px",
                   }}
                 />
-                <Bar dataKey="count" fill="#2563eb" radius={[6, 6, 0, 0]} name="Registros" />
+                <Bar dataKey="count" fill="#2563eb" radius={[6, 6, 0, 0]} name="Registros">
+                  <LabelList dataKey="count" position="top" style={{ fill: "#1e293b", fontSize: 11, fontWeight: 800 }} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -282,10 +326,12 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
                   data={categoryChartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={75}
+                  innerRadius={45}
+                  outerRadius={70}
                   paddingAngle={4}
                   dataKey="value"
+                  label={({ name, value }) => `${name}: ${value}`}
+                  labelLine={true}
                 >
                   {categoryChartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

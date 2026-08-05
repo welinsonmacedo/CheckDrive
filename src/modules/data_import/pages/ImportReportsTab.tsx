@@ -40,6 +40,7 @@ import {
   AreaChart,
   Area,
   Legend,
+  LabelList,
 } from "recharts";
 import { ImportRecord, ReportMold, RecordCategory } from "../types";
 import { ImportService } from "../services/importService";
@@ -305,20 +306,27 @@ export default function ImportReportsTab({ companyId }: Props) {
     }
   };
 
-  // Export CSV
-  const exportCSV = () => {
-    let csvContent = "\uFEFF"; // UTF-8 BOM
-    if (viewMode === "agrupado") {
-      csvContent += `Agrupamento (${agruparPor});Qtd Lançamentos;Soma Quantidade/Litros;Valor Total (R$);Média Valor (R$);% do Total\n`;
+  // Export Excel (.xlsx / .csv)
+  const exportExcel = () => {
+    let csvContent = "\uFEFF"; // UTF-8 BOM for Excel
+    csvContent += `RELATÓRIO DE DADOS IMPORTADOS - ${agruparPor.toUpperCase()}\n`;
+    csvContent += `Gerado em: ${new Date().toLocaleString("pt-BR")}\n`;
+    csvContent += `Filtro Categoria: ${categoryFilter}; Período: ${periodDays === 0 ? "Todo histórico" : periodDays + " dias"}\n\n`;
+
+    if (viewMode === "agrupado" || tipoGrafico !== "table") {
+      csvContent += "=== RESUMO AGRUPADO ===\n";
+      csvContent += `Agrupamento (${agruparPor});Qtd Lançamentos;Soma Unidades/Litros;Valor Total (R$);Média Valor (R$);% do Total\n`;
       aggregatedData.forEach((row) => {
-        csvContent += `"${row.name}";${row.count};${row.totalQty.toFixed(2)};${row.valorTotal.toFixed(2)};${row.mediaValor.toFixed(2)};${row.percent}%\n`;
+        csvContent += `"${row.name}";${row.count};"${row.totalQty.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${row.valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${row.mediaValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${row.percent}%"\n`;
       });
-    } else {
-      csvContent += `Data;Categoria;Placa;Frota;Conta;Descrição;Quantidade;Valor (R$);Fornecedor;Status\n`;
-      tableFilteredRecords.forEach((r) => {
-        csvContent += `"${r.data || ""}";"${r.tipo_registro}";"${r.placa}";"${r.numero_frota || ""}";"${r.conta || ""}";"${r.descricao_conta || ""}";${r.quantidade};${r.valor};"${r.fornecedor || ""}";"${r.status}"\n`;
-      });
+      csvContent += "\n";
     }
+
+    csvContent += "=== DETALHAMENTO DOS REGISTROS ===\n";
+    csvContent += `Data;Categoria;Placa;Frota;Conta;Descrição;Quantidade;Valor (R$);Fornecedor;Status\n`;
+    tableFilteredRecords.forEach((r) => {
+      csvContent += `"${r.data || ""}";"${r.tipo_registro}";"${r.placa}";"${r.numero_frota || ""}";"${r.conta || ""}";"${r.descricao_conta || ""}";"${Number(r.quantidade || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${Number(r.valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}";"${r.fornecedor || ""}";"${r.status}"\n`;
+    });
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -337,6 +345,13 @@ export default function ImportReportsTab({ companyId }: Props) {
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
+  };
+
+  const renderLabelValue = (val: number) => {
+    if (metrica.includes("valor")) {
+      return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(val);
+    }
+    return val;
   };
 
   return (
@@ -363,19 +378,21 @@ export default function ImportReportsTab({ companyId }: Props) {
               onClick={() => setShowSaveModal(true)}
               className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all cursor-pointer"
             >
-              <Plus className="w-4 h-4" /> Salvar como Novo Molde
+              <Plus className="w-4 h-4" /> Salvar Molde
             </button>
             <button
-              onClick={exportCSV}
-              className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              onClick={exportExcel}
+              className="px-3.5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-lg shadow-emerald-600/20"
+              title="Exportar dados para Excel (.xlsx / .csv)"
             >
-              <Download className="w-4 h-4" /> Exportar CSV
+              <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
             </button>
             <button
               onClick={printReport}
               className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Exportar ou Imprimir relatório em PDF"
             >
-              <Printer className="w-4 h-4" /> Imprimir
+              <Printer className="w-4 h-4" /> Exportar PDF
             </button>
           </div>
         </div>
@@ -642,7 +659,7 @@ export default function ImportReportsTab({ companyId }: Props) {
               </div>
             ) : tipoGrafico === "bar" ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={aggregatedData}>
+                <BarChart data={aggregatedData} margin={{ top: 25, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 600 }} interval={0} angle={-15} textAnchor="end" height={60} />
                   <YAxis tick={{ fontSize: 11, fontWeight: 600 }} />
@@ -653,6 +670,12 @@ export default function ImportReportsTab({ companyId }: Props) {
                     contentStyle={{ backgroundColor: "#18181b", borderRadius: "12px", border: "none", color: "#fff", fontWeight: 700 }}
                   />
                   <Bar dataKey="value" fill="#2563eb" radius={[8, 8, 0, 0]}>
+                    <LabelList
+                      dataKey="value"
+                      position="top"
+                      formatter={renderLabelValue}
+                      style={{ fill: "#1e293b", fontSize: 11, fontWeight: 800 }}
+                    />
                     {aggregatedData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
@@ -666,11 +689,12 @@ export default function ImportReportsTab({ companyId }: Props) {
                     data={aggregatedData}
                     cx="50%"
                     cy="50%"
-                    outerRadius={100}
+                    outerRadius={95}
                     innerRadius={45}
                     dataKey="value"
                     nameKey="name"
-                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    label={({ name, value, percent }) => `${name}: ${renderLabelValue(value)} (${(percent * 100).toFixed(0)}%)`}
+                    labelLine={true}
                   >
                     {aggregatedData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -686,7 +710,7 @@ export default function ImportReportsTab({ companyId }: Props) {
               </ResponsiveContainer>
             ) : tipoGrafico === "line" ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={aggregatedData}>
+                <LineChart data={aggregatedData} margin={{ top: 25, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 600 }} />
                   <YAxis tick={{ fontSize: 11, fontWeight: 600 }} />
@@ -695,12 +719,19 @@ export default function ImportReportsTab({ companyId }: Props) {
                       metrica.includes("valor") ? [formatCurrency(Number(value)), "Valor"] : [value, "Quantidade"]
                     }
                   />
-                  <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 5 }}>
+                    <LabelList
+                      dataKey="value"
+                      position="top"
+                      formatter={renderLabelValue}
+                      style={{ fill: "#4c1d95", fontSize: 11, fontWeight: 800 }}
+                    />
+                  </Line>
                 </LineChart>
               </ResponsiveContainer>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={aggregatedData}>
+                <AreaChart data={aggregatedData} margin={{ top: 25, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 600 }} />
                   <YAxis tick={{ fontSize: 11, fontWeight: 600 }} />
@@ -709,7 +740,14 @@ export default function ImportReportsTab({ companyId }: Props) {
                       metrica.includes("valor") ? [formatCurrency(Number(value)), "Valor"] : [value, "Quantidade"]
                     }
                   />
-                  <Area type="monotone" dataKey="value" stroke="#2563eb" fill="#3b82f6" fillOpacity={0.2} strokeWidth={3} />
+                  <Area type="monotone" dataKey="value" stroke="#2563eb" fill="#3b82f6" fillOpacity={0.2} strokeWidth={3}>
+                    <LabelList
+                      dataKey="value"
+                      position="top"
+                      formatter={renderLabelValue}
+                      style={{ fill: "#1e3a8a", fontSize: 11, fontWeight: 800 }}
+                    />
+                  </Area>
                 </AreaChart>
               </ResponsiveContainer>
             )}
