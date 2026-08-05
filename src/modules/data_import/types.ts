@@ -108,10 +108,11 @@ export interface ReportMold {
   descricao?: string;
   icon?: string;
   categoria_filtro?: string;
+  tipo_importacao_filtro?: string; // "Todas" | "combustivel_gfv" | "receitas_despesas"
   periodo_dias?: number; // 0 for all time, 30, 60, 90, 365
   placa_filtro?: string;
   fornecedor_filtro?: string;
-  agrupar_por: "categoria" | "placa" | "fornecedor" | "mes" | "status";
+  agrupar_por: "categoria" | "tipo_importacao" | "placa" | "fornecedor" | "mes" | "status";
   metrica: "soma_valor" | "quantidade" | "media_valor" | "soma_quantidade";
   tipo_grafico: "bar" | "pie" | "line" | "area" | "table";
   e_padrao?: boolean;

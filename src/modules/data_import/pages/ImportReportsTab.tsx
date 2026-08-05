@@ -127,6 +127,24 @@ function parseRecordMonthYear(dateStr?: string): { month: string; year: string }
   return null;
 }
 
+export function getRecordImportType(r: ImportRecord): "combustivel_gfv" | "receitas_despesas" {
+  if (
+    r.conta === "Consumo de Combustível" ||
+    (r.observacoes && (r.observacoes.includes("GFV") || r.observacoes.includes("Consumo por Veículo"))) ||
+    r.preco_litro !== undefined ||
+    r.media_km_l !== undefined
+  ) {
+    return "combustivel_gfv";
+  }
+  return "receitas_despesas";
+}
+
+export function getImportTypeLabel(type: "combustivel_gfv" | "receitas_despesas" | string): string {
+  if (type === "combustivel_gfv") return "Consumo de Combustível (GFV)";
+  if (type === "receitas_despesas") return "Receitas e Despesas (SOFtran)";
+  return type;
+}
+
 export default function ImportReportsTab({ companyId }: Props) {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<ImportRecord[]>([]);
@@ -135,11 +153,12 @@ export default function ImportReportsTab({ companyId }: Props) {
 
   // Filter & Config state
   const [categoryFilter, setCategoryFilter] = useState<string>("Todas");
+  const [tipoImportacaoFilter, setTipoImportacaoFilter] = useState<string>("Todas"); // "Todas" | "combustivel_gfv" | "receitas_despesas"
   const [selectedPeriod, setSelectedPeriod] = useState<string>("0"); // "0", "30", "60", "90", "365", "m:01/2026", "custom", etc.
   const [customMonth, setCustomMonth] = useState<string>(""); // "YYYY-MM"
   const [placaFilter, setPlacaFilter] = useState<string>("");
   const [fornecedorFilter, setFornecedorFilter] = useState<string>("");
-  const [agruparPor, setAgruparPor] = useState<"categoria" | "placa" | "fornecedor" | "mes" | "status">("categoria");
+  const [agruparPor, setAgruparPor] = useState<"categoria" | "tipo_importacao" | "placa" | "fornecedor" | "mes" | "status">("categoria");
   const [metrica, setMetrica] = useState<"soma_valor" | "quantidade" | "media_valor" | "soma_quantidade">("soma_valor");
   const [tipoGrafico, setTipoGrafico] = useState<"bar" | "pie" | "line" | "area" | "table">("bar");
   const [viewMode, setViewMode] = useState<"agrupado" | "detalhado">("agrupado");
@@ -175,6 +194,7 @@ export default function ImportReportsTab({ companyId }: Props) {
   const applyMold = (mold: ReportMold) => {
     setActiveMoldId(mold.id);
     if (mold.categoria_filtro) setCategoryFilter(mold.categoria_filtro);
+    if (mold.tipo_importacao_filtro) setTipoImportacaoFilter(mold.tipo_importacao_filtro);
     if (mold.periodo_dias !== undefined) setSelectedPeriod(String(mold.periodo_dias));
     if (mold.placa_filtro !== undefined) setPlacaFilter(mold.placa_filtro);
     if (mold.fornecedor_filtro !== undefined) setFornecedorFilter(mold.fornecedor_filtro);
@@ -208,6 +228,12 @@ export default function ImportReportsTab({ companyId }: Props) {
     return records.filter((r) => {
       // Category filter
       if (categoryFilter !== "Todas" && r.tipo_registro !== categoryFilter) return false;
+
+      // Tipo de Importação filter
+      if (tipoImportacaoFilter !== "Todas") {
+        const rImpType = getRecordImportType(r);
+        if (rImpType !== tipoImportacaoFilter) return false;
+      }
 
       // Placa filter
       if (placaFilter.trim()) {
@@ -246,7 +272,7 @@ export default function ImportReportsTab({ companyId }: Props) {
 
       return true;
     });
-  }, [records, categoryFilter, placaFilter, fornecedorFilter, selectedPeriod, customMonth]);
+  }, [records, categoryFilter, tipoImportacaoFilter, placaFilter, fornecedorFilter, selectedPeriod, customMonth]);
 
   // Aggregated data for grouping & charts
   const aggregatedData = useMemo(() => {
@@ -258,6 +284,10 @@ export default function ImportReportsTab({ companyId }: Props) {
     filteredRecords.forEach((r) => {
       let groupKey = "Outros";
       if (agruparPor === "categoria") groupKey = r.tipo_registro || "Sem Categoria";
+      else if (agruparPor === "tipo_importacao") {
+        const impType = getRecordImportType(r);
+        groupKey = getImportTypeLabel(impType);
+      }
       else if (agruparPor === "placa") groupKey = r.placa ? `${r.placa}${r.numero_frota ? ` (${r.numero_frota})` : ""}` : "Sem Placa";
       else if (agruparPor === "fornecedor") groupKey = r.fornecedor || "Não informado";
       else if (agruparPor === "status") groupKey = r.status.toUpperCase();
@@ -348,7 +378,8 @@ export default function ImportReportsTab({ companyId }: Props) {
         descricao: newMoldDesc,
         icon: "FileSpreadsheet",
         categoria_filtro: categoryFilter,
-        periodo_dias: periodDays,
+        tipo_importacao_filtro: tipoImportacaoFilter,
+        periodo_dias: Number(selectedPeriod) || 0,
         placa_filtro: placaFilter,
         fornecedor_filtro: fornecedorFilter,
         agrupar_por: agruparPor,
@@ -554,12 +585,64 @@ export default function ImportReportsTab({ companyId }: Props) {
 
       {/* Filter Customizer Toolbar */}
       <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 text-zinc-900 font-bold text-sm border-b border-zinc-100 pb-3">
-          <Filter className="w-4 h-4 text-blue-600" />
-          <span>Filtros e Configuração do Relatório Atual</span>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
+          <div className="flex items-center gap-2 text-zinc-900 font-bold text-sm">
+            <Filter className="w-4 h-4 text-blue-600" />
+            <span>Filtros e Configuração do Relatório Atual</span>
+          </div>
+
+          {/* Quick Sub-tabs for Import Type */}
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-100/90 rounded-2xl border border-zinc-200/60">
+            <button
+              onClick={() => setTipoImportacaoFilter("Todas")}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                tipoImportacaoFilter === "Todas"
+                  ? "bg-white text-blue-700 shadow-xs"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              Todas as Importações
+            </button>
+            <button
+              onClick={() => setTipoImportacaoFilter("combustivel_gfv")}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                tipoImportacaoFilter === "combustivel_gfv"
+                  ? "bg-amber-600 text-white shadow-xs"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              <Fuel className="w-3.5 h-3.5" /> Consumo de Combustível (GFV)
+            </button>
+            <button
+              onClick={() => setTipoImportacaoFilter("receitas_despesas")}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                tipoImportacaoFilter === "receitas_despesas"
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" /> Receitas e Despesas (SOFtran)
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          {/* Tipo de Importação Dropdown */}
+          <div>
+            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
+              Tipo da Importação
+            </label>
+            <select
+              value={tipoImportacaoFilter}
+              onChange={(e) => setTipoImportacaoFilter(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-amber-50/80 border border-amber-200 text-xs font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+            >
+              <option value="Todas">Todas as Importações</option>
+              <option value="combustivel_gfv">Consumo de Combustível (GFV)</option>
+              <option value="receitas_despesas">Receitas e Despesas (SOFtran)</option>
+            </select>
+          </div>
+
           {/* Categoria */}
           <div>
             <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
@@ -654,6 +737,7 @@ export default function ImportReportsTab({ companyId }: Props) {
               className="w-full px-3 py-2 rounded-xl bg-blue-50/80 border border-blue-200 text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               <option value="categoria">Categoria</option>
+              <option value="tipo_importacao">Tipo de Importação (GFV vs SOFtran)</option>
               <option value="placa">Placa / Frota</option>
               <option value="fornecedor">Fornecedor / Posto</option>
               <option value="mes">Mês / Período</option>
@@ -957,6 +1041,7 @@ export default function ImportReportsTab({ companyId }: Props) {
               <thead>
                 <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
                   <th className="p-3.5">Data</th>
+                  <th className="p-3.5">Tipo Importação</th>
                   <th className="p-3.5">Categoria</th>
                   <th className="p-3.5">Placa / Frota</th>
                   <th className="p-3.5">Conta / Descrição</th>
@@ -969,15 +1054,28 @@ export default function ImportReportsTab({ companyId }: Props) {
               <tbody className="divide-y divide-zinc-100 font-medium">
                 {tableFilteredRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-zinc-400 font-semibold">
+                    <td colSpan={9} className="p-8 text-center text-zinc-400 font-semibold">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
                 ) : (
-                  tableFilteredRecords.slice(0, 100).map((r) => (
-                    <tr key={r.id} className="hover:bg-zinc-50 transition-colors">
-                      <td className="p-3.5 whitespace-nowrap text-zinc-600">{r.data || "-"}</td>
-                      <td className="p-3.5 font-bold text-blue-700">{r.tipo_registro}</td>
+                  tableFilteredRecords.slice(0, 100).map((r) => {
+                    const impType = getRecordImportType(r);
+                    return (
+                      <tr key={r.id} className="hover:bg-zinc-50 transition-colors">
+                        <td className="p-3.5 whitespace-nowrap text-zinc-600">{r.data || "-"}</td>
+                        <td className="p-3.5 whitespace-nowrap">
+                          {impType === "combustivel_gfv" ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              <Fuel className="w-3 h-3 text-amber-600" /> GFV (Combustível)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                              <FileSpreadsheet className="w-3 h-3 text-indigo-600" /> SOFtran (Despesas)
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3.5 font-bold text-blue-700">{r.tipo_registro}</td>
                       <td className="p-3.5 font-extrabold text-zinc-900">
                         {r.placa} {r.numero_frota && `(${r.numero_frota})`}
                       </td>
@@ -999,8 +1097,9 @@ export default function ImportReportsTab({ companyId }: Props) {
                         </span>
                       </td>
                     </tr>
-                  ))
-                )}
+                  );
+                })
+              )}
               </tbody>
             </table>
           )}
