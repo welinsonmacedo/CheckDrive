@@ -91,17 +91,29 @@ export class ImportService {
       updated_at: new Date().toISOString(),
     };
 
+    // Clean payload matching standard import_jobs columns in Supabase
     const payloadForSupabase = {
-      ...newJob,
+      id: newJob.id,
       empresa_id: formattedCompanyId,
       usuario_id: formattedUserId,
+      nome_arquivo: newJob.nome_arquivo,
+      data_importacao: newJob.data_importacao,
+      status: newJob.status,
+      total_registros: newJob.total_registros,
+      novos: newJob.novos,
+      duplicados: newJob.duplicados,
+      conflitos: newJob.conflitos,
+      erros: newJob.erros,
+      observacoes: newJob.observacoes,
+      created_at: newJob.created_at,
+      updated_at: newJob.updated_at,
     };
 
     try {
       const { data, error } = await supabase.from("import_jobs").insert(payloadForSupabase).select().single();
       if (!error && data) {
-        await JOBS_STORE.setItem(newJob.id, data);
-        return { ...data, empresa_id: companyId } as ImportJob;
+        await JOBS_STORE.setItem(newJob.id, { ...newJob, ...data, empresa_id: companyId });
+        return { ...newJob, ...data, empresa_id: companyId } as ImportJob;
       } else if (error) {
         console.warn("Supabase import_jobs insert error:", error.message);
       }
@@ -252,8 +264,37 @@ export class ImportService {
 
     let supabaseErrorMsg: string | undefined = undefined;
 
-    // Save records to Supabase with formatted UUID
+    // Save records to Supabase with formatted UUID and fallback handling
     try {
+      // Ensure the parent import_job exists in Supabase to avoid FK constraint violations
+      try {
+        const { data: existingJob } = await supabase
+          .from("import_jobs")
+          .select("id")
+          .eq("id", jobId)
+          .maybeSingle();
+
+        if (!existingJob) {
+          console.warn("Parent import_job not found in Supabase. Upserting job first...");
+          await supabase.from("import_jobs").upsert({
+            id: jobId,
+            empresa_id: formattedCompanyId,
+            nome_arquivo: "relatorio_importacao.pdf",
+            data_importacao: new Date().toISOString(),
+            status: countConflitos > 0 ? "conflito" : "concluido",
+            total_registros: rawRecords.length,
+            novos: countNovos,
+            duplicados: countDuplicados,
+            conflitos: countConflitos,
+            erros: countErros,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } catch (jobErr) {
+        console.warn("Error ensuring parent job in Supabase:", jobErr);
+      }
+
       const supabaseRecords = savedRecords.map((r) => ({
         id: r.id,
         import_job_id: r.import_job_id,
@@ -281,7 +322,20 @@ export class ImportService {
         criado_em: r.criado_em || new Date().toISOString(),
       }));
 
-      const { error: recErr } = await supabase.from("import_records").insert(supabaseRecords);
+      let { error: recErr } = await supabase.from("import_records").insert(supabaseRecords);
+
+      // Retry Fallback: If insertion failed due to unknown columns (e.g. preco_litro, media_km_l not in DB schema)
+      if (recErr) {
+        console.warn("Supabase import_records insert warning:", recErr.message, ". Retrying with basic schema fields...");
+        const basicRecords = supabaseRecords.map(({ preco_litro, media_km_l, km_rodado, preco_por_km, ...rest }) => rest);
+        const { error: retryErr } = await supabase.from("import_records").insert(basicRecords);
+        if (!retryErr) {
+          recErr = null; // Success on basic fields retry!
+        } else {
+          recErr = retryErr;
+        }
+      }
+
       if (recErr) {
         console.warn("Supabase import_records batch save error:", recErr.message);
         if (recErr.message.includes("does not exist") || recErr.message.includes("400") || recErr.message === "Bad Request") {

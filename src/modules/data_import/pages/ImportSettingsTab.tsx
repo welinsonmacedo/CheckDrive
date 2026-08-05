@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS public.import_records (
     quantidade NUMERIC(12,3) DEFAULT 1,
     valor NUMERIC(12,2) DEFAULT 0,
     hodometro INT,
+    preco_litro NUMERIC(12,3),
+    media_km_l NUMERIC(12,2),
+    km_rodado NUMERIC(12,1),
+    preco_por_km NUMERIC(12,3),
     fornecedor TEXT,
     documento TEXT,
     numero_controle TEXT,
@@ -52,6 +56,15 @@ CREATE TABLE IF NOT EXISTS public.import_records (
     conflito BOOLEAN DEFAULT FALSE,
     criado_em TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Garantir colunas adicionais para tabelas já criadas anteriormente
+ALTER TABLE public.import_jobs ADD COLUMN IF NOT EXISTS usuario_nome TEXT;
+ALTER TABLE public.import_jobs ADD COLUMN IF NOT EXISTS periodo TEXT;
+
+ALTER TABLE public.import_records ADD COLUMN IF NOT EXISTS preco_litro NUMERIC(12,3);
+ALTER TABLE public.import_records ADD COLUMN IF NOT EXISTS media_km_l NUMERIC(12,2);
+ALTER TABLE public.import_records ADD COLUMN IF NOT EXISTS km_rodado NUMERIC(12,1);
+ALTER TABLE public.import_records ADD COLUMN IF NOT EXISTS preco_por_km NUMERIC(12,3);
 
 -- Index para otimização de busca por hash SHA-256 e empresa
 CREATE INDEX IF NOT EXISTS idx_import_records_hash_empresa ON public.import_records(hash_registro, empresa_id);
