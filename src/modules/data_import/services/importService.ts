@@ -31,29 +31,36 @@ export class ImportService {
    */
   static async getImportJobs(companyId: string): Promise<ImportJob[]> {
     const formattedCompanyId = formatUuid(companyId);
-    try {
-      const { data, error } = await supabase
-        .from("import_jobs")
-        .select("*")
-        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`)
-        .order("created_at", { ascending: false });
+    const jobMap = new Map<string, ImportJob>();
 
-      if (!error && data && data.length > 0) {
-        return data as ImportJob[];
+    try {
+      let query = supabase.from("import_jobs").select("*");
+      if (companyId && companyId !== "all") {
+        query = query.eq("empresa_id", formattedCompanyId);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
+
+      if (!error && data) {
+        data.forEach((j: any) => jobMap.set(j.id, j as ImportJob));
+      } else if (error) {
+        console.warn("Supabase import_jobs fetch error:", error.message);
       }
     } catch (e) {
       console.warn("Supabase import_jobs fetch fallback to local storage:", e);
     }
 
-    // Local fallback
-    const localJobs: ImportJob[] = [];
+    // Local fallback / merge
     await JOBS_STORE.iterate((value: ImportJob) => {
-      if (value.empresa_id === companyId || value.empresa_id === formattedCompanyId) {
-        localJobs.push(value);
+      const matchCompany = !companyId || companyId === "all" || value.empresa_id === companyId || value.empresa_id === formattedCompanyId;
+      if (matchCompany && !jobMap.has(value.id)) {
+        jobMap.set(value.id, value);
       }
     });
-    return localJobs.sort(
-      (a, b) => new Date(b.created_at || b.data_importacao).getTime() - new Date(a.created_at || a.data_importacao).getTime()
+
+    const jobs = Array.from(jobMap.values());
+    return jobs.sort(
+      (a, b) => new Date(b.created_at || b.data_importacao || 0).getTime() - new Date(a.created_at || a.data_importacao || 0).getTime()
     );
   }
 
@@ -146,7 +153,7 @@ export class ImportService {
       const { data } = await supabase
         .from("import_records")
         .select("*")
-        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`);
+        .eq("empresa_id", formattedCompanyId);
 
       if (data) {
         data.forEach((r: any) => {
@@ -460,33 +467,49 @@ export class ImportService {
   }
 
   /**
-   * Fetch imported records with optional filters
+   * Fetch imported records with optional filters, merging Supabase and Local Storage
    */
   static async getImportRecords(companyId: string, jobId?: string): Promise<ImportRecord[]> {
     const formattedCompanyId = formatUuid(companyId);
+    const recordMap = new Map<string, ImportRecord>();
 
+    // 1. Fetch from Supabase
     try {
-      let query = supabase
-        .from("import_records")
-        .select("*")
-        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`);
+      let query = supabase.from("import_records").select("*");
 
-      if (jobId) query = query.eq("import_job_id", jobId);
+      if (companyId && companyId !== "all") {
+        query = query.eq("empresa_id", formattedCompanyId);
+      }
+
+      if (jobId) {
+        query = query.eq("import_job_id", jobId);
+      }
 
       const { data, error } = await query.order("criado_em", { ascending: false });
-      if (!error && data && data.length > 0) {
-        return data as ImportRecord[];
+
+      if (error) {
+        console.warn("Supabase getImportRecords error:", error.message);
+      } else if (data) {
+        data.forEach((r: any) => {
+          recordMap.set(r.id, r as ImportRecord);
+        });
       }
     } catch (e) {
-      // ignore
+      console.warn("Supabase getImportRecords exception:", e);
     }
 
-    const records: ImportRecord[] = [];
+    // 2. Fetch from Local Storage (merge local records if offline or not in Supabase)
     await RECORDS_STORE.iterate((r: ImportRecord) => {
-      if ((r.empresa_id === companyId || r.empresa_id === formattedCompanyId) && (!jobId || r.import_job_id === jobId)) {
-        records.push(r);
+      const matchCompany = !companyId || companyId === "all" || r.empresa_id === companyId || r.empresa_id === formattedCompanyId;
+      const matchJob = !jobId || r.import_job_id === jobId;
+      if (matchCompany && matchJob) {
+        if (!recordMap.has(r.id)) {
+          recordMap.set(r.id, r);
+        }
       }
     });
+
+    const records = Array.from(recordMap.values());
     return records.sort(
       (a, b) => new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime()
     );
@@ -497,26 +520,30 @@ export class ImportService {
    */
   static async getConflicts(companyId: string): Promise<ImportConflict[]> {
     const formattedCompanyId = formatUuid(companyId);
+    const conflictMap = new Map<string, ImportConflict>();
 
     try {
-      const { data, error } = await supabase
-        .from("import_conflicts")
-        .select("*")
-        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`)
-        .order("created_at", { ascending: false });
+      let query = supabase.from("import_conflicts").select("*");
+      if (companyId && companyId !== "all") {
+        query = query.eq("empresa_id", formattedCompanyId);
+      }
+      const { data, error } = await query.order("created_at", { ascending: false });
 
-      if (!error && data) return data as ImportConflict[];
+      if (!error && data) {
+        data.forEach((c: any) => conflictMap.set(c.id, c as ImportConflict));
+      }
     } catch (e) {
-      // ignore
+      console.warn("Supabase getConflicts error:", e);
     }
 
-    const conflicts: ImportConflict[] = [];
     await CONFLICTS_STORE.iterate((c: ImportConflict) => {
-      if (c.empresa_id === companyId || c.empresa_id === formattedCompanyId) {
-        conflicts.push(c);
+      const matchCompany = !companyId || companyId === "all" || c.empresa_id === companyId || c.empresa_id === formattedCompanyId;
+      if (matchCompany && !conflictMap.has(c.id)) {
+        conflictMap.set(c.id, c);
       }
     });
-    return conflicts;
+
+    return Array.from(conflictMap.values());
   }
 
   /**
@@ -640,28 +667,34 @@ export class ImportService {
    */
   static async getLogs(companyId: string, jobId?: string): Promise<ImportLog[]> {
     const formattedCompanyId = formatUuid(companyId);
+    const logMap = new Map<string, ImportLog>();
 
     try {
-      let query = supabase
-        .from("import_logs")
-        .select("*")
-        .or(`empresa_id.eq.${companyId},empresa_id.eq.${formattedCompanyId}`);
+      let query = supabase.from("import_logs").select("*");
 
+      if (companyId && companyId !== "all") {
+        query = query.eq("empresa_id", formattedCompanyId);
+      }
       if (jobId) query = query.eq("import_job_id", jobId);
 
       const { data, error } = await query.order("criado_em", { ascending: false });
-      if (!error && data) return data as ImportLog[];
+      if (!error && data) {
+        data.forEach((l: any) => logMap.set(l.id, l as ImportLog));
+      }
     } catch (e) {
-      // ignore
+      console.warn("Supabase getLogs error:", e);
     }
 
-    const logs: ImportLog[] = [];
     await LOGS_STORE.iterate((l: ImportLog) => {
-      if ((l.empresa_id === companyId || l.empresa_id === formattedCompanyId) && (!jobId || l.import_job_id === jobId)) {
-        logs.push(l);
+      const matchCompany = !companyId || companyId === "all" || l.empresa_id === companyId || l.empresa_id === formattedCompanyId;
+      const matchJob = !jobId || l.import_job_id === jobId;
+      if (matchCompany && matchJob && !logMap.has(l.id)) {
+        logMap.set(l.id, l);
       }
     });
-    return logs.sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime());
+
+    const logs = Array.from(logMap.values());
+    return logs.sort((a, b) => new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime());
   }
 
   /**
