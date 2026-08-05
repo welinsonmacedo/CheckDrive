@@ -179,12 +179,13 @@ export async function parseSeniorTextContent(
       }
 
       // Apply smart de-para lookup for account code e.g. 104 -> Diesel S10, 106 -> Gasolina
-      if (currentContaNumber && customMappings.length > 0) {
-        const matched = AccountMappingService.findMatchingMapping(currentContaNumber, customMappings);
-        if (matched) {
-          if (!currentContaName || currentContaName.length < 3 || currentContaName.toLowerCase().includes("conta")) {
-            currentContaName = matched.target_name;
-          }
+      if (customMappings.length > 0) {
+        const matched = AccountMappingService.findMatchingMapping(
+          currentContaNumber || currentContaName,
+          customMappings
+        );
+        if (matched && matched.target_name) {
+          currentContaName = matched.target_name;
         }
       }
 
@@ -251,8 +252,13 @@ export async function parseSeniorTextContent(
 
       const fornecedor = textCleaned || "Fornecedor Não Especificado";
 
-      // Categorize account using classifier
-      const tipo_registro: RecordCategory = categorizeAccount(currentContaName, line, customMappings);
+      // Categorize account using classifier with account number, name, and line
+      const tipo_registro: RecordCategory = categorizeAccount(
+        currentContaName,
+        line,
+        customMappings,
+        currentContaNumber
+      );
 
       rawRecords.push({
         tipo_registro,

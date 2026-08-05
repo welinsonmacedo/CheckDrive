@@ -249,27 +249,43 @@ export class AccountMappingService {
     if (!text || !mappings || mappings.length === 0) return null;
     const cleanText = text.toLowerCase().trim();
 
-    // 1. Exact code match e.g. "104", "106", "101"
-    const exactCode = mappings.find((m) => m.active && m.code.toLowerCase() === cleanText);
+    const normalizeText = (s: string) =>
+      (s || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    const normText = normalizeText(cleanText);
+
+    // 1. Exact code match e.g. "104", "106", "101", "120"
+    const exactCode = mappings.find((m) => m.active && m.code.toLowerCase().trim() === cleanText);
     if (exactCode) return exactCode;
 
     // 2. Code extracted from text e.g., "Conta: 104 Diesel S10", "104 Diesel", "Conta 106"
     const codeNumberMatch = cleanText.match(/\b(\d{2,5})\b/);
     if (codeNumberMatch) {
       const extractedCode = codeNumberMatch[1];
-      const matchByExtractedCode = mappings.find((m) => m.active && m.code === extractedCode);
+      const matchByExtractedCode = mappings.find((m) => m.active && m.code.trim() === extractedCode);
       if (matchByExtractedCode) return matchByExtractedCode;
     }
 
-    // 3. Match by target name or keywords
+    // 3. Match by normalized target name or keywords
     for (const m of mappings) {
       if (!m.active) continue;
 
-      if (m.target_name && cleanText.includes(m.target_name.toLowerCase())) {
+      const normTarget = normalizeText(m.target_name);
+      if (normTarget && normTarget.length >= 3 && normText.includes(normTarget)) {
         return m;
       }
 
-      if (m.keywords && m.keywords.some((kw) => kw && cleanText.includes(kw.toLowerCase()))) {
+      if (
+        m.keywords &&
+        m.keywords.some((kw) => {
+          const normKw = normalizeText(kw);
+          return normKw && normKw.length >= 2 && normText.includes(normKw);
+        })
+      ) {
         return m;
       }
     }

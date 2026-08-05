@@ -1,199 +1,230 @@
 import { RecordCategory } from "../types";
 import { AccountMapping } from "../services/accountMappingService";
 
+/**
+ * Normalizes text by converting to lowercase and stripping accents for comparison.
+ */
+function normalizeString(str: string): string {
+  return (str || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
 export function categorizeAccount(
   accountName: string,
   accountDescription?: string,
-  customMappings?: AccountMapping[]
+  customMappings?: AccountMapping[],
+  accountNumber?: string
 ): RecordCategory {
-  const combined = `${accountName || ""} ${accountDescription || ""}`.toLowerCase();
+  const cleanAccNum = (accountNumber || "").trim().toLowerCase();
 
-  // 0. Check custom mappings first if provided
+  // 1. Direct match by exact account code in customMappings / default mappings
+  if (cleanAccNum && customMappings && customMappings.length > 0) {
+    const directMatch = customMappings.find(
+      (m) => m.active && m.code.trim().toLowerCase() === cleanAccNum
+    );
+    if (directMatch && directMatch.category) {
+      return directMatch.category as RecordCategory;
+    }
+  }
+
+  // 2. Extract code number if present in accountName e.g., "104 Diesel S10" or "Conta 106"
+  if (!cleanAccNum && accountName && customMappings && customMappings.length > 0) {
+    const numMatch = accountName.match(/\b(\d{2,5})\b/);
+    if (numMatch) {
+      const codeCandidate = numMatch[1].toLowerCase();
+      const directMatch = customMappings.find(
+        (m) => m.active && m.code.trim().toLowerCase() === codeCandidate
+      );
+      if (directMatch && directMatch.category) {
+        return directMatch.category as RecordCategory;
+      }
+    }
+  }
+
+  const combined = `${cleanAccNum ? `${cleanAccNum} ` : ""}${accountName || ""} ${accountDescription || ""}`.toLowerCase();
+  const normCombined = normalizeString(combined);
+
+  // 3. Search customMappings by code pattern, target_name or keywords
   if (customMappings && customMappings.length > 0) {
     for (const m of customMappings) {
       if (!m.active) continue;
-      const mCode = m.code.toLowerCase();
+      const mCode = m.code.trim().toLowerCase();
+      const normTarget = normalizeString(m.target_name);
 
-      // Check exact code match or word boundary code match
-      const codeRegex = new RegExp(`\\b${mCode}\\b`, "i");
-      if (codeRegex.test(combined) || (m.target_name && combined.includes(m.target_name.toLowerCase()))) {
+      if (mCode) {
+        const codeRegex = new RegExp(`(?:^|\\b|\\s|\\()${mCode}(?:$|\\b|\\s|\\))`, "i");
+        if (codeRegex.test(combined)) {
+          return m.category as RecordCategory;
+        }
+      }
+
+      if (normTarget && normTarget.length >= 3 && normCombined.includes(normTarget)) {
         return m.category as RecordCategory;
       }
 
-      if (m.keywords && m.keywords.some((kw) => kw && combined.includes(kw.toLowerCase()))) {
+      if (m.keywords && m.keywords.some((kw) => kw && normCombined.includes(normalizeString(kw)))) {
         return m.category as RecordCategory;
       }
     }
   }
 
-  // Check code numbers directly (e.g. 104 = Diesel S10, 106 = Gasolina, 101 = Gasolina Adm, 105 = Diesel Terceiro)
-  if (/\b104\b/.test(combined)) return "Diesel";
-  if (/\b106\b/.test(combined)) return "Gasolina";
-  if (/\b101\b/.test(combined)) return "Gasolina Administrativo";
-  if (/\b105\b/.test(combined)) return "Diesel Terceiro";
-  if (/\b102\b/.test(combined)) return "Arla";
-  if (/\b103\b/.test(combined)) return "Arla Estoque";
-  if (/\b107\b/.test(combined)) return "Lava-jato";
-  if (/\b108\b/.test(combined)) return "Manutenção";
-  if (/\b109\b/.test(combined)) return "Pneus Novos";
-  if (/\b110\b/.test(combined)) return "Pedágio";
-  if (/\b111\b/.test(combined)) return "Seguro";
-  if (/\b112\b/.test(combined)) return "Multa";
-
-  if (combined.includes("gasolina adm") || combined.includes("gasolina admin") || combined.includes("gasolina ad") || combined.includes("gas. adm")) {
+  // 4. Fallback Keyword rules (without misleading hardcoded code numbers)
+  if (
+    normCombined.includes("gasolina adm") ||
+    normCombined.includes("gasolina admin") ||
+    normCombined.includes("gas. adm")
+  ) {
     return "Gasolina Administrativo";
   }
 
-  if (combined.includes("gasolina") || combined.includes("gas. comum") || combined.includes("gas. adit") || combined.includes("gasolina comum")) {
+  if (normCombined.includes("gasolina")) {
     return "Gasolina";
   }
 
-  if (combined.includes("diesel ter") || combined.includes("diesel terceiro") || combined.includes("diesel terc")) {
+  if (
+    normCombined.includes("diesel ter") ||
+    normCombined.includes("diesel terceiro") ||
+    normCombined.includes("diesel terc")
+  ) {
     return "Diesel Terceiro";
   }
 
-  if (combined.includes("diesel") || combined.includes("s10") || combined.includes("s500")) {
+  if (
+    normCombined.includes("diesel") ||
+    normCombined.includes("s10") ||
+    normCombined.includes("s500")
+  ) {
     return "Diesel";
   }
 
-  if (combined.includes("arla estoque") || combined.includes("estoque arla") || combined.includes("arla est")) {
+  if (normCombined.includes("arla estoque") || normCombined.includes("estoque arla")) {
     return "Arla Estoque";
   }
 
-  if (combined.includes("estoque") || combined.includes("estq")) {
-    return "Estoque";
-  }
-
-  if (combined.includes("arla") || combined.includes("arla32") || combined.includes("arla 32")) {
+  if (normCombined.includes("arla") || normCombined.includes("arla32")) {
     return "Arla";
   }
 
-  if (combined.includes("freio") || combined.includes("freios") || combined.includes("pastilha") || combined.includes("disco de freio") || combined.includes("lona de freio")) {
-    return "Freios";
-  }
-
-  if (combined.includes("eletrica") || combined.includes("elétrica") || combined.includes("bateria") || combined.includes("alternador") || combined.includes("lampada") || combined.includes("lâmpada") || combined.includes("chicote")) {
-    return "Elétrica";
-  }
-
   if (
-    combined.includes("lava-jato") ||
-    combined.includes("lavajato") ||
-    combined.includes("lavagem") ||
-    combined.includes("ducha") ||
-    combined.includes("higieniza")
-  ) {
-    return "Lava-jato";
-  }
-
-  if (combined.includes("recapagem") || combined.includes("recap") || combined.includes("vulcanização")) {
-    return "Recapagem";
-  }
-
-  if (combined.includes("pneu novo") || combined.includes("pneus novos") || combined.includes("pneu n")) {
-    return "Pneus Novos";
-  }
-
-  if (
-    combined.includes("rastream") ||
-    combined.includes("rastreador") ||
-    combined.includes("telemetria") ||
-    combined.includes("sascar") ||
-    combined.includes("omnilink") ||
-    combined.includes("autotrac") ||
-    combined.includes("cobli")
-  ) {
-    return "Rastreamento";
-  }
-
-  if (
-    combined.includes("gasolina") ||
-    combined.includes("etanol") ||
-    combined.includes("combust") ||
-    combined.includes("gnv") ||
-    combined.includes("post")
-  ) {
-    return "Combustível";
-  }
-
-  if (
-    combined.includes("pedag") ||
-    combined.includes("pedág") ||
-    combined.includes("sem parar") ||
-    combined.includes("veloe") ||
-    combined.includes("conectcar") ||
-    combined.includes("move mais")
-  ) {
-    return "Pedágio";
-  }
-
-  if (
-    combined.includes("multa") ||
-    combined.includes("infração") ||
-    combined.includes("infracao") ||
-    combined.includes("autuação") ||
-    combined.includes("autuacao") ||
-    combined.includes("dtran") ||
-    combined.includes("detran")
-  ) {
-    return "Multa";
-  }
-
-  if (
-    combined.includes("seguro") ||
-    combined.includes("apolice") ||
-    combined.includes("apólice") ||
-    combined.includes("sinistro") ||
-    combined.includes("franquia")
-  ) {
-    return "Seguro";
-  }
-
-  if (
-    combined.includes("lubrific") ||
-    combined.includes("óleo") ||
-    combined.includes("oleo") ||
-    combined.includes("graxa") ||
-    combined.includes("fluido")
+    normCombined.includes("lubrific") ||
+    normCombined.includes("oleo motor") ||
+    normCombined.includes("óleo motor") ||
+    normCombined.includes("graxa") ||
+    normCombined.includes("aditivo")
   ) {
     return "Lubrificantes";
   }
 
   if (
-    combined.includes("pneu") ||
-    combined.includes("alinhamento") ||
-    combined.includes("balanceamento") ||
-    combined.includes("câmara")
+    normCombined.includes("pedag") ||
+    normCombined.includes("pedág") ||
+    normCombined.includes("passagens") ||
+    normCombined.includes("sem parar") ||
+    normCombined.includes("conectcar") ||
+    normCombined.includes("cgmp")
   ) {
+    return "Pedágio";
+  }
+
+  if (
+    normCombined.includes("multa") ||
+    normCombined.includes("infracao") ||
+    normCombined.includes("infração") ||
+    normCombined.includes("detran")
+  ) {
+    return "Multa";
+  }
+
+  if (
+    normCombined.includes("seguro") ||
+    normCombined.includes("apolice") ||
+    normCombined.includes("apólice") ||
+    normCombined.includes("sinistro")
+  ) {
+    return "Seguro";
+  }
+
+  if (
+    normCombined.includes("borracharia") ||
+    normCombined.includes("vulcanizacao") ||
+    normCombined.includes("pneu")
+  ) {
+    if (normCombined.includes("recap")) return "Recapagem";
+    if (normCombined.includes("novo") || normCombined.includes("aquisicao")) return "Pneus Novos";
     return "Pneus";
   }
 
   if (
-    combined.includes("peça") ||
-    combined.includes("peca") ||
-    combined.includes("filtro") ||
-    combined.includes("pastilha") ||
-    combined.includes("disco") ||
-    combined.includes("correia") ||
-    combined.includes("bateria") ||
-    combined.includes("amortecedor")
+    normCombined.includes("freio") ||
+    normCombined.includes("disco") ||
+    normCombined.includes("pastilha") ||
+    normCombined.includes("cubo")
   ) {
-    return "Peças";
+    return "Freios";
   }
 
   if (
-    combined.includes("mecanic") ||
-    combined.includes("mecânic") ||
-    combined.includes("manuten") ||
-    combined.includes("serviço") ||
-    combined.includes("servico") ||
-    combined.includes("oficina") ||
-    combined.includes("funilaria") ||
-    combined.includes("elétrica") ||
-    combined.includes("revisão")
+    normCombined.includes("eletrica") ||
+    normCombined.includes("elétrica") ||
+    normCombined.includes("bateria") ||
+    normCombined.includes("lampada")
+  ) {
+    return "Elétrica";
+  }
+
+  if (
+    normCombined.includes("lava-jato") ||
+    normCombined.includes("lavagem") ||
+    normCombined.includes("descontaminacao")
+  ) {
+    return "Lava-jato";
+  }
+
+  if (
+    normCombined.includes("rastread") ||
+    normCombined.includes("telemetria") ||
+    normCombined.includes("omnilink") ||
+    normCombined.includes("sascar")
+  ) {
+    return "Rastreamento";
+  }
+
+  if (
+    normCombined.includes("mecanica") ||
+    normCombined.includes("mecânica") ||
+    normCombined.includes("manutencao") ||
+    normCombined.includes("manutenção") ||
+    normCombined.includes("servico") ||
+    normCombined.includes("serviço") ||
+    normCombined.includes("oficina")
   ) {
     return "Manutenção";
   }
 
+  if (
+    normCombined.includes("peca") ||
+    normCombined.includes("peça") ||
+    normCombined.includes("filtro") ||
+    normCombined.includes("carroceria") ||
+    normCombined.includes("parafuso") ||
+    normCombined.includes("cabine") ||
+    normCombined.includes("amortecedor") ||
+    normCombined.includes("cambio") ||
+    normCombined.includes("câmbio") ||
+    normCombined.includes("diferencial") ||
+    normCombined.includes("embreagem") ||
+    normCombined.includes("escapamento") ||
+    normCombined.includes("motor") ||
+    normCombined.includes("parabrisa") ||
+    normCombined.includes("valvula") ||
+    normCombined.includes("válvula")
+  ) {
+    return "Peças";
+  }
+
   return "Outros";
 }
+
