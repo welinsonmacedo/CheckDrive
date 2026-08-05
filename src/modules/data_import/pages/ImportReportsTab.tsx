@@ -52,11 +52,13 @@ interface Props {
 const CATEGORIES: (RecordCategory | "Todas")[] = [
   "Todas",
   "Combustível",
+  "Gasolina",
   "Gasolina Administrativo",
   "Diesel",
   "Diesel Terceiro",
   "Arla",
   "Arla Estoque",
+  "Estoque",
   "Lava-jato",
   "Pneus Novos",
   "Recapagem",

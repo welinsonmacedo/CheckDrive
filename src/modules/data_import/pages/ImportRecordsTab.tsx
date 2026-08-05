@@ -27,11 +27,13 @@ interface Props {
 const CATEGORIES: string[] = [
   "Todos",
   "Combustível",
+  "Gasolina",
   "Gasolina Administrativo",
   "Diesel",
   "Diesel Terceiro",
   "Arla",
   "Arla Estoque",
+  "Estoque",
   "Lava-jato",
   "Pneus Novos",
   "Recapagem",

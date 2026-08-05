@@ -7,6 +7,10 @@ export function categorizeAccount(accountName: string, accountDescription?: stri
     return "Gasolina Administrativo";
   }
 
+  if (combined.includes("gasolina") || combined.includes("gas. comum") || combined.includes("gas. adit") || combined.includes("gasolina comum")) {
+    return "Gasolina";
+  }
+
   if (combined.includes("diesel ter") || combined.includes("diesel terceiro") || combined.includes("diesel terc")) {
     return "Diesel Terceiro";
   }
@@ -17,6 +21,10 @@ export function categorizeAccount(accountName: string, accountDescription?: stri
 
   if (combined.includes("arla estoque") || combined.includes("estoque arla") || combined.includes("arla est")) {
     return "Arla Estoque";
+  }
+
+  if (combined.includes("estoque") || combined.includes("estq")) {
+    return "Estoque";
   }
 
   if (combined.includes("arla") || combined.includes("arla32") || combined.includes("arla 32")) {
