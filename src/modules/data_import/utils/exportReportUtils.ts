@@ -3,6 +3,9 @@ import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ImportRecord } from "../types";
+import { VehicleReportStat } from "./vehicleStatsUtils";
+
+export type { VehicleReportStat };
 
 export interface ReportExportFilterOptions {
   companyName?: string;
@@ -25,17 +28,6 @@ export interface AggregatedReportRow {
   percent: number;
 }
 
-export interface VehicleReportStat {
-  key: string;
-  placa: string;
-  numero_frota?: string;
-  viagensCount: number;
-  totalCost: number;
-  totalLiters: number;
-  categories: Record<string, { count: number; valor: number; liters: number }>;
-  items: ImportRecord[];
-}
-
 export interface ExportReportData {
   filters: ReportExportFilterOptions;
   overallMetrics: {
@@ -48,7 +40,8 @@ export interface ExportReportData {
   vehicleStats: {
     top10Highest?: VehicleReportStat[];
     top10Lowest?: VehicleReportStat[];
-    allVehicles?: any[];
+    topCPK?: VehicleReportStat[];
+    allVehicles?: VehicleReportStat[];
   };
   tableFilteredRecords: ImportRecord[];
 }

@@ -1,6 +1,14 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { exportReportToExcel, exportReportToPDF } from "../utils/exportReportUtils";
 import {
+  calculateVehicleStats,
+  getRecordImportType,
+  getImportTypeLabel,
+  VehicleReportStat,
+} from "../utils/vehicleStatsUtils";
+
+export { getRecordImportType, getImportTypeLabel };
+import {
   FileSpreadsheet,
   PieChart as PieChartIcon,
   BarChart3,
@@ -138,24 +146,6 @@ function parseRecordMonthYear(dateStr?: string): { month: string; year: string }
   return null;
 }
 
-export function getRecordImportType(r: ImportRecord): "combustivel_gfv" | "receitas_despesas" {
-  if (
-    r.conta === "Consumo de Combustível" ||
-    (r.observacoes && (r.observacoes.includes("GFV") || r.observacoes.includes("Consumo por Veículo"))) ||
-    r.preco_litro !== undefined ||
-    r.media_km_l !== undefined
-  ) {
-    return "combustivel_gfv";
-  }
-  return "receitas_despesas";
-}
-
-export function getImportTypeLabel(type: "combustivel_gfv" | "receitas_despesas" | string): string {
-  if (type === "combustivel_gfv") return "Consumo de Combustível (GFV)";
-  if (type === "receitas_despesas") return "Receitas e Despesas (SOFtran)";
-  return type;
-}
-
 export default function ImportReportsTab({ companyId }: Props) {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<ImportRecord[]>([]);
@@ -176,7 +166,7 @@ export default function ImportReportsTab({ companyId }: Props) {
   const [tableSearch, setTableSearch] = useState<string>("");
 
   // Top 10 Vehicles Report State
-  const [topVehiclesTab, setTopVehiclesTab] = useState<"maior" | "menor" | "lado_a_lado">("lado_a_lado");
+  const [topVehiclesTab, setTopVehiclesTab] = useState<"maior" | "menor" | "lado_a_lado" | "cpk">("lado_a_lado");
   const [selectedVehicleDetailKey, setSelectedVehicleDetailKey] = useState<string | null>(null);
 
   // Modal State
@@ -226,6 +216,42 @@ export default function ImportReportsTab({ companyId }: Props) {
       setTopVehiclesTab("menor");
     }
   };
+
+  // Extract available months from records + standard recent months
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    records.forEach((r) => {
+      const parsed = parseRecordMonthYear(r.data);
+      if (parsed) {
+        monthsSet.add(`${parsed.month}/${parsed.year}`);
+      }
+    });
+
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear; y >= currentYear - 1; y--) {
+      for (let m = 12; m >= 1; m--) {
+        const mStr = String(m).padStart(2, "0");
+        monthsSet.add(`${mStr}/${y}`);
+      }
+    }
+
+    return Array.from(monthsSet).sort((a, b) => {
+      const [mA, yA] = a.split("/");
+      const [mB, yB] = b.split("/");
+      if (yA !== yB) return Number(yB) - Number(yA);
+      return Number(mB) - Number(mA);
+    });
+  }, [records]);
+
+  const monthsByYear = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    availableMonths.forEach((m) => {
+      const [, y] = m.split("/");
+      if (!map[y]) map[y] = [];
+      map[y].push(m);
+    });
+    return map;
+  }, [availableMonths]);
 
   // Helper for period label
   const getPeriodLabel = () => {
@@ -362,72 +388,9 @@ export default function ImportReportsTab({ companyId }: Props) {
       .sort((a, b) => b.value - a.value);
   }, [filteredRecords, agruparPor, metrica]);
 
-  // Vehicle Stats for Top 10 Highest & Lowest Cost Reports
+  // Vehicle Stats for Top 10 Highest, Lowest & CPK Reports
   const vehicleStats = useMemo(() => {
-    const map: Record<
-      string,
-      {
-        key: string;
-        placa: string;
-        numero_frota?: string;
-        viagensCount: number; // Cada abastecimento / lançamento = 1 viagem
-        totalCost: number;
-        totalLiters: number;
-        categories: Record<string, { count: number; valor: number; liters: number }>;
-        items: ImportRecord[];
-      }
-    > = {};
-
-    filteredRecords.forEach((r) => {
-      const rawPlaca = r.placa?.trim().toUpperCase() || "SEM PLACA";
-      const frota = r.numero_frota?.trim() || "";
-      const key = frota ? `${rawPlaca} (Frota ${frota})` : rawPlaca;
-
-      if (!map[key]) {
-        map[key] = {
-          key,
-          placa: rawPlaca,
-          numero_frota: frota,
-          viagensCount: 0,
-          totalCost: 0,
-          totalLiters: 0,
-          categories: {},
-          items: [],
-        };
-      }
-
-      map[key].viagensCount += 1;
-      const val = Number(r.valor) || 0;
-      const qty = Number(r.quantidade) || 0;
-      map[key].totalCost += val;
-      map[key].totalLiters += qty;
-      map[key].items.push(r);
-
-      const cat = r.tipo_registro || "Outros";
-      if (!map[key].categories[cat]) {
-        map[key].categories[cat] = { count: 0, valor: 0, liters: 0 };
-      }
-      map[key].categories[cat].count += 1;
-      map[key].categories[cat].valor += val;
-      map[key].categories[cat].liters += qty;
-    });
-
-    const allVehicles = Object.values(map);
-
-    const top10Highest = [...allVehicles]
-      .sort((a, b) => b.totalCost - a.totalCost)
-      .slice(0, 10);
-
-    const top10Lowest = [...allVehicles]
-      .filter((v) => v.totalCost > 0)
-      .sort((a, b) => a.totalCost - b.totalCost)
-      .slice(0, 10);
-
-    return {
-      allVehicles,
-      top10Highest,
-      top10Lowest,
-    };
+    return calculateVehicleStats(filteredRecords);
   }, [filteredRecords]);
 
   const selectedVehicleDetail = useMemo(() => {
@@ -504,6 +467,29 @@ export default function ImportReportsTab({ companyId }: Props) {
             <p className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
               Média: {formatCurrency(avgCostPerTrip)} / viagem
             </p>
+          </div>
+        </div>
+
+        {/* CPK & Import Source Metrics (Km GFV x Custo SOFtran) */}
+        <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+          <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+            <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="text-[11px]">Km Rodado (GFV):</span>
+            <strong className="text-slate-900 font-extrabold ml-auto">
+              {vehicle.kmRodadoCombustivel ? `${vehicle.kmRodadoCombustivel.toLocaleString("pt-BR")} km` : "N/I"}
+            </strong>
+          </div>
+          <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+            <DollarSign className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="text-[11px]">Custo Veículo:</span>
+            <strong className="text-slate-900 font-extrabold ml-auto">{formatCurrency(vehicle.costDespesas)}</strong>
+          </div>
+          <div className="flex items-center gap-1.5 font-semibold text-purple-900 bg-purple-100/90 px-2 py-1 rounded-lg border border-purple-200">
+            <Calculator className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+            <span className="text-[11px]">CPK:</span>
+            <strong className="text-purple-950 font-black ml-auto">
+              {vehicle.cpk > 0 ? `R$ ${vehicle.cpk.toFixed(3)}/km` : "Sem Km"}
+            </strong>
           </div>
         </div>
 
@@ -944,34 +930,21 @@ export default function ImportReportsTab({ companyId }: Props) {
                   <option value="90">Últimos 90 dias</option>
                   <option value="365">Este Ano (365d)</option>
                 </optgroup>
-                <optgroup label="Ano 2026">
-                  <option value="m:01/2026">Mês 01/2026 (Janeiro)</option>
-                  <option value="m:02/2026">Mês 02/2026 (Fevereiro)</option>
-                  <option value="m:03/2026">Mês 03/2026 (Março)</option>
-                  <option value="m:04/2026">Mês 04/2026 (Abril)</option>
-                  <option value="m:05/2026">Mês 05/2026 (Maio)</option>
-                  <option value="m:06/2026">Mês 06/2026 (Junho)</option>
-                  <option value="m:07/2026">Mês 07/2026 (Julho)</option>
-                  <option value="m:08/2026">Mês 08/2026 (Agosto)</option>
-                  <option value="m:09/2026">Mês 09/2026 (Setembro)</option>
-                  <option value="m:10/2026">Mês 10/2026 (Outubro)</option>
-                  <option value="m:11/2026">Mês 11/2026 (Novembro)</option>
-                  <option value="m:12/2026">Mês 12/2026 (Dezembro)</option>
-                </optgroup>
-                <optgroup label="Ano 2025">
-                  <option value="m:01/2025">Mês 01/2025 (Janeiro)</option>
-                  <option value="m:02/2025">Mês 02/2025 (Fevereiro)</option>
-                  <option value="m:03/2025">Mês 03/2025 (Março)</option>
-                  <option value="m:04/2025">Mês 04/2025 (Abril)</option>
-                  <option value="m:05/2025">Mês 05/2025 (Maio)</option>
-                  <option value="m:06/2025">Mês 06/2025 (Junho)</option>
-                  <option value="m:07/2025">Mês 07/2025 (Julho)</option>
-                  <option value="m:08/2025">Mês 08/2025 (Agosto)</option>
-                  <option value="m:09/2025">Mês 09/2025 (Setembro)</option>
-                  <option value="m:10/2025">Mês 10/2025 (Outubro)</option>
-                  <option value="m:11/2025">Mês 11/2025 (Novembro)</option>
-                  <option value="m:12/2025">Mês 12/2025 (Dezembro)</option>
-                </optgroup>
+
+                {Object.entries(monthsByYear).map(([year, monthList]) => (
+                  <optgroup key={year} label={`Ano ${year}`}>
+                    {monthList.map((my) => {
+                      const [m] = my.split("/");
+                      const monthName = MONTH_NAMES_PT[m] || m;
+                      return (
+                        <option key={my} value={`m:${my}`}>
+                          Mês {my} ({monthName})
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                ))}
+
                 <optgroup label="Personalizado">
                   <option value="custom">Selecionar Mês Específico (Seletor)</option>
                 </optgroup>
@@ -1149,6 +1122,16 @@ export default function ImportReportsTab({ companyId }: Props) {
             >
               <ArrowDownRight className="w-3.5 h-3.5" /> Top 10 Menor Custo
             </button>
+            <button
+              onClick={() => setTopVehiclesTab("cpk")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                topVehiclesTab === "cpk"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              <Calculator className="w-3.5 h-3.5" /> Ranking CPK (R$/Km)
+            </button>
           </div>
         </div>
 
@@ -1212,7 +1195,7 @@ export default function ImportReportsTab({ companyId }: Props) {
               {vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))}
             </div>
           </div>
-        ) : (
+        ) : topVehiclesTab === "menor" ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between bg-emerald-50/80 p-4 rounded-2xl border border-emerald-200">
               <div className="flex items-center gap-2">
@@ -1227,6 +1210,37 @@ export default function ImportReportsTab({ companyId }: Props) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))}
             </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-purple-50/80 p-4 rounded-2xl border border-purple-200 gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-purple-700" />
+                  <h4 className="font-black text-purple-950 text-base">Ranking & Relatório de Custo por Quilômetro (CPK)</h4>
+                </div>
+                <p className="text-xs text-purple-800 mt-0.5">
+                  CPK = Custo do Veículo (Importação de Receitas/Despesas SOFtran) ÷ Km Rodado (Importação de Consumo de Combustível GFV).
+                </p>
+              </div>
+              <span className="text-xs font-extrabold text-purple-900 bg-white px-3 py-1.5 rounded-xl border border-purple-200 self-start sm:self-auto shadow-xs">
+                {vehicleStats.topCPK.length} veículo(s) calculados
+              </span>
+            </div>
+
+            {vehicleStats.topCPK.length === 0 ? (
+              <div className="p-8 text-center bg-zinc-50 rounded-2xl border border-zinc-200">
+                <Info className="w-8 h-8 text-zinc-400 mx-auto mb-2" />
+                <p className="text-xs font-bold text-zinc-600">Nenhum veículo com Km e Custo registrados no filtro atual.</p>
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  Importe relatórios de 'Consumo de Combustível (GFV)' para obter o Km Rodado e 'Receitas e Despesas (SOFtran)' para os Custos dos veículos.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {vehicleStats.topCPK.map((v, i) => renderVehicleCard(v, i + 1, true))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1605,19 +1619,35 @@ export default function ImportReportsTab({ companyId }: Props) {
             {/* Modal Content */}
             <div className="p-6 overflow-y-auto space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-200">
-                  <p className="text-xs font-extrabold text-zinc-500">Custo Total Acumulado</p>
+                  <p className="text-xs font-extrabold text-zinc-500 uppercase tracking-wider">Custo Total Geral</p>
                   <p className="text-lg font-black text-zinc-900 mt-1">{formatCurrency(selectedVehicleDetail.totalCost)}</p>
                 </div>
+                <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200">
+                  <p className="text-xs font-extrabold text-emerald-800 uppercase tracking-wider">Custo Despesas (SOFtran)</p>
+                  <p className="text-lg font-black text-emerald-950 mt-1">{formatCurrency(selectedVehicleDetail.costDespesas)}</p>
+                </div>
                 <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-200">
-                  <p className="text-xs font-extrabold text-indigo-700">Qtd de Viagens (Abastecimentos)</p>
+                  <p className="text-xs font-extrabold text-indigo-700 uppercase tracking-wider">Qtd Viagens / Abastecimentos</p>
                   <p className="text-lg font-black text-indigo-950 mt-1">{selectedVehicleDetail.viagensCount} viagens</p>
                 </div>
                 <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200">
-                  <p className="text-xs font-extrabold text-amber-700">Consumo de Combustível</p>
+                  <p className="text-xs font-extrabold text-amber-800 uppercase tracking-wider">Consumo Total</p>
                   <p className="text-lg font-black text-amber-950 mt-1">
                     {selectedVehicleDetail.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L
+                  </p>
+                </div>
+                <div className="bg-blue-50/70 p-4 rounded-2xl border border-blue-200">
+                  <p className="text-xs font-extrabold text-blue-800 uppercase tracking-wider">Km Rodado (GFV)</p>
+                  <p className="text-lg font-black text-blue-950 mt-1">
+                    {selectedVehicleDetail.kmRodadoCombustivel ? `${selectedVehicleDetail.kmRodadoCombustivel.toLocaleString("pt-BR")} km` : "Não Inf."}
+                  </p>
+                </div>
+                <div className="bg-purple-100/80 p-4 rounded-2xl border border-purple-300">
+                  <p className="text-xs font-extrabold text-purple-900 uppercase tracking-wider">CPK do Veículo (R$/Km)</p>
+                  <p className="text-lg font-black text-purple-950 mt-1">
+                    {selectedVehicleDetail.cpk > 0 ? `R$ ${selectedVehicleDetail.cpk.toFixed(3)}/km` : "Sem Km"}
                   </p>
                 </div>
               </div>

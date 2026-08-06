@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
+import { calculateVehicleStats } from "../utils/vehicleStatsUtils";
 import {
   FileSpreadsheet,
   PieChart as PieChartIcon,
@@ -101,6 +102,45 @@ const COLORS = [
   "#84cc16",
   "#d97706",
 ];
+
+const MONTH_NAMES_PT: Record<string, string> = {
+  "01": "Janeiro",
+  "02": "Fevereiro",
+  "03": "Março",
+  "04": "Abril",
+  "05": "Maio",
+  "06": "Junho",
+  "07": "Julho",
+  "08": "Agosto",
+  "09": "Setembro",
+  "10": "Outubro",
+  "11": "Novembro",
+  "12": "Dezembro",
+};
+
+function parseRecordMonthYear(dateStr?: string): { month: string; year: string } | null {
+  if (!dateStr) return null;
+  const s = dateStr.trim();
+  if (s.includes("-")) {
+    const parts = s.split("-");
+    if (parts.length >= 2) {
+      if (parts[0].length === 4) {
+        return { year: parts[0], month: parts[1].padStart(2, "0") };
+      } else if (parts[2]?.length === 4) {
+        return { year: parts[2], month: parts[1].padStart(2, "0") };
+      }
+    }
+  }
+  if (s.includes("/")) {
+    const parts = s.split("/");
+    if (parts.length === 3) {
+      return { year: parts[2], month: parts[1].padStart(2, "0") };
+    } else if (parts.length === 2) {
+      return { year: parts[1], month: parts[0].padStart(2, "0") };
+    }
+  }
+  return null;
+}
 
 export default function SharedReportPage() {
   const { shareId: paramShareId } = useParams<{ shareId: string }>();
@@ -209,11 +249,60 @@ export default function SharedReportPage() {
     return report?.records_snapshot || [];
   }, [report]);
 
+  // Extract available months from records + standard recent months
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    records.forEach((r) => {
+      const parsed = parseRecordMonthYear(r.data);
+      if (parsed) {
+        monthsSet.add(`${parsed.month}/${parsed.year}`);
+      }
+    });
+
+    const currentYear = new Date().getFullYear();
+    for (let y = currentYear; y >= currentYear - 1; y--) {
+      for (let m = 12; m >= 1; m--) {
+        const mStr = String(m).padStart(2, "0");
+        monthsSet.add(`${mStr}/${y}`);
+      }
+    }
+
+    return Array.from(monthsSet).sort((a, b) => {
+      const [mA, yA] = a.split("/");
+      const [mB, yB] = b.split("/");
+      if (yA !== yB) return Number(yB) - Number(yA);
+      return Number(mB) - Number(mA);
+    });
+  }, [records]);
+
+  const monthsByYear = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    availableMonths.forEach((m) => {
+      const [month, year] = m.split("/");
+      if (!map[year]) map[year] = [];
+      map[year].push(m);
+    });
+    return map;
+  }, [availableMonths]);
+
   // Period label
   const getPeriodLabel = () => {
-    if (selectedPeriod === "0") return "Todo o Período";
-    if (selectedPeriod.startsWith("m:")) return `Mês ${selectedPeriod.replace("m:", "")}`;
-    return `Últimos ${selectedPeriod} dias`;
+    if (selectedPeriod === "custom") {
+      if (!customMonth) return "Mês Selecionado";
+      const [y, m] = customMonth.split("-");
+      const name = MONTH_NAMES_PT[m] || m;
+      return `Mês ${m}/${y} (${name})`;
+    }
+    if (selectedPeriod.startsWith("m:")) {
+      const my = selectedPeriod.substring(2);
+      const [m, y] = my.split("/");
+      const name = MONTH_NAMES_PT[m] || m;
+      return `Mês ${my} (${name})`;
+    }
+    const days = Number(selectedPeriod);
+    if (days === 0) return "Todo o Histórico";
+    if (days === 365) return "Este Ano (365d)";
+    return `Últimos ${days} dias`;
   };
 
   // Filter records based on superior filters
@@ -236,22 +325,32 @@ export default function SharedReportPage() {
       if (fornecedorFilter) {
         if (!r.fornecedor || !r.fornecedor.toLowerCase().includes(fornecedorFilter.toLowerCase())) return false;
       }
-      // 5. Período
+      // 5. Período / Mês
       if (selectedPeriod !== "0" && r.data) {
-        if (selectedPeriod.startsWith("m:")) {
-          const targetMonthYear = selectedPeriod.replace("m:", "");
-          const recordDate = r.data.trim();
-          if (recordDate.includes("-")) {
-            const parts = recordDate.split("-");
-            if (parts.length >= 2) {
-              const ym = parts[0].length === 4 ? `${parts[1].padStart(2, "0")}/${parts[0]}` : `${parts[1].padStart(2, "0")}/${parts[2]}`;
-              if (ym !== targetMonthYear) return false;
-            }
-          } else if (recordDate.includes("/")) {
-            const parts = recordDate.split("/");
-            if (parts.length === 3) {
-              const ym = `${parts[1].padStart(2, "0")}/${parts[2]}`;
-              if (ym !== targetMonthYear) return false;
+        if (selectedPeriod === "custom" && customMonth) {
+          const [cYear, cMonth] = customMonth.split("-");
+          const parsed = parseRecordMonthYear(r.data);
+          if (!parsed || parsed.month !== cMonth || parsed.year !== cYear) return false;
+        } else if (selectedPeriod.startsWith("m:")) {
+          const monthYearStr = selectedPeriod.substring(2); // e.g. "01/2026"
+          const [targetMonth, targetYear] = monthYearStr.split("/");
+          const parsed = parseRecordMonthYear(r.data);
+          if (parsed) {
+            if (parsed.month !== targetMonth || parsed.year !== targetYear) return false;
+          } else {
+            const recordDate = r.data.trim();
+            if (recordDate.includes("-")) {
+              const parts = recordDate.split("-");
+              if (parts.length >= 2) {
+                const ym = parts[0].length === 4 ? `${parts[1].padStart(2, "0")}/${parts[0]}` : `${parts[1].padStart(2, "0")}/${parts[2]}`;
+                if (ym !== monthYearStr) return false;
+              }
+            } else if (recordDate.includes("/")) {
+              const parts = recordDate.split("/");
+              if (parts.length === 3) {
+                const ym = `${parts[1].padStart(2, "0")}/${parts[2]}`;
+                if (ym !== monthYearStr) return false;
+              }
             }
           }
         } else {
@@ -268,7 +367,7 @@ export default function SharedReportPage() {
       }
       return true;
     });
-  }, [records, categoryFilter, tipoImportacaoFilter, placaFilter, fornecedorFilter, selectedPeriod]);
+  }, [records, categoryFilter, tipoImportacaoFilter, placaFilter, fornecedorFilter, selectedPeriod, customMonth]);
 
   // Overall metrics
   const totalValorGeral = useMemo(() => {
@@ -327,72 +426,9 @@ export default function SharedReportPage() {
       .sort((a, b) => b.value - a.value);
   }, [filteredRecords, agruparPor, metrica, totalValorGeral]);
 
-  // Vehicle Stats for Top 10 Highest & Lowest Cost Reports
+  // Vehicle Stats for Top 10 Highest, Lowest & CPK Reports
   const vehicleStats = useMemo(() => {
-    const map: Record<
-      string,
-      {
-        key: string;
-        placa: string;
-        numero_frota?: string;
-        viagensCount: number;
-        totalCost: number;
-        totalLiters: number;
-        categories: Record<string, { count: number; valor: number; liters: number }>;
-        items: ImportRecord[];
-      }
-    > = {};
-
-    filteredRecords.forEach((r) => {
-      const rawPlaca = r.placa?.trim().toUpperCase() || "SEM PLACA";
-      const frota = r.numero_frota?.trim() || "";
-      const key = frota ? `${rawPlaca} (Frota ${frota})` : rawPlaca;
-
-      if (!map[key]) {
-        map[key] = {
-          key,
-          placa: rawPlaca,
-          numero_frota: frota,
-          viagensCount: 0,
-          totalCost: 0,
-          totalLiters: 0,
-          categories: {},
-          items: [],
-        };
-      }
-
-      map[key].viagensCount += 1;
-      const val = Number(r.valor) || 0;
-      const qty = Number(r.quantidade) || 0;
-      map[key].totalCost += val;
-      map[key].totalLiters += qty;
-      map[key].items.push(r);
-
-      const cat = r.tipo_registro || "Outros";
-      if (!map[key].categories[cat]) {
-        map[key].categories[cat] = { count: 0, valor: 0, liters: 0 };
-      }
-      map[key].categories[cat].count += 1;
-      map[key].categories[cat].valor += val;
-      map[key].categories[cat].liters += qty;
-    });
-
-    const allVehicles = Object.values(map);
-
-    const top10Highest = [...allVehicles]
-      .sort((a, b) => b.totalCost - a.totalCost)
-      .slice(0, 10);
-
-    const top10Lowest = [...allVehicles]
-      .filter((v) => v.totalCost > 0)
-      .sort((a, b) => a.totalCost - b.totalCost)
-      .slice(0, 10);
-
-    return {
-      allVehicles,
-      top10Highest,
-      top10Lowest,
-    };
+    return calculateVehicleStats(filteredRecords);
   }, [filteredRecords]);
 
   // Selected vehicle detail
@@ -827,20 +863,56 @@ export default function SharedReportPage() {
               </select>
             </div>
 
-            {/* Período */}
+            {/* Período / Mês */}
             <div>
-              <label className="text-[11px] font-bold text-slate-600 mb-1 block">Período</label>
-              <select
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none"
-              >
-                <option value="0">Todo o Histórico</option>
-                <option value="30">Últimos 30 Dias</option>
-                <option value="60">Últimos 60 Dias</option>
-                <option value="90">Últimos 90 Dias</option>
-                <option value="365">Último Ano (365 Dias)</option>
-              </select>
+              <label className="text-[11px] font-bold text-slate-600 mb-1 flex items-center justify-between">
+                <span>Período / Mês</span>
+                {selectedPeriod.startsWith("m:") && (
+                  <span className="text-[10px] text-blue-600 font-bold">Por Mês</span>
+                )}
+              </label>
+              <div className="space-y-1">
+                <select
+                  value={selectedPeriod}
+                  onChange={(e) => setSelectedPeriod(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <optgroup label="Períodos Relativos">
+                    <option value="0">Todo o Histórico</option>
+                    <option value="30">Últimos 30 Dias</option>
+                    <option value="60">Últimos 60 Dias</option>
+                    <option value="90">Últimos 90 Dias</option>
+                    <option value="365">Este Ano (365 Dias)</option>
+                  </optgroup>
+
+                  {Object.entries(monthsByYear).map(([year, monthList]) => (
+                    <optgroup key={year} label={`Ano ${year}`}>
+                      {monthList.map((my) => {
+                        const [m] = my.split("/");
+                        const monthName = MONTH_NAMES_PT[m] || m;
+                        return (
+                          <option key={my} value={`m:${my}`}>
+                            Mês {my} ({monthName})
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  ))}
+
+                  <optgroup label="Personalizado">
+                    <option value="custom">Selecionar Mês Específico (Seletor)</option>
+                  </optgroup>
+                </select>
+
+                {selectedPeriod === "custom" && (
+                  <input
+                    type="month"
+                    value={customMonth}
+                    onChange={(e) => setCustomMonth(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 mt-1"
+                  />
+                )}
+              </div>
             </div>
 
             {/* Agrupar por */}
