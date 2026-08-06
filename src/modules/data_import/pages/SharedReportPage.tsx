@@ -26,6 +26,7 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownRight,
+  ArrowUpDown,
   Check,
   FileText,
   DollarSign,
@@ -142,6 +143,9 @@ export default function SharedReportPage() {
   const [cpkSearch, setCpkSearch] = useState<string>("");
   const [cpkFilterRange, setCpkFilterRange] = useState<"todos" | "economicos" | "medios" | "elevados" | "sem_km">("todos");
   const [cpkSortOrder, setCpkSortOrder] = useState<"cpk_asc" | "cpk_desc" | "cost_desc" | "km_desc">("cpk_asc");
+  const [veiculoSearch, setVeiculoSearch] = useState<string>("");
+  const [veiculoSortField, setVeiculoSortField] = useState<"totalCost" | "cpk" | "kmRodadoCombustivel" | "totalLiters" | "viagensCount">("totalCost");
+  const [veiculoSortOrder, setVeiculoSortOrder] = useState<"asc" | "desc">("desc");
 
   // Modals & Expanders State
   const [selectedVehicleDetailKey, setSelectedVehicleDetailKey] = useState<string | null>(null);
@@ -443,6 +447,74 @@ export default function SharedReportPage() {
 
     return list;
   }, [vehicleStats, cpkSearch, cpkFilterRange, cpkSortOrder]);
+
+  const sortedVehiclesList = useMemo(() => {
+    let list = [...vehicleStats.allVehicles];
+    if (veiculoSearch.trim()) {
+      const term = veiculoSearch.toLowerCase().trim();
+      list = list.filter(
+        (v) => v.placa.toLowerCase().includes(term) || (v.numero_frota && v.numero_frota.toLowerCase().includes(term))
+      );
+    }
+    list.sort((a, b) => {
+      let valA = a[veiculoSortField] || 0;
+      let valB = b[veiculoSortField] || 0;
+      return veiculoSortOrder === "asc" ? valA - valB : valB - valA;
+    });
+    return list;
+  }, [vehicleStats, veiculoSearch, veiculoSortField, veiculoSortOrder]);
+
+  const monthlyTrendData = useMemo(() => {
+    const map: Record<string, { monthKey: string; monthLabel: string; count: number; totalLiters: number; totalValor: number }> = {};
+
+    filteredRecords.forEach((r) => {
+      let key = "Outros";
+      let label = "Outros";
+      if (r.data) {
+        const parts = r.data.trim().split("/");
+        if (parts.length >= 3) {
+          const m = parts[1].padStart(2, "0");
+          const y = parts[2].substring(0, 4);
+          key = `${y}-${m}`;
+          label = `${m}/${y}`;
+        }
+      }
+      if (!map[key]) {
+        map[key] = { monthKey: key, monthLabel: label, count: 0, totalLiters: 0, totalValor: 0 };
+      }
+      map[key].count += 1;
+      map[key].totalLiters += Number(r.quantidade || 0);
+      map[key].totalValor += getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
+    });
+
+    const list = Object.values(map).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    return list.map((m, idx) => {
+      const prev = idx > 0 ? list[idx - 1] : null;
+      let variationPct = 0;
+      if (prev && prev.totalValor > 0) {
+        variationPct = ((m.totalValor - prev.totalValor) / prev.totalValor) * 100;
+      }
+      return { ...m, variationPct };
+    });
+  }, [filteredRecords, tipoImportacaoFilter]);
+
+  const topCategoriesList = useMemo(() => {
+    return categoryBreakdown.map((cat) => ({
+      name: cat.name,
+      valorTotal: cat.valorTotal,
+      count: cat.count,
+      percent: totalValorGeral > 0 ? (cat.valorTotal / totalValorGeral) * 100 : 0,
+    }));
+  }, [categoryBreakdown, totalValorGeral]);
+
+  const topFornecedoresList = useMemo(() => {
+    return supplierBreakdown.map((s) => ({
+      name: s.name,
+      valorTotal: s.valorTotal,
+      count: s.count,
+      percent: totalValorGeral > 0 ? (s.valorTotal / totalValorGeral) * 100 : 0,
+    }));
+  }, [supplierBreakdown, totalValorGeral]);
 
   const handleExportExcel = async () => {
     setIsExportingExcel(true);
@@ -1040,228 +1112,1010 @@ export default function SharedReportPage() {
         </div>
       </div>
 
-      {/* Main Chart Section */}
-      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
-          <div>
-            <h3 className="font-black text-slate-900 text-base">Análise Visual Agrupada ({agruparPor.toUpperCase()})</h3>
-            <p className="text-xs text-slate-500">Visualização gráfica dos indicadores do relatório.</p>
-          </div>
-        </div>
-
-        <div className="h-80 w-full pt-4">
-          {aggregatedData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-slate-400 text-xs">
-              Nenhum dado encontrado para os filtros selecionados.
+      {/* TAB 2: VISÃO ANALÍTICA */}
+      {reportViewTab === "analitico" && (
+        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="font-black text-slate-900 text-base">Análise Visual Agrupada ({agruparPor.toUpperCase()})</h3>
+              <p className="text-xs text-slate-500">Visualização gráfica dos indicadores do relatório.</p>
             </div>
-          ) : tipoGrafico === "pie" ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={aggregatedData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  dataKey="value"
-                  nameKey="name"
-                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                >
-                  {aggregatedData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(val: any) => [val, "Métrica"]} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : tipoGrafico === "line" ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={aggregatedData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={3} dot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : tipoGrafico === "area" ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={aggregatedData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Area type="monotone" dataKey="value" stroke="#2563eb" fill="#3b82f6" fillOpacity={0.2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={aggregatedData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="value" fill="#2563eb" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      {/* TOP 10 VEÍCULOS (MAIORES E MENORES GASTOS) */}
-      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Truck className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-black text-slate-900 text-lg">Ranking de Veículos (Top 10)</h3>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Análise comparativa dos 10 veículos com maiores e 10 veículos com menores gastos.
-            </p>
           </div>
 
-          {/* Tab Switcher for Top 10 */}
-          <div className="inline-flex p-1 bg-zinc-100 rounded-2xl border border-zinc-200 shrink-0">
-            <button
-              onClick={() => setTopVehiclesTab("lado_a_lado")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                topVehiclesTab === "lado_a_lado"
-                  ? "bg-white text-zinc-900 shadow-xs border border-zinc-200/80"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              📊 Lado a Lado
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("maior")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "maior"
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "text-rose-700 hover:bg-rose-50"
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5" /> 10 Maiores Gastos
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("menor")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "menor"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "text-emerald-700 hover:bg-emerald-50"
-              }`}
-            >
-              <Award className="w-3.5 h-3.5" /> 10 Menores Gastos
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("cpk")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "cpk"
-                  ? "bg-purple-600 text-white shadow-xs"
-                  : "text-purple-700 hover:bg-purple-50"
-              }`}
-            >
-              <Calculator className="w-3.5 h-3.5" /> Ranking CPK (R$/Km)
-            </button>
+          <div className="h-80 w-full pt-4">
+            {aggregatedData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs">
+                Nenhum dado encontrado para os filtros selecionados.
+              </div>
+            ) : tipoGrafico === "pie" ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={aggregatedData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    dataKey="value"
+                    nameKey="name"
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  >
+                    {aggregatedData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(val: any) => [val, "Métrica"]} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : tipoGrafico === "line" ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={aggregatedData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={3} dot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : tipoGrafico === "area" ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={aggregatedData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="value" stroke="#2563eb" fill="#3b82f6" fillOpacity={0.2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={aggregatedData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#2563eb" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
+      )}
 
-        {/* TOP 10 CONTENT */}
-        {vehicleStats.allVehicles.length === 0 ? (
-          <div className="p-8 text-center text-xs text-zinc-400 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200">
-            Nenhum veículo identificado para os filtros selecionados.
-          </div>
-        ) : topVehiclesTab === "lado_a_lado" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 10 Maiores Gastos Column */}
-            <div className="space-y-3">
-              <div className="p-3.5 bg-gradient-to-r from-rose-500 to-amber-600 rounded-2xl text-white flex items-center justify-between shadow-xs">
+      {/* TAB 1: RANKING TOP 10 */}
+      {reportViewTab === "ranking" && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+              <div>
                 <div className="flex items-center gap-2">
-                  <Flame className="w-5 h-5 text-amber-200" />
-                  <div>
-                    <h4 className="font-black text-sm">10 Veículos com MAIORES Gastos</h4>
-                    <p className="text-[11px] text-rose-100">Top despesas no período selecionado</p>
-                  </div>
+                  <Truck className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-black text-slate-900 text-lg">Ranking de Veículos (Top 10)</h3>
                 </div>
-                <span className="text-xs font-extrabold bg-white/20 px-2.5 py-1 rounded-xl">
-                  {vehicleStats.top10Highest.length} veículos
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {vehicleStats.top10Highest.map((v, idx) => renderVehicleCard(v, idx + 1, true))}
-              </div>
-            </div>
-
-            {/* 10 Menores Gastos Column */}
-            <div className="space-y-3">
-              <div className="p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl text-white flex items-center justify-between shadow-xs">
-                <div className="flex items-center gap-2">
-                  <Award className="w-5 h-5 text-emerald-200" />
-                  <div>
-                    <h4 className="font-black text-sm">10 Veículos com MENORES Gastos</h4>
-                    <p className="text-[11px] text-emerald-100">Top veículos econômicos com despesas</p>
-                  </div>
-                </div>
-                <span className="text-xs font-extrabold bg-white/20 px-2.5 py-1 rounded-xl">
-                  {vehicleStats.top10Lowest.length} veículos
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {vehicleStats.top10Lowest.map((v, idx) => renderVehicleCard(v, idx + 1, false))}
-              </div>
-            </div>
-          </div>
-        ) : topVehiclesTab === "maior" ? (
-          <div className="space-y-3">
-            <div className="p-3.5 bg-gradient-to-r from-rose-500 to-amber-600 rounded-2xl text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Flame className="w-5 h-5 text-amber-200" />
-                <h4 className="font-black text-sm">Top 10 Veículos com MAIORES Gastos</h4>
-              </div>
-              <span className="text-xs font-bold text-rose-100">Ordenado por Custo Total Descrecente</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {vehicleStats.top10Highest.map((v, idx) => renderVehicleCard(v, idx + 1, true))}
-            </div>
-          </div>
-        ) : topVehiclesTab === "menor" ? (
-          <div className="space-y-3">
-            <div className="p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Award className="w-5 h-5 text-emerald-200" />
-                <h4 className="font-black text-sm">Top 10 Veículos com MENORES Gastos</h4>
-              </div>
-              <span className="text-xs font-bold text-emerald-100">Ordenado por Custo Total Crescente</span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {vehicleStats.top10Lowest.map((v, idx) => renderVehicleCard(v, idx + 1, false))}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="p-3 bg-purple-900 text-white rounded-2xl flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Calculator className="w-5 h-5 text-purple-300" />
-                <div>
-                  <h4 className="font-black text-sm">Ranking por CPK (Custo por Quilômetro Rodado)</h4>
-                  <p className="text-[11px] text-purple-200">Cruzamento de Despesas (SOFtran) com Km Rodado (GFV)</p>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {vehicleStats.topCPK.length === 0 ? (
-                <p className="text-xs text-zinc-400 italic p-4 text-center col-span-2">
-                  Importe os relatórios GFV (Consumo) e SOFtran (Despesas) para visualizar o CPK.
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Análise comparativa dos 10 veículos com maiores e 10 veículos com menores gastos.
                 </p>
+              </div>
+
+              {/* Tab Switcher for Top 10 */}
+              <div className="inline-flex p-1 bg-zinc-100 rounded-2xl border border-zinc-200 shrink-0">
+                <button
+                  onClick={() => setTopVehiclesTab("lado_a_lado")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                    topVehiclesTab === "lado_a_lado"
+                      ? "bg-white text-zinc-900 shadow-xs border border-zinc-200/80"
+                      : "text-zinc-600 hover:text-zinc-900"
+                  }`}
+                >
+                  📊 Lado a Lado
+                </button>
+                <button
+                  onClick={() => setTopVehiclesTab("maior")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
+                    topVehiclesTab === "maior"
+                      ? "bg-rose-600 text-white shadow-xs"
+                      : "text-rose-700 hover:bg-rose-50"
+                  }`}
+                >
+                  <Flame className="w-3.5 h-3.5" /> 10 Maiores Gastos
+                </button>
+                <button
+                  onClick={() => setTopVehiclesTab("menor")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
+                    topVehiclesTab === "menor"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-emerald-700 hover:bg-emerald-50"
+                  }`}
+                >
+                  <Award className="w-3.5 h-3.5" /> 10 Menores Gastos
+                </button>
+                <button
+                  onClick={() => setTopVehiclesTab("cpk")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
+                    topVehiclesTab === "cpk"
+                      ? "bg-purple-600 text-white shadow-xs"
+                      : "text-purple-700 hover:bg-purple-50"
+                  }`}
+                >
+                  <Calculator className="w-3.5 h-3.5" /> Ranking CPK (R$/Km)
+                </button>
+              </div>
+            </div>
+
+            {/* TOP 10 CONTENT */}
+            {vehicleStats.allVehicles.length === 0 ? (
+              <div className="p-8 text-center text-xs text-zinc-400 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200">
+                Nenhum veículo identificado para os filtros selecionados.
+              </div>
+            ) : topVehiclesTab === "lado_a_lado" ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 10 Maiores Gastos Column */}
+                <div className="space-y-3">
+                  <div className="p-3.5 bg-gradient-to-r from-rose-500 to-amber-600 rounded-2xl text-white flex items-center justify-between shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <Flame className="w-5 h-5 text-amber-200" />
+                      <div>
+                        <h4 className="font-black text-sm">10 Veículos com MAIORES Gastos</h4>
+                        <p className="text-[11px] text-rose-100">Top despesas no período selecionado</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-extrabold bg-white/20 px-2.5 py-1 rounded-xl">
+                      {vehicleStats.top10Highest.length} veículos
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {vehicleStats.top10Highest.map((v, idx) => renderVehicleCard(v, idx + 1, true))}
+                  </div>
+                </div>
+
+                {/* 10 Menores Gastos Column */}
+                <div className="space-y-3">
+                  <div className="p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl text-white flex items-center justify-between shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <Award className="w-5 h-5 text-emerald-200" />
+                      <div>
+                        <h4 className="font-black text-sm">10 Veículos com MENORES Gastos</h4>
+                        <p className="text-[11px] text-emerald-100">Top veículos econômicos com despesas</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-extrabold bg-white/20 px-2.5 py-1 rounded-xl">
+                      {vehicleStats.top10Lowest.length} veículos
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {vehicleStats.top10Lowest.map((v, idx) => renderVehicleCard(v, idx + 1, false))}
+                  </div>
+                </div>
+              </div>
+            ) : topVehiclesTab === "maior" ? (
+              <div className="space-y-3">
+                <div className="p-3.5 bg-gradient-to-r from-rose-500 to-amber-600 rounded-2xl text-white flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Flame className="w-5 h-5 text-amber-200" />
+                    <h4 className="font-black text-sm">Top 10 Veículos com MAIORES Gastos</h4>
+                  </div>
+                  <span className="text-xs font-bold text-rose-100">Ordenado por Custo Total Descrecente</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {vehicleStats.top10Highest.map((v, idx) => renderVehicleCard(v, idx + 1, true))}
+                </div>
+              </div>
+            ) : topVehiclesTab === "menor" ? (
+              <div className="space-y-3">
+                <div className="p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl text-white flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Award className="w-5 h-5 text-emerald-200" />
+                    <h4 className="font-black text-sm">Top 10 Veículos com MENORES Gastos</h4>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-100">Ordenado por Custo Total Crescente</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {vehicleStats.top10Lowest.map((v, idx) => renderVehicleCard(v, idx + 1, false))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 bg-purple-900 text-white rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="w-5 h-5 text-purple-300" />
+                    <div>
+                      <h4 className="font-black text-sm">Ranking por CPK (Custo por Quilômetro Rodado)</h4>
+                      <p className="text-[11px] text-purple-200">Cruzamento de Despesas (SOFtran) com Km Rodado (GFV)</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {vehicleStats.topCPK.length === 0 ? (
+                    <p className="text-xs text-zinc-400 italic p-4 text-center col-span-2">
+                      Importe os relatórios GFV (Consumo) e SOFtran (Despesas) para visualizar o CPK.
+                    </p>
+                  ) : (
+                    vehicleStats.topCPK.map((v, idx) => renderVehicleCard(v, idx + 1, true))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Category & Supplier Ranking Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Top Categories Ranking */}
+            <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-extrabold text-zinc-900 text-base">Ranking por Categoria de Custo</h3>
+                </div>
+                <span className="text-xs font-bold text-zinc-500">{topCategoriesList.length} categorias</span>
+              </div>
+
+              <div className="space-y-2">
+                {topCategoriesList.slice(0, 10).map((cat, idx) => (
+                  <div key={cat.name} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-200/80 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center ${
+                        idx === 0 ? "bg-amber-400 text-amber-950" : idx === 1 ? "bg-slate-300 text-slate-900" : idx === 2 ? "bg-amber-600/30 text-amber-900" : "bg-zinc-200 text-zinc-700"
+                      }`}>
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <p className="font-bold text-xs text-zinc-900">{cat.name}</p>
+                        <p className="text-[11px] text-zinc-500">{cat.count} lançamentos • {cat.percent.toFixed(1)}% do total</p>
+                      </div>
+                    </div>
+                    <span className="font-black text-xs text-indigo-700">{formatCurrency(cat.valorTotal)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top Suppliers Ranking */}
+            <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-blue-600" />
+                  <h3 className="font-extrabold text-zinc-900 text-base">Ranking por Fornecedor / Posto</h3>
+                </div>
+                <span className="text-xs font-bold text-zinc-500">{topFornecedoresList.length} fornecedores</span>
+              </div>
+
+              <div className="space-y-2">
+                {topFornecedoresList.slice(0, 10).map((forn, idx) => (
+                  <div key={forn.name} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-200/80 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center ${
+                        idx === 0 ? "bg-amber-400 text-amber-950" : idx === 1 ? "bg-slate-300 text-slate-900" : idx === 2 ? "bg-amber-600/30 text-amber-900" : "bg-zinc-200 text-zinc-700"
+                      }`}>
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <p className="font-bold text-xs text-zinc-900 truncate max-w-[200px]">{forn.name}</p>
+                        <p className="text-[11px] text-zinc-500">{forn.count} compras • {forn.percent.toFixed(1)}% do total</p>
+                      </div>
+                    </div>
+                    <span className="font-black text-xs text-blue-700">{formatCurrency(forn.valorTotal)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: TENDÊNCIA TEMPORAL */}
+      {reportViewTab === "tendencia" && (
+        <div className="space-y-6">
+          {/* Trend KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 bg-white rounded-2xl border border-zinc-200 shadow-xs">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Mês com Maior Custo</span>
+              <p className="text-lg font-black text-rose-600 mt-1">
+                {monthlyTrendData.length > 0
+                  ? [...monthlyTrendData].sort((a, b) => b.totalValor - a.totalValor)[0].monthLabel
+                  : "-"}
+              </p>
+              <span className="text-xs font-bold text-zinc-700">
+                {monthlyTrendData.length > 0
+                  ? formatCurrency([...monthlyTrendData].sort((a, b) => b.totalValor - a.totalValor)[0].totalValor)
+                  : "R$ 0,00"}
+              </span>
+            </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-zinc-200 shadow-xs">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Mês mais Econômico</span>
+              <p className="text-lg font-black text-emerald-600 mt-1">
+                {monthlyTrendData.length > 0
+                  ? [...monthlyTrendData].sort((a, b) => a.totalValor - b.totalValor)[0].monthLabel
+                  : "-"}
+              </p>
+              <span className="text-xs font-bold text-zinc-700">
+                {monthlyTrendData.length > 0
+                  ? formatCurrency([...monthlyTrendData].sort((a, b) => a.totalValor - b.totalValor)[0].totalValor)
+                  : "R$ 0,00"}
+              </span>
+            </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-zinc-200 shadow-xs">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Média Mensal</span>
+              <p className="text-lg font-black text-indigo-600 mt-1">
+                {formatCurrency(
+                  monthlyTrendData.length > 0
+                    ? monthlyTrendData.reduce((acc, m) => acc + m.totalValor, 0) / monthlyTrendData.length
+                    : 0
+                )}
+              </p>
+              <span className="text-xs font-bold text-zinc-500">
+                Baseado em {monthlyTrendData.length} mês(es)
+              </span>
+            </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-zinc-200 shadow-xs">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Variação no Último Mês</span>
+              <div className="flex items-center gap-1 mt-1">
+                {monthlyTrendData.length > 1 ? (
+                  monthlyTrendData[monthlyTrendData.length - 1].variationPct >= 0 ? (
+                    <>
+                      <ArrowUpRight className="w-5 h-5 text-rose-600" />
+                      <span className="text-lg font-black text-rose-600">
+                        +{monthlyTrendData[monthlyTrendData.length - 1].variationPct.toFixed(1)}%
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDownRight className="w-5 h-5 text-emerald-600" />
+                      <span className="text-lg font-black text-emerald-600">
+                        {monthlyTrendData[monthlyTrendData.length - 1].variationPct.toFixed(1)}%
+                      </span>
+                    </>
+                  )
+                ) : (
+                  <span className="text-lg font-black text-zinc-400">0%</span>
+                )}
+              </div>
+              <span className="text-xs font-bold text-zinc-500">Em relação ao mês anterior</span>
+            </div>
+          </div>
+
+          {/* Trend Area Chart */}
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <div>
+                <h3 className="font-black text-zinc-900 text-base">Evolução Temporal de Custos (R$)</h3>
+                <p className="text-xs text-zinc-500">Acompanhamento dos gastos mês a mês no período selecionado.</p>
+              </div>
+            </div>
+
+            <div className="h-80 w-full pt-4">
+              {monthlyTrendData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-zinc-400 text-xs">
+                  Nenhum dado com data identificada para gerar a tendência temporal.
+                </div>
               ) : (
-                vehicleStats.topCPK.map((v, idx) => renderVehicleCard(v, idx + 1, true))
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthlyTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="monthLabel" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
+                    <Tooltip
+                      formatter={(val: any) => [formatCurrency(Number(val)), "Custo Total"]}
+                      labelFormatter={(lbl) => `Mês: ${lbl}`}
+                    />
+                    <Area type="monotone" dataKey="totalValor" stroke="#2563eb" fill="#3b82f6" fillOpacity={0.2} strokeWidth={3} />
+                  </AreaChart>
+                </ResponsiveContainer>
               )}
             </div>
           </div>
-        )}
-      </div>
+
+          {/* Monthly Evolution Table */}
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
+            <h3 className="font-black text-zinc-900 text-base border-b border-zinc-100 pb-3">Tabela de Evolução Mensal</h3>
+            <div className="overflow-x-auto rounded-2xl border border-zinc-200">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-zinc-100 text-zinc-700 font-bold border-b border-zinc-200">
+                    <th className="p-3">Mês / Ano</th>
+                    <th className="p-3 text-right">Lançamentos</th>
+                    <th className="p-3 text-right">Volume / Qtd Total</th>
+                    <th className="p-3 text-right">Valor Total (R$)</th>
+                    <th className="p-3 text-right">Variação %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {monthlyTrendData.map((m) => (
+                    <tr key={m.monthKey} className="hover:bg-zinc-50 font-medium">
+                      <td className="p-3 font-bold text-zinc-900">{m.monthLabel}</td>
+                      <td className="p-3 text-right text-zinc-600">{m.count}</td>
+                      <td className="p-3 text-right text-zinc-600">{m.totalLiters.toFixed(1)} L</td>
+                      <td className="p-3 text-right font-black text-zinc-900">{formatCurrency(m.totalValor)}</td>
+                      <td className="p-3 text-right font-bold">
+                        {m.variationPct > 0 ? (
+                          <span className="text-rose-600">+{m.variationPct.toFixed(1)}%</span>
+                        ) : m.variationPct < 0 ? (
+                          <span className="text-emerald-600">{m.variationPct.toFixed(1)}%</span>
+                        ) : (
+                          <span className="text-zinc-400">0.0%</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: DETALHAMENTO INTERATIVO DOS REGISTROS (TABELAS) */}
+      {reportViewTab === "tabelas" && (
+        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-900 text-base">Detalhamento Interativo dos Registros</h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Escolha como deseja explorar os dados: agrupado por Categoria, por Veículo, por Fornecedor ou Lançamento a Lançamento.
+              </p>
+            </div>
+
+            {/* Detalhado View Mode Switcher */}
+            <div className="inline-flex p-1 bg-zinc-100 rounded-2xl border border-zinc-200 shrink-0">
+              <button
+                onClick={() => setDetalhadoTab("categoria")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  detalhadoTab === "categoria"
+                    ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                📂 Por Categoria
+              </button>
+              <button
+                onClick={() => setDetalhadoTab("placa")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  detalhadoTab === "placa"
+                    ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                🚛 Por Veículo
+              </button>
+              <button
+                onClick={() => setDetalhadoTab("fornecedor")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  detalhadoTab === "fornecedor"
+                    ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                🏪 Por Fornecedor
+              </button>
+              <button
+                onClick={() => setDetalhadoTab("detalhado")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  detalhadoTab === "detalhado"
+                    ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                📋 Lançamentos Individuais
+              </button>
+            </div>
+          </div>
+
+          {/* DETALHAMENTO: POR CATEGORIA */}
+          {detalhadoTab === "categoria" && (
+            <div className="space-y-3">
+              {categoryBreakdown.length === 0 ? (
+                <p className="text-xs text-zinc-400 p-4 text-center">Nenhuma categoria encontrada.</p>
+              ) : (
+                categoryBreakdown.map((cat) => {
+                  const isOpen = expandedCategories[cat.name];
+                  const percent = totalValorGeral > 0 ? (cat.valorTotal / totalValorGeral) * 100 : 0;
+                  const media = cat.count > 0 ? cat.valorTotal / cat.count : 0;
+
+                  return (
+                    <div key={cat.name} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                      <div
+                        onClick={() =>
+                          setExpandedCategories((prev) => ({ ...prev, [cat.name]: !prev[cat.name] }))
+                        }
+                        className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                            <Layers className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-black text-slate-900 text-sm">{cat.name}</h4>
+                              <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">
+                                {cat.count} lançamento(s)
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Representa {percent.toFixed(1)}% do total do relatório • Média de {formatCurrency(media)} por registro
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                          <div className="text-right">
+                            <p className="text-[10px] uppercase font-bold text-slate-400">Total Categoria</p>
+                            <p className="text-base font-black text-slate-900">{formatCurrency(cat.valorTotal)}</p>
+                          </div>
+                          <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                            <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expandable items inside category */}
+                      {isOpen && (
+                        <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs bg-white rounded-xl border border-slate-200">
+                              <thead>
+                                <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                  <th className="p-2.5">Data</th>
+                                  <th className="p-2.5">Placa</th>
+                                  <th className="p-2.5">Descrição</th>
+                                  <th className="p-2.5 text-right">Qtd</th>
+                                  <th className="p-2.5 text-right">Valor</th>
+                                  <th className="p-2.5">Fornecedor</th>
+                                  <th className="p-2.5 text-center">Ações</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {cat.items.map((r, i) => (
+                                  <tr key={r.id || i} className="hover:bg-slate-50">
+                                    <td className="p-2.5 font-medium">{r.data || "-"}</td>
+                                    <td className="p-2.5 font-bold font-mono text-slate-900">{r.placa || "-"}</td>
+                                    <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
+                                    <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
+                                    <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
+                                    <td className="p-2.5 text-slate-600">{r.fornecedor || "-"}</td>
+                                    <td className="p-2.5 text-center">
+                                      <button
+                                        onClick={() => setSelectedRecordDetail(r)}
+                                        className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" /> Ver
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* DETALHAMENTO: POR VEÍCULO */}
+          {detalhadoTab === "placa" && (
+            <div className="space-y-3">
+              {vehicleStats.allVehicles.length === 0 ? (
+                <p className="text-xs text-zinc-400 p-4 text-center">Nenhum veículo encontrado.</p>
+              ) : (
+                vehicleStats.allVehicles.map((v) => {
+                  const isOpen = expandedVehicles[v.key];
+                  const avg = v.viagensCount > 0 ? v.totalCost / v.viagensCount : 0;
+
+                  return (
+                    <div key={v.key} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                      <div
+                        onClick={() =>
+                          setExpandedVehicles((prev) => ({ ...prev, [v.key]: !prev[v.key] }))
+                        }
+                        className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                            <Truck className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-black text-slate-900 text-sm tracking-wide">{v.placa}</h4>
+                              {v.numero_frota && (
+                                <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200">
+                                  Frota {v.numero_frota}
+                                </span>
+                              )}
+                              <span className="text-[10px] font-extrabold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md">
+                                {v.viagensCount} lançamento(s)
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Volume: {v.totalLiters.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L • Média de {formatCurrency(avg)} / registro
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                          <div className="text-right">
+                            <p className="text-[10px] uppercase font-bold text-slate-400">Custo Total</p>
+                            <p className="text-base font-black text-slate-900">{formatCurrency(v.totalCost)}</p>
+                          </div>
+                          <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                            <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isOpen && (
+                        <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs bg-white rounded-xl border border-slate-200">
+                              <thead>
+                                <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                  <th className="p-2.5">Data</th>
+                                  <th className="p-2.5">Categoria</th>
+                                  <th className="p-2.5">Descrição</th>
+                                  <th className="p-2.5 text-right">Qtd</th>
+                                  <th className="p-2.5 text-right">Valor</th>
+                                  <th className="p-2.5">Fornecedor</th>
+                                  <th className="p-2.5 text-center">Ações</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {v.items.map((r, i) => (
+                                  <tr key={r.id || i} className="hover:bg-slate-50">
+                                    <td className="p-2.5 font-medium">{r.data || "-"}</td>
+                                    <td className="p-2.5">
+                                      <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px]">
+                                        {r.tipo_registro}
+                                      </span>
+                                    </td>
+                                    <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
+                                    <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
+                                    <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
+                                    <td className="p-2.5 text-slate-600">{r.fornecedor || "-"}</td>
+                                    <td className="p-2.5 text-center">
+                                      <button
+                                        onClick={() => setSelectedRecordDetail(r)}
+                                        className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" /> Ver
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* DETALHAMENTO: POR FORNECEDOR */}
+          {detalhadoTab === "fornecedor" && (
+            <div className="space-y-3">
+              {supplierBreakdown.length === 0 ? (
+                <p className="text-xs text-zinc-400 p-4 text-center">Nenhum fornecedor encontrado.</p>
+              ) : (
+                supplierBreakdown.map((s) => {
+                  const isOpen = expandedFornecedores[s.name];
+
+                  return (
+                    <div key={s.name} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                      <div
+                        onClick={() =>
+                          setExpandedFornecedores((prev) => ({ ...prev, [s.name]: !prev[s.name] }))
+                        }
+                        className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                            <Building2 className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-black text-slate-900 text-sm">{s.name}</h4>
+                            <p className="text-[11px] text-slate-500 mt-0.5">{s.count} registro(s) vinculado(s)</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                          <div className="text-right">
+                            <p className="text-[10px] uppercase font-bold text-slate-400">Total Faturado</p>
+                            <p className="text-base font-black text-slate-900">{formatCurrency(s.valorTotal)}</p>
+                          </div>
+                          <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                            <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {isOpen && (
+                        <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs bg-white rounded-xl border border-slate-200">
+                              <thead>
+                                <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                                  <th className="p-2.5">Data</th>
+                                  <th className="p-2.5">Categoria</th>
+                                  <th className="p-2.5">Placa</th>
+                                  <th className="p-2.5">Descrição</th>
+                                  <th className="p-2.5 text-right">Qtd</th>
+                                  <th className="p-2.5 text-right">Valor</th>
+                                  <th className="p-2.5 text-center">Ações</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {s.items.map((r, i) => (
+                                  <tr key={r.id || i} className="hover:bg-slate-50">
+                                    <td className="p-2.5 font-medium">{r.data || "-"}</td>
+                                    <td className="p-2.5 font-bold">{r.tipo_registro}</td>
+                                    <td className="p-2.5 font-mono font-bold">{r.placa || "-"}</td>
+                                    <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
+                                    <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
+                                    <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
+                                    <td className="p-2.5 text-center">
+                                      <button
+                                        onClick={() => setSelectedRecordDetail(r)}
+                                        className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <Eye className="w-3.5 h-3.5" /> Ver
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* DETALHAMENTO: LANÇAMENTOS INDIVIDUAIS (TABELA COMPLETA) */}
+          {detalhadoTab === "detalhado" && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-700">
+                  Mostrando {tableFilteredRecords.length} de {filteredRecords.length} lançamentos
+                </span>
+
+                <div className="relative w-full sm:w-80">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Pesquisar por placa, categoria, fornecedor..."
+                    value={tableSearch}
+                    onChange={(e) => setTableSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                      <th className="p-3 rounded-l-xl">Data</th>
+                      <th className="p-3">Categoria</th>
+                      <th className="p-3">Placa / Frota</th>
+                      <th className="p-3">Conta / Descrição</th>
+                      <th className="p-3 text-right">Qtd</th>
+                      <th className="p-3 text-right">Valor (R$)</th>
+                      <th className="p-3">Fornecedor</th>
+                      <th className="p-3 text-center rounded-r-xl">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {tableFilteredRecords.slice(0, 150).map((r, idx) => (
+                      <tr key={r.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3 font-medium text-slate-700">{r.data || "-"}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold text-[11px]">
+                            {r.tipo_registro}
+                          </span>
+                        </td>
+                        <td className="p-3 font-mono font-bold text-slate-900">
+                          {r.placa || "-"} {r.numero_frota ? `(${r.numero_frota})` : ""}
+                        </td>
+                        <td className="p-3 text-slate-600 max-w-xs truncate">{r.descricao_conta || r.conta || "-"}</td>
+                        <td className="p-3 text-right font-medium text-slate-700">{Number(r.quantidade || 0).toFixed(2)}</td>
+                        <td className="p-3 text-right font-black text-slate-900">{formatCurrency(Number(r.valor || 0))}</td>
+                        <td className="p-3 text-slate-600 truncate max-w-xs">{r.fornecedor || "-"}</td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => setSelectedRecordDetail(r)}
+                            className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold hover:bg-blue-100 text-[11px] inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> Ver Detalhes
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {tableFilteredRecords.length > 150 && (
+                  <div className="p-3 text-center text-xs text-slate-500 border-t border-slate-100">
+                    Exibindo os primeiros 150 de {tableFilteredRecords.length} registros.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 5: FICHA VEÍCULO A VEÍCULO */}
+      {reportViewTab === "veiculo_a_veiculo" && (
+        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-amber-500" />
+                <h3 className="font-black text-slate-900 text-base">Ficha Veículo a Veículo da Frota</h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Matriz completa com custos, consumo, quilometragem e CPK de cada veículo.
+              </p>
+            </div>
+
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="Buscar placa ou número da frota..."
+                value={veiculoSearch}
+                onChange={(e) => setVeiculoSearch(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-zinc-100 text-zinc-700 font-bold border-b border-zinc-200">
+                  <th className="p-3 text-center">#</th>
+                  <th className="p-3">Placa</th>
+                  <th className="p-3">Frota</th>
+                  <th className="p-3 text-center">Lançamentos</th>
+                  <th className="p-3 text-center">Litros / Volume</th>
+                  <th className="p-3 text-center">Km Rodado</th>
+                  <th className="p-3 text-right">Custo Despesas</th>
+                  <th className="p-3 text-right">CPK (R$/Km)</th>
+                  <th className="p-3 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 font-medium">
+                {sortedVehiclesList.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-zinc-400">
+                      Nenhum veículo encontrado.
+                    </td>
+                  </tr>
+                ) : (
+                  sortedVehiclesList.map((v, idx) => (
+                    <tr key={v.key} className="hover:bg-slate-50">
+                      <td className="p-3 text-center font-bold text-zinc-400">#{idx + 1}</td>
+                      <td className="p-3 font-extrabold text-zinc-900 font-mono">{v.placa}</td>
+                      <td className="p-3 font-semibold text-zinc-600">{v.numero_frota || "-"}</td>
+                      <td className="p-3 text-center text-zinc-700">{v.viagensCount}</td>
+                      <td className="p-3 text-center text-amber-900 font-bold">
+                        {v.totalLiters > 0 ? `${v.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "-"}
+                      </td>
+                      <td className="p-3 text-center text-blue-900 font-bold">
+                        {v.kmRodadoCombustivel > 0 ? `${v.kmRodadoCombustivel.toLocaleString("pt-BR")} km` : "-"}
+                      </td>
+                      <td className="p-3 text-right font-black text-slate-900">{formatCurrency(v.totalCost)}</td>
+                      <td className="p-3 text-right font-black text-purple-700">
+                        {v.cpk > 0 ? `R$ ${v.cpk.toFixed(3)}` : "-"}
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => setSelectedVehicleDetailKey(v.key)}
+                          className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          Ver Detalhes
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 6: RELATÓRIO CPK */}
+      {reportViewTab === "cpk" && (
+        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-purple-600" />
+                <h3 className="font-black text-slate-900 text-base">Relatório CPK (Custo por Quilômetro)</h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Indicador de eficiência operacional (R$ / Km rodado) por veículo.
+              </p>
+            </div>
+
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="Buscar veículo no CPK..."
+                value={cpkSearch}
+                onChange={(e) => setCpkSearch(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-purple-900 text-white font-bold">
+                  <th className="p-3 text-center">#</th>
+                  <th className="p-3">Placa</th>
+                  <th className="p-3">Frota</th>
+                  <th className="p-3 text-right">Km Rodado (GFV)</th>
+                  <th className="p-3 text-right">Despesas (SOFtran)</th>
+                  <th className="p-3 text-right">CPK (R$ / Km)</th>
+                  <th className="p-3 text-center">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 font-medium">
+                {sortedCpkVehicles.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-zinc-400">
+                      Nenhum veículo encontrado para a análise de CPK.
+                    </td>
+                  </tr>
+                ) : (
+                  sortedCpkVehicles.map((v, idx) => (
+                    <tr key={v.key} className="hover:bg-purple-50/40">
+                      <td className="p-3 text-center font-bold text-zinc-400">#{idx + 1}</td>
+                      <td className="p-3 font-extrabold text-zinc-900 font-mono">{v.placa}</td>
+                      <td className="p-3 font-semibold text-zinc-600">{v.numero_frota || "-"}</td>
+                      <td className="p-3 text-right font-bold text-blue-900">
+                        {v.kmRodadoCombustivel > 0 ? `${v.kmRodadoCombustivel.toLocaleString("pt-BR")} km` : "-"}
+                      </td>
+                      <td className="p-3 text-right font-black text-slate-900">{formatCurrency(v.totalCost)}</td>
+                      <td className="p-3 text-right font-black text-purple-700">
+                        {v.cpk > 0 ? `R$ ${v.cpk.toFixed(3)}` : "-"}
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => setSelectedVehicleDetailKey(v.key)}
+                          className="px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-800 text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          Ver Detalhes
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* DETALHAMENTO INTERATIVO DOS REGISTROS */}
       <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-5">
