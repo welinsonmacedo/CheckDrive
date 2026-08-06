@@ -389,7 +389,275 @@ export async function exportReportToExcel(data: ExportReportData) {
   ];
 
   // ==========================================
-  // ABA 2: DETALHAMENTO DOS LANÇAMENTOS
+  // ABA 2: RELATÓRIO ESPECIALIZADO DE CPK (R$/KM)
+  // ==========================================
+  const wsCpk = workbook.addWorksheet("Relatório CPK");
+  wsCpk.mergeCells("A1:H2");
+  const cpkTitle = wsCpk.getCell("A1");
+  cpkTitle.value = `${company.toUpperCase()} - RELATÓRIO ESPECIALIZADO DE CPK (CUSTO POR QUILÔMETRO RODADO)`;
+  cpkTitle.font = { name: "Arial", size: 13, bold: true, color: { argb: "FFFFFF" } };
+  cpkTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "4C1D95" } };
+  cpkTitle.alignment = { vertical: "middle", horizontal: "center" };
+
+  wsCpk.getCell("A4").value = "Cruzamento de Despesas (SOFtran) com Quilometragem Rodada (GFV / Telemetria)";
+  wsCpk.getCell("A4").font = { italic: true, size: 9, color: { argb: "6B21A8" } };
+
+  const allVehList = vehicleStats?.allVehicles || [];
+  const vehWithKm = allVehList.filter((v) => v.kmRodadoCombustivel > 0);
+  const fleetTotalKm = allVehList.reduce((acc, v) => acc + (v.kmRodadoCombustivel || 0), 0);
+  const fleetTotalCost = allVehList.reduce((acc, v) => acc + (v.totalCost || 0), 0);
+  const avgCpkVal = fleetTotalKm > 0 ? fleetTotalCost / fleetTotalKm : 0;
+
+  wsCpk.getRow(6).values = [
+    "CPK Médio da Frota (R$/Km)",
+    "Total Km Rodado (GFV)",
+    "Custo Total Despesas (R$)",
+    "Total Veículos na Frota",
+    "Veículos com Km Registrado",
+  ];
+  wsCpk.getRow(6).font = { size: 9, bold: true, color: { argb: "581C87" } };
+
+  wsCpk.getRow(7).values = [
+    avgCpkVal,
+    fleetTotalKm,
+    fleetTotalCost,
+    allVehList.length,
+    vehWithKm.length,
+  ];
+  wsCpk.getCell("A7").numFmt = 'R$ #,##0.000"/km"';
+  wsCpk.getCell("B7").numFmt = '#,##0" km"';
+  wsCpk.getCell("C7").numFmt = 'R$ #,##0.00';
+  wsCpk.getCell("D7").numFmt = '#,##0';
+  wsCpk.getCell("E7").numFmt = '#,##0';
+  wsCpk.getRow(7).font = { name: "Arial", size: 11, bold: true };
+
+  const cpkHeaders = [
+    "Placa",
+    "Frota",
+    "Km Rodado (GFV)",
+    "Consumo (Litros)",
+    "Média (Km/L)",
+    "Custo Despesas (R$)",
+    "CPK Total (R$/Km)",
+    "Status CPK",
+  ];
+  const cpkHeaderRow = wsCpk.getRow(9);
+  cpkHeaderRow.values = cpkHeaders;
+  cpkHeaderRow.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFF" } };
+  cpkHeaderRow.height = 22;
+  cpkHeaderRow.eachCell((cell) => {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "6D28D9" } };
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+  });
+
+  const sortedCpkList = [...allVehList].sort((a, b) => {
+    if (a.cpk === 0 && b.cpk > 0) return 1;
+    if (b.cpk === 0 && a.cpk > 0) return -1;
+    return a.cpk - b.cpk;
+  });
+
+  sortedCpkList.forEach((v, idx) => {
+    const rowNum = idx + 10;
+    const mediaKmL = v.totalLiters > 0 && v.kmRodadoCombustivel > 0 ? v.kmRodadoCombustivel / v.totalLiters : 0;
+    let statusCpk = "Sem Km";
+    if (v.cpk > 0) {
+      if (v.cpk <= 2.0) statusCpk = "Econômico";
+      else if (v.cpk <= 4.0) statusCpk = "Média Operacional";
+      else statusCpk = "Custo Elevado";
+    }
+
+    const row = wsCpk.getRow(rowNum);
+    row.values = [
+      v.placa,
+      v.numero_frota || "-",
+      v.kmRodadoCombustivel,
+      v.totalLiters,
+      mediaKmL,
+      v.totalCost,
+      v.cpk,
+      statusCpk,
+    ];
+
+    wsCpk.getCell(`A${rowNum}`).font = { bold: true };
+    wsCpk.getCell(`A${rowNum}`).alignment = { horizontal: "center" };
+    wsCpk.getCell(`B${rowNum}`).alignment = { horizontal: "center" };
+    wsCpk.getCell(`C${rowNum}`).numFmt = '#,##0" km"';
+    wsCpk.getCell(`D${rowNum}`).numFmt = '#,##0.00" L"';
+    wsCpk.getCell(`E${rowNum}`).numFmt = '#,##0.00" km/L"';
+    wsCpk.getCell(`F${rowNum}`).numFmt = 'R$ #,##0.00';
+    wsCpk.getCell(`G${rowNum}`).numFmt = 'R$ #,##0.000';
+    wsCpk.getCell(`G${rowNum}`).font = { bold: true, color: { argb: "581C87" } };
+    wsCpk.getCell(`H${rowNum}`).alignment = { horizontal: "center" };
+
+    if (idx % 2 === 1) {
+      row.eachCell((c) => {
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F5F3FF" } };
+      });
+    }
+  });
+
+  wsCpk.columns = [
+    { width: 16 },
+    { width: 14 },
+    { width: 20 },
+    { width: 20 },
+    { width: 18 },
+    { width: 22 },
+    { width: 22 },
+    { width: 20 },
+  ];
+
+  // ==========================================
+  // ABA 3: EVOLUÇÃO TEMPORAL & TENDÊNCIA
+  // ==========================================
+  const wsTrend = workbook.addWorksheet("Evolução Mensal & Tendência");
+  wsTrend.mergeCells("A1:F2");
+  const trendTitle = wsTrend.getCell("A1");
+  trendTitle.value = `${company.toUpperCase()} - EVOLUÇÃO TEMPORAL E TENDÊNCIA DE CUSTOS MÊS A MÊS`;
+  trendTitle.font = { name: "Arial", size: 13, bold: true, color: { argb: "FFFFFF" } };
+  trendTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "1E1B4B" } };
+  trendTitle.alignment = { vertical: "middle", horizontal: "center" };
+
+  const monthlyMap: Record<string, { monthYear: string; count: number; totalQty: number; valorTotal: number }> = {};
+  (tableFilteredRecords || []).forEach((r) => {
+    let my = "Outros";
+    if (r.data) {
+      const parts = r.data.trim().split("/");
+      if (parts.length >= 3) {
+        my = `${parts[1].padStart(2, "0")}/${parts[2].substring(0, 4)}`;
+      }
+    }
+    if (!monthlyMap[my]) {
+      monthlyMap[my] = { monthYear: my, count: 0, totalQty: 0, valorTotal: 0 };
+    }
+    monthlyMap[my].count += 1;
+    monthlyMap[my].totalQty += Number(r.quantidade || 0);
+    monthlyMap[my].valorTotal += getRecordFinancialValue(r, data.filters.tipoImportacaoFilter === "combustivel_gfv");
+  });
+
+  const monthlyList = Object.values(monthlyMap).sort((a, b) => a.monthYear.localeCompare(b.monthYear));
+
+  wsTrend.getRow(5).values = [
+    "Mês / Período",
+    "Qtd Lançamentos",
+    "Volume Total (Litros / Qtd)",
+    "Custo Total (R$)",
+    "Ticket Médio por Lançamento (R$)",
+    "% do Custo Acumulado",
+  ];
+  wsTrend.getRow(5).font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFF" } };
+  wsTrend.getRow(5).height = 22;
+  wsTrend.getRow(5).eachCell((c) => {
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "3730A3" } };
+    c.alignment = { vertical: "middle", horizontal: "center" };
+  });
+
+  monthlyList.forEach((m, idx) => {
+    const rowNum = idx + 6;
+    const avg = m.count > 0 ? m.valorTotal / m.count : 0;
+    const pct = overallMetrics.totalValorGeral > 0 ? m.valorTotal / overallMetrics.totalValorGeral : 0;
+
+    const row = wsTrend.getRow(rowNum);
+    row.values = [m.monthYear, m.count, m.totalQty, m.valorTotal, avg, pct];
+
+    wsTrend.getCell(`A${rowNum}`).font = { bold: true };
+    wsTrend.getCell(`A${rowNum}`).alignment = { horizontal: "center" };
+    wsTrend.getCell(`B${rowNum}`).numFmt = '#,##0';
+    wsTrend.getCell(`C${rowNum}`).numFmt = '#,##0.00';
+    wsTrend.getCell(`D${rowNum}`).numFmt = 'R$ #,##0.00';
+    wsTrend.getCell(`D${rowNum}`).font = { bold: true };
+    wsTrend.getCell(`E${rowNum}`).numFmt = 'R$ #,##0.00';
+    wsTrend.getCell(`F${rowNum}`).numFmt = '0.0%';
+
+    if (idx % 2 === 1) {
+      row.eachCell((c) => {
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "EEF2FF" } };
+      });
+    }
+  });
+
+  wsTrend.columns = [{ width: 18 }, { width: 18 }, { width: 28 }, { width: 22 }, { width: 30 }, { width: 22 }];
+
+  // ==========================================
+  // ABA 4: DESEMPENHO VEÍCULO A VEÍCULO (FICHA DA FROTA)
+  // ==========================================
+  const wsVeh = workbook.addWorksheet("Ficha Veículo a Veículo");
+  wsVeh.mergeCells("A1:I2");
+  const vehTitle = wsVeh.getCell("A1");
+  vehTitle.value = `${company.toUpperCase()} - FICHA COMPLETA E DESEMPENHO POR VEÍCULO DA FROTA`;
+  vehTitle.font = { name: "Arial", size: 13, bold: true, color: { argb: "FFFFFF" } };
+  vehTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "0F172A" } };
+  vehTitle.alignment = { vertical: "middle", horizontal: "center" };
+
+  wsVeh.getRow(5).values = [
+    "Placa",
+    "Frota",
+    "Qtd Viagens / Lançamentos",
+    "Consumo Total (Litros)",
+    "Quilometragem Rodada (Km)",
+    "Média Consumo (Km/L)",
+    "Custo Despesas (R$)",
+    "CPK Total (R$/Km)",
+    "Top Categoria de Custo",
+  ];
+  wsVeh.getRow(5).font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFF" } };
+  wsVeh.getRow(5).height = 22;
+  wsVeh.getRow(5).eachCell((c) => {
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "1E293B" } };
+    c.alignment = { vertical: "middle", horizontal: "center" };
+  });
+
+  allVehList.forEach((v, idx) => {
+    const rowNum = idx + 6;
+    const mediaKmL = v.totalLiters > 0 && v.kmRodadoCombustivel > 0 ? v.kmRodadoCombustivel / v.totalLiters : 0;
+    const topCat = Object.entries(v.categories || {}).sort((a, b) => b[1].valor - a[1].valor)[0];
+    const topCatStr = topCat ? `${topCat[0]} (${formatCurrency(topCat[1].valor)})` : "-";
+
+    const row = wsVeh.getRow(rowNum);
+    row.values = [
+      v.placa,
+      v.numero_frota || "-",
+      v.viagensCount,
+      v.totalLiters,
+      v.kmRodadoCombustivel,
+      mediaKmL,
+      v.totalCost,
+      v.cpk,
+      topCatStr,
+    ];
+
+    wsVeh.getCell(`A${rowNum}`).font = { bold: true };
+    wsVeh.getCell(`A${rowNum}`).alignment = { horizontal: "center" };
+    wsVeh.getCell(`B${rowNum}`).alignment = { horizontal: "center" };
+    wsVeh.getCell(`C${rowNum}`).numFmt = '#,##0';
+    wsVeh.getCell(`D${rowNum}`).numFmt = '#,##0.00" L"';
+    wsVeh.getCell(`E${rowNum}`).numFmt = '#,##0" km"';
+    wsVeh.getCell(`F${rowNum}`).numFmt = '#,##0.00" km/L"';
+    wsVeh.getCell(`G${rowNum}`).numFmt = 'R$ #,##0.00';
+    wsVeh.getCell(`G${rowNum}`).font = { bold: true };
+    wsVeh.getCell(`H${rowNum}`).numFmt = 'R$ #,##0.000';
+
+    if (idx % 2 === 1) {
+      row.eachCell((c) => {
+        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F8FAFC" } };
+      });
+    }
+  });
+
+  wsVeh.columns = [
+    { width: 16 },
+    { width: 14 },
+    { width: 24 },
+    { width: 22 },
+    { width: 24 },
+    { width: 20 },
+    { width: 22 },
+    { width: 20 },
+    { width: 36 },
+  ];
+
+  // ==========================================
+  // ABA 5: DETALHAMENTO DOS LANÇAMENTOS
   // ==========================================
   const wsDetail = workbook.addWorksheet("Lançamentos Detalhados");
 
@@ -720,7 +988,178 @@ export function exportReportToPDF(data: ExportReportData) {
     currentY = (doc as any).lastAutoTable.finalY + 8;
   }
 
-  // 6. AGRUPADO TABLE
+  // 5. RELATÓRIO ESPECIALIZADO DE CPK
+  const cpkVehList = vehicleStats?.allVehicles || [];
+  if (cpkVehList.length > 0) {
+    if (currentY + 50 > pageHeight) {
+      doc.addPage();
+      currentY = 18;
+    }
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(88, 28, 135); // Purple 900
+    doc.text("RELATÓRIO ESPECIALIZADO DE CPK (CUSTO POR KM RODADO)", 14, currentY);
+
+    const cpkColumns = [
+      "Placa",
+      "Frota",
+      "Km Rodado (GFV)",
+      "Consumo (L)",
+      "Média (Km/L)",
+      "Custo Despesas (R$)",
+      "CPK Total (R$/Km)",
+      "Status CPK",
+    ];
+
+    const sortedCpkForPdf = [...cpkVehList].sort((a, b) => {
+      if (a.cpk === 0 && b.cpk > 0) return 1;
+      if (b.cpk === 0 && a.cpk > 0) return -1;
+      return a.cpk - b.cpk;
+    });
+
+    const cpkRows = sortedCpkForPdf.map((v) => {
+      const mediaKmL = v.totalLiters > 0 && v.kmRodadoCombustivel > 0 ? v.kmRodadoCombustivel / v.totalLiters : 0;
+      let statusStr = "Sem Km";
+      if (v.cpk > 0) {
+        if (v.cpk <= 2.0) statusStr = "Econômico";
+        else if (v.cpk <= 4.0) statusStr = "Média Operacional";
+        else statusStr = "Custo Elevado";
+      }
+
+      return [
+        v.placa,
+        v.numero_frota || "-",
+        v.kmRodadoCombustivel > 0 ? `${formatNumber(v.kmRodadoCombustivel, 0)} km` : "-",
+        v.totalLiters > 0 ? `${formatNumber(v.totalLiters, 1)} L` : "-",
+        mediaKmL > 0 ? `${formatNumber(mediaKmL, 2)} km/L` : "-",
+        formatCurrency(v.totalCost),
+        v.cpk > 0 ? `R$ ${v.cpk.toFixed(3)}` : "-",
+        statusStr,
+      ];
+    });
+
+    autoTable(doc, {
+      startY: currentY + 3,
+      head: [cpkColumns],
+      body: cpkRows,
+      theme: "grid",
+      headStyles: {
+        fillColor: [109, 40, 217], // Purple 700
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 8,
+        halign: "center",
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: [30, 41, 59],
+      },
+      alternateRowStyles: {
+        fillColor: [245, 243, 255],
+      },
+      columnStyles: {
+        0: { halign: "center", fontStyle: "bold", cellWidth: 22 },
+        1: { halign: "center", cellWidth: 18 },
+        2: { halign: "center", cellWidth: 26 },
+        3: { halign: "center", cellWidth: 24 },
+        4: { halign: "center", cellWidth: 24 },
+        5: { halign: "right", fontStyle: "bold", cellWidth: 32 },
+        6: { halign: "right", fontStyle: "bold", textColor: [88, 28, 135], cellWidth: 28 },
+        7: { halign: "center", cellWidth: "auto" },
+      },
+      margin: { left: 14, right: 14 },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  // 6. EVOLUÇÃO TEMPORAL MÊS A MÊS
+  const monthlyMapPdf: Record<string, { monthYear: string; count: number; totalQty: number; valorTotal: number }> = {};
+  (tableFilteredRecords || []).forEach((r) => {
+    let my = "Outros";
+    if (r.data) {
+      const parts = r.data.trim().split("/");
+      if (parts.length >= 3) {
+        my = `${parts[1].padStart(2, "0")}/${parts[2].substring(0, 4)}`;
+      }
+    }
+    if (!monthlyMapPdf[my]) {
+      monthlyMapPdf[my] = { monthYear: my, count: 0, totalQty: 0, valorTotal: 0 };
+    }
+    monthlyMapPdf[my].count += 1;
+    monthlyMapPdf[my].totalQty += Number(r.quantidade || 0);
+    monthlyMapPdf[my].valorTotal += getRecordFinancialValue(r, data.filters.tipoImportacaoFilter === "combustivel_gfv");
+  });
+
+  const monthlyListPdf = Object.values(monthlyMapPdf).sort((a, b) => a.monthYear.localeCompare(b.monthYear));
+  if (monthlyListPdf.length > 0) {
+    if (currentY + 45 > pageHeight) {
+      doc.addPage();
+      currentY = 18;
+    }
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(55, 48, 163); // Indigo 800
+    doc.text("EVOLUÇÃO TEMPORAL E TENDÊNCIA MÊS A MÊS", 14, currentY);
+
+    const trendColumns = [
+      "Mês / Ano",
+      "Qtd Lançamentos",
+      "Volume Total (Litros)",
+      "Custo Total (R$)",
+      "Ticket Médio / Registro",
+      "% Custo Acumulado",
+    ];
+
+    const trendRows = monthlyListPdf.map((m) => {
+      const avg = m.count > 0 ? m.valorTotal / m.count : 0;
+      const pct = overallMetrics.totalValorGeral > 0 ? (m.valorTotal / overallMetrics.totalValorGeral) * 100 : 0;
+      return [
+        m.monthYear,
+        `${m.count} lanço(s)`,
+        formatNumber(m.totalQty, 1),
+        formatCurrency(m.valorTotal),
+        formatCurrency(avg),
+        `${pct.toFixed(1)}%`,
+      ];
+    });
+
+    autoTable(doc, {
+      startY: currentY + 3,
+      head: [trendColumns],
+      body: trendRows,
+      theme: "grid",
+      headStyles: {
+        fillColor: [55, 48, 163],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 8,
+        halign: "center",
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: [30, 41, 59],
+      },
+      alternateRowStyles: {
+        fillColor: [238, 242, 255],
+      },
+      columnStyles: {
+        0: { halign: "center", fontStyle: "bold" },
+        1: { halign: "center" },
+        2: { halign: "right" },
+        3: { halign: "right", fontStyle: "bold", textColor: [30, 27, 75] },
+        4: { halign: "right" },
+        5: { halign: "center", fontStyle: "bold" },
+      },
+      margin: { left: 14, right: 14 },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  // 7. AGRUPADO TABLE
   const aggList = aggregatedData || [];
   if (aggList.length > 0) {
     if (currentY + 45 > pageHeight) {

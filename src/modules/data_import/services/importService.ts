@@ -521,6 +521,67 @@ export class ImportService {
   }
 
   /**
+   * Update Hodometro and/or Km Rodado for a specific import record (GFV / Telemetria)
+   */
+  static async updateRecordOdometerAndKm(
+    recordId: string,
+    companyId: string,
+    updates: { hodometro?: number; km_rodado?: number }
+  ): Promise<{ success: boolean; updatedRecord?: ImportRecord; error?: string }> {
+    const existing = await RECORDS_STORE.getItem<ImportRecord>(recordId);
+    if (!existing) {
+      return { success: false, error: "Registro não encontrado." };
+    }
+
+    const newHodometro = updates.hodometro !== undefined ? updates.hodometro : existing.hodometro;
+    const newKmRodado = updates.km_rodado !== undefined ? updates.km_rodado : existing.km_rodado;
+
+    // Recalculate media_km_l and preco_por_km
+    let newMediaKmL = existing.media_km_l;
+    let newPrecoPorKm = existing.preco_por_km;
+
+    if (existing.quantidade && existing.quantidade > 0 && newKmRodado !== undefined && newKmRodado > 0) {
+      newMediaKmL = newKmRodado / existing.quantidade;
+    }
+
+    if (existing.valor && existing.valor > 0 && newKmRodado !== undefined && newKmRodado > 0) {
+      newPrecoPorKm = existing.valor / newKmRodado;
+    }
+
+    const updatedRecord: ImportRecord = {
+      ...existing,
+      hodometro: newHodometro,
+      km_rodado: newKmRodado,
+      media_km_l: newMediaKmL,
+      preco_por_km: newPrecoPorKm,
+    };
+
+    // 1. Local Storage update
+    await RECORDS_STORE.setItem(recordId, updatedRecord);
+
+    // 2. Supabase update
+    try {
+      const { error } = await supabase
+        .from("import_records")
+        .update({
+          hodometro: newHodometro,
+          km_rodado: newKmRodado,
+          media_km_l: newMediaKmL,
+          preco_por_km: newPrecoPorKm,
+        })
+        .eq("id", recordId);
+
+      if (error) {
+        console.warn("Supabase updateRecordOdometerAndKm error:", error.message);
+      }
+    } catch (e: any) {
+      console.warn("Supabase updateRecordOdometerAndKm exception:", e);
+    }
+
+    return { success: true, updatedRecord };
+  }
+
+  /**
    * Fetch imported records with optional filters, merging Supabase and Local Storage
    */
   static async getImportRecords(companyId: string, jobId?: string): Promise<ImportRecord[]> {

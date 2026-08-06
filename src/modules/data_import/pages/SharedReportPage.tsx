@@ -135,9 +135,13 @@ export default function SharedReportPage() {
   const [tipoGrafico, setTipoGrafico] = useState<"bar" | "pie" | "line" | "area" | "table">("bar");
 
   // Internal Interactive Views (ALWAYS fully interactive for the reader)
-  const [topVehiclesTab, setTopVehiclesTab] = useState<"maior" | "menor" | "lado_a_lado">("lado_a_lado");
+  const [reportViewTab, setReportViewTab] = useState<"ranking" | "analitico" | "tendencia" | "tabelas" | "veiculo_a_veiculo" | "cpk">("ranking");
+  const [topVehiclesTab, setTopVehiclesTab] = useState<"maior" | "menor" | "lado_a_lado" | "cpk">("lado_a_lado");
   const [detalhadoTab, setDetalhadoTab] = useState<"categoria" | "placa" | "fornecedor" | "detalhado">("categoria");
   const [tableSearch, setTableSearch] = useState<string>("");
+  const [cpkSearch, setCpkSearch] = useState<string>("");
+  const [cpkFilterRange, setCpkFilterRange] = useState<"todos" | "economicos" | "medios" | "elevados" | "sem_km">("todos");
+  const [cpkSortOrder, setCpkSortOrder] = useState<"cpk_asc" | "cpk_desc" | "cost_desc" | "km_desc">("cpk_asc");
 
   // Modals & Expanders State
   const [selectedVehicleDetailKey, setSelectedVehicleDetailKey] = useState<string | null>(null);
@@ -393,6 +397,52 @@ export default function SharedReportPage() {
         r.numero_frota?.toLowerCase().includes(term)
     );
   }, [filteredRecords, tableSearch]);
+
+  // CPK Fleet calculations
+  const validCpkVehicles = useMemo(() => {
+    return vehicleStats.allVehicles.filter((v) => v.cpk > 0 && v.kmRodadoCombustivel > 0);
+  }, [vehicleStats]);
+
+  const avgFleetCpk = useMemo(() => {
+    const totalKm = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.kmRodadoCombustivel || 0), 0);
+    const totalCost = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.totalCost || 0), 0);
+    return totalKm > 0 ? totalCost / totalKm : 0;
+  }, [vehicleStats]);
+
+  const sortedCpkVehicles = useMemo(() => {
+    let list = [...vehicleStats.allVehicles];
+
+    if (cpkSearch.trim()) {
+      const term = cpkSearch.toLowerCase().trim();
+      list = list.filter(
+        (v) => v.placa.toLowerCase().includes(term) || (v.numero_frota && v.numero_frota.toLowerCase().includes(term))
+      );
+    }
+
+    if (cpkFilterRange === "economicos") {
+      list = list.filter((v) => v.cpk > 0 && v.cpk <= 2.0);
+    } else if (cpkFilterRange === "medios") {
+      list = list.filter((v) => v.cpk > 2.0 && v.cpk <= 4.0);
+    } else if (cpkFilterRange === "elevados") {
+      list = list.filter((v) => v.cpk > 4.0);
+    } else if (cpkFilterRange === "sem_km") {
+      list = list.filter((v) => v.cpk === 0 || v.kmRodadoCombustivel === 0);
+    }
+
+    list.sort((a, b) => {
+      if (cpkSortOrder === "cpk_asc") {
+        if (a.cpk === 0 && b.cpk > 0) return 1;
+        if (b.cpk === 0 && a.cpk > 0) return -1;
+        return a.cpk - b.cpk;
+      }
+      if (cpkSortOrder === "cpk_desc") return b.cpk - a.cpk;
+      if (cpkSortOrder === "cost_desc") return b.totalCost - a.totalCost;
+      if (cpkSortOrder === "km_desc") return b.kmRodadoCombustivel - a.kmRodadoCombustivel;
+      return 0;
+    });
+
+    return list;
+  }, [vehicleStats, cpkSearch, cpkFilterRange, cpkSortOrder]);
 
   const handleExportExcel = async () => {
     setIsExportingExcel(true);
@@ -872,6 +922,75 @@ export default function SharedReportPage() {
         </fieldset>
       </div>
 
+      {/* Sub-Navigation Bar for Report Tabs */}
+      <div className="bg-white rounded-2xl p-2 border border-zinc-200/80 shadow-xs flex flex-wrap items-center gap-1.5 no-print">
+        <button
+          onClick={() => setReportViewTab("ranking")}
+          className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            reportViewTab === "ranking"
+              ? "bg-gradient-to-r from-amber-500 to-rose-600 text-white shadow-md shadow-rose-500/20"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <Award className="w-4 h-4" /> Ranking Top 10
+        </button>
+
+        <button
+          onClick={() => setReportViewTab("analitico")}
+          className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            reportViewTab === "analitico"
+              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <PieChartIcon className="w-4 h-4" /> Visão Analítica
+        </button>
+
+        <button
+          onClick={() => setReportViewTab("tendencia")}
+          className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            reportViewTab === "tendencia"
+              ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-md shadow-purple-500/20"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" /> Tendência
+        </button>
+
+        <button
+          onClick={() => setReportViewTab("tabelas")}
+          className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            reportViewTab === "tabelas"
+              ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/20"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" /> Detalhamento
+        </button>
+
+        <button
+          onClick={() => setReportViewTab("veiculo_a_veiculo")}
+          className={`flex-1 min-w-[160px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            reportViewTab === "veiculo_a_veiculo"
+              ? "bg-gradient-to-r from-slate-800 to-zinc-900 text-white shadow-md shadow-slate-900/20"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <Truck className="w-4 h-4 text-amber-400" /> Ficha Veículo a Veículo
+        </button>
+
+        <button
+          onClick={() => setReportViewTab("cpk")}
+          className={`flex-1 min-w-[150px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            reportViewTab === "cpk"
+              ? "bg-gradient-to-r from-purple-700 to-indigo-800 text-white shadow-md shadow-purple-600/20"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <Calculator className="w-4 h-4 text-purple-300" /> Relatório CPK
+        </button>
+      </div>
+
       {/* Overview Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-sm relative overflow-hidden">
@@ -1034,6 +1153,16 @@ export default function SharedReportPage() {
             >
               <Award className="w-3.5 h-3.5" /> 10 Menores Gastos
             </button>
+            <button
+              onClick={() => setTopVehiclesTab("cpk")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
+                topVehiclesTab === "cpk"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "text-purple-700 hover:bg-purple-50"
+              }`}
+            >
+              <Calculator className="w-3.5 h-3.5" /> Ranking CPK (R$/Km)
+            </button>
           </div>
         </div>
 
@@ -1097,7 +1226,7 @@ export default function SharedReportPage() {
               {vehicleStats.top10Highest.map((v, idx) => renderVehicleCard(v, idx + 1, true))}
             </div>
           </div>
-        ) : (
+        ) : topVehiclesTab === "menor" ? (
           <div className="space-y-3">
             <div className="p-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1108,6 +1237,27 @@ export default function SharedReportPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {vehicleStats.top10Lowest.map((v, idx) => renderVehicleCard(v, idx + 1, false))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="p-3 bg-purple-900 text-white rounded-2xl flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-purple-300" />
+                <div>
+                  <h4 className="font-black text-sm">Ranking por CPK (Custo por Quilômetro Rodado)</h4>
+                  <p className="text-[11px] text-purple-200">Cruzamento de Despesas (SOFtran) com Km Rodado (GFV)</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {vehicleStats.topCPK.length === 0 ? (
+                <p className="text-xs text-zinc-400 italic p-4 text-center col-span-2">
+                  Importe os relatórios GFV (Consumo) e SOFtran (Despesas) para visualizar o CPK.
+                </p>
+              ) : (
+                vehicleStats.topCPK.map((v, idx) => renderVehicleCard(v, idx + 1, true))
+              )}
             </div>
           </div>
         )}
