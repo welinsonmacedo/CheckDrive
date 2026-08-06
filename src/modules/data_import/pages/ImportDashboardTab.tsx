@@ -35,6 +35,7 @@ import {
 import { ImportJob, ImportRecord } from "../types";
 import { ImportService } from "../services/importService";
 import { calculateVehicleStats } from "../utils/vehicleStatsUtils";
+import { parseRecordMonthYear } from "../utils/dateUtils";
 
 interface Props {
   companyId: string;
@@ -90,12 +91,21 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
   // Chart data: Monthly imports
   const monthlyMap: Record<string, number> = {};
   records.forEach((r) => {
-    const monthKey = r.data ? r.data.substring(0, 7) : "Atual";
+    const parsed = parseRecordMonthYear(r.data);
+    const monthKey = parsed ? `${parsed.month}/${parsed.year}` : "Atual";
     monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + 1;
   });
 
   const monthlyChartData = Object.keys(monthlyMap)
-    .sort()
+    .sort((a, b) => {
+      const [mA, yA] = a.split("/");
+      const [mB, yB] = b.split("/");
+      if (yA && yB) {
+        if (yA !== yB) return Number(yA) - Number(yB);
+        return Number(mA) - Number(mB);
+      }
+      return a.localeCompare(b);
+    })
     .slice(-6)
     .map((k) => ({
       month: k,

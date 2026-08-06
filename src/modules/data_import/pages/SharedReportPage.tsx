@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { calculateVehicleStats, getRecordFinancialValue } from "../utils/vehicleStatsUtils";
+import { parseRecordMonthYear, matchesPeriod, getPeriodLabel as getPeriodLabelUtil, MONTH_NAMES_PT } from "../utils/dateUtils";
 import {
   FileSpreadsheet,
   PieChart as PieChartIcon,
@@ -102,45 +103,6 @@ const COLORS = [
   "#84cc16",
   "#d97706",
 ];
-
-const MONTH_NAMES_PT: Record<string, string> = {
-  "01": "Janeiro",
-  "02": "Fevereiro",
-  "03": "Março",
-  "04": "Abril",
-  "05": "Maio",
-  "06": "Junho",
-  "07": "Julho",
-  "08": "Agosto",
-  "09": "Setembro",
-  "10": "Outubro",
-  "11": "Novembro",
-  "12": "Dezembro",
-};
-
-function parseRecordMonthYear(dateStr?: string): { month: string; year: string } | null {
-  if (!dateStr) return null;
-  const s = dateStr.trim();
-  if (s.includes("-")) {
-    const parts = s.split("-");
-    if (parts.length >= 2) {
-      if (parts[0].length === 4) {
-        return { year: parts[0], month: parts[1].padStart(2, "0") };
-      } else if (parts[2]?.length === 4) {
-        return { year: parts[2], month: parts[1].padStart(2, "0") };
-      }
-    }
-  }
-  if (s.includes("/")) {
-    const parts = s.split("/");
-    if (parts.length === 3) {
-      return { year: parts[2], month: parts[1].padStart(2, "0") };
-    } else if (parts.length === 2) {
-      return { year: parts[1], month: parts[0].padStart(2, "0") };
-    }
-  }
-  return null;
-}
 
 export default function SharedReportPage() {
   const { shareId: paramShareId } = useParams<{ shareId: string }>();
@@ -286,24 +248,7 @@ export default function SharedReportPage() {
   }, [availableMonths]);
 
   // Period label
-  const getPeriodLabel = () => {
-    if (selectedPeriod === "custom") {
-      if (!customMonth) return "Mês Selecionado";
-      const [y, m] = customMonth.split("-");
-      const name = MONTH_NAMES_PT[m] || m;
-      return `Mês ${m}/${y} (${name})`;
-    }
-    if (selectedPeriod.startsWith("m:")) {
-      const my = selectedPeriod.substring(2);
-      const [m, y] = my.split("/");
-      const name = MONTH_NAMES_PT[m] || m;
-      return `Mês ${my} (${name})`;
-    }
-    const days = Number(selectedPeriod);
-    if (days === 0) return "Todo o Histórico";
-    if (days === 365) return "Este Ano (365d)";
-    return `Últimos ${days} dias`;
-  };
+  const getPeriodLabel = () => getPeriodLabelUtil(selectedPeriod, customMonth);
 
   // Filter records based on superior filters
   const filteredRecords = useMemo(() => {
@@ -326,45 +271,8 @@ export default function SharedReportPage() {
         if (!r.fornecedor || !r.fornecedor.toLowerCase().includes(fornecedorFilter.toLowerCase())) return false;
       }
       // 5. Período / Mês
-      if (selectedPeriod !== "0" && r.data) {
-        if (selectedPeriod === "custom" && customMonth) {
-          const [cYear, cMonth] = customMonth.split("-");
-          const parsed = parseRecordMonthYear(r.data);
-          if (!parsed || parsed.month !== cMonth || parsed.year !== cYear) return false;
-        } else if (selectedPeriod.startsWith("m:")) {
-          const monthYearStr = selectedPeriod.substring(2); // e.g. "01/2026"
-          const [targetMonth, targetYear] = monthYearStr.split("/");
-          const parsed = parseRecordMonthYear(r.data);
-          if (parsed) {
-            if (parsed.month !== targetMonth || parsed.year !== targetYear) return false;
-          } else {
-            const recordDate = r.data.trim();
-            if (recordDate.includes("-")) {
-              const parts = recordDate.split("-");
-              if (parts.length >= 2) {
-                const ym = parts[0].length === 4 ? `${parts[1].padStart(2, "0")}/${parts[0]}` : `${parts[1].padStart(2, "0")}/${parts[2]}`;
-                if (ym !== monthYearStr) return false;
-              }
-            } else if (recordDate.includes("/")) {
-              const parts = recordDate.split("/");
-              if (parts.length === 3) {
-                const ym = `${parts[1].padStart(2, "0")}/${parts[2]}`;
-                if (ym !== monthYearStr) return false;
-              }
-            }
-          }
-        } else {
-          const days = parseInt(selectedPeriod);
-          if (!isNaN(days) && days > 0) {
-            const recordDate = new Date(r.data);
-            if (!isNaN(recordDate.getTime())) {
-              const cutoff = new Date();
-              cutoff.setDate(cutoff.getDate() - days);
-              if (recordDate < cutoff) return false;
-            }
-          }
-        }
-      }
+      if (!matchesPeriod(r.data, selectedPeriod, customMonth)) return false;
+
       return true;
     });
   }, [records, categoryFilter, tipoImportacaoFilter, placaFilter, fornecedorFilter, selectedPeriod, customMonth]);

@@ -8,7 +8,14 @@ import {
   VehicleReportStat,
 } from "../utils/vehicleStatsUtils";
 
-export { getRecordImportType, getImportTypeLabel };
+import {
+  parseRecordMonthYear,
+  matchesPeriod,
+  getPeriodLabel as getPeriodLabelUtil,
+  MONTH_NAMES_PT,
+} from "../utils/dateUtils";
+
+export { getRecordImportType, getImportTypeLabel, parseRecordMonthYear };
 import {
   FileSpreadsheet,
   PieChart as PieChartIcon,
@@ -109,45 +116,6 @@ const COLORS = [
   "#84cc16",
   "#d97706",
 ];
-
-const MONTH_NAMES_PT: Record<string, string> = {
-  "01": "Janeiro",
-  "02": "Fevereiro",
-  "03": "Março",
-  "04": "Abril",
-  "05": "Maio",
-  "06": "Junho",
-  "07": "Julho",
-  "08": "Agosto",
-  "09": "Setembro",
-  "10": "Outubro",
-  "11": "Novembro",
-  "12": "Dezembro",
-};
-
-function parseRecordMonthYear(dateStr?: string): { month: string; year: string } | null {
-  if (!dateStr) return null;
-  const s = dateStr.trim();
-  if (s.includes("-")) {
-    const parts = s.split("-");
-    if (parts.length >= 2) {
-      if (parts[0].length === 4) {
-        return { year: parts[0], month: parts[1].padStart(2, "0") };
-      } else if (parts[2]?.length === 4) {
-        return { year: parts[2], month: parts[1].padStart(2, "0") };
-      }
-    }
-  }
-  if (s.includes("/")) {
-    const parts = s.split("/");
-    if (parts.length === 3) {
-      return { year: parts[2], month: parts[1].padStart(2, "0") };
-    } else if (parts.length === 2) {
-      return { year: parts[1], month: parts[0].padStart(2, "0") };
-    }
-  }
-  return null;
-}
 
 export default function ImportReportsTab({ companyId }: Props) {
   const [loading, setLoading] = useState(true);
@@ -263,24 +231,7 @@ export default function ImportReportsTab({ companyId }: Props) {
   }, [availableMonths]);
 
   // Helper for period label
-  const getPeriodLabel = () => {
-    if (selectedPeriod === "custom") {
-      if (!customMonth) return "Mês Selecionado";
-      const [y, m] = customMonth.split("-");
-      const name = MONTH_NAMES_PT[m] || m;
-      return `Mês ${m}/${y} (${name})`;
-    }
-    if (selectedPeriod.startsWith("m:")) {
-      const my = selectedPeriod.substring(2);
-      const [m, y] = my.split("/");
-      const name = MONTH_NAMES_PT[m] || m;
-      return `Mês ${my} (${name})`;
-    }
-    const days = Number(selectedPeriod);
-    if (days === 0) return "Todo o Histórico";
-    if (days === 365) return "Este Ano (365d)";
-    return `Últimos ${days} dias`;
-  };
+  const getPeriodLabel = () => getPeriodLabelUtil(selectedPeriod, customMonth);
 
   // Filtered records
   const filteredRecords = useMemo(() => {
@@ -310,24 +261,7 @@ export default function ImportReportsTab({ companyId }: Props) {
       }
 
       // Period / Month filter
-      if (selectedPeriod === "custom" && customMonth) {
-        const [cYear, cMonth] = customMonth.split("-");
-        const parsed = parseRecordMonthYear(r.data);
-        if (!parsed || parsed.month !== cMonth || parsed.year !== cYear) return false;
-      } else if (selectedPeriod.startsWith("m:")) {
-        const monthYearStr = selectedPeriod.substring(2); // e.g. "01/2026"
-        const [targetMonth, targetYear] = monthYearStr.split("/");
-        const parsed = parseRecordMonthYear(r.data);
-        if (!parsed || parsed.month !== targetMonth || parsed.year !== targetYear) return false;
-      } else {
-        const days = Number(selectedPeriod);
-        if (days > 0 && r.data) {
-          const rDate = new Date(r.data).getTime();
-          const now = new Date().getTime();
-          const diffDays = (now - rDate) / (1000 * 3600 * 24);
-          if (diffDays > days) return false;
-        }
-      }
+      if (!matchesPeriod(r.data, selectedPeriod, customMonth)) return false;
 
       return true;
     });
@@ -351,13 +285,9 @@ export default function ImportReportsTab({ companyId }: Props) {
       else if (agruparPor === "fornecedor") groupKey = r.fornecedor || "Não informado";
       else if (agruparPor === "status") groupKey = r.status.toUpperCase();
       else if (agruparPor === "mes") {
-        if (r.data) {
-          const parts = r.data.split("-");
-          if (parts.length >= 2) {
-            groupKey = `${parts[1]}/${parts[0]}`; // MM/YYYY
-          } else {
-            groupKey = r.data.substring(0, 7);
-          }
+        const parsed = parseRecordMonthYear(r.data);
+        if (parsed) {
+          groupKey = `${parsed.month}/${parsed.year}`; // MM/YYYY
         } else {
           groupKey = "Sem Data";
         }

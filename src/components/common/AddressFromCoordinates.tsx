@@ -97,22 +97,26 @@ export default function AddressFromCoordinates({
         }
 
         if (!addressFound) {
-          const bdcResponse = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=pt`,
-          );
-          if (bdcResponse.ok) {
-            const bdcData = await bdcResponse.json();
-            if (bdcData.city || bdcData.locality) {
-              const loc = [
-                bdcData.locality,
-                bdcData.city,
-                bdcData.principalSubdivision,
-              ].filter(Boolean);
-              // removes duplicates
-              const uniqueLoc = Array.from(new Set(loc));
-              setAddress(uniqueLoc.join(" - "));
-              addressFound = true;
+          try {
+            const bdcResponse = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=pt`,
+            );
+            if (bdcResponse.ok) {
+              const bdcData = await bdcResponse.json();
+              if (bdcData.city || bdcData.locality) {
+                const loc = [
+                  bdcData.locality,
+                  bdcData.city,
+                  bdcData.principalSubdivision,
+                ].filter(Boolean);
+                // removes duplicates
+                const uniqueLoc = Array.from(new Set(loc));
+                setAddress(uniqueLoc.join(" - "));
+                addressFound = true;
+              }
             }
+          } catch (bdcError) {
+            console.warn("BigDataCloud failed:", bdcError);
           }
         }
 
