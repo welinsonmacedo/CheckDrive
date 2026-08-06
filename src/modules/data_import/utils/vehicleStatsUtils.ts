@@ -17,16 +17,21 @@ export interface VehicleReportStat {
 }
 
 export function getRecordImportType(r: ImportRecord): "combustivel_gfv" | "receitas_despesas" {
-  if (
-    r.conta === "Consumo de Combustível" ||
-    (r.observacoes && (r.observacoes.includes("GFV") || r.observacoes.includes("Consumo por Veículo"))) ||
-    r.preco_litro !== undefined ||
-    r.media_km_l !== undefined ||
-    (r.km_rodado !== undefined && r.km_rodado > 0) ||
-    ["Combustível", "Gasolina", "Gasolina Administrativo", "Diesel", "Diesel Terceiro", "Arla", "Arla Estoque"].includes(r.tipo_registro)
-  ) {
+  // A record is ONLY combustivel_gfv if it was produced by the GFV "Consumo de Combustível" PDF parser
+  const isGfvConta = r.conta === "Consumo de Combustível";
+  const isGfvObs = Boolean(
+    r.observacoes &&
+      (r.observacoes.includes("GFV") ||
+        r.observacoes.includes("Consumo por Veículo") ||
+        r.observacoes.includes("Relatório GFV"))
+  );
+  const isGfvFields = r.preco_litro !== undefined || r.media_km_l !== undefined;
+
+  if (isGfvConta || isGfvObs || isGfvFields) {
     return "combustivel_gfv";
   }
+
+  // All other records (including Diesel, Gasolina, Arla from SOFtran) are receitas_despesas!
   return "receitas_despesas";
 }
 
