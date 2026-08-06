@@ -3,6 +3,7 @@ import { exportReportToExcel, exportReportToPDF } from "../utils/exportReportUti
 import {
   calculateVehicleStats,
   getRecordImportType,
+  getRecordFinancialValue,
   getImportTypeLabel,
   VehicleReportStat,
 } from "../utils/vehicleStatsUtils";
@@ -358,7 +359,8 @@ export default function ImportReportsTab({ companyId }: Props) {
         map[groupKey] = { key: groupKey, totalValor: 0, totalQty: 0, count: 0, items: [] };
       }
 
-      map[groupKey].totalValor += Number(r.valor) || 0;
+      const financialVal = getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
+      map[groupKey].totalValor += financialVal;
       map[groupKey].totalQty += Number(r.quantidade) || 0;
       map[groupKey].count += 1;
       map[groupKey].items.push(r);
@@ -548,8 +550,8 @@ export default function ImportReportsTab({ companyId }: Props) {
 
   // Overall Metrics
   const totalValorGeral = useMemo(
-    () => filteredRecords.reduce((sum, r) => sum + (Number(r.valor) || 0), 0),
-    [filteredRecords]
+    () => filteredRecords.reduce((sum, r) => sum + getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv"), 0),
+    [filteredRecords, tipoImportacaoFilter]
   );
   const totalQtyGeral = useMemo(
     () => filteredRecords.reduce((sum, r) => sum + (Number(r.quantidade) || 0), 0),

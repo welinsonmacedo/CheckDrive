@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { calculateVehicleStats } from "../utils/vehicleStatsUtils";
+import { calculateVehicleStats, getRecordFinancialValue } from "../utils/vehicleStatsUtils";
 import {
   FileSpreadsheet,
   PieChart as PieChartIcon,
@@ -371,8 +371,8 @@ export default function SharedReportPage() {
 
   // Overall metrics
   const totalValorGeral = useMemo(() => {
-    return filteredRecords.reduce((acc, r) => acc + (Number(r.valor) || 0), 0);
-  }, [filteredRecords]);
+    return filteredRecords.reduce((acc, r) => acc + getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv"), 0);
+  }, [filteredRecords, tipoImportacaoFilter]);
 
   const totalQtyGeral = useMemo(() => {
     return filteredRecords.reduce((acc, r) => acc + (Number(r.quantidade) || 0), 0);
@@ -400,7 +400,7 @@ export default function SharedReportPage() {
         groups[key] = { count: 0, valorTotal: 0, totalQty: 0 };
       }
       groups[key].count += 1;
-      groups[key].valorTotal += Number(r.valor) || 0;
+      groups[key].valorTotal += getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
       groups[key].totalQty += Number(r.quantidade) || 0;
     });
 

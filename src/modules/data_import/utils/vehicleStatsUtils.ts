@@ -30,9 +30,21 @@ export function getRecordImportType(r: ImportRecord): "combustivel_gfv" | "recei
   return "receitas_despesas";
 }
 
+/**
+ * Returns the effective financial value of a record for reporting.
+ * For GFV records ("Consumo de Combustível"), financial value is 0 to avoid
+ * double-counting with SOFtran ("Receitas e Despesas"), as GFV is used ONLY for Km Rodado.
+ */
+export function getRecordFinancialValue(r: ImportRecord, allowGfvFallback: boolean = false): number {
+  if (getRecordImportType(r) === "combustivel_gfv") {
+    return allowGfvFallback ? Number(r.valor) || 0 : 0;
+  }
+  return Number(r.valor) || 0;
+}
+
 export function getImportTypeLabel(type: "combustivel_gfv" | "receitas_despesas" | string): string {
-  if (type === "combustivel_gfv") return "Consumo de Combustível (GFV)";
-  if (type === "receitas_despesas") return "Receitas e Despesas (SOFtran)";
+  if (type === "combustivel_gfv") return "Consumo de Combustível (GFV - Telemetria/Km)";
+  if (type === "receitas_despesas") return "Receitas e Despesas (SOFtran - Custos)";
   return type;
 }
 
@@ -65,13 +77,12 @@ export function calculateVehicleStats(records: ImportRecord[]) {
     map[key].viagensCount += 1;
     const val = Number(r.valor) || 0;
     const qty = Number(r.quantidade) || 0;
-    map[key].totalCost += val;
-    map[key].totalLiters += qty;
     map[key].items.push(r);
 
     const impType = getRecordImportType(r);
     if (impType === "combustivel_gfv") {
       map[key].costCombustivel += val;
+      map[key].totalLiters += qty;
       let rKm = 0;
       if (typeof r.km_rodado === "number" && r.km_rodado > 0) {
         rKm = r.km_rodado;
@@ -81,22 +92,31 @@ export function calculateVehicleStats(records: ImportRecord[]) {
       map[key].kmRodadoCombustivel += rKm;
     } else {
       map[key].costDespesas += val;
+      map[key].totalCost += val; // ONLY SOFtran (receitas_despesas) records contribute to financial total cost!
     }
 
+    // Categories Breakdown
     const cat = r.tipo_registro || "Outros";
     if (!map[key].categories[cat]) {
       map[key].categories[cat] = { count: 0, valor: 0, liters: 0 };
     }
     map[key].categories[cat].count += 1;
-    map[key].categories[cat].valor += val;
+    // Only add financial value to category if it's SOFtran (receitas_despesas)
+    if (impType !== "combustivel_gfv") {
+      map[key].categories[cat].valor += val;
+    }
     map[key].categories[cat].liters += qty;
   });
 
   Object.values(map).forEach((v) => {
+    // If no SOFtran records exist for this vehicle (costDespesas === 0), but GFV records exist,
+    // use GFV cost as fallback so total cost isn't 0 when ONLY GFV was imported
+    if (v.totalCost === 0 && v.costCombustivel > 0) {
+      v.totalCost = v.costCombustivel;
+    }
+
     if (v.kmRodadoCombustivel > 0) {
-      // CPK Principal: Custo de Receita/Despesa (SOFtran) ÷ Km Rodado do Combustível (GFV)
-      // Se costDespesas for 0 mas houver totalCost, podemos usar totalCost / kmRodadoCombustivel
-      v.cpk = v.costDespesas > 0 ? v.costDespesas / v.kmRodadoCombustivel : v.totalCost / v.kmRodadoCombustivel;
+      v.cpk = v.totalCost / v.kmRodadoCombustivel;
       v.cpkTotal = v.totalCost / v.kmRodadoCombustivel;
     } else {
       v.cpk = 0;
@@ -116,7 +136,7 @@ export function calculateVehicleStats(records: ImportRecord[]) {
     .slice(0, 10);
 
   const topCPK = [...allVehicles]
-    .filter((v) => v.kmRodadoCombustivel > 0 || v.costDespesas > 0)
+    .filter((v) => v.kmRodadoCombustivel > 0 || v.totalCost > 0)
     .sort((a, b) => b.cpk - a.cpk);
 
   return {

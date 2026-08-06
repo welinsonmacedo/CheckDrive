@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { ImportJob, ImportRecord, RecordCategory } from "../types";
 import { ImportService } from "../services/importService";
+import { getRecordImportType } from "../utils/vehicleStatsUtils";
 
 interface Props {
   companyId: string;
@@ -694,11 +695,15 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
                         </td>
                         <td className="p-4 font-black text-zinc-900 whitespace-nowrap">
                           <div>R$ {Number(r.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
-                          {r.media_km_l !== undefined && r.media_km_l > 0 && (
+                          {getRecordImportType(r) === "combustivel_gfv" ? (
+                            <div className="text-[10px] text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5 inline-block">
+                              Relatório: usa Km Rodado
+                            </div>
+                          ) : r.media_km_l !== undefined && r.media_km_l > 0 ? (
                             <div className="text-[10px] text-blue-600 font-bold">
                               {Number(r.media_km_l).toFixed(2)} Km/L
                             </div>
-                          )}
+                          ) : null}
                         </td>
                         <td className="p-4 text-zinc-700 font-medium whitespace-nowrap">
                           <div>{r.hodometro ? Number(r.hodometro).toLocaleString("pt-BR") : "-"}</div>

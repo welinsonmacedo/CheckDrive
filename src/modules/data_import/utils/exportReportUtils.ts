@@ -3,7 +3,7 @@ import { saveAs } from "file-saver";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ImportRecord } from "../types";
-import { VehicleReportStat } from "./vehicleStatsUtils";
+import { VehicleReportStat, getRecordFinancialValue, getRecordImportType } from "./vehicleStatsUtils";
 
 export type { VehicleReportStat };
 
@@ -446,7 +446,7 @@ export async function exportReportToExcel(data: ExportReportData) {
       r.descricao_conta || "-",
       r.fornecedor || "-",
       Number(r.quantidade || 0),
-      Number(r.valor || 0),
+      getRecordFinancialValue(r, data.filters.tipoImportacaoFilter === "combustivel_gfv"),
       (r.status || "APROVADO").toUpperCase(),
     ];
 
@@ -837,7 +837,7 @@ export function exportReportToPDF(data: ExportReportData) {
         r.descricao_conta || r.conta || "-",
         r.fornecedor || "-",
         Number(r.quantidade || 0) > 0 ? formatNumber(Number(r.quantidade), 1) : "-",
-        formatCurrency(Number(r.valor || 0)),
+        formatCurrency(getRecordFinancialValue(r, data.filters.tipoImportacaoFilter === "combustivel_gfv")),
       ];
     });
 
