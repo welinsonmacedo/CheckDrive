@@ -64,7 +64,7 @@ import { ImportRecord, RecordCategory } from "../types";
 import { SharedReportService, SharedReportConfig } from "../services/sharedReportService";
 import { ImportService } from "../services/importService";
 import { exportReportToExcel, exportReportToPDF } from "../utils/exportReportUtils";
-import { getRecordImportType, getImportTypeLabel } from "./ImportReportsTab";
+import { getRecordImportType, getImportTypeLabel } from "../utils/vehicleStatsUtils";
 
 const CATEGORIES: (RecordCategory | "Todas")[] = [
   "Todas",
@@ -310,7 +310,15 @@ export default function SharedReportPage() {
       else if (agruparPor === "tipo_importacao") key = getImportTypeLabel(getRecordImportType(r));
       else if (agruparPor === "placa") key = r.placa ? `${r.placa.toUpperCase()}${r.numero_frota ? ` (${r.numero_frota})` : ""}` : "Sem Placa";
       else if (agruparPor === "fornecedor") key = r.fornecedor ? r.fornecedor.trim() : "Sem Fornecedor";
-      else if (agruparPor === "status") key = r.status ? r.status.toUpperCase() : "DESCONHECIDO";
+      else if (agruparPor === "status") key = r.status ? (r.status || "").toUpperCase() : "DESCONHECIDO";
+      else if (agruparPor === "mes") {
+        const parsed = parseRecordMonthYear(r.data);
+        if (parsed) {
+          key = `${parsed.month}/${parsed.year}`;
+        } else {
+          key = "Sem Data";
+        }
+      }
 
       if (!groups[key]) {
         groups[key] = { count: 0, valorTotal: 0, totalQty: 0 };
@@ -340,7 +348,7 @@ export default function SharedReportPage() {
         };
       })
       .sort((a, b) => b.value - a.value);
-  }, [filteredRecords, agruparPor, metrica, totalValorGeral]);
+  }, [filteredRecords, agruparPor, metrica, totalValorGeral, tipoImportacaoFilter]);
 
   // Vehicle Stats for Top 10 Highest, Lowest & CPK Reports
   const vehicleStats = useMemo(() => {
@@ -362,14 +370,14 @@ export default function SharedReportPage() {
       if (!map[cat]) {
         map[cat] = { name: cat, valorTotal: 0, totalQty: 0, count: 0, items: [] };
       }
-      map[cat].valorTotal += Number(r.valor) || 0;
+      map[cat].valorTotal += getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
       map[cat].totalQty += Number(r.quantidade) || 0;
       map[cat].count += 1;
       map[cat].items.push(r);
     });
 
     return Object.values(map).sort((a, b) => b.valorTotal - a.valorTotal);
-  }, [filteredRecords]);
+  }, [filteredRecords, tipoImportacaoFilter]);
 
   // Suppliers Breakdown
   const supplierBreakdown = useMemo(() => {
@@ -380,13 +388,13 @@ export default function SharedReportPage() {
       if (!map[sup]) {
         map[sup] = { name: sup, valorTotal: 0, count: 0, items: [] };
       }
-      map[sup].valorTotal += Number(r.valor) || 0;
+      map[sup].valorTotal += getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
       map[sup].count += 1;
       map[sup].items.push(r);
     });
 
     return Object.values(map).sort((a, b) => b.valorTotal - a.valorTotal);
-  }, [filteredRecords]);
+  }, [filteredRecords, tipoImportacaoFilter]);
 
   // Table records search
   const tableFilteredRecords = useMemo(() => {
@@ -465,29 +473,47 @@ export default function SharedReportPage() {
   }, [vehicleStats, veiculoSearch, veiculoSortField, veiculoSortOrder]);
 
   const monthlyTrendData = useMemo(() => {
-    const map: Record<string, { monthKey: string; monthLabel: string; count: number; totalLiters: number; totalValor: number }> = {};
+    const map: Record<
+      string,
+      { monthKey: string; monthLabel: string; totalValor: number; totalLiters: number; count: number; year: number; monthNum: number }
+    > = {};
 
     filteredRecords.forEach((r) => {
+      const parsed = parseRecordMonthYear(r.data);
       let key = "Outros";
       let label = "Outros";
-      if (r.data) {
-        const parts = r.data.trim().split("/");
-        if (parts.length >= 3) {
-          const m = parts[1].padStart(2, "0");
-          const y = parts[2].substring(0, 4);
-          key = `${y}-${m}`;
-          label = `${m}/${y}`;
-        }
+      let year = 0;
+      let monthNum = 0;
+
+      if (parsed) {
+        key = `${parsed.year}-${parsed.month}`;
+        label = `${parsed.month}/${parsed.year}`;
+        year = Number(parsed.year);
+        monthNum = Number(parsed.month);
       }
+
       if (!map[key]) {
-        map[key] = { monthKey: key, monthLabel: label, count: 0, totalLiters: 0, totalValor: 0 };
+        map[key] = {
+          monthKey: key,
+          monthLabel: label,
+          totalValor: 0,
+          totalLiters: 0,
+          count: 0,
+          year,
+          monthNum,
+        };
       }
+
       map[key].count += 1;
       map[key].totalLiters += Number(r.quantidade || 0);
       map[key].totalValor += getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
     });
 
-    const list = Object.values(map).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    const list = Object.values(map).sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return a.monthNum - b.monthNum;
+    });
+
     return list.map((m, idx) => {
       const prev = idx > 0 ? list[idx - 1] : null;
       let variationPct = 0;
@@ -2117,414 +2143,7 @@ export default function SharedReportPage() {
         </div>
       )}
 
-      {/* DETALHAMENTO INTERATIVO DOS REGISTROS */}
-      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-blue-600" />
-              <h3 className="font-black text-slate-900 text-base">Detalhamento Interativo dos Registros</h3>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Escolha como deseja explorar os dados: agrupado por Categoria, por Veículo, por Fornecedor ou Lançamento a Lançamento.
-            </p>
-          </div>
 
-          {/* Detalhado View Mode Switcher */}
-          <div className="inline-flex p-1 bg-zinc-100 rounded-2xl border border-zinc-200 shrink-0">
-            <button
-              onClick={() => setDetalhadoTab("categoria")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                detalhadoTab === "categoria"
-                  ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              📂 Por Categoria
-            </button>
-            <button
-              onClick={() => setDetalhadoTab("placa")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                detalhadoTab === "placa"
-                  ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              🚛 Por Veículo
-            </button>
-            <button
-              onClick={() => setDetalhadoTab("fornecedor")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                detalhadoTab === "fornecedor"
-                  ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              🏪 Por Fornecedor
-            </button>
-            <button
-              onClick={() => setDetalhadoTab("detalhado")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                detalhadoTab === "detalhado"
-                  ? "bg-white text-blue-600 shadow-xs border border-zinc-200/80"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              📋 Lançamentos Individuais
-            </button>
-          </div>
-        </div>
-
-        {/* DETALHAMENTO: POR CATEGORIA */}
-        {detalhadoTab === "categoria" && (
-          <div className="space-y-3">
-            {categoryBreakdown.length === 0 ? (
-              <p className="text-xs text-zinc-400 p-4 text-center">Nenhuma categoria encontrada.</p>
-            ) : (
-              categoryBreakdown.map((cat) => {
-                const isOpen = expandedCategories[cat.name];
-                const percent = totalValorGeral > 0 ? (cat.valorTotal / totalValorGeral) * 100 : 0;
-                const media = cat.count > 0 ? cat.valorTotal / cat.count : 0;
-
-                return (
-                  <div key={cat.name} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
-                    <div
-                      onClick={() =>
-                        setExpandedCategories((prev) => ({ ...prev, [cat.name]: !prev[cat.name] }))
-                      }
-                      className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                          <Layers className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-black text-slate-900 text-sm">{cat.name}</h4>
-                            <span className="text-[10px] font-extrabold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md">
-                              {cat.count} lançamento(s)
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            Representa {percent.toFixed(1)}% do total do relatório • Média de {formatCurrency(media)} por registro
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
-                        <div className="text-right">
-                          <p className="text-[10px] uppercase font-bold text-slate-400">Total Categoria</p>
-                          <p className="text-base font-black text-slate-900">{formatCurrency(cat.valorTotal)}</p>
-                        </div>
-                        <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
-                          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Expandable items inside category */}
-                    {isOpen && (
-                      <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs bg-white rounded-xl border border-slate-200">
-                            <thead>
-                              <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                                <th className="p-2.5">Data</th>
-                                <th className="p-2.5">Placa</th>
-                                <th className="p-2.5">Descrição</th>
-                                <th className="p-2.5 text-right">Qtd</th>
-                                <th className="p-2.5 text-right">Valor</th>
-                                <th className="p-2.5">Fornecedor</th>
-                                <th className="p-2.5 text-center">Ações</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {cat.items.map((r, i) => (
-                                <tr key={r.id || i} className="hover:bg-slate-50">
-                                  <td className="p-2.5 font-medium">{r.data || "-"}</td>
-                                  <td className="p-2.5 font-bold font-mono text-slate-900">{r.placa || "-"}</td>
-                                  <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
-                                  <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
-                                  <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
-                                  <td className="p-2.5 text-slate-600">{r.fornecedor || "-"}</td>
-                                  <td className="p-2.5 text-center">
-                                    <button
-                                      onClick={() => setSelectedRecordDetail(r)}
-                                      className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"
-                                    >
-                                      <Eye className="w-3.5 h-3.5" /> Ver
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-
-        {/* DETALHAMENTO: POR VEÍCULO */}
-        {detalhadoTab === "placa" && (
-          <div className="space-y-3">
-            {vehicleStats.allVehicles.length === 0 ? (
-              <p className="text-xs text-zinc-400 p-4 text-center">Nenhum veículo encontrado.</p>
-            ) : (
-              vehicleStats.allVehicles.map((v) => {
-                const isOpen = expandedVehicles[v.key];
-                const avg = v.viagensCount > 0 ? v.totalCost / v.viagensCount : 0;
-
-                return (
-                  <div key={v.key} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
-                    <div
-                      onClick={() =>
-                        setExpandedVehicles((prev) => ({ ...prev, [v.key]: !prev[v.key] }))
-                      }
-                      className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                          <Truck className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-black text-slate-900 text-sm tracking-wide">{v.placa}</h4>
-                            {v.numero_frota && (
-                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200">
-                                Frota {v.numero_frota}
-                              </span>
-                            )}
-                            <span className="text-[10px] font-extrabold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md">
-                              {v.viagensCount} lançamento(s)
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            Volume: {v.totalLiters.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L • Média de {formatCurrency(avg)} / registro
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
-                        <div className="text-right">
-                          <p className="text-[10px] uppercase font-bold text-slate-400">Custo Total</p>
-                          <p className="text-base font-black text-slate-900">{formatCurrency(v.totalCost)}</p>
-                        </div>
-                        <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
-                          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {isOpen && (
-                      <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs bg-white rounded-xl border border-slate-200">
-                            <thead>
-                              <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                                <th className="p-2.5">Data</th>
-                                <th className="p-2.5">Categoria</th>
-                                <th className="p-2.5">Descrição</th>
-                                <th className="p-2.5 text-right">Qtd</th>
-                                <th className="p-2.5 text-right">Valor</th>
-                                <th className="p-2.5">Fornecedor</th>
-                                <th className="p-2.5 text-center">Ações</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {v.items.map((r, i) => (
-                                <tr key={r.id || i} className="hover:bg-slate-50">
-                                  <td className="p-2.5 font-medium">{r.data || "-"}</td>
-                                  <td className="p-2.5">
-                                    <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px]">
-                                      {r.tipo_registro}
-                                    </span>
-                                  </td>
-                                  <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
-                                  <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
-                                  <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
-                                  <td className="p-2.5 text-slate-600">{r.fornecedor || "-"}</td>
-                                  <td className="p-2.5 text-center">
-                                    <button
-                                      onClick={() => setSelectedRecordDetail(r)}
-                                      className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"
-                                    >
-                                      <Eye className="w-3.5 h-3.5" /> Ver
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-
-        {/* DETALHAMENTO: POR FORNECEDOR */}
-        {detalhadoTab === "fornecedor" && (
-          <div className="space-y-3">
-            {supplierBreakdown.length === 0 ? (
-              <p className="text-xs text-zinc-400 p-4 text-center">Nenhum fornecedor encontrado.</p>
-            ) : (
-              supplierBreakdown.map((s) => {
-                const isOpen = expandedFornecedores[s.name];
-
-                return (
-                  <div key={s.name} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
-                    <div
-                      onClick={() =>
-                        setExpandedFornecedores((prev) => ({ ...prev, [s.name]: !prev[s.name] }))
-                      }
-                      className="p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                          <Building2 className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h4 className="font-black text-slate-900 text-sm">{s.name}</h4>
-                          <p className="text-[11px] text-slate-500 mt-0.5">{s.count} registro(s) vinculado(s)</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
-                        <div className="text-right">
-                          <p className="text-[10px] uppercase font-bold text-slate-400">Total Faturado</p>
-                          <p className="text-base font-black text-slate-900">{formatCurrency(s.valorTotal)}</p>
-                        </div>
-                        <button className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
-                          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {isOpen && (
-                      <div className="p-4 bg-slate-50 border-t border-slate-200 space-y-2">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs bg-white rounded-xl border border-slate-200">
-                            <thead>
-                              <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                                <th className="p-2.5">Data</th>
-                                <th className="p-2.5">Categoria</th>
-                                <th className="p-2.5">Placa</th>
-                                <th className="p-2.5">Descrição</th>
-                                <th className="p-2.5 text-right">Qtd</th>
-                                <th className="p-2.5 text-right">Valor</th>
-                                <th className="p-2.5 text-center">Ações</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {s.items.map((r, i) => (
-                                <tr key={r.id || i} className="hover:bg-slate-50">
-                                  <td className="p-2.5 font-medium">{r.data || "-"}</td>
-                                  <td className="p-2.5 font-bold">{r.tipo_registro}</td>
-                                  <td className="p-2.5 font-mono font-bold">{r.placa || "-"}</td>
-                                  <td className="p-2.5 text-slate-600">{r.descricao_conta || r.conta || "-"}</td>
-                                  <td className="p-2.5 text-right">{Number(r.quantidade || 0).toFixed(2)}</td>
-                                  <td className="p-2.5 text-right font-black">{formatCurrency(Number(r.valor || 0))}</td>
-                                  <td className="p-2.5 text-center">
-                                    <button
-                                      onClick={() => setSelectedRecordDetail(r)}
-                                      className="p-1 text-blue-600 hover:bg-blue-50 rounded-md font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"
-                                    >
-                                      <Eye className="w-3.5 h-3.5" /> Ver
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-
-        {/* DETALHAMENTO: LANÇAMENTOS INDIVIDUAIS (TABELA COMPLETA) */}
-        {detalhadoTab === "detalhado" && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
-              <span className="text-xs font-bold text-slate-700">
-                Mostrando {tableFilteredRecords.length} de {filteredRecords.length} lançamentos
-              </span>
-
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Pesquisar por placa, categoria, fornecedor..."
-                  value={tableSearch}
-                  onChange={(e) => setTableSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                    <th className="p-3 rounded-l-xl">Data</th>
-                    <th className="p-3">Categoria</th>
-                    <th className="p-3">Placa / Frota</th>
-                    <th className="p-3">Conta / Descrição</th>
-                    <th className="p-3 text-right">Qtd</th>
-                    <th className="p-3 text-right">Valor (R$)</th>
-                    <th className="p-3">Fornecedor</th>
-                    <th className="p-3 text-center rounded-r-xl">Ação</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {tableFilteredRecords.slice(0, 150).map((r, idx) => (
-                    <tr key={r.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3 font-medium text-slate-700">{r.data || "-"}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold text-[11px]">
-                          {r.tipo_registro}
-                        </span>
-                      </td>
-                      <td className="p-3 font-mono font-bold text-slate-900">
-                        {r.placa || "-"} {r.numero_frota ? `(${r.numero_frota})` : ""}
-                      </td>
-                      <td className="p-3 text-slate-600 max-w-xs truncate">{r.descricao_conta || r.conta || "-"}</td>
-                      <td className="p-3 text-right font-medium text-slate-700">{Number(r.quantidade || 0).toFixed(2)}</td>
-                      <td className="p-3 text-right font-black text-slate-900">{formatCurrency(Number(r.valor || 0))}</td>
-                      <td className="p-3 text-slate-600 truncate max-w-xs">{r.fornecedor || "-"}</td>
-                      <td className="p-3 text-center">
-                        <button
-                          onClick={() => setSelectedRecordDetail(r)}
-                          className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold hover:bg-blue-100 text-[11px] inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5" /> Ver Detalhes
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {tableFilteredRecords.length > 150 && (
-                <div className="p-3 text-center text-xs text-slate-500 border-t border-slate-100">
-                  Exibindo os primeiros 150 de {tableFilteredRecords.length} registros.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* VEHICLE DETAIL MODAL */}
       {selectedVehicleDetail && (

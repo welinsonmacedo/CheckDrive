@@ -67,18 +67,28 @@ export default function ShareReportModal({
 
   useEffect(() => {
     if (isOpen) {
-      const newShareId = SharedReportService.generateShareId();
-      const newCode = SharedReportService.generateAccessCode();
-      setShareId(newShareId);
-      setAccessCode(newCode);
+      const stableShareId = SharedReportService.generateShareId(companyId);
+      setShareId(stableShareId);
       setTitle(currentTitle);
-      setAllowFilters(true);
       setSavedSuccess(false);
       setCopiedLink(false);
       setCopiedCode(false);
       setCopiedMessage(false);
+
+      // Attempt to load existing share config to preserve settings or PIN unless user regenerates
+      SharedReportService.getSharedReport(stableShareId).then((existing) => {
+        if (existing) {
+          if (existing.access_code) setAccessCode(existing.access_code);
+          else setAccessCode(SharedReportService.generateAccessCode());
+          if (existing.title) setTitle(existing.title);
+          if (typeof existing.allow_filters === "boolean") setAllowFilters(existing.allow_filters);
+        } else {
+          setAccessCode(SharedReportService.generateAccessCode());
+          setAllowFilters(true);
+        }
+      });
     }
-  }, [isOpen, currentTitle]);
+  }, [isOpen, companyId, currentTitle]);
 
   // Auto-save active report configuration whenever key fields change
   useEffect(() => {
