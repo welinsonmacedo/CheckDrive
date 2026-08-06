@@ -57,14 +57,18 @@ export function calculateVehicleStats(records: ImportRecord[]) {
   const map: Record<string, VehicleReportStat> = {};
 
   records.forEach((r) => {
-    const rawPlaca = r.placa?.trim().toUpperCase() || "SEM PLACA";
+    const rawPlacaDisplay = r.placa?.trim().toUpperCase() || "SEM PLACA";
+    const rawPlacaClean = rawPlacaDisplay.replace(/[\s-]/g, "");
     const frota = r.numero_frota?.trim() || "";
-    const key = frota ? `${rawPlaca} (Frota ${frota})` : rawPlaca;
+
+    // Key vehicle by clean plate if available so GFV (telemetry/km) and SOFtran (expenses/costs) match!
+    const isRealPlate = Boolean(rawPlacaClean && rawPlacaClean !== "SEMPLACA" && rawPlacaClean !== "FROTAGERAL");
+    const key = isRealPlate ? rawPlacaClean : frota ? `FROTA-${frota}` : "SEM-PLACA";
 
     if (!map[key]) {
       map[key] = {
         key,
-        placa: rawPlaca,
+        placa: rawPlacaDisplay,
         numero_frota: frota,
         viagensCount: 0,
         totalCost: 0,
@@ -77,6 +81,14 @@ export function calculateVehicleStats(records: ImportRecord[]) {
         categories: {},
         items: [],
       };
+    } else {
+      // Update display values if current record has a more specific frota or plate
+      if (!map[key].numero_frota && frota) {
+        map[key].numero_frota = frota;
+      }
+      if (map[key].placa === "SEM PLACA" && rawPlacaDisplay !== "SEM PLACA") {
+        map[key].placa = rawPlacaDisplay;
+      }
     }
 
     map[key].viagensCount += 1;
@@ -88,11 +100,17 @@ export function calculateVehicleStats(records: ImportRecord[]) {
     if (impType === "combustivel_gfv") {
       map[key].costCombustivel += val;
       map[key].totalLiters += qty;
+
       let rKm = 0;
-      if (typeof r.km_rodado === "number" && r.km_rodado > 0) {
+      if (typeof r.km_rodado === "number" && !isNaN(r.km_rodado) && r.km_rodado > 0) {
         rKm = r.km_rodado;
       } else if (r.quantidade && r.media_km_l && r.quantidade > 0 && r.media_km_l > 0) {
         rKm = r.quantidade * r.media_km_l;
+      } else if (r.observacoes) {
+        const obsKmMatch = r.observacoes.match(/Km\s+Rodados?:\s*([\d\.\,]+)/i);
+        if (obsKmMatch) {
+          rKm = parseFloat(obsKmMatch[1].replace(/\./g, "").replace(",", "."));
+        }
       }
       map[key].kmRodadoCombustivel += rKm;
     } else {
