@@ -785,7 +785,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Spacer for sidebar to avoid layout shift */}
-      <div className="hidden md:block w-20 flex-shrink-0" />
+      <div className="hidden md:block w-20 flex-shrink-0 print:hidden" />
 
       {/* Sidebar */}
       <aside className={`group absolute md:absolute top-[73px] md:top-0 left-0 bottom-0 md:w-20 md:hover:w-72 flex-shrink-0 bg-white/95 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl flex flex-col print:hidden transition-all duration-300 z-50 overflow-x-hidden overflow-y-auto md:overflow-y-hidden ${isMobileMenuOpen ? 'w-full translate-x-0' : 'w-full -translate-x-full md:translate-x-0'}`}>
