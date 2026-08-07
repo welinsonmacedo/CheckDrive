@@ -24,7 +24,9 @@ import {
   Upload,
   History,
   Receipt,
+  FileSpreadsheet,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
 import ManualIssueModal from "@/src/modules/company/components/ManualIssueModal";
@@ -1547,6 +1549,82 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
     setShowTrackingPrintModal(true);
   };
 
+  const handleExportTrackingExcel = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const data = filteredAlertsForTracking.map((alert) => {
+      const isKm = alert.trigger_type === "km";
+      let statusText = "Em dia";
+      let tipoAlvo = isKm ? "Por KM (Odômetro)" : "Por Data";
+      let valorAtual = "-";
+      let valorAlvo = "-";
+      let faltantes = "-";
+
+      if (isKm) {
+        const vehId = alert.target_vehicle_id || alert.vehicle_id;
+        const currentKm = odometers[vehId] || 0;
+        const intervalKm = Number(alert.interval_km || 0);
+        const lastKm = Number(alert.last_km || 0);
+        const targetKm = lastKm + intervalKm;
+        const remainingKm = targetKm - currentKm;
+
+        const isOverdue = remainingKm <= 0;
+        const isNear = remainingKm > 0 && remainingKm <= (Number(alert.warning_km) || 1000);
+
+        if (isOverdue) {
+          statusText = "Atrasada / Vencida";
+        } else if (isNear) {
+          statusText = "Próxima do Vencimento";
+        }
+
+        valorAtual = `${currentKm.toLocaleString("pt-BR")} KM`;
+        valorAlvo = `${targetKm.toLocaleString("pt-BR")} KM`;
+        faltantes = isOverdue
+          ? `Atrasado ${Math.abs(remainingKm).toLocaleString("pt-BR")} KM`
+          : `${remainingKm.toLocaleString("pt-BR")} KM`;
+      } else if (alert.trigger_date) {
+        const targetDate = new Date(alert.trigger_date + "T00:00:00");
+        const diffTime = targetDate.getTime() - today.getTime();
+        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const isOverdue = daysRemaining < 0;
+        const isNear = daysRemaining >= 0 && daysRemaining <= (Number(alert.warning_days) || 7);
+
+        if (isOverdue) {
+          statusText = "Atrasada / Vencida";
+        } else if (isNear) {
+          statusText = "Próxima do Vencimento";
+        }
+
+        valorAtual = "-";
+        valorAlvo = targetDate.toLocaleDateString("pt-BR");
+        faltantes = isOverdue
+          ? `Vencido há ${Math.abs(daysRemaining)} dia(s)`
+          : `${daysRemaining} dia(s)`;
+      }
+
+      return {
+        "Status": statusText,
+        "Alerta / Serviço": alert.title || "N/A",
+        "Veículo / Placa": alert.vehicles?.plate || "N/A",
+        "Modelo Veículo": alert.vehicles?.model || "N/A",
+        "Motorista / Responsável": alert.profiles?.full_name || "N/A",
+        "Tipo Alvo": tipoAlvo,
+        "Atual": valorAtual,
+        "Alvo / Meta": valorAlvo,
+        "Faltantes / Restante": faltantes,
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Acompanhamento");
+    XLSX.writeFile(
+      wb,
+      `Acompanhamento_Manutencao_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
+  };
+
   const handlePrintIssuesList = () => {
     setShowIssuesPrintModal(true);
   };
@@ -1739,6 +1817,15 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
                 <option value="near">Próximas do Vencimento</option>
                 <option value="ok">Em dia</option>
               </select>
+
+              <button
+                onClick={handleExportTrackingExcel}
+                className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-2 shadow-sm font-sans"
+                title="Exportar acompanhamentos para Excel (.xlsx)"
+              >
+                <FileSpreadsheet size={14} />
+                Exportar Excel
+              </button>
 
               <button
                 onClick={handlePrintTracking}
