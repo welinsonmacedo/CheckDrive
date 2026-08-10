@@ -324,10 +324,11 @@ export default function ReportsBiView({
       let issuesList = rawIssues.map((i: any) => ({
         ...i,
         plate:
+          (i.trailer_id ? (trailersMap[i.trailer_id]?.plate || i.trailers?.plate) : null) ||
+          trailersMap[i.vehicle_id]?.plate ||
           i.vehicles?.plate ||
           i.trailers?.plate ||
           vehiclesMap[i.vehicle_id]?.plate ||
-          trailersMap[i.vehicle_id]?.plate ||
           trailersMap[i.trailer_id]?.plate ||
           "Sem Placa",
       }));

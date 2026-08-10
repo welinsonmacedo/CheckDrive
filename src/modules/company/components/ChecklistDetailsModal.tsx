@@ -471,7 +471,9 @@ export default function ChecklistDetailsModal({
                   Veículo / Placa
                 </span>
                 <p className="text-sm font-black text-gray-800">
-                  {selectedSub.vehicles?.plate || "N/A"}
+                  {selectedSub.trailers?.plate
+                    ? `${selectedSub.trailers.plate} (Reboque)${selectedSub.vehicles?.plate ? ` • Trator: ${selectedSub.vehicles.plate}` : ''}`
+                    : selectedSub.vehicles?.plate || "N/A"}
                 </p>
               </div>
               <div className="space-y-1">

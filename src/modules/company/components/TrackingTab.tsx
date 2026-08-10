@@ -6,7 +6,7 @@ import { TrackingDashboard } from "../monitoring/components/TrackingDashboard";
 import { RefreshCw, Radio } from "lucide-react";
 
 export default function TrackingTab() {
-  const [activeSidebarTab, setActiveSidebarTab] = React.useState<"drivers" | "events">("drivers");
+  const [activeSidebarTab, setActiveSidebarTab] = React.useState<"drivers" | "events" | "trips">("drivers");
 
   const {
     loading,
@@ -16,6 +16,8 @@ export default function TrackingTab() {
     selectedDriverState,
     selectedTripMetrics,
     loadingTrip,
+    tripsHistory,
+    loadingTripsHistory,
     isPlaybackPlaying,
     setIsPlaybackPlaying,
     playbackIndex,
@@ -57,6 +59,8 @@ export default function TrackingTab() {
         selectedDriverState={selectedDriverState}
         selectedTripMetrics={selectedTripMetrics}
         loadingTrip={loadingTrip}
+        tripsHistory={tripsHistory}
+        loadingTripsHistory={loadingTripsHistory}
         onSelectDriver={(id) => setSelectedDriverId(id)}
         filters={filters}
         onFilterChange={setFilters}

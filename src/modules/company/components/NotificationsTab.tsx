@@ -367,7 +367,9 @@ export default function NotificationsTab() {
                         <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-mono text-[10px] font-black text-gray-700 px-2 py-0.5 bg-gray-100 rounded border border-gray-200 uppercase tracking-widest">
-                              {issue.vehicle?.plate || issue.trailer?.plate || "S/ Placa"}
+                              {issue.trailer?.plate
+                                ? `${issue.trailer.plate} (Reboque)`
+                                : issue.vehicle?.plate || "S/ Placa"}
                             </span>
                             {issue.occurrencesCount > 1 && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[9px] font-black tracking-wider uppercase">
@@ -456,7 +458,9 @@ export default function NotificationsTab() {
                         <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-mono text-[10px] font-black text-gray-700 px-2 py-0.5 bg-gray-100 rounded border border-gray-200 uppercase tracking-widest">
-                              {issue.vehicle?.plate || issue.trailer?.plate || "S/ Placa"}
+                              {issue.trailer?.plate
+                                ? `${issue.trailer.plate} (Reboque)`
+                                : issue.vehicle?.plate || "S/ Placa"}
                             </span>
                             <span className="px-1.5 py-0.5 rounded-md bg-red-50 text-red-600 text-[8px] font-black tracking-widest uppercase border border-red-100">
                               Alerta Disparado

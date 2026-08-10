@@ -17,6 +17,7 @@ import {
   formatRelativeTime,
   FIVE_MINUTES_MS,
   calculateTripMetrics,
+  fetchTripsList,
 } from "../services/trackingService";
 import { subscribeDriverLocations } from "../services/trackingRealtime";
 
@@ -29,6 +30,8 @@ export function useTracking() {
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [selectedTripMetrics, setSelectedTripMetrics] = useState<TripMetrics | null>(null);
   const [loadingTrip, setLoadingTrip] = useState(false);
+  const [tripsHistory, setTripsHistory] = useState<TripMetrics[]>([]);
+  const [loadingTripsHistory, setLoadingTripsHistory] = useState(false);
 
   // Map settings
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -214,7 +217,9 @@ export function useTracking() {
           );
           const lastUpdateAgo = formatRelativeTime(ds.latestLocation.created_at);
           if (status !== ds.status || lastUpdateAgo !== ds.lastUpdateAgo) {
-            return { ...ds, status, lastUpdateAgo };
+            
+
+  return { ...ds, status, lastUpdateAgo };
           }
           return ds;
         })
@@ -355,7 +360,9 @@ export function useTracking() {
       }
     });
 
-    return {
+    
+
+  return {
       onlineDrivers: online,
       stoppedDrivers: stopped,
       offlineDrivers: offline,
@@ -371,6 +378,21 @@ export function useTracking() {
     return driverStates.find((ds) => ds.driver_id === selectedDriverId) || null;
   }, [driverStates, selectedDriverId]);
 
+  
+
+    // 6. Fetch Trips History List
+  useEffect(() => {
+    if (!companyId || !filters.date) return;
+    let isMounted = true;
+    setLoadingTripsHistory(true);
+    fetchTripsList(companyId, filters.date).then(trips => {
+      if (isMounted) {
+        setTripsHistory(trips);
+        setLoadingTripsHistory(false);
+      }
+    });
+    return () => { isMounted = false; };
+  }, [companyId, filters.date]);
   return {
     loading,
     driverStates: filteredDriverStates,
@@ -380,6 +402,8 @@ export function useTracking() {
     selectedDriverState,
     selectedTripMetrics,
     loadingTrip,
+    tripsHistory,
+    loadingTripsHistory,
 
     // Playback
     isPlaybackPlaying,

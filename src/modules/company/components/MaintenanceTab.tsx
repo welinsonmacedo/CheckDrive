@@ -524,7 +524,10 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
       ].filter(Boolean);
 
 
-      const { data: submissionsData } = await supabase.from("checklist_submissions").select("id, type").eq("company_id", (user as any)?.company_id)
+      const { data: submissionsData } = await supabase
+        .from("checklist_submissions")
+        .select("id, type, vehicle_id, trailer_id")
+        .eq("company_id", (user as any)?.company_id)
         .in("id", submissionIds);
 
       const fuelSubmissionIds =
@@ -538,14 +541,16 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
 
       const { data: checklistItemsResData } = await supabase.from("checklist_items").select("title, priority").order("order_index");
       const vehicleIds = [
-        ...new Set(
-          filteredIssues.map((i: any) => i.vehicle_id).filter(Boolean),
-        ),
+        ...new Set([
+          ...filteredIssues.map((i: any) => i.vehicle_id),
+          ...(submissionsData || []).map((s: any) => s.vehicle_id),
+        ].filter(Boolean)),
       ];
       const trailerIds = [
-        ...new Set(
-          filteredIssues.map((i: any) => i.trailer_id).filter(Boolean),
-        ),
+        ...new Set([
+          ...filteredIssues.map((i: any) => i.trailer_id),
+          ...(submissionsData || []).map((s: any) => s.trailer_id),
+        ].filter(Boolean)),
       ];
       const driverIds = [
         ...new Set(filteredIssues.map((i: any) => i.driver_id).filter(Boolean)),
@@ -553,21 +558,21 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
 
       let vehiclesData: any[] = [];
       if (vehicleIds.length > 0) {
-        const { data } = await supabase.from("vehicles").select("id, plate, model, branch_id").eq("company_id", (user as any)?.company_id)
+        const { data } = await supabase.from("vehicles").select("id, plate, model, branch_id")
           .in("id", vehicleIds);
         vehiclesData = data || [];
       }
 
       let trailersData: any[] = [];
       if (trailerIds.length > 0) {
-        const { data } = await supabase.from("trailers").select("id, plate, branch_id").eq("company_id", (user as any)?.company_id)
+        const { data } = await supabase.from("trailers").select("id, plate, model, branch_id")
           .in("id", trailerIds);
         trailersData = data || [];
       }
 
       let driversData: any[] = [];
       if (driverIds.length > 0) {
-        const { data } = await supabase.from("profiles").select("id, full_name").eq("company_id", (user as any)?.company_id)
+        const { data } = await supabase.from("profiles").select("id, full_name")
           .in("id", driverIds);
         driversData = data || [];
       }
@@ -578,16 +583,21 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
           status = "pending";
         }
         
+        const sub = submissionsData?.find((s: any) => s.id === issue.submission_id);
+        const effectiveVehicleId = issue.vehicle_id || sub?.vehicle_id;
+        const effectiveTrailerId = issue.trailer_id || sub?.trailer_id;
+
         const checklistItem = checklistItemsResData?.find(ci => ci.title === issue.item_title);
         const mappedPriority = checklistItem?.priority || "Medio";
         
         return {
           ...issue,
+          vehicle_id: effectiveVehicleId,
+          trailer_id: effectiveTrailerId,
           priority: mappedPriority,
-
           status,
-          vehicles: vehiclesData.find((v) => v.id === issue.vehicle_id),
-          trailers: trailersData.find((t) => t.id === issue.trailer_id),
+          vehicles: vehiclesData.find((v) => v.id === effectiveVehicleId),
+          trailers: trailersData.find((t) => t.id === effectiveTrailerId),
           profiles: driversData.find((d) => d.id === issue.driver_id),
         };
       });
@@ -1307,7 +1317,7 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
     const response = await fetch(selectedImage);
     const blob = await response.blob();
 
-    const plate = selectedIssue.vehicles?.plate || "veiculo";
+    const plate = selectedIssue.trailers?.plate || selectedIssue.vehicles?.plate || "veiculo";
 
     const date = new Date(selectedIssue.created_at)
       .toLocaleDateString("pt-BR")
@@ -1368,6 +1378,9 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
     .filter(
       (issue) =>
         issue.vehicles?.plate
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        issue.trailers?.plate
           ?.toLowerCase()
           .includes(searchTerm.toLowerCase()) ||
         issue.item_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -2361,8 +2374,27 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
                           />
                         )}
                         <div>
-                          <div className="font-bold text-zinc-900">{issue.vehicles?.plate || issue.trailers?.plate || "Sem Placa"}</div>
-                          <div className="text-xs text-zinc-500">{issue.profiles?.full_name || "N/A"}</div>
+                          <div className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
+                            {issue.trailers?.plate ? (
+                              <>
+                                <span className="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                  Reboque: {issue.trailers.plate}
+                                </span>
+                                {issue.vehicles?.plate && (
+                                  <span className="text-xs text-zinc-500 font-normal">
+                                    (Trator: {issue.vehicles.plate})
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              issue.vehicles?.plate || "Sem Placa"
+                            )}
+                          </div>
+                          <div className="text-xs text-zinc-500">
+                            {issue.trailers?.plate && !issue.vehicles?.plate
+                              ? "Reboque"
+                              : issue.vehicles?.model || issue.profiles?.full_name || "N/A"}
+                          </div>
                         </div>
                       </div>
                       <div className="text-right text-xs">
@@ -2525,17 +2557,24 @@ export default function MaintenanceTab({ branchId }: MaintenanceTabProps = {}) {
                         </td>
 
                         <td className="px-5 py-4">
-                          <div className="font-bold text-sm">
-                            {issue.vehicles?.plate ||
-                              issue.trailers?.plate ||
-                              "Sem Placa"}
+                          <div className="font-bold text-sm flex items-center gap-1.5 flex-wrap">
+                            {issue.trailers?.plate ? (
+                              <>
+                                <span>{issue.trailers.plate}</span>
+                                <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-black uppercase">
+                                  Reboque
+                                </span>
+                              </>
+                            ) : (
+                              issue.vehicles?.plate || "Sem Placa"
+                            )}
                           </div>
                           <div className="text-[10px] text-gray-400">
-                            {issue.vehicles
-                              ? issue.vehicles.model
-                              : issue.trailers
-                                ? "Reboque"
-                                : "Carreta/Interno"}
+                            {issue.trailers?.plate
+                              ? issue.vehicles?.plate
+                                ? `Tracionado por ${issue.vehicles.plate}`
+                                : "Reboque"
+                              : issue.vehicles?.model || "Carreta/Interno"}
                           </div>
                         </td>
 

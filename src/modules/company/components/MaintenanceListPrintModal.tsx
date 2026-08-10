@@ -94,7 +94,9 @@ export default function MaintenanceListPrintModal({ issues, onClose, user, tabTi
                 </tr>
               ) : (
                 issues.map((item, idx) => {
-                  const plate = item.vehicles?.plate || item.trailers?.plate || "Sem Placa";
+                  const plate = item.trailers?.plate
+                    ? `${item.trailers.plate} (Reboque)${item.vehicles?.plate ? ` / ${item.vehicles.plate}` : ''}`
+                    : item.vehicles?.plate || "Sem Placa";
                   const driver = item.profiles?.full_name || "N/A";
                   const dateStr = new Date(item.created_at).toLocaleDateString("pt-BR") + " " + new Date(item.created_at).toLocaleTimeString("pt-BR", {hour: '2-digit', minute:'2-digit'});
                   

@@ -161,7 +161,9 @@ export default function IssueDetailsModal({
                         <Car size={12} /> Veículo
                       </span>
                       <span className="font-bold text-zinc-900 text-sm">
-                        {issue.vehicles?.plate || issue.trailers?.plate || "Sem veículo"}
+                        {issue.trailers?.plate
+                          ? `${issue.trailers.plate} (Reboque)${issue.vehicles?.plate ? ` • Trator: ${issue.vehicles.plate}` : ''}`
+                          : issue.vehicles?.plate || "Sem veículo"}
                       </span>
                     </div>
                     <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100 print:border-zinc-300 print:bg-white">

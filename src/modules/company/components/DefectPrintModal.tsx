@@ -134,11 +134,11 @@ export default function DefectPrintModal({
                 <Car size={12} /> Veículo Envolvido
               </p>
               <p className="text-xl font-black text-zinc-900">
-                {defect.vehicles?.plate
-                  ? defect.trailers?.plate
-                    ? `${defect.vehicles.plate} / ${defect.trailers.plate}`
-                    : defect.vehicles.plate
-                  : defect.trailers?.plate || "Não Registrado"}
+                {defect.trailers?.plate
+                  ? defect.vehicles?.plate
+                    ? `${defect.trailers.plate} (Reboque) • Trator: ${defect.vehicles.plate}`
+                    : `${defect.trailers.plate} (Reboque)`
+                  : defect.vehicles?.plate || "Não Registrado"}
               </p>
             </div>
             <div className="bg-white p-5 rounded-2xl border-2 border-zinc-100 col-span-1 md:col-span-2 print:border-zinc-300 print:bg-white print:rounded-none">

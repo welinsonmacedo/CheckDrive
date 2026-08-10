@@ -29,6 +29,10 @@ import {
   ShoppingCart,
   ListFilter,
   CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  Image,
+  X,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import ReportsFilters, { GlobalReportFilters } from "./ReportsFilters";
@@ -66,6 +70,15 @@ export default function ReportsOperationalView() {
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<any[]>([]);
   const [summaryStats, setSummaryStats] = useState<any>({});
+
+  // Pendencias por Placa dropdown & expansion state
+  const [expandedPlates, setExpandedPlates] = useState<Record<string, boolean>>({});
+  const [selectedDefectByPlate, setSelectedDefectByPlate] = useState<Record<string, string>>({});
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+
+  const togglePlateExpand = (plate: string) => {
+    setExpandedPlates((prev) => ({ ...prev, [plate]: !prev[plate] }));
+  };
 
   useEffect(() => {
     fetchFilterOptions();
@@ -171,6 +184,10 @@ export default function ReportsOperationalView() {
 
       const getPlate = (r: any) => {
         if (!r) return "-";
+        if (r.trailer_id) {
+          const tp = r.trailers?.plate || trailersMap[r.trailer_id]?.plate;
+          if (tp) return tp;
+        }
         return (
           r.plate ||
           r.vehicles?.plate ||
@@ -216,12 +233,26 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
-          let result = (data || []).map((r: any) => ({
-            ...r,
-            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
-            trailers: r.trailers || trailersMap[r.trailer_id] || null,
-            profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-" },
-          }));
+          let result = (data || []).map((r: any) => {
+            const veh = r.vehicles || vehiclesMap[r.vehicle_id] || null;
+            const trl = r.trailers || trailersMap[r.trailer_id] || trailersMap[r.vehicle_id] || null;
+            const plate =
+              r.plate ||
+              veh?.plate ||
+              trl?.plate ||
+              vehiclesMap[r.vehicle_id]?.plate ||
+              trailersMap[r.trailer_id]?.plate ||
+              trailersMap[r.vehicle_id]?.plate ||
+              "-";
+
+            return {
+              ...r,
+              vehicles: veh,
+              trailers: trl,
+              profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-" },
+              plate,
+            };
+          });
 
           if (filters.branchId !== "all") {
             result = result.filter(
@@ -278,12 +309,26 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
-          let result = (data || []).map((r: any) => ({
-            ...r,
-            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
-            trailers: r.trailers || trailersMap[r.trailer_id] || null,
-            profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-" },
-          }));
+          let result = (data || []).map((r: any) => {
+            const veh = r.vehicles || vehiclesMap[r.vehicle_id] || null;
+            const trl = r.trailers || trailersMap[r.trailer_id] || trailersMap[r.vehicle_id] || null;
+            const plate =
+              r.plate ||
+              veh?.plate ||
+              trl?.plate ||
+              vehiclesMap[r.vehicle_id]?.plate ||
+              trailersMap[r.trailer_id]?.plate ||
+              trailersMap[r.vehicle_id]?.plate ||
+              "-";
+
+            return {
+              ...r,
+              vehicles: veh,
+              trailers: trl,
+              profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-" },
+              plate,
+            };
+          });
 
           if (filters.branchId !== "all") {
             result = result.filter(
@@ -296,7 +341,7 @@ export default function ReportsOperationalView() {
           // Group by plate
           const groupedMap: Record<string, any[]> = {};
           result.forEach((iss: any) => {
-            const plate = iss.vehicles?.plate || iss.trailers?.plate || "Sem Placa";
+            const plate = iss.plate || "Sem Placa";
             if (!groupedMap[plate]) groupedMap[plate] = [];
             groupedMap[plate].push(iss);
           });
@@ -387,7 +432,15 @@ export default function ReportsOperationalView() {
         case "schedules": {
           let query = supabase
             .from("schedules")
-            .select("*, profiles(full_name, branch_id), vehicles(plate, branch_id), trailers(plate, branch_id)")
+            .select(`
+              *,
+              profiles(full_name, branch_id),
+              vehicles(plate, model, branch_id),
+              trailers(plate, model, branch_id),
+              start_checklist:checklist_submissions!start_checklist_id(id, odometer),
+              end_checklist:checklist_submissions!end_checklist_id(id, odometer),
+              fuel_checklist:checklist_submissions!fuel_checklist_id(id, details, odometer)
+            `)
             .eq("company_id", companyId)
             .gte("start_at", startIso)
             .lte("start_at", endIso)
@@ -409,12 +462,94 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
-          let result = (data || []).map((r: any) => ({
-            ...r,
-            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
-            trailers: r.trailers || trailersMap[r.trailer_id] || null,
-            profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-", branch_id: null },
-          }));
+          const scheduleIds = (data || []).map((s: any) => s.id).filter(Boolean);
+          let fuelSubsMap: Record<string, number> = {};
+          if (scheduleIds.length > 0) {
+            const { data: fuelSubs } = await supabase
+              .from("checklist_submissions")
+              .select("id, schedule_id, details")
+              .in("schedule_id", scheduleIds);
+
+            (fuelSubs || []).forEach((fs: any) => {
+              if (fs.schedule_id) {
+                let l = 0;
+                if (fs.details) {
+                  const details = typeof fs.details === "string" ? JSON.parse(fs.details) : fs.details;
+                  l = Number(
+                    details.manual_liters ??
+                    details.liters ??
+                    details.litros ??
+                    details.qtd_litros ??
+                    details.gas_station_liters ??
+                    details.quantidade_litros ??
+                    details.itemValues?.gas_station_liters ??
+                    details.itemValues?.manual_liters ??
+                    details.itemValues?.liters ??
+                    details.itemValues?.litros ??
+                    0
+                  );
+                }
+                if (l > 0) {
+                  fuelSubsMap[fs.schedule_id] = (fuelSubsMap[fs.schedule_id] || 0) + l;
+                }
+              }
+            });
+          }
+
+          let totalKmDriven = 0;
+          let totalLiters = 0;
+
+          let result = (data || []).map((r: any) => {
+            const veh = r.vehicles || vehiclesMap[r.vehicle_id] || null;
+            const trl = r.trailers || trailersMap[r.trailer_id] || null;
+            const prof = r.profiles || { full_name: profilesMap[r.driver_id] || "-", branch_id: null };
+
+            const startKm = Number(r.adjusted_start_odometer ?? r.start_odometer ?? r.start_checklist?.odometer ?? 0);
+            const endKm = Number(r.adjusted_end_odometer ?? r.end_odometer ?? r.end_checklist?.odometer ?? 0);
+
+            let totalKm = 0;
+            if (endKm > 0 && startKm > 0 && endKm >= startKm) {
+              totalKm = endKm - startKm;
+            } else if (r.distance) {
+              totalKm = Number(r.distance);
+            }
+
+            let liters = 0;
+            if (r.adjusted_liters !== undefined && r.adjusted_liters !== null && Number(r.adjusted_liters) > 0) {
+              liters = Number(r.adjusted_liters);
+            } else if (fuelSubsMap[r.id]) {
+              liters = fuelSubsMap[r.id];
+            } else if (r.fuel_checklist?.details) {
+              const details = typeof r.fuel_checklist.details === "string" ? JSON.parse(r.fuel_checklist.details) : r.fuel_checklist.details;
+              liters = Number(
+                details.manual_liters ??
+                details.liters ??
+                details.litros ??
+                details.qtd_litros ??
+                details.gas_station_liters ??
+                details.quantidade_litros ??
+                details.itemValues?.gas_station_liters ??
+                details.itemValues?.manual_liters ??
+                details.itemValues?.liters ??
+                details.itemValues?.litros ??
+                0
+              );
+            }
+
+            totalKmDriven += totalKm;
+            totalLiters += liters;
+
+            return {
+              ...r,
+              vehicles: veh,
+              trailers: trl,
+              profiles: prof,
+              start_km: startKm,
+              end_km: endKm,
+              total_km: totalKm,
+              liters: liters,
+            };
+          });
 
           if (filters.vehicleId !== "all") {
             result = result.filter((r: any) => r.vehicle_id === filters.vehicleId || r.trailer_id === filters.vehicleId);
@@ -429,14 +564,29 @@ export default function ReportsOperationalView() {
             );
           }
 
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter(
+              (r: any) =>
+                r.vehicles?.plate?.toLowerCase().includes(term) ||
+                r.trailers?.plate?.toLowerCase().includes(term) ||
+                r.profiles?.full_name?.toLowerCase().includes(term) ||
+                r.plate?.toLowerCase().includes(term)
+            );
+          }
+
           setReportData(result);
-          setSummaryStats({ total: result.length });
+          setSummaryStats({
+            total: result.length,
+            totalKmDriven: Math.round(totalKmDriven),
+            totalLiters: Math.round(totalLiters * 10) / 10,
+          });
           break;
         }
 
         // --- CATEGORY: FROTA ---
         case "vehicles": {
-          const [vRes, tRes] = await Promise.all([
+          const [vRes, tRes, subRes, schRes] = await Promise.all([
             supabase
               .from("vehicles")
               .select("*, branches(name)")
@@ -447,16 +597,98 @@ export default function ReportsOperationalView() {
               .select("*, branches(name)")
               .eq("company_id", companyId)
               .order("plate"),
+            supabase
+              .from("checklist_submissions")
+              .select("id, vehicle_id, trailer_id, odometer, created_at")
+              .eq("company_id", companyId)
+              .not("odometer", "is", null)
+              .gt("odometer", 0)
+              .order("created_at", { ascending: false }),
+            supabase
+              .from("schedules")
+              .select("id, vehicle_id, trailer_id, end_odometer, start_odometer, adjusted_end_odometer, created_at, end_at, start_at")
+              .eq("company_id", companyId)
+              .order("created_at", { ascending: false }),
           ]);
 
           const vData = vRes.data || [];
           const tData = (tRes.data || []).map((t: any) => ({
             ...t,
             model: t.model || "Reboque",
-            type: t.type || "Reboque",
+            type: t.type || "Reboque / Semirreboque",
           }));
 
-          let combined = [...vData, ...tData];
+          // Maps for last known odometer and date
+          const lastVehicleKmMap: Record<string, { km: number; date: string }> = {};
+          const lastTrailerKmMap: Record<string, { km: number; date: string }> = {};
+
+          // Populate from checklist_submissions
+          (subRes.data || []).forEach((s: any) => {
+            const odo = Number(s.odometer || 0);
+            if (odo > 0) {
+              if (s.vehicle_id && (!lastVehicleKmMap[s.vehicle_id] || new Date(s.created_at) > new Date(lastVehicleKmMap[s.vehicle_id].date))) {
+                lastVehicleKmMap[s.vehicle_id] = { km: odo, date: s.created_at };
+              }
+              if (s.trailer_id && (!lastTrailerKmMap[s.trailer_id] || new Date(s.created_at) > new Date(lastTrailerKmMap[s.trailer_id].date))) {
+                lastTrailerKmMap[s.trailer_id] = { km: odo, date: s.created_at };
+              }
+            }
+          });
+
+          // Populate from schedules
+          (schRes.data || []).forEach((sch: any) => {
+            const endOdo = Number(sch.adjusted_end_odometer ?? sch.end_odometer ?? sch.start_odometer ?? 0);
+            const schDate = sch.end_at || sch.start_at || sch.created_at;
+            if (endOdo > 0 && schDate) {
+              if (sch.vehicle_id && (!lastVehicleKmMap[sch.vehicle_id] || endOdo > lastVehicleKmMap[sch.vehicle_id].km)) {
+                lastVehicleKmMap[sch.vehicle_id] = { km: endOdo, date: schDate };
+              }
+              if (sch.trailer_id && (!lastTrailerKmMap[sch.trailer_id] || endOdo > lastTrailerKmMap[sch.trailer_id].km)) {
+                lastTrailerKmMap[sch.trailer_id] = { km: endOdo, date: schDate };
+              }
+            }
+          });
+
+          // Combine vehicles & trailers with calculated current_km & last_km_date
+          const processedVehicles = vData.map((v: any) => {
+            let km = Number(v.odometer || v.current_km || 0);
+            let date = v.updated_at || v.created_at || null;
+
+            if (lastVehicleKmMap[v.id]) {
+              if (lastVehicleKmMap[v.id].km >= km || !km) {
+                km = lastVehicleKmMap[v.id].km;
+                date = lastVehicleKmMap[v.id].date;
+              }
+            }
+
+            return {
+              ...v,
+              asset_category: "Veículo",
+              current_km: km,
+              last_km_date: date,
+            };
+          });
+
+          const processedTrailers = tData.map((t: any) => {
+            let km = Number(t.odometer || t.current_km || 0);
+            let date = t.updated_at || t.created_at || null;
+
+            if (lastTrailerKmMap[t.id]) {
+              if (lastTrailerKmMap[t.id].km >= km || !km) {
+                km = lastTrailerKmMap[t.id].km;
+                date = lastTrailerKmMap[t.id].date;
+              }
+            }
+
+            return {
+              ...t,
+              asset_category: "Reboque",
+              current_km: km,
+              last_km_date: date,
+            };
+          });
+
+          let combined = [...processedVehicles, ...processedTrailers];
 
           if (filters.branchId !== "all") {
             combined = combined.filter((v: any) => v.branch_id === filters.branchId);
@@ -476,7 +708,10 @@ export default function ReportsOperationalView() {
               (v: any) =>
                 v.plate?.toLowerCase().includes(term) ||
                 v.model?.toLowerCase().includes(term) ||
-                v.type?.toLowerCase().includes(term),
+                v.type?.toLowerCase().includes(term) ||
+                v.chassi?.toLowerCase().includes(term) ||
+                v.renavam?.toLowerCase().includes(term) ||
+                v.asset_category?.toLowerCase().includes(term),
             );
           }
 
@@ -484,6 +719,8 @@ export default function ReportsOperationalView() {
           setSummaryStats({
             total: result.length,
             active: result.filter((v: any) => v.active !== false).length,
+            vehiclesCount: result.filter((v: any) => v.asset_category === "Veículo").length,
+            trailersCount: result.filter((v: any) => v.asset_category === "Reboque").length,
           });
           break;
         }
@@ -515,6 +752,12 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
+          // Build branches map from branches state
+          const branchMap: Record<string, string> = {};
+          (branches || []).forEach((b: any) => {
+            if (b.id) branchMap[b.id] = b.name;
+          });
+
           // Fetch scores separately
           const { data: perfData } = await supabase
             .from("driver_performance")
@@ -526,12 +769,18 @@ export default function ReportsOperationalView() {
 
           let result = (data || []).map((d: any) => ({
             ...d,
+            branches: d.branches || (d.branch_id && branchMap[d.branch_id] ? { name: branchMap[d.branch_id] } : null),
             driver_performance: [{ score: perfMap[d.id] ?? 0 }],
           }));
 
           if (filters.searchTerm) {
             const term = filters.searchTerm.toLowerCase();
-            result = result.filter((d: any) => d.full_name?.toLowerCase().includes(term));
+            result = result.filter(
+              (d: any) =>
+                d.full_name?.toLowerCase().includes(term) ||
+                d.branches?.name?.toLowerCase().includes(term) ||
+                d.cpf?.toLowerCase().includes(term)
+            );
           }
 
           setReportData(result);
@@ -543,14 +792,98 @@ export default function ReportsOperationalView() {
         }
 
         case "branches": {
-          const { data } = await supabase
-            .from("branches")
-            .select("*")
-            .eq("company_id", companyId)
-            .order("name");
+          const [bRes, vRes, tRes, dRes] = await Promise.all([
+            supabase
+              .from("branches")
+              .select("*")
+              .eq("company_id", companyId)
+              .order("name"),
+            supabase
+              .from("vehicles")
+              .select("id, branch_id")
+              .eq("company_id", companyId),
+            supabase
+              .from("trailers")
+              .select("id, branch_id")
+              .eq("company_id", companyId),
+            supabase
+              .from("profiles")
+              .select("id, branch_id")
+              .eq("company_id", companyId)
+              .eq("role", "driver"),
+          ]);
 
-          setReportData(data || []);
-          setSummaryStats({ total: (data || []).length });
+          let branchesData = bRes.data || [];
+
+          if (branchesData.length === 0) {
+            try {
+              const storageKey = `checkdrive_branches_${companyId || "default"}`;
+              const local = localStorage.getItem(storageKey);
+              if (local) {
+                branchesData = JSON.parse(local);
+              }
+            } catch (e) {
+              console.error("Error reading fallback branches from localStorage:", e);
+            }
+          }
+
+          const vCountMap: Record<string, number> = {};
+          (vRes.data || []).forEach((v: any) => {
+            if (v.branch_id) vCountMap[v.branch_id] = (vCountMap[v.branch_id] || 0) + 1;
+          });
+
+          const tCountMap: Record<string, number> = {};
+          (tRes.data || []).forEach((t: any) => {
+            if (t.branch_id) tCountMap[t.branch_id] = (tCountMap[t.branch_id] || 0) + 1;
+          });
+
+          const dCountMap: Record<string, number> = {};
+          (dRes.data || []).forEach((d: any) => {
+            if (d.branch_id) dCountMap[d.branch_id] = (dCountMap[d.branch_id] || 0) + 1;
+          });
+
+          let result = branchesData.map((b: any) => {
+            const vCount = vCountMap[b.id] || 0;
+            const tCount = tCountMap[b.id] || 0;
+            const dCount = dCountMap[b.id] || 0;
+            return {
+              ...b,
+              vehiclesCount: vCount,
+              trailersCount: tCount,
+              totalVehicles: vCount + tCount,
+              driversCount: dCount,
+            };
+          });
+
+          if (filters.branchId !== "all") {
+            result = result.filter((b: any) => b.id === filters.branchId);
+          }
+
+          if (filters.status === "active") {
+            result = result.filter((b: any) => b.active !== false);
+          } else if (filters.status === "inactive") {
+            result = result.filter((b: any) => b.active === false);
+          }
+
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter(
+              (b: any) =>
+                b.name?.toLowerCase().includes(term) ||
+                b.manager?.toLowerCase().includes(term) ||
+                b.city?.toLowerCase().includes(term) ||
+                b.state?.toLowerCase().includes(term) ||
+                b.cnpj?.toLowerCase().includes(term)
+            );
+          }
+
+          setReportData(result);
+          setSummaryStats({
+            total: result.length,
+            active: result.filter((b: any) => b.active !== false).length,
+            totalVehiclesInBranches: result.reduce((acc: number, b: any) => acc + (b.totalVehicles || 0), 0),
+            totalDriversInBranches: result.reduce((acc: number, b: any) => acc + (b.driversCount || 0), 0),
+          });
           break;
         }
 
@@ -577,15 +910,51 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
-          let result = (data || []).map((r: any) => ({
-            ...r,
-            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
-            trailers: r.trailers || trailersMap[r.trailer_id] || null,
-            profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-" },
-          }));
+          let result = (data || []).map((r: any) => {
+            const trl = r.trailers || trailersMap[r.trailer_id] || trailersMap[r.vehicle_id] || null;
+            const veh = r.vehicles || vehiclesMap[r.vehicle_id] || null;
+            const isTrailer = Boolean(r.trailer_id || trailersMap[r.trailer_id] || trailersMap[r.vehicle_id] || (r.trailers?.plate && !r.vehicles?.plate));
+            const plate =
+              r.plate ||
+              (r.trailer_id ? (trailersMap[r.trailer_id]?.plate || r.trailers?.plate) : null) ||
+              trailersMap[r.vehicle_id]?.plate ||
+              (isTrailer && trl?.plate ? trl.plate : null) ||
+              veh?.plate ||
+              trl?.plate ||
+              vehiclesMap[r.vehicle_id]?.plate ||
+              "-";
+
+            return {
+              ...r,
+              vehicles: veh,
+              trailers: trl,
+              profiles: r.profiles || { full_name: profilesMap[r.driver_id] || "-" },
+              plate,
+              is_trailer: isTrailer,
+            };
+          });
 
           if (filters.vehicleId !== "all") {
             result = result.filter((r: any) => r.vehicle_id === filters.vehicleId || r.trailer_id === filters.vehicleId);
+          }
+
+          if (filters.branchId !== "all") {
+            result = result.filter(
+              (r: any) =>
+                r.vehicles?.branch_id === filters.branchId ||
+                r.trailers?.branch_id === filters.branchId,
+            );
+          }
+
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter(
+              (r: any) =>
+                r.plate?.toLowerCase().includes(term) ||
+                r.item_title?.toLowerCase().includes(term) ||
+                r.description?.toLowerCase().includes(term) ||
+                r.profiles?.full_name?.toLowerCase().includes(term),
+            );
           }
 
           setReportData(result);
@@ -617,12 +986,29 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
-          let result = (data || []).map((r: any) => ({
-            ...r,
-            vehicles: r.vehicles || vehiclesMap[r.vehicle_id] || null,
-            trailers: r.trailers || trailersMap[r.trailer_id] || null,
-            resolver: r.resolver || { full_name: profilesMap[r.resolved_by] || "Sistema" },
-          }));
+          let result = (data || []).map((r: any) => {
+            const trl = r.trailers || trailersMap[r.trailer_id] || trailersMap[r.vehicle_id] || null;
+            const veh = r.vehicles || vehiclesMap[r.vehicle_id] || null;
+            const isTrailer = Boolean(r.trailer_id || trailersMap[r.trailer_id] || trailersMap[r.vehicle_id] || (r.trailers?.plate && !r.vehicles?.plate));
+            const plate =
+              r.plate ||
+              (r.trailer_id ? (trailersMap[r.trailer_id]?.plate || r.trailers?.plate) : null) ||
+              trailersMap[r.vehicle_id]?.plate ||
+              (isTrailer && trl?.plate ? trl.plate : null) ||
+              veh?.plate ||
+              trl?.plate ||
+              vehiclesMap[r.vehicle_id]?.plate ||
+              "-";
+
+            return {
+              ...r,
+              vehicles: veh,
+              trailers: trl,
+              resolver: r.resolver || { full_name: profilesMap[r.resolved_by] || "Sistema" },
+              plate,
+              is_trailer: isTrailer,
+            };
+          });
 
           if (filters.vehicleId !== "all") {
             result = result.filter((r: any) => r.vehicle_id === filters.vehicleId || r.trailer_id === filters.vehicleId);
@@ -633,6 +1019,18 @@ export default function ReportsOperationalView() {
               (r: any) =>
                 r.vehicles?.branch_id === filters.branchId ||
                 r.trailers?.branch_id === filters.branchId,
+            );
+          }
+
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter(
+              (r: any) =>
+                r.plate?.toLowerCase().includes(term) ||
+                r.item_title?.toLowerCase().includes(term) ||
+                r.description?.toLowerCase().includes(term) ||
+                r.resolution_notes?.toLowerCase().includes(term) ||
+                r.resolver?.full_name?.toLowerCase().includes(term),
             );
           }
 
@@ -651,34 +1049,101 @@ export default function ReportsOperationalView() {
 
         // --- CATEGORY: ESTOQUE ---
         case "inventory": {
-          const { data } = await supabase
+          const { data: items } = await supabase
             .from("inventory_items")
             .select("*")
             .eq("company_id", companyId)
             .order("name");
 
-          let result = data || [];
+          const { data: transactions } = await supabase
+            .from("inventory_transactions")
+            .select("*, inventory_items(name)")
+            .eq("company_id", companyId)
+            .order("created_at", { ascending: false });
+
+          const { data: vehicles } = await supabase
+            .from("vehicles")
+            .select("id, plate")
+            .eq("company_id", companyId);
+
+          const { data: trailers } = await supabase
+            .from("trailers")
+            .select("id, plate")
+            .eq("company_id", companyId);
+
+          const vehMap: Record<string, string> = {};
+          (vehicles || []).forEach((v) => { vehMap[v.id] = v.plate; });
+          (trailers || []).forEach((t) => { vehMap[t.id] = t.plate; });
+
+          const txMap: Record<string, any> = {};
+          (transactions || []).forEach((tx) => {
+            if (tx.item_id && !txMap[tx.item_id]) {
+              txMap[tx.item_id] = tx;
+            }
+          });
+
+          let result = (items || []).map((item) => {
+            const tx = txMap[item.id];
+            let plate = item.plate || tx?.plate || (tx?.vehicle_id ? vehMap[tx.vehicle_id] : null) || (tx?.trailer_id ? vehMap[tx.trailer_id] : null);
+            if (!plate && tx?.notes) {
+              const match = tx.notes.match(/([A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4})/i);
+              if (match) plate = match[0].toUpperCase();
+            }
+
+            const nfNumber = item.nf_number || tx?.nf_number || "-";
+            const itemDate = tx?.date || tx?.created_at || item.created_at;
+            const unitPrice = Number(item.average_cost || tx?.unit_price || 0);
+
+            return {
+              ...item,
+              latest_tx: tx,
+              date: itemDate,
+              nf_number: nfNumber,
+              plate: plate || "-",
+              unit_price: unitPrice,
+            };
+          });
+
           if (filters.status === "low") {
-            result = result.filter((i) => Number(i.quantity) <= Number(i.min_quantity || 0));
+            result = result.filter((i) => Number(i.current_quantity ?? i.quantity ?? 0) <= Number(i.min_quantity || 0));
           }
 
           if (filters.searchTerm) {
             const term = filters.searchTerm.toLowerCase();
-            result = result.filter((i) => i.name?.toLowerCase().includes(term));
+            result = result.filter((i) =>
+              i.name?.toLowerCase().includes(term) ||
+              i.sku?.toLowerCase().includes(term) ||
+              i.nf_number?.toLowerCase().includes(term) ||
+              i.plate?.toLowerCase().includes(term)
+            );
           }
 
           setReportData(result);
           setSummaryStats({
             totalItems: result.length,
-            lowStockCount: result.filter((i) => Number(i.quantity) <= Number(i.min_quantity || 0)).length,
+            lowStockCount: result.filter((i) => Number(i.current_quantity ?? i.quantity ?? 0) <= Number(i.min_quantity || 0)).length,
           });
           break;
         }
 
         case "purchases": {
+          const { data: vehicles } = await supabase
+            .from("vehicles")
+            .select("id, plate")
+            .eq("company_id", companyId);
+
+          const { data: trailers } = await supabase
+            .from("trailers")
+            .select("id, plate")
+            .eq("company_id", companyId);
+
+          const vehMap: Record<string, string> = {};
+          (vehicles || []).forEach((v) => { vehMap[v.id] = v.plate; });
+          (trailers || []).forEach((t) => { vehMap[t.id] = t.plate; });
+
           let { data, error } = await supabase
             .from("inventory_transactions")
-            .select("*, inventory_items(name)")
+            .select("*, inventory_items(name), inventory_suppliers(name)")
             .eq("company_id", companyId)
             .eq("type", "in")
             .gte("created_at", startIso)
@@ -697,7 +1162,30 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
-          const result = data || [];
+          let result = (data || []).map((tx: any) => {
+            let plate = tx.plate || (tx.vehicle_id ? vehMap[tx.vehicle_id] : null) || (tx.trailer_id ? vehMap[tx.trailer_id] : null);
+            if (!plate && tx.notes) {
+              const match = tx.notes.match(/([A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4})/i);
+              if (match) plate = match[0].toUpperCase();
+            }
+
+            return {
+              ...tx,
+              plate: plate || "-",
+              date: tx.date || tx.created_at,
+            };
+          });
+
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter((i) =>
+              i.inventory_items?.name?.toLowerCase().includes(term) ||
+              i.nf_number?.toLowerCase().includes(term) ||
+              i.plate?.toLowerCase().includes(term) ||
+              i.inventory_suppliers?.name?.toLowerCase().includes(term)
+            );
+          }
+
           const totalAmount = result.reduce(
             (acc, curr) => acc + (Number(curr.total_price) || Number(curr.quantity) * Number(curr.unit_price) || 0),
             0,
@@ -712,9 +1200,23 @@ export default function ReportsOperationalView() {
         }
 
         case "stock_out": {
+          const { data: vehicles } = await supabase
+            .from("vehicles")
+            .select("id, plate")
+            .eq("company_id", companyId);
+
+          const { data: trailers } = await supabase
+            .from("trailers")
+            .select("id, plate")
+            .eq("company_id", companyId);
+
+          const vehMap: Record<string, string> = {};
+          (vehicles || []).forEach((v) => { vehMap[v.id] = v.plate; });
+          (trailers || []).forEach((t) => { vehMap[t.id] = t.plate; });
+
           let { data, error } = await supabase
             .from("inventory_transactions")
-            .select("*, inventory_items(name)")
+            .select("*, inventory_items(name, average_cost)")
             .eq("company_id", companyId)
             .eq("type", "out")
             .gte("created_at", startIso)
@@ -733,20 +1235,84 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
-          setReportData(data || []);
-          setSummaryStats({ total: (data || []).length });
+          let result = (data || []).map((tx: any) => {
+            let plate = tx.plate || (tx.vehicle_id ? vehMap[tx.vehicle_id] : null) || (tx.trailer_id ? vehMap[tx.trailer_id] : null);
+            if (!plate && tx.notes) {
+              const match = tx.notes.match(/([A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4})/i);
+              if (match) plate = match[0].toUpperCase();
+            }
+
+            const qty = Math.abs(Number(tx.quantity || 0));
+            const unitPrice = Number(tx.unit_price || tx.inventory_items?.average_cost || 0);
+            const totalPrice = Number(tx.total_price) || (qty * unitPrice);
+
+            return {
+              ...tx,
+              plate: plate || "-",
+              date: tx.date || tx.created_at,
+              quantity: qty,
+              unit_price: unitPrice,
+              total_price: totalPrice,
+            };
+          });
+
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter((i) =>
+              i.inventory_items?.name?.toLowerCase().includes(term) ||
+              i.notes?.toLowerCase().includes(term) ||
+              i.plate?.toLowerCase().includes(term)
+            );
+          }
+
+          const totalAmount = result.reduce(
+            (acc, curr) => acc + (Number(curr.total_price) || 0),
+            0,
+          );
+
+          setReportData(result);
+          setSummaryStats({
+            totalTransactions: result.length,
+            totalAmount,
+          });
           break;
         }
 
         case "suppliers": {
-          const { data } = await supabase
+          let { data: invSuppliers } = await supabase
+            .from("inventory_suppliers")
+            .select("*")
+            .eq("company_id", companyId)
+            .order("name");
+
+          let { data: genSuppliers } = await supabase
             .from("suppliers")
             .select("*")
             .eq("company_id", companyId)
             .order("name");
 
-          setReportData(data || []);
-          setSummaryStats({ total: (data || []).length });
+          const map = new Map<string, any>();
+          (invSuppliers || []).forEach((s) => map.set(s.id || s.name, s));
+          (genSuppliers || []).forEach((s) => {
+            const key = s.id || s.name;
+            if (!map.has(key)) map.set(key, s);
+          });
+
+          let result = Array.from(map.values());
+
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter((i) =>
+              i.name?.toLowerCase().includes(term) ||
+              i.cnpj_cpf?.toLowerCase().includes(term) ||
+              i.contact_name?.toLowerCase().includes(term) ||
+              i.phone?.toLowerCase().includes(term) ||
+              i.email?.toLowerCase().includes(term)
+            );
+          }
+
+          setReportData(result);
+          setSummaryStats({ totalSuppliers: result.length });
           break;
         }
 
@@ -799,7 +1365,6 @@ export default function ReportsOperationalView() {
           }
 
           let totalLiters = 0;
-          let totalCost = 0;
 
           result = result.map((row: any) => {
             let detailsObj: any = {};
@@ -809,11 +1374,45 @@ export default function ReportsOperationalView() {
             } catch (e) {
               console.error(e);
             }
-            const liters = Number(detailsObj.liters || detailsObj.litros) || 0;
-            const cost = Number(detailsObj.total_value || detailsObj.valor_total) || 0;
+
+            // Extract Liters accurately
+            let liters = Number(detailsObj.manual_liters ?? detailsObj.liters ?? detailsObj.litros) || 0;
+
+            if (!liters && detailsObj.itemValues && typeof detailsObj.itemValues === "object") {
+              for (const [key, val] of Object.entries(detailsObj.itemValues)) {
+                const title = (detailsObj.itemTitles?.[key] || "").toLowerCase();
+                const valNum = Number(val);
+                if (!isNaN(valNum) && valNum > 0) {
+                  if (title.includes("litr") || title.includes("lit") || title.includes("qtd") || title.includes("combust")) {
+                    liters = valNum;
+                    break;
+                  } else if (liters === 0) {
+                    liters = valNum;
+                  }
+                }
+              }
+            }
+
+            // Extract Location / Posto
+            let location =
+              detailsObj.station ||
+              detailsObj.posto ||
+              detailsObj.location ||
+              detailsObj.local ||
+              detailsObj.gas_station ||
+              detailsObj.posto_combustivel ||
+              row.location ||
+              null;
+
+            if (!location && row.latitude && row.longitude) {
+              location = `${Number(row.latitude).toFixed(4)}, ${Number(row.longitude).toFixed(4)}`;
+            }
+
+            if (!location) {
+              location = "Posto / Local não informado";
+            }
 
             totalLiters += liters;
-            totalCost += cost;
 
             return {
               ...row,
@@ -822,15 +1421,25 @@ export default function ReportsOperationalView() {
               profiles: row.profiles || { full_name: profilesMap[row.driver_id] || "-" },
               parsedDetails: detailsObj,
               liters,
-              cost,
+              location,
             };
           });
+
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter((r: any) =>
+              r.plate?.toLowerCase().includes(term) ||
+              r.vehicles?.plate?.toLowerCase().includes(term) ||
+              r.trailers?.plate?.toLowerCase().includes(term) ||
+              r.profiles?.full_name?.toLowerCase().includes(term) ||
+              r.location?.toLowerCase().includes(term)
+            );
+          }
 
           setReportData(result);
           setSummaryStats({
             totalFuelings: result.length,
             totalLiters: Math.round(totalLiters),
-            totalCost,
           });
           break;
         }
@@ -916,13 +1525,55 @@ export default function ReportsOperationalView() {
             data = fallbackData || [];
           }
 
-          let result = (data || []).map((a: any) => ({
-            ...a,
-            profiles: { full_name: profilesMap[a.user_id || a.driver_id] || "-" },
-          }));
+          let result = (data || []).map((a: any) => {
+            const userName = a.user_name || a.user_email || profilesMap[a.user_id || a.driver_id] || "Usuário";
+            const whereChanged = [a.module, a.entity, a.entity_id ? `#${a.entity_id}` : ""].filter(Boolean).join(" › ") || a.system_section || a.section || "Sistema";
+
+            let detailsText = a.reason || a.description || "";
+            if (!detailsText && a.details) {
+              detailsText = typeof a.details === "object" ? JSON.stringify(a.details) : String(a.details);
+            }
+            if (!detailsText && a.changes) {
+              detailsText = typeof a.changes === "object" ? JSON.stringify(a.changes) : String(a.changes);
+            }
+
+            let whatChanged = detailsText;
+            if (a.field_changed) {
+              whatChanged = `Campo [${a.field_changed}]${whatChanged ? `: ${whatChanged}` : ""}`;
+            }
+            if (a.old_value !== undefined && a.old_value !== null && a.new_value !== undefined && a.new_value !== null) {
+              const oldStr = typeof a.old_value === "object" ? JSON.stringify(a.old_value) : String(a.old_value);
+              const newStr = typeof a.new_value === "object" ? JSON.stringify(a.new_value) : String(a.new_value);
+              whatChanged += ` (${oldStr} ➔ ${newStr})`;
+            }
+            if (!whatChanged) {
+              whatChanged = a.action || a.type || "Alteração registrada";
+            }
+
+            return {
+              ...a,
+              user_display: userName,
+              where_changed: whereChanged,
+              what_changed: whatChanged,
+              profiles: { full_name: userName },
+            };
+          });
+
+          if (filters.searchTerm) {
+            const term = filters.searchTerm.toLowerCase();
+            result = result.filter((i) =>
+              i.user_display?.toLowerCase().includes(term) ||
+              i.where_changed?.toLowerCase().includes(term) ||
+              i.what_changed?.toLowerCase().includes(term) ||
+              i.action?.toLowerCase().includes(term) ||
+              i.module?.toLowerCase().includes(term) ||
+              i.entity?.toLowerCase().includes(term) ||
+              i.reason?.toLowerCase().includes(term)
+            );
+          }
 
           setReportData(result);
-          setSummaryStats({ total: result.length });
+          setSummaryStats({ totalAudits: result.length });
           break;
         }
 
@@ -986,12 +1637,36 @@ export default function ReportsOperationalView() {
           (d.items || []).map((i: any) => i?.item_title || "").join(" | "),
         ]);
       } else if (selectedReport === "vehicles") {
-        headers = ["Placa", "Modelo", "Tipo", "Filial", "Status"];
+        headers = [
+          "Placa",
+          "Categoria",
+          "Modelo",
+          "Tipo",
+          "Ano Fab/Mod",
+          "Chassi",
+          "RENAVAM",
+          "Cor",
+          "Combustível",
+          "ANTT",
+          "Filial",
+          "KM Atual",
+          "Data do Último KM",
+          "Status",
+        ];
         rows = (reportData || []).map((d) => [
           d.plate,
+          d.asset_category || (d.model === "Reboque" ? "Reboque" : "Veículo"),
           d.model || "-",
           d.type || "-",
+          d.manufacture_year || d.model_year ? `${d.manufacture_year || '-'}/${d.model_year || '-'}` : "-",
+          d.chassi || "-",
+          d.renavam || "-",
+          d.color || "-",
+          d.fuel_type || "-",
+          d.antt || "-",
           d.branches?.name || "Sem Filial",
+          d.current_km ? `${Number(d.current_km).toLocaleString("pt-BR")} km` : "0 km",
+          d.last_km_date ? new Date(d.last_km_date).toLocaleString("pt-BR") : "-",
           d.active !== false ? "Ativo" : "Inativo",
         ]);
       } else if (selectedReport === "drivers") {
@@ -1001,6 +1676,18 @@ export default function ReportsOperationalView() {
           d.branches?.name || "Sem Filial",
           d.driver_performance?.[0]?.score ?? d.driver_performance?.score ?? "-",
           d.active !== false ? "Ativo" : "Inativo",
+        ]);
+      } else if (selectedReport === "branches") {
+        headers = ["Nome da Filial", "Cidade/UF", "Responsável / Gerente", "Total de Veículos", "Total de Motoristas", "Telefone", "CNPJ", "Status"];
+        rows = (reportData || []).map((b) => [
+          b.name,
+          b.city && b.state ? `${b.city}/${b.state}` : b.city || b.state || "-",
+          b.manager || "-",
+          b.totalVehicles ?? 0,
+          b.driversCount ?? 0,
+          b.phone || "-",
+          b.cnpj || "-",
+          b.active !== false ? "Ativa" : "Inativa",
         ]);
       } else if (selectedReport === "resolved_issues") {
         headers = ["Data Resolução", "Placa", "Item", "Descrição da Pendência", "Detalhes da Resolução", "Resolvido Por", "Custo (R$)"];
@@ -1014,22 +1701,31 @@ export default function ReportsOperationalView() {
           Number(d.resolution_value || 0).toFixed(2),
         ]);
       } else if (selectedReport === "fuelings") {
-        headers = ["Data", "Placa", "Motorista", "Litros (L)", "Valor Total (R$)"];
+        headers = ["Data", "Placa", "Motorista", "Litros (L)", "Local / Posto"];
         rows = (reportData || []).map((d) => [
-          new Date(d.created_at).toLocaleString("pt-BR"),
+          d.created_at ? new Date(d.created_at).toLocaleDateString("pt-BR") : "-",
           d.plate || d.vehicles?.plate || d.trailers?.plate || "-",
           d.profiles?.full_name || "-",
-          d.liters || 0,
-          Number(d.cost || 0).toFixed(2),
+          d.liters ? `${d.liters} L` : "0 L",
+          d.location || "-",
         ]);
       } else if (selectedReport === "schedules") {
-        headers = ["Data / Hora", "Placa", "Motorista", "Status"];
-        rows = (reportData || []).map((d) => [
-          d.start_at ? new Date(d.start_at).toLocaleString("pt-BR") : "-",
-          d.plate || d.vehicles?.plate || d.trailers?.plate || "-",
-          d.profiles?.full_name || "-",
-          d.status || "-",
-        ]);
+        headers = ["Data da Escala", "Placa", "Motorista", "KM Inicial", "KM Final", "KM Total", "Abastecimento (Litros)", "Status"];
+        rows = (reportData || []).map((d) => {
+          const plateStr = d.trailers?.plate
+            ? `${d.trailers.plate}${d.vehicles?.plate ? ` (${d.vehicles.plate})` : ''}`
+            : d.vehicles?.plate || d.plate || "-";
+          return [
+            d.start_at ? new Date(d.start_at).toLocaleString("pt-BR") : "-",
+            plateStr,
+            d.profiles?.full_name || d.driver_name || "-",
+            d.start_km ? `${d.start_km} km` : "-",
+            d.end_km ? `${d.end_km} km` : "-",
+            d.total_km ? `${d.total_km} km` : "-",
+            d.liters > 0 ? `${d.liters} L` : "-",
+            d.status === "completed" ? "Concluída" : d.status === "in_progress" ? "Em Andamento" : d.status || "Agendada",
+          ];
+        });
       } else if (selectedReport === "notifications" || selectedReport === "auto_alerts") {
         headers = ["Data", "Placa", "Título / Alerta", "Descrição", "Status"];
         rows = (reportData || []).map((d) => [
@@ -1047,6 +1743,61 @@ export default function ReportsOperationalView() {
           d.endOdo,
           d.kmDriven,
           d.count,
+        ]);
+      } else if (selectedReport === "inventory") {
+        headers = ["Data", "Item / Produto", "SKU / Código", "Categoria", "Nº da NF", "Placa", "Qtd. em Estoque", "Valor do Produto (R$)", "Status"];
+        rows = (reportData || []).map((d) => [
+          d.date || d.created_at ? new Date(d.date || d.created_at).toLocaleDateString("pt-BR") : "-",
+          d.name || "-",
+          d.sku || "-",
+          d.category || "Geral",
+          d.nf_number || "-",
+          d.plate || "-",
+          Number(d.current_quantity ?? d.quantity ?? 0),
+          Number(d.unit_price ?? d.average_cost ?? 0).toFixed(2),
+          Number(d.current_quantity ?? d.quantity ?? 0) <= Number(d.min_quantity || 0) ? "Estoque Baixo" : "Normal",
+        ]);
+      } else if (selectedReport === "purchases") {
+        headers = ["Data", "Item / Produto", "Nº da NF", "Placa", "Fornecedor", "Quantidade", "Valor Unit. (R$)", "Valor Total (R$)"];
+        rows = (reportData || []).map((d) => [
+          d.date || d.created_at ? new Date(d.date || d.created_at).toLocaleDateString("pt-BR") : "-",
+          d.inventory_items?.name || d.name || "-",
+          d.nf_number || "-",
+          d.plate || "-",
+          d.inventory_suppliers?.name || "-",
+          Number(d.quantity || 0),
+          Number(d.unit_price || 0).toFixed(2),
+          Number(d.total_price || (Number(d.quantity || 0) * Number(d.unit_price || 0))).toFixed(2),
+        ]);
+      } else if (selectedReport === "stock_out") {
+        headers = ["Data", "Item / Produto", "Placa", "Observações", "Quantidade", "Valor Unit. (R$)", "Valor Total (R$)"];
+        rows = (reportData || []).map((d) => [
+          d.date || d.created_at ? new Date(d.date || d.created_at).toLocaleDateString("pt-BR") : "-",
+          d.inventory_items?.name || d.name || "-",
+          d.plate || d.vehicles?.plate || d.trailers?.plate || "-",
+          d.notes || "-",
+          Number(d.quantity || 0),
+          Number(d.unit_price || 0).toFixed(2),
+          Number(d.total_price || 0).toFixed(2),
+        ]);
+      } else if (selectedReport === "suppliers") {
+        headers = ["Nome / Fornecedor", "CNPJ / CPF", "Contato / Responsável", "Telefone", "E-mail", "Endereço"];
+        rows = (reportData || []).map((d) => [
+          d.name || "-",
+          d.cnpj_cpf || "-",
+          d.contact_name || "-",
+          d.phone || "-",
+          d.email || "-",
+          d.address || "-",
+        ]);
+      } else if (selectedReport === "user_audits" || selectedReport === "system_audits") {
+        headers = ["Data / Hora", "Usuário Responsável", "Onde Alterou (Módulo / Entidade)", "Ação", "O que Alterou / Detalhes"];
+        rows = (reportData || []).map((d) => [
+          d.created_at ? new Date(d.created_at).toLocaleString("pt-BR") : "-",
+          d.user_display || d.user_name || d.user_email || d.profiles?.full_name || "-",
+          d.where_changed || [d.module, d.entity, d.entity_id ? `#${d.entity_id}` : ""].filter(Boolean).join(" > ") || "-",
+          d.action || d.type || "-",
+          d.what_changed || d.reason || d.field_changed || "-",
         ]);
       } else {
         // Fallback generic tabular mapping
@@ -1454,6 +2205,8 @@ export default function ReportsOperationalView() {
           {summaryStats.totalFuelings !== undefined && <span>Abastecimentos: {summaryStats.totalFuelings}</span>}
           {summaryStats.totalLiters !== undefined && <span>Volume Total: {summaryStats.totalLiters} L</span>}
           {summaryStats.totalKmDriven !== undefined && <span>KM Rodados: {summaryStats.totalKmDriven} km</span>}
+          {summaryStats.totalSuppliers !== undefined && <span>Fornecedores Cadastrados: {summaryStats.totalSuppliers}</span>}
+          {summaryStats.totalAudits !== undefined && <span>Auditorias Registradas: {summaryStats.totalAudits}</span>}
         </div>
       )}
 
@@ -1480,32 +2233,46 @@ export default function ReportsOperationalView() {
                 <tr className="bg-gray-50/80 border-b border-gray-200/80 text-[10px] font-black uppercase text-gray-500 tracking-wider">
                   {selectedReport === "pending_by_plate" ? (
                     <>
-                      <th className="py-3 px-4">Placa</th>
-                      <th className="py-3 px-4">Qtd Pendências</th>
-                      <th className="py-3 px-4">Itens com Defeito</th>
+                      <th className="py-3 px-4 w-36">Placa</th>
+                      <th className="py-3 px-4 w-36 text-center">Qtd Pendências</th>
+                      <th className="py-3 px-4">Seleção / Lista de Defeitos (Dropdown)</th>
+                      <th className="py-3 px-4 w-24 text-right">Ação</th>
                     </>
                   ) : selectedReport === "vehicles" ? (
                     <>
-                      <th className="py-3 px-4">Placa</th>
-                      <th className="py-3 px-4">Modelo</th>
-                      <th className="py-3 px-4">Tipo</th>
+                      <th className="py-3 px-4">Placa / Categoria</th>
+                      <th className="py-3 px-4">Modelo / Tipo</th>
+                      <th className="py-3 px-4">Ano (Fab/Mod)</th>
+                      <th className="py-3 px-4">Chassi / RENAVAM</th>
+                      <th className="py-3 px-4">Cor / Comb. / ANTT</th>
                       <th className="py-3 px-4">Filial</th>
-                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-right">KM Atual</th>
+                      <th className="py-3 px-4 text-right">Data do Último KM</th>
+                      <th className="py-3 px-4 text-center">Status</th>
                     </>
                   ) : selectedReport === "drivers" ? (
                     <>
                       <th className="py-3 px-4">Nome Completo</th>
                       <th className="py-3 px-4">Filial</th>
                       <th className="py-3 px-4">Pontuação</th>
-                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                    </>
+                  ) : selectedReport === "branches" ? (
+                    <>
+                      <th className="py-3 px-4">Filial / Localização</th>
+                      <th className="py-3 px-4">Responsável / Gerente</th>
+                      <th className="py-3 px-4 text-center">Total de Veículos</th>
+                      <th className="py-3 px-4 text-center">Total de Motoristas</th>
+                      <th className="py-3 px-4">Contato / CNPJ</th>
+                      <th className="py-3 px-4 text-center">Status</th>
                     </>
                   ) : selectedReport === "fuelings" ? (
                     <>
                       <th className="py-3 px-4">Data</th>
                       <th className="py-3 px-4">Placa</th>
                       <th className="py-3 px-4">Motorista</th>
-                      <th className="py-3 px-4">Litros</th>
-                      <th className="py-3 px-4">Valor Total (R$)</th>
+                      <th className="py-3 px-4 text-center">Litros</th>
+                      <th className="py-3 px-4">Local / Posto</th>
                     </>
                   ) : selectedReport === "mileage" ? (
                     <>
@@ -1542,6 +2309,65 @@ export default function ReportsOperationalView() {
                       <th className="py-3 px-4">Descrição / Regra</th>
                       <th className="py-3 px-4">Status</th>
                     </>
+                  ) : selectedReport === "schedules" ? (
+                    <>
+                      <th className="py-3 px-4">Data da Escala</th>
+                      <th className="py-3 px-4">Placa</th>
+                      <th className="py-3 px-4">Motorista</th>
+                      <th className="py-3 px-4 text-right">KM Inicial</th>
+                      <th className="py-3 px-4 text-right">KM Final</th>
+                      <th className="py-3 px-4 text-right">KM Total</th>
+                      <th className="py-3 px-4 text-right">Abastecimento</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                    </>
+                  ) : selectedReport === "inventory" ? (
+                    <>
+                      <th className="py-3 px-4">Data</th>
+                      <th className="py-3 px-4">Item / Produto</th>
+                      <th className="py-3 px-4">Nº da NF</th>
+                      <th className="py-3 px-4">Placa</th>
+                      <th className="py-3 px-4 text-center">Qtd. em Estoque</th>
+                      <th className="py-3 px-4 text-right">Valor do Produto</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                    </>
+                  ) : selectedReport === "purchases" ? (
+                    <>
+                      <th className="py-3 px-4">Data</th>
+                      <th className="py-3 px-4">Item / Produto</th>
+                      <th className="py-3 px-4">Nº da NF</th>
+                      <th className="py-3 px-4">Placa</th>
+                      <th className="py-3 px-4">Fornecedor</th>
+                      <th className="py-3 px-4 text-center">Quantidade</th>
+                      <th className="py-3 px-4 text-right">Valor Unit. (R$)</th>
+                      <th className="py-3 px-4 text-right">Valor Total (R$)</th>
+                    </>
+                  ) : selectedReport === "stock_out" ? (
+                    <>
+                      <th className="py-3 px-4">Data</th>
+                      <th className="py-3 px-4">Item / Produto</th>
+                      <th className="py-3 px-4">Placa</th>
+                      <th className="py-3 px-4">Observações / Motivo</th>
+                      <th className="py-3 px-4 text-center">Quantidade</th>
+                      <th className="py-3 px-4 text-right">Valor Unit. (R$)</th>
+                      <th className="py-3 px-4 text-right">Valor Total (R$)</th>
+                    </>
+                  ) : selectedReport === "suppliers" ? (
+                    <>
+                      <th className="py-3 px-4">Nome / Fornecedor</th>
+                      <th className="py-3 px-4">CNPJ / CPF</th>
+                      <th className="py-3 px-4">Contato / Responsável</th>
+                      <th className="py-3 px-4">Telefone / WhatsApp</th>
+                      <th className="py-3 px-4">E-mail</th>
+                      <th className="py-3 px-4">Endereço</th>
+                    </>
+                  ) : selectedReport === "user_audits" || selectedReport === "system_audits" ? (
+                    <>
+                      <th className="py-3 px-4">Data e Hora</th>
+                      <th className="py-3 px-4">Usuário / Responsável</th>
+                      <th className="py-3 px-4">Onde Alterou (Módulo / Entidade)</th>
+                      <th className="py-3 px-4 text-center">Ação</th>
+                      <th className="py-3 px-4">O que Alterou (Detalhes da Alteração)</th>
+                    </>
                   ) : (
                     <>
                       <th className="py-3 px-4">Data</th>
@@ -1555,27 +2381,271 @@ export default function ReportsOperationalView() {
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs font-semibold text-gray-700">
                 {(reportData || []).map((row, idx) => (
-                  <tr key={row.id || idx} className="hover:bg-gray-50/50 transition-colors">
-                    {selectedReport === "pending_by_plate" ? (
-                      <>
-                        <td className="py-3 px-4 font-black text-indigo-600">{row.plate}</td>
-                        <td className="py-3 px-4 font-bold">{row.count}</td>
-                        <td className="py-3 px-4 text-gray-600">
-                          {(row.items || []).map((i: any) => i?.item_title || "").join(", ")}
+                  selectedReport === "pending_by_plate" ? (
+                    <React.Fragment key={row.plate || idx}>
+                      <tr className="hover:bg-gray-50/50 transition-colors border-b border-gray-100">
+                        <td className="py-3 px-4 font-black text-indigo-600 text-sm align-top">
+                          {row.plate}
                         </td>
-                      </>
-                    ) : selectedReport === "vehicles" ? (
+                        <td className="py-3 px-4 font-bold text-center align-top">
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-black bg-rose-50 text-rose-700 border border-rose-200">
+                            {row.count} {row.count === 1 ? 'pendência' : 'pendências'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 align-top">
+                          {/* Dropdown Select to pick an individual defect */}
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                            <div className="relative flex-1 w-full max-w-md">
+                              <select
+                                value={selectedDefectByPlate[row.plate] || ""}
+                                onChange={(e) =>
+                                  setSelectedDefectByPlate((prev) => ({
+                                    ...prev,
+                                    [row.plate]: e.target.value,
+                                  }))
+                                }
+                                className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-gray-800 shadow-2xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden cursor-pointer"
+                              >
+                                <option value="">
+                                  🔽 Selecionar Defeito no Dropdown ({row.count} cadastrado{row.count > 1 ? 's' : ''})...
+                                </option>
+                                {row.items?.map((item: any, iIdx: number) => (
+                                  <option key={item.id || iIdx} value={item.id}>
+                                    Defeito #{iIdx + 1}: {item.item_title || "Sem título"} [{item.priority || "Médio"}] - {item.description ? item.description.substring(0, 45) + '...' : 'Sem observação'}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <button
+                              onClick={() => togglePlateExpand(row.plate)}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold transition-all bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shrink-0"
+                            >
+                              {expandedPlates[row.plate] ? (
+                                <>
+                                  <ChevronUp size={14} /> Ocultar Lista ({row.count})
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown size={14} /> Ver Todos ({row.count})
+                                </>
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Selected Defect Card Detail */}
+                          {(() => {
+                            const selectedId = selectedDefectByPlate[row.plate];
+                            if (!selectedId) return null;
+                            const selectedDefect = row.items?.find((i: any) => i.id === selectedId);
+                            if (!selectedDefect) return null;
+
+                            return (
+                              <div className="mt-2.5 p-3.5 bg-indigo-50/70 rounded-xl border border-indigo-200 space-y-2 text-xs text-gray-800 animate-fadeIn shadow-2xs">
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 pb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-black text-indigo-950 text-sm">
+                                      {selectedDefect.item_title}
+                                    </span>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                                        selectedDefect.priority === "Alta"
+                                          ? "bg-rose-100 text-rose-700 border border-rose-300"
+                                          : selectedDefect.priority === "Baixa"
+                                          ? "bg-blue-100 text-blue-700 border border-blue-300"
+                                          : "bg-amber-100 text-amber-800 border border-amber-300"
+                                      }`}
+                                    >
+                                      Prioridade: {selectedDefect.priority || "Médio"}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={() =>
+                                      setSelectedDefectByPlate((prev) => ({
+                                        ...prev,
+                                        [row.plate]: "",
+                                      }))
+                                    }
+                                    className="text-gray-400 hover:text-gray-700 text-[11px] font-bold underline cursor-pointer"
+                                  >
+                                    Limpar seleção
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                                  <div>
+                                    <span className="text-gray-500 block font-semibold">Descrição / Observação:</span>
+                                    <span className="font-bold text-gray-900">
+                                      {selectedDefect.description || "Nenhuma observação informada."}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500 block font-semibold">Motorista / Apontado por:</span>
+                                    <span className="font-bold text-gray-900">
+                                      {selectedDefect.profiles?.full_name || selectedDefect.driver_name || "N/A"}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500 block font-semibold">Data do Registro:</span>
+                                    <span className="font-bold text-gray-900">
+                                      {selectedDefect.created_at
+                                        ? new Date(selectedDefect.created_at).toLocaleString("pt-BR")
+                                        : "N/A"}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500 block font-semibold">Foto Anexa:</span>
+                                    {selectedDefect.photo_url ? (
+                                      <button
+                                        onClick={() => setPreviewPhoto(selectedDefect.photo_url)}
+                                        className="inline-flex items-center gap-1 text-indigo-600 hover:underline font-bold cursor-pointer"
+                                      >
+                                        <Image size={13} /> Visualizar Foto do Defeito
+                                      </button>
+                                    ) : (
+                                      <span className="text-gray-400">Sem foto registrada</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </td>
+
+                        <td className="py-3 px-4 text-right align-top">
+                          <button
+                            onClick={() => togglePlateExpand(row.plate)}
+                            className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                            title="Alternar lista completa de defeitos"
+                          >
+                            {expandedPlates[row.plate] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Expanded Full List of Defects for this Plate */}
+                      {expandedPlates[row.plate] && (
+                        <tr className="bg-slate-50/90">
+                          <td colSpan={4} className="p-4 border-b border-gray-200">
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
+                                  <Wrench size={14} className="text-indigo-600" />
+                                  Defeitos Pendentes da Placa: <span className="font-mono text-indigo-600">{row.plate}</span> ({row.count})
+                                </h4>
+                                <span className="text-[10px] text-gray-500 font-bold">
+                                  Mostrando todos os {row.count} apontamentos
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {row.items?.map((item: any, idxItem: number) => (
+                                  <div
+                                    key={item.id || idxItem}
+                                    className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs space-y-2 relative"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center shrink-0">
+                                          {idxItem + 1}
+                                        </span>
+                                        <span className="font-extrabold text-xs text-gray-900">
+                                          {item.item_title}
+                                        </span>
+                                      </div>
+
+                                      <span
+                                        className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase shrink-0 ${
+                                          item.priority === "Alta"
+                                            ? "bg-rose-100 text-rose-700 border border-rose-200"
+                                            : item.priority === "Baixa"
+                                            ? "bg-blue-100 text-blue-700 border border-blue-200"
+                                            : "bg-amber-100 text-amber-800 border border-amber-200"
+                                        }`}
+                                      >
+                                        {item.priority || "Médio"}
+                                      </span>
+                                    </div>
+
+                                    <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                      {item.description || "Sem observação detalhada."}
+                                    </p>
+
+                                    <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-100">
+                                      <span>
+                                        👤 {item.profiles?.full_name || item.driver_name || "Motorista N/A"}
+                                      </span>
+                                      <span>
+                                        📅 {item.created_at ? new Date(item.created_at).toLocaleDateString("pt-BR") : "-"}
+                                      </span>
+                                    </div>
+
+                                    {item.photo_url && (
+                                      <div className="pt-1">
+                                        <button
+                                          onClick={() => setPreviewPhoto(item.photo_url)}
+                                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-[10px] font-black hover:bg-indigo-100 border border-indigo-200 transition-colors cursor-pointer"
+                                        >
+                                          <Image size={12} /> Ver Foto Anexa
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ) : (
+                    <tr key={row.id || idx} className="hover:bg-gray-50/50 transition-colors">
+                      {selectedReport === "vehicles" ? (
                       <>
-                        <td className="py-3 px-4 font-black text-gray-900">{row.plate}</td>
-                        <td className="py-3 px-4">{row.model || "-"}</td>
-                        <td className="py-3 px-4 uppercase">{row.type || "-"}</td>
-                        <td className="py-3 px-4">{row.branches?.name || "Sem Filial"}</td>
+                        <td className="py-3 px-4 font-black text-gray-900">
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="font-mono text-indigo-700 font-extrabold text-sm">{row.plate}</span>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                              row.asset_category === "Reboque"
+                                ? "bg-purple-100 text-purple-800 border border-purple-200"
+                                : "bg-blue-100 text-blue-800 border border-blue-200"
+                            }`}>
+                              {row.asset_category || "Veículo"}
+                            </span>
+                          </div>
+                        </td>
                         <td className="py-3 px-4">
+                          <div className="font-bold text-gray-800 text-xs">{row.model || "-"}</div>
+                          <div className="text-[10px] text-gray-500 uppercase">{row.type || "-"}</div>
+                        </td>
+                        <td className="py-3 px-4 text-xs font-semibold text-gray-700">
+                          {row.manufacture_year || row.model_year ? `${row.manufacture_year || '-'}/${row.model_year || '-'}` : "-"}
+                        </td>
+                        <td className="py-3 px-4 text-xs font-mono">
+                          <div className="text-gray-900 font-bold">{row.chassi || "-"}</div>
+                          {row.renavam && <div className="text-[10px] text-gray-500">RN: {row.renavam}</div>}
+                        </td>
+                        <td className="py-3 px-4 text-xs">
+                          <div className="text-gray-800 font-medium">
+                            {[row.color, row.fuel_type].filter(Boolean).join(" • ") || "-"}
+                          </div>
+                          {row.antt && <div className="text-[10px] text-gray-500 font-mono">ANTT: {row.antt}</div>}
+                        </td>
+                        <td className="py-3 px-4 text-xs font-medium text-gray-700">
+                          {row.branches?.name || "Sem Filial"}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-black text-indigo-600 text-sm">
+                          {row.current_km ? `${Number(row.current_km).toLocaleString("pt-BR")} km` : "0 km"}
+                        </td>
+                        <td className="py-3 px-4 text-right text-xs font-medium text-gray-600 whitespace-nowrap">
+                          {row.last_km_date ? new Date(row.last_km_date).toLocaleString("pt-BR") : "-"}
+                        </td>
+                        <td className="py-3 px-4 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
                               row.active !== false
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-rose-50 text-rose-700"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-rose-50 text-rose-700 border border-rose-200"
                             }`}
                           >
                             {row.active !== false ? "Ativo" : "Inativo"}
@@ -1584,31 +2654,98 @@ export default function ReportsOperationalView() {
                       </>
                     ) : selectedReport === "drivers" ? (
                       <>
-                        <td className="py-3 px-4 font-extrabold text-gray-900">{row.full_name}</td>
-                        <td className="py-3 px-4">{row.branches?.name || "Sem Filial"}</td>
-                        <td className="py-3 px-4 font-black text-indigo-600">
-                          {row.driver_performance?.[0]?.score ?? row.driver_performance?.score ?? "-"} pts
+                        <td className="py-3 px-4 font-extrabold text-gray-900">
+                          <div className="font-extrabold text-gray-900 text-sm">{row.full_name}</div>
+                          {row.email && <div className="text-[10px] text-gray-500 font-normal">{row.email}</div>}
                         </td>
                         <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-800 rounded-md border border-slate-200 text-xs font-bold">
+                            🏢 {row.branches?.name || "Sem Filial"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-black text-indigo-600 text-sm">
+                          {row.driver_performance?.[0]?.score ?? row.driver_performance?.score ?? "-"} pts
+                        </td>
+                        <td className="py-3 px-4 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
                               row.active !== false
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-rose-50 text-rose-700"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-rose-50 text-rose-700 border border-rose-200"
                             }`}
                           >
                             {row.active !== false ? "Ativo" : "Inativo"}
                           </span>
                         </td>
                       </>
+                    ) : selectedReport === "branches" ? (
+                      <>
+                        <td className="py-3 px-4">
+                          <div className="font-extrabold text-gray-900 text-sm flex items-center gap-1.5">
+                            🏢 {row.name}
+                          </div>
+                          <div className="text-[11px] text-gray-500 font-medium">
+                            {row.city && row.state ? `${row.city} / ${row.state}` : row.city || row.location || "-"}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-xs">
+                          {row.manager ? (
+                            <div className="font-extrabold text-gray-800 flex items-center gap-1">
+                              👤 {row.manager}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 font-normal italic">Não informado</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="inline-flex flex-col items-center">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200 text-xs font-black">
+                              🚚 {row.totalVehicles || 0}
+                            </span>
+                            {row.trailersCount > 0 && (
+                              <span className="text-[10px] text-purple-700 font-semibold mt-0.5">
+                                ({row.vehiclesCount || 0} veíc. + {row.trailersCount} reb.)
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full border border-blue-200 text-xs font-black">
+                            👨‍✈️ {row.driversCount || 0}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-xs font-mono">
+                          <div className="text-gray-800 font-bold">{row.phone || "-"}</div>
+                          {row.cnpj && <div className="text-[10px] text-gray-500">CNPJ: {row.cnpj}</div>}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                              row.active !== false
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-rose-50 text-rose-700 border border-rose-200"
+                            }`}
+                          >
+                            {row.active !== false ? "Ativa" : "Inativa"}
+                          </span>
+                        </td>
+                      </>
                     ) : selectedReport === "fuelings" ? (
                       <>
-                        <td className="py-3 px-4">{new Date(row.created_at).toLocaleDateString("pt-BR")}</td>
-                        <td className="py-3 px-4 font-black text-gray-900">{row.plate || row.vehicles?.plate || row.trailers?.plate || "-"}</td>
-                        <td className="py-3 px-4">{row.profiles?.full_name || "-"}</td>
-                        <td className="py-3 px-4 font-bold text-amber-600">{row.liters || 0} L</td>
-                        <td className="py-3 px-4 font-black text-emerald-600">
-                          R$ {Number(row.cost || 0).toFixed(2)}
+                        <td className="py-3 px-4 text-gray-600 font-medium whitespace-nowrap">
+                          {row.created_at ? new Date(row.created_at).toLocaleDateString("pt-BR") : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-gray-900">
+                          {row.plate || row.vehicles?.plate || row.trailers?.plate || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-gray-900">
+                          {row.profiles?.full_name || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-black text-amber-600 text-sm">
+                          {row.liters || 0} L
+                        </td>
+                        <td className="py-3 px-4 text-gray-700 text-xs font-semibold">
+                          {row.location || "-"}
                         </td>
                       </>
                     ) : selectedReport === "mileage" ? (
@@ -1629,7 +2766,16 @@ export default function ReportsOperationalView() {
                             : "-"}
                         </td>
                         <td className="py-3 px-4 font-extrabold text-gray-900">
-                          {row.plate || row.vehicles?.plate || row.trailers?.plate || "-"}
+                          <div className="flex flex-col items-start gap-0.5">
+                            <span className="font-mono text-indigo-700 font-extrabold text-sm">
+                              {row.plate || row.trailers?.plate || row.vehicles?.plate || "-"}
+                            </span>
+                            {(row.is_trailer || row.trailer_id || (row.trailers?.plate && (!row.vehicles?.plate || row.plate === row.trailers?.plate))) && (
+                              <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 text-[9px] font-black rounded uppercase">
+                                Reboque
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 font-bold text-gray-900">{row.item_title || "-"}</td>
                         <td className="py-3 px-4 text-gray-600 max-w-xs truncate" title={row.description || row.observation || "-"}>
@@ -1649,7 +2795,16 @@ export default function ReportsOperationalView() {
                           {row.created_at ? new Date(row.created_at).toLocaleDateString("pt-BR") : "-"}
                         </td>
                         <td className="py-3 px-4 font-extrabold text-gray-900">
-                          {row.plate || row.vehicles?.plate || row.trailers?.plate || "-"}
+                          <div className="flex flex-col items-start gap-0.5">
+                            <span className="font-mono text-indigo-700 font-extrabold text-sm">
+                              {row.plate || row.trailers?.plate || row.vehicles?.plate || "-"}
+                            </span>
+                            {(row.is_trailer || row.trailer_id || (row.trailers?.plate && (!row.vehicles?.plate || row.plate === row.trailers?.plate))) && (
+                              <span className="px-1.5 py-0.5 bg-purple-100 text-purple-800 text-[9px] font-black rounded uppercase">
+                                Reboque
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 font-bold text-gray-900">{row.item_title || "-"}</td>
                         <td className="py-3 px-4 text-gray-600 max-w-xs truncate" title={row.description || row.observation || "-"}>
@@ -1696,6 +2851,219 @@ export default function ReportsOperationalView() {
                           </span>
                         </td>
                       </>
+                    ) : selectedReport === "schedules" ? (
+                      <>
+                        <td className="py-3 px-4 text-gray-600 font-medium whitespace-nowrap">
+                          {row.start_at ? new Date(row.start_at).toLocaleString("pt-BR") : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-black text-gray-900">
+                          {row.trailers?.plate ? (
+                            <span className="flex flex-col">
+                              <span className="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 text-xs w-fit font-mono font-bold">
+                                Reboque: {row.trailers.plate}
+                              </span>
+                              {row.vehicles?.plate && (
+                                <span className="text-[10px] text-gray-500 font-mono mt-0.5">
+                                  Trator: {row.vehicles.plate}
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="font-mono text-indigo-600 font-black">
+                              {row.vehicles?.plate || row.plate || "Sem Placa"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-gray-800">
+                          {row.profiles?.full_name || row.driver_name || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-gray-700 text-right">
+                          {row.start_km ? `${Number(row.start_km).toLocaleString("pt-BR")} km` : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-gray-700 text-right">
+                          {row.end_km ? `${Number(row.end_km).toLocaleString("pt-BR")} km` : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-indigo-600 text-right">
+                          {row.total_km ? `${Number(row.total_km).toLocaleString("pt-BR")} km` : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-right">
+                          {row.liters > 0 ? (
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-full border border-amber-200 text-xs font-mono font-black">
+                              ⛽ {Number(row.liters).toLocaleString("pt-BR")} L
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 font-normal text-xs">-</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              row.status === "completed" || row.status === "finished" || row.status === "concluida"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : row.status === "in_progress" || row.status === "em_andamento"
+                                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                : "bg-gray-100 text-gray-700 border border-gray-200"
+                            }`}
+                          >
+                            {row.status === "completed" ? "Concluída" : row.status === "in_progress" ? "Em Andamento" : row.status || "Agendada"}
+                          </span>
+                        </td>
+                      </>
+                    ) : selectedReport === "inventory" ? (
+                      <>
+                        <td className="py-3 px-4 text-gray-600 font-medium whitespace-nowrap">
+                          {row.date || row.created_at
+                            ? new Date(row.date || row.created_at).toLocaleDateString("pt-BR")
+                            : "-"}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-extrabold text-gray-900 text-sm">{row.name}</div>
+                          <div className="text-[10px] text-gray-500 font-mono">
+                            {row.sku ? `SKU: ${row.sku}` : "Sem SKU"} • {row.category || "Geral"}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-gray-800 text-xs">
+                          {row.nf_number || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-indigo-700 text-xs">
+                          {row.plate || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-black text-gray-900 text-sm">
+                          {Number(row.current_quantity ?? row.quantity ?? 0)} un
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-black text-emerald-600 text-sm">
+                          R$ {Number(row.unit_price ?? row.average_cost ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              Number(row.current_quantity ?? row.quantity ?? 0) <= Number(row.min_quantity || 0)
+                                ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            }`}
+                          >
+                            {Number(row.current_quantity ?? row.quantity ?? 0) <= Number(row.min_quantity || 0)
+                              ? "Estoque Baixo"
+                              : "Normal"}
+                          </span>
+                        </td>
+                      </>
+                    ) : selectedReport === "purchases" ? (
+                      <>
+                        <td className="py-3 px-4 text-gray-600 font-medium whitespace-nowrap">
+                          {row.date || row.created_at
+                            ? new Date(row.date || row.created_at).toLocaleDateString("pt-BR")
+                            : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-gray-900">
+                          {row.inventory_items?.name || row.name || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-gray-800">
+                          {row.nf_number || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-indigo-700">
+                          {row.plate || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-gray-700">
+                          {row.inventory_suppliers?.name || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold">
+                          {row.quantity || 0}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-gray-800">
+                          R$ {Number(row.unit_price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-black text-emerald-600">
+                          R$ {Number(row.total_price || (Number(row.quantity || 0) * Number(row.unit_price || 0))).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </>
+                    ) : selectedReport === "stock_out" ? (
+                      <>
+                        <td className="py-3 px-4 text-gray-600 font-medium whitespace-nowrap">
+                          {row.date || row.created_at
+                            ? new Date(row.date || row.created_at).toLocaleDateString("pt-BR")
+                            : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-gray-900">
+                          {row.inventory_items?.name || row.name || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-indigo-700">
+                          {row.plate || row.vehicles?.plate || row.trailers?.plate || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-gray-600 max-w-xs truncate" title={row.notes || "-"}>
+                          {row.notes || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold">
+                          {Math.abs(Number(row.quantity || 0))}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-gray-800">
+                          R$ {Number(row.unit_price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-black text-rose-600">
+                          R$ {Number(row.total_price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </>
+                    ) : selectedReport === "suppliers" ? (
+                      <>
+                        <td className="py-3 px-4">
+                          <div className="font-extrabold text-gray-900 text-sm">{row.name || "-"}</div>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-gray-800 text-xs">
+                          {row.cnpj_cpf || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-gray-800 font-semibold text-xs">
+                          {row.contact_name || "-"}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-gray-800 text-xs">
+                          {row.phone || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-indigo-600 font-medium text-xs">
+                          {row.email || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-gray-600 text-xs">
+                          {row.address || "-"}
+                        </td>
+                      </>
+                    ) : selectedReport === "user_audits" || selectedReport === "system_audits" ? (
+                      <>
+                        <td className="py-3 px-4 text-gray-700 font-mono text-xs whitespace-nowrap font-medium">
+                          {row.created_at ? new Date(row.created_at).toLocaleString("pt-BR") : "-"}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-extrabold text-gray-900 text-sm">{row.user_display || row.user_name || row.user_email || "-"}</div>
+                          {row.user_role && (
+                            <span className="text-[10px] uppercase font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                              {row.user_role}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold">
+                            <span className="text-indigo-600 font-black">{row.module || "Geral"}</span>
+                            {row.entity && <span className="text-slate-400">›</span>}
+                            {row.entity && <span className="text-slate-700">{row.entity}</span>}
+                            {row.entity_id && <span className="text-slate-400 text-[10px]">#{row.entity_id}</span>}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              row.action === "CRIAR" || row.action === "LOGIN"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : row.action === "EXCLUIR" || row.action === "BLOQUEAR" || row.action === "FALHA_LOGIN"
+                                ? "bg-rose-100 text-rose-800"
+                                : row.action === "EDITAR" || row.action === "RESET_SENHA" || row.action === "ALTERAR_SENHA"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-indigo-100 text-indigo-800"
+                            }`}
+                          >
+                            {row.action || row.type || "Ação"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-gray-800 text-xs font-medium max-w-md">
+                          {row.what_changed || row.reason || row.field_changed || "-"}
+                        </td>
+                      </>
                     ) : (
                       <>
                         <td className="py-3 px-4">
@@ -1732,12 +3100,55 @@ export default function ReportsOperationalView() {
                       </>
                     )}
                   </tr>
-                ))}
+                )
+              ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* Defect Photo Modal */}
+      {previewPhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-2xl w-full p-4 space-y-3 relative shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                <Image size={16} className="text-indigo-600" /> Foto do Defeito
+              </h3>
+              <button
+                onClick={() => setPreviewPhoto(null)}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-500 font-bold cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-[75vh] overflow-hidden rounded-xl bg-gray-900 flex items-center justify-center">
+              <img
+                src={previewPhoto}
+                alt="Foto do defeito"
+                className="max-h-[70vh] object-contain w-full"
+              />
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => setPreviewPhoto(null)}
+                className="px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
