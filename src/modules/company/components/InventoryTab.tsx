@@ -25,10 +25,11 @@ import {
   Building2,
 } from "lucide-react";
 import { SupplierModal } from "./SupplierModal";
+import SuppliersMap from "./SuppliersMap";
 
 export default function InventoryTab() {
   const { user } = useAuth();
-  const [activeSubTab, setActiveSubTab] = useState<"items" | "suppliers" | "nfs">("items");
+  const [activeSubTab, setActiveSubTab] = useState<"items" | "suppliers" | "map" | "nfs">("items");
   const [itemsFilter, setItemsFilter] = useState<"registered" | "in_stock" | "out_of_stock" | "used">("registered");
   const [sqlError, setSqlError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +38,7 @@ export default function InventoryTab() {
   // Data states
   const [items, setItems] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [supplierSearch, setSupplierSearch] = useState("");
   const [transactions, setTransactions] = useState<any[]>([]);
 
@@ -69,10 +71,11 @@ export default function InventoryTab() {
         return;
       }
 
-      const [itemsRes, suppliersRes, transRes] = await Promise.all([
+      const [itemsRes, suppliersRes, transRes, branchesRes] = await Promise.all([
         supabase.from("inventory_items").select("*").eq("company_id", user?.company_id).order("name"),
         supabase.from("inventory_suppliers").select("*").eq("company_id", user?.company_id).order("name"),
-        supabase.from("inventory_transactions").select(`*, inventory_items(name), inventory_suppliers(name)`).eq("company_id", user?.company_id).order("created_at", { ascending: false })
+        supabase.from("inventory_transactions").select(`*, inventory_items(name), inventory_suppliers(name)`).eq("company_id", user?.company_id).order("created_at", { ascending: false }),
+        supabase.from("branches").select("*").eq("company_id", user?.company_id).order("name"),
       ]);
 
       if (itemsRes.error) throw itemsRes.error;
@@ -82,6 +85,7 @@ export default function InventoryTab() {
       setItems(itemsRes.data || []);
       setSuppliers(suppliersRes.data || []);
       setTransactions(transRes.data || []);
+      setBranches(branchesRes.data || []);
     } catch (err: any) {
       console.error(err);
       if (err.message && err.message.includes("does not exist")) setSqlError("missing_tables");
@@ -452,6 +456,15 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
             Fornecedores
           </button>
           <button
+            onClick={() => setActiveSubTab("map")}
+            className={`px-4 py-2 text-sm font-bold rounded-t-lg transition-colors flex items-center gap-1.5 ${
+              activeSubTab === "map" ? "bg-zinc-100 text-zinc-900 border-b-2 border-primary" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-50 border-b-2 border-transparent"
+            }`}
+          >
+            <Compass size={15} className="text-indigo-600" />
+            Mapa de Fornecedores
+          </button>
+          <button
             onClick={() => setActiveSubTab("nfs")}
             className={`px-4 py-2 text-sm font-bold rounded-t-lg transition-colors ${
               activeSubTab === "nfs" ? "bg-zinc-100 text-zinc-900 border-b-2 border-primary" : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-50 border-b-2 border-transparent"
@@ -605,6 +618,12 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveSubTab("map")}
+                  className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 hover:bg-indigo-100 transition cursor-pointer shrink-0"
+                >
+                  <Compass size={15} /> Ver no Mapa
+                </button>
                 <div className="relative">
                   <Search size={15} className="absolute left-3 top-2.5 text-zinc-400" />
                   <input
@@ -854,6 +873,41 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
                   })}
               </div>
             )}
+          </div>
+        )}
+
+        {activeSubTab === "map" && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-zinc-200">
+              <div>
+                <h2 className="text-lg font-bold text-zinc-800 flex items-center gap-2">
+                  <Compass className="text-indigo-600" size={20} />
+                  Mapa Geográfico de Fornecedores & Filiais
+                </h2>
+                <p className="text-xs text-zinc-500">
+                  Visualize no mapa interativo a localização dos fornecedores e filiais da sua empresa. Filtre por categorias atendidas (pneus, baterias, peças, combustível...).
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setSupplierForm({ id: "", name: "", cnpj_cpf: "", contact_name: "", phone: "", email: "" });
+                  setShowSupplierModal(true);
+                }}
+                className="bg-primary text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-primary-dark cursor-pointer shrink-0 self-start sm:self-auto"
+              >
+                <Plus size={16} /> Novo Fornecedor
+              </button>
+            </div>
+
+            <SuppliersMap
+              suppliers={suppliers}
+              branches={branches}
+              onEditSupplier={(sup) => {
+                setSupplierForm(sup as any);
+                setShowSupplierModal(true);
+              }}
+            />
           </div>
         )}
 
