@@ -33,6 +33,7 @@ import {
   ChevronUp,
   Image,
   X,
+  MapPin,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import ReportsFilters, { GlobalReportFilters } from "./ReportsFilters";
@@ -161,10 +162,11 @@ export default function ReportsOperationalView() {
       const endIso = `${filters.endDate}T23:59:59Z`;
 
       // Helper lookup maps for robust offline/schema-independent resolution
-      const [profilesRes, vehiclesRes, trailersRes] = await Promise.all([
+      const [profilesRes, vehiclesRes, trailersRes, routesRes] = await Promise.all([
         supabase.from("profiles").select("id, full_name").eq("company_id", companyId),
         supabase.from("vehicles").select("id, plate, branch_id").eq("company_id", companyId),
         supabase.from("trailers").select("id, plate").eq("company_id", companyId),
+        supabase.from("routes").select("id, origin, destination, stops").eq("company_id", companyId),
       ]);
 
       const profilesMap: Record<string, string> = {};
@@ -181,6 +183,25 @@ export default function ReportsOperationalView() {
       (trailersRes.data || []).forEach((t: any) => {
         if (t.id) trailersMap[t.id] = t;
       });
+
+      const routesMap: Record<string, any> = {};
+      (routesRes.data || []).forEach((rt: any) => {
+        if (rt.id) routesMap[rt.id] = rt;
+      });
+
+      const getRouteStr = (r: any) => {
+        if (!r) return "-";
+        const rt = r.routes || (r.route_id ? routesMap[r.route_id] : null);
+        if (rt) {
+          if (rt.origin && rt.destination) return `${rt.origin} ➔ ${rt.destination}`;
+          if (rt.origin) return rt.origin;
+          if (rt.destination) return rt.destination;
+        }
+        if (r.route_name) return r.route_name;
+        if (r.origin && r.destination) return `${r.origin} ➔ ${r.destination}`;
+        if (r.origin) return r.origin;
+        return "-";
+      };
 
       const getPlate = (r: any) => {
         if (!r) return "-";
@@ -436,7 +457,8 @@ export default function ReportsOperationalView() {
               *,
               profiles(full_name, branch_id),
               vehicles(plate, model, branch_id),
-              trailers(plate, model)
+              trailers(plate, model),
+              routes(origin, destination, stops)
             `)
             .eq("company_id", companyId)
             .gte("start_at", startIso)
@@ -657,6 +679,7 @@ export default function ReportsOperationalView() {
               vehicles: veh,
               trailers: trl,
               profiles: prof,
+              route_str: getRouteStr(r),
               start_km: startKm,
               end_km: endKm,
               total_km: totalKm,
@@ -684,7 +707,8 @@ export default function ReportsOperationalView() {
                 r.vehicles?.plate?.toLowerCase().includes(term) ||
                 r.trailers?.plate?.toLowerCase().includes(term) ||
                 r.profiles?.full_name?.toLowerCase().includes(term) ||
-                r.plate?.toLowerCase().includes(term)
+                r.plate?.toLowerCase().includes(term) ||
+                r.route_str?.toLowerCase().includes(term)
             );
           }
 
@@ -1837,13 +1861,14 @@ export default function ReportsOperationalView() {
           d.location || "-",
         ]);
       } else if (selectedReport === "schedules") {
-        headers = ["Data da Escala", "Placa", "Motorista", "KM Inicial", "KM Final", "KM Total", "Abastecimento (Litros)", "Status"];
+        headers = ["Data da Escala", "Rota", "Placa", "Motorista", "KM Inicial", "KM Final", "KM Total", "Abastecimento (Litros)", "Status"];
         rows = (reportData || []).map((d) => {
           const plateStr = d.trailers?.plate
             ? `${d.trailers.plate}${d.vehicles?.plate ? ` (${d.vehicles.plate})` : ''}`
             : d.vehicles?.plate || d.plate || "-";
           return [
             d.start_at ? new Date(d.start_at).toLocaleString("pt-BR") : "-",
+            d.route_str || "-",
             plateStr,
             d.profiles?.full_name || d.driver_name || "-",
             d.start_km ? `${d.start_km} km` : "-",
@@ -2439,6 +2464,7 @@ export default function ReportsOperationalView() {
                   ) : selectedReport === "schedules" ? (
                     <>
                       <th className="py-3 px-4">Data da Escala</th>
+                      <th className="py-3 px-4">Rota</th>
                       <th className="py-3 px-4">Placa</th>
                       <th className="py-3 px-4">Motorista</th>
                       <th className="py-3 px-4 text-right">KM Inicial</th>
@@ -2982,6 +3008,16 @@ export default function ReportsOperationalView() {
                       <>
                         <td className="py-3 px-4 text-gray-600 font-medium whitespace-nowrap">
                           {row.start_at ? new Date(row.start_at).toLocaleString("pt-BR") : "-"}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-gray-800">
+                          {row.route_str && row.route_str !== "-" ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-50/80 text-indigo-900 text-xs border border-indigo-100 font-semibold">
+                              <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              <span>{row.route_str}</span>
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 font-normal text-xs">-</span>
+                          )}
                         </td>
                         <td className="py-3 px-4 font-black text-gray-900">
                           {row.trailers?.plate ? (
