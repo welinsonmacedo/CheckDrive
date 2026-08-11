@@ -523,18 +523,16 @@ export default function AdminDashboard() {
 
   const fetchVehiclesWithPending = async () => {
     try {
-      const { data: vehicles } = await supabase.from("vehicles").select(`
-          *,
-          checklist_submissions(             status,             details,             created_at           ),
-          maintenance_records(
-            status,
-            priority
-          )
-        `,
-        )
-        .eq("company_id", (user as any)?.company_id)         .limit(5);
+      let vehicles: any[] = [];
+      const { data, error } = await supabase.from("vehicles").select("*")
+        .eq("company_id", (user as any)?.company_id)
+        .limit(5);
 
-      if (vehicles) {
+      if (!error && data) {
+        vehicles = data;
+      }
+
+      if (vehicles.length > 0) {
         const processed = vehicles.map((vehicle) => {
           const pendingMaintenance =
             vehicle.maintenance_records?.filter(

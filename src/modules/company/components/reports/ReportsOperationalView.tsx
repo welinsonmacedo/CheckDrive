@@ -477,7 +477,7 @@ export default function ReportsOperationalView() {
               const batch = allChecklistIds.slice(i, i + 30);
               const { data: subBatch } = await supabase
                 .from("checklist_submissions")
-                .select("id, schedule_id, odometer, details, created_at, type")
+                .select("id, schedule_id, odometer, details, created_at")
                 .in("id", batch);
 
               (subBatch || []).forEach((sub: any) => {
@@ -492,7 +492,7 @@ export default function ReportsOperationalView() {
               const batch = scheduleIds.slice(i, i + 30);
               const { data: schSubs } = await supabase
                 .from("checklist_submissions")
-                .select("id, schedule_id, odometer, details, created_at, type")
+                .select("id, schedule_id, odometer, details, created_at")
                 .in("schedule_id", batch);
 
               (schSubs || []).forEach((sub: any) => {
@@ -519,16 +519,48 @@ export default function ReportsOperationalView() {
             }
           }
 
+          const parseKm = (val: any): number => {
+            if (val === null || val === undefined || val === "") return 0;
+            if (typeof val === "number") return val > 0 ? val : 0;
+            if (typeof val === "string") {
+              const cleaned = val.replace(/\./g, "").replace(",", ".");
+              const num = parseFloat(cleaned);
+              return !isNaN(num) && num > 0 ? num : 0;
+            }
+            return 0;
+          };
+
           const extractKmFromSub = (sub: any) => {
             if (!sub) return 0;
-            if (sub.odometer && Number(sub.odometer) > 0) return Number(sub.odometer);
-            const details = typeof sub.details === "string" ? JSON.parse(sub.details) : sub.details || {};
-            if (details.odometer && Number(details.odometer) > 0) return Number(details.odometer);
-            if (details.start_odometer && Number(details.start_odometer) > 0) return Number(details.start_odometer);
-            if (details.end_odometer && Number(details.end_odometer) > 0) return Number(details.end_odometer);
-            if (details.km && Number(details.km) > 0) return Number(details.km);
-            if (details.itemValues?.odometer && Number(details.itemValues.odometer) > 0) return Number(details.itemValues.odometer);
-            if (details.itemValues?.km && Number(details.itemValues.km) > 0) return Number(details.itemValues.km);
+            if (parseKm(sub.odometer) > 0) return parseKm(sub.odometer);
+
+            let details = sub.details;
+            if (typeof details === "string") {
+              try { details = JSON.parse(details); } catch (e) { details = {}; }
+            }
+            details = details || {};
+
+            const keys = [
+              "odometer", "km", "km_inicial", "km_final", "km_atual", "start_odometer", "end_odometer",
+              "odometro", "quilometragem", "tacografo"
+            ];
+            for (const key of keys) {
+              if (parseKm(details[key]) > 0) return parseKm(details[key]);
+            }
+
+            if (details.itemValues && typeof details.itemValues === "object") {
+              for (const key of keys) {
+                if (parseKm(details.itemValues[key]) > 0) return parseKm(details.itemValues[key]);
+              }
+            }
+
+            // Fallback: check nested object numeric values
+            if (typeof details === "object") {
+              for (const v of Object.values(details)) {
+                const parsed = parseKm(v);
+                if (parsed > 100) return parsed;
+              }
+            }
             return 0;
           };
 
@@ -560,20 +592,19 @@ export default function ReportsOperationalView() {
 
             const startSub = submissionsMap[r.start_checklist_id];
             const schSubs = submissionsByScheduleMap[r.id] || [];
-            const startSchSub = schSubs.find((s) => s.type === "start" || (s.type || "").toLowerCase().includes("início"));
             const avgRecord = averagesByScheduleMap[r.id];
 
             let startKm = 0;
-            if (r.adjusted_start_odometer !== undefined && r.adjusted_start_odometer !== null && Number(r.adjusted_start_odometer) > 0) {
-              startKm = Number(r.adjusted_start_odometer);
-            } else if (r.start_odometer !== undefined && r.start_odometer !== null && Number(r.start_odometer) > 0) {
-              startKm = Number(r.start_odometer);
+            if (parseKm(r.adjusted_start_odometer) > 0) {
+              startKm = parseKm(r.adjusted_start_odometer);
+            } else if (parseKm(r.start_odometer) > 0) {
+              startKm = parseKm(r.start_odometer);
+            } else if (parseKm(r.start_km) > 0) {
+              startKm = parseKm(r.start_km);
             } else if (startSub && extractKmFromSub(startSub) > 0) {
               startKm = extractKmFromSub(startSub);
-            } else if (startSchSub && extractKmFromSub(startSchSub) > 0) {
-              startKm = extractKmFromSub(startSchSub);
-            } else if (avgRecord?.start_odometer && Number(avgRecord.start_odometer) > 0) {
-              startKm = Number(avgRecord.start_odometer);
+            } else if (avgRecord?.start_odometer && parseKm(avgRecord.start_odometer) > 0) {
+              startKm = parseKm(avgRecord.start_odometer);
             } else {
               for (const s of schSubs) {
                 const km = extractKmFromSub(s);
@@ -585,19 +616,18 @@ export default function ReportsOperationalView() {
             }
 
             const endSub = submissionsMap[r.end_checklist_id];
-            const endSchSub = schSubs.find((s) => s.type === "end" || (s.type || "").toLowerCase().includes("fim"));
 
             let endKm = 0;
-            if (r.adjusted_end_odometer !== undefined && r.adjusted_end_odometer !== null && Number(r.adjusted_end_odometer) > 0) {
-              endKm = Number(r.adjusted_end_odometer);
-            } else if (r.end_odometer !== undefined && r.end_odometer !== null && Number(r.end_odometer) > 0) {
-              endKm = Number(r.end_odometer);
+            if (parseKm(r.adjusted_end_odometer) > 0) {
+              endKm = parseKm(r.adjusted_end_odometer);
+            } else if (parseKm(r.end_odometer) > 0) {
+              endKm = parseKm(r.end_odometer);
+            } else if (parseKm(r.end_km) > 0) {
+              endKm = parseKm(r.end_km);
             } else if (endSub && extractKmFromSub(endSub) > 0) {
               endKm = extractKmFromSub(endSub);
-            } else if (endSchSub && extractKmFromSub(endSchSub) > 0) {
-              endKm = extractKmFromSub(endSchSub);
-            } else if (avgRecord?.end_odometer && Number(avgRecord.end_odometer) > 0) {
-              endKm = Number(avgRecord.end_odometer);
+            } else if (avgRecord?.end_odometer && parseKm(avgRecord.end_odometer) > 0) {
+              endKm = parseKm(avgRecord.end_odometer);
             } else {
               for (let i = schSubs.length - 1; i >= 0; i--) {
                 const km = extractKmFromSub(schSubs[i]);
@@ -611,12 +641,12 @@ export default function ReportsOperationalView() {
             let totalKm = 0;
             if (endKm > 0 && startKm > 0 && endKm >= startKm) {
               totalKm = endKm - startKm;
-            } else if (r.distance && Number(r.distance) > 0) {
-              totalKm = Number(r.distance);
-            } else if (r.total_km && Number(r.total_km) > 0) {
-              totalKm = Number(r.total_km);
-            } else if (avgRecord?.distance && Number(avgRecord.distance) > 0) {
-              totalKm = Number(avgRecord.distance);
+            } else if (parseKm(r.distance) > 0) {
+              totalKm = parseKm(r.distance);
+            } else if (parseKm(r.total_km) > 0) {
+              totalKm = parseKm(r.total_km);
+            } else if (parseKm(avgRecord?.distance) > 0) {
+              totalKm = parseKm(avgRecord.distance);
             }
 
             const fuelSub = submissionsMap[r.fuel_checklist_id];
