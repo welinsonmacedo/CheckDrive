@@ -98,6 +98,20 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
   const [internalTab, setInternalTab] = useState<"drivers" | "events" | "trips">("drivers");
   const [eventsSearchTerm, setEventsSearchTerm] = useState("");
   const [eventsFilterType, setEventsFilterType] = useState<"all" | "speed" | "other">("all");
+  const [tripsSearchTerm, setTripsSearchTerm] = useState("");
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const yesterdayStr = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const twoDaysAgoStr = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  const formatPtDate = (isoDateStr: string) => {
+    if (!isoDateStr) return "";
+    const parts = isoDateStr.split("-");
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return isoDateStr;
+  };
 
   const currentTab = onSidebarTabChange ? activeSidebarTab : internalTab;
   const setTab = (t: "drivers" | "events" | "trips") => {
@@ -471,10 +485,43 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
                 </div>
 
                 {/* TRIP METRICS & PLAYBACK */}
-                <div className="space-y-2 pt-1">
-                  <h3 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    <Navigation size={14} className="text-blue-400" /> Métricas da Viagem
-                  </h3>
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                      <Navigation size={14} className="text-blue-400" /> Trajeto de {formatPtDate(filters.date)}
+                    </h3>
+                  </div>
+
+                  {/* Quick Date Selector for selected driver */}
+                  <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-2 flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 shrink-0">Data do Trajeto:</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onFilterChange({ ...filters, date: todayStr })}
+                        className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition ${
+                          filters.date === todayStr ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        Hoje
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onFilterChange({ ...filters, date: yesterdayStr })}
+                        className={`text-[10px] px-2 py-0.5 rounded-md font-bold transition ${
+                          filters.date === yesterdayStr ? "bg-blue-600 text-white" : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        Ontem
+                      </button>
+                      <input
+                        type="date"
+                        value={filters.date}
+                        onChange={(e) => onFilterChange({ ...filters, date: e.target.value })}
+                        className="bg-slate-950 border border-slate-700 rounded-md text-[10px] text-white px-1.5 py-0.5 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
 
                   {loadingTrip ? (
                     <div className="p-6 text-center text-xs text-slate-400 bg-slate-800/50 rounded-2xl border border-slate-800 animate-pulse">
@@ -647,81 +694,213 @@ export const DriverSidebar: React.FC<DriverSidebarProps> = ({
           ) : currentTab === "trips" ? (
             /* TAB 3: HISTÓRICO DE TRAJETOS */
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
-              <div className="bg-gradient-to-r from-purple-950/60 to-slate-900 border border-purple-800/40 rounded-2xl p-3 space-y-1 text-xs">
-                <div className="flex items-center gap-2 text-purple-400 font-black">
-                  <Navigation size={16} />
-                  <span>Histórico de Trajetos</span>
+              {/* Date Selector Header Box */}
+              <div className="bg-gradient-to-r from-purple-950/70 via-slate-900 to-slate-900 border border-purple-800/50 rounded-2xl p-3.5 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-purple-300 font-black text-xs">
+                    <Navigation size={16} className="text-purple-400 shrink-0" />
+                    <span>Histórico de Trajetos</span>
+                  </div>
+                  <span className="text-[10px] bg-purple-900/60 text-purple-300 border border-purple-700/50 px-2 py-0.5 rounded-full font-bold">
+                    {formatPtDate(filters.date)}
+                  </span>
                 </div>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Lista de trajetos já realizados. Filtre pela data clicando no botão de filtros acima.
-                </p>
+
+                {/* Quick Date Pills */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-slate-400 font-bold block">Selecionar Data Anterior:</span>
+                  <div className="grid grid-cols-3 gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => onFilterChange({ ...filters, date: todayStr })}
+                      className={`py-1 rounded-lg transition ${
+                        filters.date === todayStr ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Hoje
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onFilterChange({ ...filters, date: yesterdayStr })}
+                      className={`py-1 rounded-lg transition ${
+                        filters.date === yesterdayStr ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Ontem
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onFilterChange({ ...filters, date: twoDaysAgoStr })}
+                      className={`py-1 rounded-lg transition ${
+                        filters.date === twoDaysAgoStr ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      Anteontem
+                    </button>
+                  </div>
+
+                  {/* Custom Date Input */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <label className="text-[10px] text-slate-400 shrink-0 font-bold">Outra data:</label>
+                    <input
+                      type="date"
+                      value={filters.date}
+                      onChange={(e) => onFilterChange({ ...filters, date: e.target.value })}
+                      className="w-full px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2 pb-20">
+              {/* Search Trips Bar */}
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={tripsSearchTerm}
+                  onChange={(e) => setTripsSearchTerm(e.target.value)}
+                  placeholder="Buscar motorista, placa ou rota..."
+                  className="w-full pl-9 pr-8 py-2 bg-slate-800/80 border border-slate-700/60 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 transition"
+                />
+                {tripsSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setTripsSearchTerm("")}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* Trips List */}
+              <div className="space-y-2.5 pb-20">
                 {loadingTripsHistory ? (
                   <div className="p-8 text-center text-slate-400">
-                    <Radio size={24} className="animate-pulse mx-auto mb-2 opacity-50" />
-                    <p className="text-[11px]">Carregando trajetos...</p>
+                    <Radio size={24} className="animate-pulse mx-auto mb-2 opacity-50 text-purple-400" />
+                    <p className="text-[11px]">Buscando trajetos de {formatPtDate(filters.date)}...</p>
                   </div>
                 ) : !tripsHistory || tripsHistory.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 bg-slate-800/30 rounded-2xl border border-slate-700/50">
-                    <p className="text-[11px]">Nenhum trajeto encontrado para a data {filters.date}.</p>
+                  <div className="p-8 text-center text-slate-400 bg-slate-800/30 rounded-2xl border border-slate-700/50 space-y-1">
+                    <Calendar size={24} className="mx-auto mb-2 text-slate-500" />
+                    <p className="text-[11px] font-bold text-slate-300">Nenhum trajeto registrado nesta data</p>
+                    <p className="text-[10px] text-slate-500">
+                      Tente selecionar outra data no seletor acima ou verificar os filtros.
+                    </p>
                   </div>
                 ) : (
-                  tripsHistory.map((trip) => (
-                    <div 
-                      key={trip.trip_id}
-                      className="bg-slate-800/60 border border-slate-700/60 p-3 rounded-2xl hover:bg-slate-800 transition cursor-pointer"
-                      onClick={() => {
-                        onSelectDriver(trip.driver_id);
-                        if (onFilterChange) onFilterChange({ ...filters, tripId: trip.trip_id });
-                        setTab("drivers");
-                      }}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2 text-white font-bold text-sm">
-                          <Users size={14} className="text-blue-400" />
-                          <span>{driverStates.find(d => d.driver_id === trip.driver_id)?.driver?.full_name || "Motorista"}</span>
+                  (() => {
+                    const filteredTrips = tripsHistory.filter((trip) => {
+                      if (!tripsSearchTerm) return true;
+                      const term = tripsSearchTerm.toLowerCase();
+                      const dState = driverStates.find((d) => d.driver_id === trip.driver_id);
+                      const dName = (trip.driverName || dState?.driver?.full_name || "").toLowerCase();
+                      const plate = (trip.vehiclePlate || dState?.vehicle?.plate || "").toLowerCase();
+                      const model = (trip.vehicleModel || dState?.vehicle?.model || "").toLowerCase();
+                      const route = (trip.routeName || dState?.route_name || "").toLowerCase();
+
+                      return dName.includes(term) || plate.includes(term) || model.includes(term) || route.includes(term);
+                    });
+
+                    if (filteredTrips.length === 0) {
+                      return (
+                        <div className="p-6 text-center text-slate-400 bg-slate-800/30 rounded-2xl border border-slate-700/50">
+                          <p className="text-[11px]">Nenhum trajeto encontrado para "{tripsSearchTerm}".</p>
                         </div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30">
-                          {trip.totalPositions} pts
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2 mt-3">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-slate-400">Início</span>
-                          <span className="text-xs font-medium text-slate-200">
-                            {new Date(trip.firstPositionAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                      );
+                    }
+
+                    return filteredTrips.map((trip) => {
+                      const dState = driverStates.find((d) => d.driver_id === trip.driver_id);
+                      const driverName = trip.driverName || dState?.driver?.full_name || "Motorista";
+                      const plate = trip.vehiclePlate || dState?.vehicle?.plate;
+                      const model = trip.vehicleModel || dState?.vehicle?.model;
+                      const routeName = trip.routeName || dState?.route_name;
+
+                      return (
+                        <div
+                          key={trip.trip_id}
+                          className="bg-slate-800/70 border border-slate-700/70 p-3.5 rounded-2xl hover:bg-slate-800 hover:border-purple-500/50 transition cursor-pointer space-y-2.5 shadow-lg group"
+                          onClick={() => {
+                            onSelectDriver(trip.driver_id);
+                            if (onFilterChange) onFilterChange({ ...filters, tripId: trip.trip_id });
+                            setTab("drivers");
+                          }}
+                        >
+                          {/* Driver Name & Status Tag */}
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 flex items-center justify-center font-bold text-xs shrink-0">
+                                {driverName.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-bold text-white group-hover:text-purple-300 transition">
+                                  {driverName}
+                                </h4>
+                                {(plate || model) && (
+                                  <span className="text-[10px] text-slate-400 block font-mono">
+                                    {plate || ""} {model ? `(${model})` : ""}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30 shrink-0">
+                              {trip.totalPositions} pts GPS
+                            </span>
+                          </div>
+
+                          {/* Route Tag if available */}
+                          {routeName && (
+                            <div className="text-[11px] font-semibold text-cyan-300 bg-cyan-950/40 border border-cyan-800/40 px-2.5 py-1 rounded-xl flex items-center gap-1.5">
+                              <Navigation size={12} className="shrink-0 text-cyan-400" />
+                              <span className="truncate">{routeName}</span>
+                            </div>
+                          )}
+
+                          {/* Stats Grid */}
+                          <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-700/50">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-slate-400">Início</span>
+                              <span className="text-xs font-bold text-slate-200">
+                                {new Date(trip.firstPositionAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                            <div className="flex flex-col text-right">
+                              <span className="text-[10px] text-slate-400">Fim</span>
+                              <span className="text-xs font-bold text-slate-200">
+                                {new Date(trip.lastPositionAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-slate-400">Em Movimento</span>
+                              <span className="text-xs font-bold text-emerald-400">
+                                {formatDuration(trip.movingTimeMs)}
+                              </span>
+                            </div>
+                            <div className="flex flex-col text-right">
+                              <span className="text-[10px] text-slate-400">Tempo Parado</span>
+                              <span className="text-xs font-bold text-rose-400">
+                                {formatDuration(trip.stoppedTimeMs)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between col-span-2 mt-1 pt-2 border-t border-slate-700/40 text-[11px]">
+                              <span className="text-slate-400">Vel. Máxima:</span>
+                              <span className="font-extrabold text-amber-400">{trip.maxSpeedKmh} km/h</span>
+                            </div>
+                          </div>
+
+                          {/* Action Link */}
+                          <div className="pt-1 flex items-center justify-end text-[11px] font-bold text-purple-400 group-hover:text-purple-300 gap-1">
+                            <span>Ver trajeto com setas no mapa</span>
+                            <Navigation size={12} className="rotate-90" />
+                          </div>
                         </div>
-                        <div className="flex flex-col text-right">
-                          <span className="text-[10px] text-slate-400">Fim</span>
-                          <span className="text-xs font-medium text-slate-200">
-                            {new Date(trip.lastPositionAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-slate-400">Movimento</span>
-                          <span className="text-xs font-bold text-emerald-400">
-                            {formatDuration(trip.movingTimeMs)}
-                          </span>
-                        </div>
-                        <div className="flex flex-col text-right">
-                          <span className="text-[10px] text-slate-400">Parado</span>
-                          <span className="text-xs font-bold text-rose-400">
-                            {formatDuration(trip.stoppedTimeMs)}
-                          </span>
-                        </div>
-                        
-                        <div className="flex flex-col col-span-2 mt-1 pt-2 border-t border-slate-700/50">
-                          <span className="text-[10px] text-slate-400">Velocidade Máxima</span>
-                          <span className="text-xs font-bold text-amber-400">{trip.maxSpeedKmh} km/h</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                      );
+                    });
+                  })()
                 )}
               </div>
             </div>

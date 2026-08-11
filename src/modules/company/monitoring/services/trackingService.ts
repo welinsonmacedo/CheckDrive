@@ -709,18 +709,50 @@ export async function fetchTripsList(
     const startOfDay = new Date(`${dateStr}T00:00:00`).toISOString();
     const endOfDay = new Date(`${dateStr}T23:59:59`).toISOString();
 
-    const { data: locations, error } = await supabase
-      .from("driver_locations")
-      .select("*")
-      .eq("company_id", companyId)
-      .gte("created_at", startOfDay)
-      .lte("created_at", endOfDay)
-      .order("created_at", { ascending: true })
-      .limit(5000);
+    const [locationsRes, profilesRes, driversRes, vehiclesRes, schedulesRes] = await Promise.all([
+      supabase
+        .from("driver_locations")
+        .select("*")
+        .eq("company_id", companyId)
+        .gte("created_at", startOfDay)
+        .lte("created_at", endOfDay)
+        .order("created_at", { ascending: true })
+        .limit(5000),
+      supabase.from("profiles").select("id, full_name, email").eq("company_id", companyId),
+      supabase.from("drivers").select("id, name, email").eq("company_id", companyId),
+      supabase.from("vehicles").select("id, plate, model").eq("company_id", companyId),
+      supabase.from("schedules").select("driver_id, vehicle_id, routes(origin, destination)").eq("company_id", companyId),
+    ]);
 
-    if (error || !locations || locations.length === 0) {
+    const locations = locationsRes.data || [];
+    if (!locations || locations.length === 0) {
       return [];
     }
+
+    const profilesMap = new Map<string, string>();
+    (profilesRes.data || []).forEach((p: any) => {
+      profilesMap.set(p.id, formatDriverName(p.full_name, p.email));
+    });
+    (driversRes.data || []).forEach((d: any) => {
+      if (!profilesMap.has(d.id) || profilesMap.get(d.id) === "Motorista") {
+        profilesMap.set(d.id, formatDriverName(d.name, d.email));
+      }
+    });
+
+    const vehiclesMap = new Map<string, { plate: string; model?: string }>();
+    (vehiclesRes.data || []).forEach((v: any) => {
+      vehiclesMap.set(v.id, { plate: v.plate, model: v.model });
+    });
+
+    const routesMap = new Map<string, string>();
+    (schedulesRes.data || []).forEach((s: any) => {
+      if (s.driver_id && s.routes) {
+        const rName = `${s.routes.origin || ""} ➔ ${s.routes.destination || ""}`;
+        if (rName !== " ➔ ") {
+          routesMap.set(s.driver_id, rName);
+        }
+      }
+    });
 
     // Group by trip_id (or a composite of driver_id if null)
     const grouped = new Map<string, any[]>();
@@ -736,6 +768,13 @@ export async function fetchTripsList(
     for (const [tripId, locs] of Array.from(grouped.entries())) {
       const metrics = calculateTripMetrics(locs);
       metrics.trip_id = tripId;
+      metrics.driverName = profilesMap.get(metrics.driver_id) || "Motorista";
+      if (metrics.vehicle_id) {
+        const veh = vehiclesMap.get(metrics.vehicle_id);
+        metrics.vehiclePlate = veh?.plate;
+        metrics.vehicleModel = veh?.model;
+      }
+      metrics.routeName = routesMap.get(metrics.driver_id);
       trips.push(metrics);
     }
 

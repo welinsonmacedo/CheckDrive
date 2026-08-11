@@ -52,6 +52,10 @@ export interface TripMetrics {
   trip_id: string;
   driver_id: string;
   vehicle_id?: string;
+  driverName?: string;
+  vehiclePlate?: string;
+  vehicleModel?: string;
+  routeName?: string;
   movingTimeMs: number;
   stoppedTimeMs: number;
   avgSpeedKmh: number;

@@ -207,6 +207,50 @@ function createStartEndIcon(type: "start" | "end", timeLabel?: string): L.DivIco
   });
 }
 
+function calculateBearing(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const lat1Rad = (lat1 * Math.PI) / 180;
+  const lat2Rad = (lat2 * Math.PI) / 180;
+
+  const y = Math.sin(dLng) * Math.cos(lat2Rad);
+  const x =
+    Math.cos(lat1Rad) * Math.sin(lat2Rad) -
+    Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
+
+  let brng = (Math.atan2(y, x) * 180) / Math.PI;
+  return (brng + 360) % 360;
+}
+
+function createPolylineArrowIcon(bearing: number = 0): L.DivIcon {
+  const html = `
+    <div style="
+      transform: rotate(${bearing}deg);
+      transition: transform 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      background: #0f172a;
+      border: 1.5px solid #38bdf8;
+      border-radius: 9999px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+    ">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="#38bdf8" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 19 21 12 17 5 21 12 2"></polygon>
+      </svg>
+    </div>
+  `;
+
+  return L.divIcon({
+    html,
+    className: "route-direction-arrow-marker",
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
 async function fetchRoadRouteGeometry(
   locations: { latitude: number; longitude: number }[]
 ): Promise<[number, number][] | null> {
@@ -272,8 +316,45 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
   const polylineRef = useRef<L.Polyline | null>(null);
   const startMarkerRef = useRef<L.Marker | null>(null);
   const endMarkerRef = useRef<L.Marker | null>(null);
+  const routeArrowMarkersRef = useRef<L.Marker[]>([]);
   const playbackMarkerRef = useRef<L.Marker | null>(null);
   const heatmapCirclesRef = useRef<L.CircleMarker[]>([]);
+
+  const renderRouteArrows = (map: L.Map, latLngs: [number, number][]) => {
+    // Clear old arrows
+    routeArrowMarkersRef.current.forEach((m) => m.remove());
+    routeArrowMarkersRef.current = [];
+
+    if (!latLngs || latLngs.length < 2) return;
+
+    // Place around 15-20 directional arrows along the path
+    const maxArrows = 18;
+    const step = Math.max(1, Math.floor(latLngs.length / maxArrows));
+
+    for (let i = 0; i < latLngs.length - 1; i += step) {
+      const p1 = latLngs[i];
+      const p2 = latLngs[Math.min(i + 1, latLngs.length - 1)];
+
+      if (!p1 || !p2) continue;
+      const [lat1, lng1] = p1;
+      const [lat2, lng2] = p2;
+
+      if (Math.abs(lat1 - lat2) < 0.00001 && Math.abs(lng1 - lng2) < 0.00001) {
+        continue;
+      }
+
+      const bearing = calculateBearing(lat1, lng1, lat2, lng2);
+      const arrowIcon = createPolylineArrowIcon(bearing);
+
+      const marker = L.marker([lat1, lng1], {
+        icon: arrowIcon,
+        interactive: false,
+        zIndexOffset: 1200,
+      }).addTo(map);
+
+      routeArrowMarkersRef.current.push(marker);
+    }
+  };
 
   // 1. Initialize Map
   useEffect(() => {
@@ -469,6 +550,10 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
       endMarkerRef.current = null;
     }
 
+    // Cleanup previous arrow markers
+    routeArrowMarkersRef.current.forEach((m) => m.remove());
+    routeArrowMarkersRef.current = [];
+
     if (!selectedTripMetrics || !selectedTripMetrics.locations || selectedTripMetrics.locations.length < 2) {
       return;
     }
@@ -514,6 +599,9 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
 
     routeOutlineRef.current = routeOutline;
     polylineRef.current = polyline;
+
+    // Render directional arrow markers along the route
+    renderRouteArrows(map, rawLatLngs);
 
     // 2. Add Start (A - Início) and End (B - Fim) markers
     const startLoc = validLocs[0];
@@ -572,6 +660,7 @@ export const MonitoringMap: React.FC<MonitoringMapProps> = ({
       if (polylineRef.current && routeOutlineRef.current) {
         polylineRef.current.setLatLngs(validStreetCoords);
         routeOutlineRef.current.setLatLngs(validStreetCoords);
+        renderRouteArrows(map, validStreetCoords);
 
         try {
           const bounds = polylineRef.current.getBounds();
