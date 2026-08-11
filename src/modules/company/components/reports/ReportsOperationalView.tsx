@@ -164,7 +164,7 @@ export default function ReportsOperationalView() {
       const [profilesRes, vehiclesRes, trailersRes] = await Promise.all([
         supabase.from("profiles").select("id, full_name").eq("company_id", companyId),
         supabase.from("vehicles").select("id, plate, branch_id").eq("company_id", companyId),
-        supabase.from("trailers").select("id, plate, branch_id").eq("company_id", companyId),
+        supabase.from("trailers").select("id, plate").eq("company_id", companyId),
       ]);
 
       const profilesMap: Record<string, string> = {};
@@ -206,7 +206,7 @@ export default function ReportsOperationalView() {
         case "checklists": {
           let query = supabase
             .from("checklist_issues")
-            .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
+            .select("*, vehicles(plate, branch_id), trailers(plate)")
             .eq("company_id", companyId)
             .gte("created_at", startIso)
             .lte("created_at", endIso)
@@ -285,7 +285,7 @@ export default function ReportsOperationalView() {
         case "pending_by_plate": {
           let query = supabase
             .from("checklist_issues")
-            .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
+            .select("*, vehicles(plate, branch_id), trailers(plate)")
             .eq("company_id", companyId)
             .in("status", ["pending", "waiting"])
             .gte("created_at", startIso)
@@ -364,7 +364,7 @@ export default function ReportsOperationalView() {
         case "auto_alerts": {
           let { data, error } = await supabase
             .from("auto_alerts")
-            .select("*, vehicles:target_vehicle_id(plate, branch_id), trailers:target_vehicle_id(plate, branch_id)")
+            .select("*, vehicles:target_vehicle_id(plate, branch_id), trailers:target_vehicle_id(plate)")
             .eq("company_id", companyId)
             .order("created_at", { ascending: false });
 
@@ -436,10 +436,7 @@ export default function ReportsOperationalView() {
               *,
               profiles(full_name, branch_id),
               vehicles(plate, model, branch_id),
-              trailers(plate, model, branch_id),
-              start_checklist:checklist_submissions!start_checklist_id(id, odometer),
-              end_checklist:checklist_submissions!end_checklist_id(id, odometer),
-              fuel_checklist:checklist_submissions!fuel_checklist_id(id, details, odometer)
+              trailers(plate, model)
             `)
             .eq("company_id", companyId)
             .gte("start_at", startIso)
@@ -462,78 +459,140 @@ export default function ReportsOperationalView() {
             data = fbRes.data || [];
           }
 
-          const scheduleIds = (data || []).map((s: any) => s.id).filter(Boolean);
-          let fuelSubsMap: Record<string, number> = {};
-          if (scheduleIds.length > 0) {
-            const { data: fuelSubs } = await supabase
-              .from("checklist_submissions")
-              .select("id, schedule_id, details")
-              .in("schedule_id", scheduleIds);
+          const rawSchedules = data || [];
+          const scheduleIds = rawSchedules.map((s: any) => s.id).filter(Boolean);
+          const startChecklistIds = rawSchedules.map((s: any) => s.start_checklist_id).filter(Boolean);
+          const endChecklistIds = rawSchedules.map((s: any) => s.end_checklist_id).filter(Boolean);
+          const fuelChecklistIds = rawSchedules.map((s: any) => s.fuel_checklist_id).filter(Boolean);
 
-            (fuelSubs || []).forEach((fs: any) => {
-              if (fs.schedule_id) {
-                let l = 0;
-                if (fs.details) {
-                  const details = typeof fs.details === "string" ? JSON.parse(fs.details) : fs.details;
-                  l = Number(
-                    details.manual_liters ??
-                    details.liters ??
-                    details.litros ??
-                    details.qtd_litros ??
-                    details.gas_station_liters ??
-                    details.quantidade_litros ??
-                    details.itemValues?.gas_station_liters ??
-                    details.itemValues?.manual_liters ??
-                    details.itemValues?.liters ??
-                    details.itemValues?.litros ??
-                    0
-                  );
-                }
-                if (l > 0) {
-                  fuelSubsMap[fs.schedule_id] = (fuelSubsMap[fs.schedule_id] || 0) + l;
-                }
-              }
-            });
+          const allChecklistIds = Array.from(new Set([...startChecklistIds, ...endChecklistIds, ...fuelChecklistIds]));
+
+          let submissionsMap: Record<string, any> = {};
+          let submissionsByScheduleMap: Record<string, any[]> = {};
+
+          // Fetch explicit checklist submissions in batches of 30
+          if (allChecklistIds.length > 0) {
+            for (let i = 0; i < allChecklistIds.length; i += 30) {
+              const batch = allChecklistIds.slice(i, i + 30);
+              const { data: subBatch } = await supabase
+                .from("checklist_submissions")
+                .select("id, schedule_id, odometer, details, created_at, type")
+                .in("id", batch);
+
+              (subBatch || []).forEach((sub: any) => {
+                submissionsMap[sub.id] = sub;
+              });
+            }
           }
+
+          // Fetch submissions linked by schedule_id in batches of 30
+          if (scheduleIds.length > 0) {
+            for (let i = 0; i < scheduleIds.length; i += 30) {
+              const batch = scheduleIds.slice(i, i + 30);
+              const { data: schSubs } = await supabase
+                .from("checklist_submissions")
+                .select("id, schedule_id, odometer, details, created_at, type")
+                .in("schedule_id", batch);
+
+              (schSubs || []).forEach((sub: any) => {
+                submissionsMap[sub.id] = sub;
+                if (sub.schedule_id) {
+                  if (!submissionsByScheduleMap[sub.schedule_id]) {
+                    submissionsByScheduleMap[sub.schedule_id] = [];
+                  }
+                  submissionsByScheduleMap[sub.schedule_id].push(sub);
+                }
+              });
+            }
+          }
+
+          const extractLitersFromDetails = (subDetails: any) => {
+            if (!subDetails) return 0;
+            const details = typeof subDetails === "string" ? JSON.parse(subDetails) : subDetails;
+            return Number(
+              details.manual_liters ??
+              details.liters ??
+              details.litros ??
+              details.qtd_litros ??
+              details.gas_station_liters ??
+              details.quantidade_litros ??
+              details.itemValues?.gas_station_liters ??
+              details.itemValues?.manual_liters ??
+              details.itemValues?.liters ??
+              details.itemValues?.litros ??
+              0
+            );
+          };
 
           let totalKmDriven = 0;
           let totalLiters = 0;
 
-          let result = (data || []).map((r: any) => {
+          let result = rawSchedules.map((r: any) => {
             const veh = r.vehicles || vehiclesMap[r.vehicle_id] || null;
             const trl = r.trailers || trailersMap[r.trailer_id] || null;
             const prof = r.profiles || { full_name: profilesMap[r.driver_id] || "-", branch_id: null };
 
-            const startKm = Number(r.adjusted_start_odometer ?? r.start_odometer ?? r.start_checklist?.odometer ?? 0);
-            const endKm = Number(r.adjusted_end_odometer ?? r.end_odometer ?? r.end_checklist?.odometer ?? 0);
+            const startSub = submissionsMap[r.start_checklist_id];
+            const schSubs = submissionsByScheduleMap[r.id] || [];
+            const startSchSub = schSubs.find((s) => s.type === "start" || (s.type || "").toLowerCase().includes("início"));
+
+            let startKm = 0;
+            if (r.adjusted_start_odometer !== undefined && r.adjusted_start_odometer !== null && Number(r.adjusted_start_odometer) >= 0) {
+              startKm = Number(r.adjusted_start_odometer);
+            } else if (r.start_odometer !== undefined && r.start_odometer !== null && Number(r.start_odometer) > 0) {
+              startKm = Number(r.start_odometer);
+            } else if (startSub?.odometer) {
+              startKm = Number(startSub.odometer);
+            } else if (startSub?.details?.odometer || startSub?.details?.start_odometer) {
+              startKm = Number(startSub.details.odometer || startSub.details.start_odometer);
+            } else if (startSchSub?.odometer) {
+              startKm = Number(startSchSub.odometer);
+            } else if (startSchSub?.details?.odometer) {
+              startKm = Number(startSchSub.details.odometer);
+            }
+
+            const endSub = submissionsMap[r.end_checklist_id];
+            const endSchSub = schSubs.find((s) => s.type === "end" || (s.type || "").toLowerCase().includes("fim"));
+
+            let endKm = 0;
+            if (r.adjusted_end_odometer !== undefined && r.adjusted_end_odometer !== null && Number(r.adjusted_end_odometer) >= 0) {
+              endKm = Number(r.adjusted_end_odometer);
+            } else if (r.end_odometer !== undefined && r.end_odometer !== null && Number(r.end_odometer) > 0) {
+              endKm = Number(r.end_odometer);
+            } else if (endSub?.odometer) {
+              endKm = Number(endSub.odometer);
+            } else if (endSub?.details?.odometer || endSub?.details?.end_odometer) {
+              endKm = Number(endSub.details.odometer || endSub.details.end_odometer);
+            } else if (endSchSub?.odometer) {
+              endKm = Number(endSchSub.odometer);
+            } else if (endSchSub?.details?.odometer) {
+              endKm = Number(endSchSub.details.odometer);
+            }
 
             let totalKm = 0;
             if (endKm > 0 && startKm > 0 && endKm >= startKm) {
               totalKm = endKm - startKm;
-            } else if (r.distance) {
+            } else if (r.distance && Number(r.distance) > 0) {
               totalKm = Number(r.distance);
+            } else if (r.total_km && Number(r.total_km) > 0) {
+              totalKm = Number(r.total_km);
             }
 
+            const fuelSub = submissionsMap[r.fuel_checklist_id];
             let liters = 0;
             if (r.adjusted_liters !== undefined && r.adjusted_liters !== null && Number(r.adjusted_liters) > 0) {
               liters = Number(r.adjusted_liters);
-            } else if (fuelSubsMap[r.id]) {
-              liters = fuelSubsMap[r.id];
-            } else if (r.fuel_checklist?.details) {
-              const details = typeof r.fuel_checklist.details === "string" ? JSON.parse(r.fuel_checklist.details) : r.fuel_checklist.details;
-              liters = Number(
-                details.manual_liters ??
-                details.liters ??
-                details.litros ??
-                details.qtd_litros ??
-                details.gas_station_liters ??
-                details.quantidade_litros ??
-                details.itemValues?.gas_station_liters ??
-                details.itemValues?.manual_liters ??
-                details.itemValues?.liters ??
-                details.itemValues?.litros ??
-                0
-              );
+            } else {
+              if (fuelSub) {
+                liters = extractLitersFromDetails(fuelSub.details);
+              }
+              if (liters === 0) {
+                schSubs.forEach((s) => {
+                  if (s.type === "fuel" || (s.type || "").toLowerCase().includes("abastecimento")) {
+                    liters += extractLitersFromDetails(s.details);
+                  }
+                });
+              }
             }
 
             totalKmDriven += totalKm;
@@ -589,12 +648,12 @@ export default function ReportsOperationalView() {
           const [vRes, tRes, subRes, schRes] = await Promise.all([
             supabase
               .from("vehicles")
-              .select("*, branches(name)")
+              .select("*")
               .eq("company_id", companyId)
               .order("plate"),
             supabase
               .from("trailers")
-              .select("*, branches(name)")
+              .select("*")
               .eq("company_id", companyId)
               .order("plate"),
             supabase
@@ -606,7 +665,7 @@ export default function ReportsOperationalView() {
               .order("created_at", { ascending: false }),
             supabase
               .from("schedules")
-              .select("id, vehicle_id, trailer_id, end_odometer, start_odometer, adjusted_end_odometer, created_at, end_at, start_at")
+              .select("id, vehicle_id, trailer_id, end_odometer, start_odometer, created_at, end_at, start_at")
               .eq("company_id", companyId)
               .order("created_at", { ascending: false }),
           ]);
@@ -728,7 +787,7 @@ export default function ReportsOperationalView() {
         case "drivers": {
           let query = supabase
             .from("profiles")
-            .select("*, branches(name)")
+            .select("*")
             .eq("company_id", companyId)
             .eq("role", "driver")
             .order("full_name");
@@ -891,7 +950,7 @@ export default function ReportsOperationalView() {
         case "history": {
           let query = supabase
             .from("checklist_issues")
-            .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
+            .select("*, vehicles(plate, branch_id), trailers(plate)")
             .eq("company_id", companyId)
             .gte("created_at", startIso)
             .lte("created_at", endIso)
@@ -965,7 +1024,7 @@ export default function ReportsOperationalView() {
         case "resolved_issues": {
           let query = supabase
             .from("checklist_issues")
-            .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
+            .select("*, vehicles(plate, branch_id), trailers(plate)")
             .eq("company_id", companyId)
             .eq("status", "resolved")
             .gte("resolved_at", startIso)
@@ -1320,7 +1379,7 @@ export default function ReportsOperationalView() {
         case "fuelings": {
           let query = supabase
             .from("checklist_submissions")
-            .select("*, vehicles(plate, branch_id), trailers(plate, branch_id)")
+            .select("*, vehicles(plate, branch_id), trailers(plate)")
             .eq("company_id", companyId)
             .gte("created_at", startIso)
             .lte("created_at", endIso)
@@ -2878,13 +2937,17 @@ export default function ReportsOperationalView() {
                           {row.profiles?.full_name || row.driver_name || "-"}
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-gray-700 text-right">
-                          {row.start_km ? `${Number(row.start_km).toLocaleString("pt-BR")} km` : "-"}
+                          {row.start_km > 0 ? `${Number(row.start_km).toLocaleString("pt-BR")} km` : "-"}
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-gray-700 text-right">
-                          {row.end_km ? `${Number(row.end_km).toLocaleString("pt-BR")} km` : "-"}
+                          {row.end_km > 0 ? `${Number(row.end_km).toLocaleString("pt-BR")} km` : "-"}
                         </td>
                         <td className="py-3 px-4 font-mono font-black text-indigo-600 text-right">
-                          {row.total_km ? `${Number(row.total_km).toLocaleString("pt-BR")} km` : "-"}
+                          {row.total_km > 0
+                            ? `${Number(row.total_km).toLocaleString("pt-BR")} km`
+                            : row.start_km > 0 && row.end_km > 0
+                            ? `${Number(row.end_km - row.start_km).toLocaleString("pt-BR")} km`
+                            : "-"}
                         </td>
                         <td className="py-3 px-4 font-bold text-right">
                           {row.liters > 0 ? (
