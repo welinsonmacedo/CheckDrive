@@ -468,7 +468,6 @@ export default function ReportsOperationalView() {
           const allChecklistIds = Array.from(new Set([...startChecklistIds, ...endChecklistIds, ...fuelChecklistIds]));
 
           let submissionsMap: Record<string, any> = {};
-          let submissionsByScheduleMap: Record<string, any[]> = {};
           let averagesByScheduleMap: Record<string, any> = {};
 
           // Fetch explicit checklist submissions in batches of 30
@@ -477,7 +476,7 @@ export default function ReportsOperationalView() {
               const batch = allChecklistIds.slice(i, i + 30);
               const { data: subBatch } = await supabase
                 .from("checklist_submissions")
-                .select("id, schedule_id, odometer, details, created_at")
+                .select("id, odometer, details, created_at")
                 .in("id", batch);
 
               (subBatch || []).forEach((sub: any) => {
@@ -486,26 +485,10 @@ export default function ReportsOperationalView() {
             }
           }
 
-          // Fetch submissions linked by schedule_id in batches of 30
+          // Fetch vehicle_averages linked by schedule_id in batches of 30
           if (scheduleIds.length > 0) {
             for (let i = 0; i < scheduleIds.length; i += 30) {
               const batch = scheduleIds.slice(i, i + 30);
-              const { data: schSubs } = await supabase
-                .from("checklist_submissions")
-                .select("id, schedule_id, odometer, details, created_at")
-                .in("schedule_id", batch);
-
-              (schSubs || []).forEach((sub: any) => {
-                submissionsMap[sub.id] = sub;
-                if (sub.schedule_id) {
-                  if (!submissionsByScheduleMap[sub.schedule_id]) {
-                    submissionsByScheduleMap[sub.schedule_id] = [];
-                  }
-                  submissionsByScheduleMap[sub.schedule_id].push(sub);
-                }
-              });
-
-              // Also fetch vehicle_averages linked by schedule_id
               const { data: avgs } = await supabase
                 .from("vehicle_averages")
                 .select("schedule_id, start_odometer, end_odometer, distance, liters")
@@ -591,7 +574,7 @@ export default function ReportsOperationalView() {
             const prof = r.profiles || { full_name: profilesMap[r.driver_id] || "-", branch_id: null };
 
             const startSub = submissionsMap[r.start_checklist_id];
-            const schSubs = submissionsByScheduleMap[r.id] || [];
+            const schSubs = [submissionsMap[r.start_checklist_id], submissionsMap[r.end_checklist_id], submissionsMap[r.fuel_checklist_id]].filter(Boolean);
             const avgRecord = averagesByScheduleMap[r.id];
 
             let startKm = 0;
