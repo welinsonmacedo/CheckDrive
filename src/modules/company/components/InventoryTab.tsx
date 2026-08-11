@@ -1,7 +1,29 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/modules/shared/contexts/AuthContext";
-import { Package, Truck, FileText, Plus, Search, Edit2, Trash2, X, Check, FileCheck, Layers, Upload, Eye } from "lucide-react";
+import {
+  Package,
+  Truck,
+  FileText,
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  X,
+  Check,
+  FileCheck,
+  Layers,
+  Upload,
+  Eye,
+  MapPin,
+  Users,
+  Tag,
+  Phone,
+  Mail,
+  ExternalLink,
+  Compass,
+  Building2,
+} from "lucide-react";
 import { SupplierModal } from "./SupplierModal";
 
 export default function InventoryTab() {
@@ -15,6 +37,7 @@ export default function InventoryTab() {
   // Data states
   const [items, setItems] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [supplierSearch, setSupplierSearch] = useState("");
   const [transactions, setTransactions] = useState<any[]>([]);
 
   // Modals
@@ -324,6 +347,17 @@ export default function InventoryTab() {
   contact_name TEXT,
   phone TEXT,
   email TEXT,
+  cep TEXT,
+  address TEXT,
+  location TEXT,
+  number TEXT,
+  bairro TEXT,
+  city TEXT,
+  state TEXT,
+  latitude NUMERIC,
+  longitude NUMERIC,
+  contacts JSONB,
+  categories JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   company_id UUID REFERENCES public.companies(id)
 );
@@ -562,42 +596,264 @@ CREATE POLICY "Allow all actions for company users (transactions)" ON public.inv
 
         {activeSubTab === "suppliers" && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-bold text-zinc-800">Fornecedores</h2>
-              <button
-                onClick={() => {
-                  setSupplierForm({ id: "", name: "", cnpj_cpf: "", contact_name: "", phone: "", email: "" });
-                  setShowSupplierModal(true);
-                }}
-                className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-primary-dark cursor-pointer"
-              >
-                <Plus size={16} /> Novo Fornecedor
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {suppliers.map(sup => (
-                <div key={sup.id} className="bg-white border border-zinc-200 rounded-xl p-5 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start mb-3">
-                    <h3 className="font-extrabold text-zinc-900 truncate pr-2">{sup.name}</h3>
-                    <button
-                      onClick={() => {
-                        setSupplierForm(sup);
-                        setShowSupplierModal(true);
-                      }}
-                      className="text-zinc-400 hover:text-primary shrink-0 cursor-pointer"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                  </div>
-                  <div className="space-y-1.5 text-xs text-zinc-600 font-medium">
-                    <p>CNPJ: <span className="text-zinc-900">{sup.cnpj_cpf || '-'}</span></p>
-                    <p>Contato: <span className="text-zinc-900">{sup.contact_name || '-'}</span></p>
-                    <p>Tel: <span className="text-zinc-900">{sup.phone || '-'}</span></p>
-                    <p>Email: <span className="text-zinc-900">{sup.email || '-'}</span></p>
-                  </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-zinc-800">Fornecedores</h2>
+                <p className="text-xs text-zinc-500">
+                  Gerencie fornecedores com localização GPS, contatos por departamento e categorias atendidas.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-2.5 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={supplierSearch}
+                    onChange={(e) => setSupplierSearch(e.target.value)}
+                    placeholder="Buscar fornecedor, CNPJ, categoria..."
+                    className="pl-9 pr-3 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs font-medium text-zinc-800 w-full sm:w-64 focus:outline-none focus:border-primary"
+                  />
                 </div>
-              ))}
+                <button
+                  onClick={() => {
+                    setSupplierForm({ id: "", name: "", cnpj_cpf: "", contact_name: "", phone: "", email: "" });
+                    setShowSupplierModal(true);
+                  }}
+                  className="bg-primary text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-primary-dark cursor-pointer shrink-0"
+                >
+                  <Plus size={16} /> Novo Fornecedor
+                </button>
+              </div>
             </div>
+
+            {/* Supplier Cards List */}
+            {suppliers.filter((s) => {
+              if (!supplierSearch.trim()) return true;
+              const term = supplierSearch.toLowerCase().trim();
+              const nameMatch = s.name?.toLowerCase().includes(term);
+              const cnpjMatch = s.cnpj_cpf?.toLowerCase().includes(term);
+              const cityMatch =
+                s.city?.toLowerCase().includes(term) ||
+                s.address?.toLowerCase().includes(term) ||
+                s.location?.toLowerCase().includes(term);
+
+              let cStr = "";
+              if (Array.isArray(s.contacts)) cStr = JSON.stringify(s.contacts).toLowerCase();
+              else if (typeof s.contacts === "string") cStr = s.contacts.toLowerCase();
+              const contactMatch = (s.contact_name?.toLowerCase().includes(term)) || cStr.includes(term);
+
+              let catStr = "";
+              if (Array.isArray(s.categories)) catStr = JSON.stringify(s.categories).toLowerCase();
+              else if (typeof s.categories === "string") catStr = s.categories.toLowerCase();
+              const catMatch = catStr.includes(term);
+
+              return nameMatch || cnpjMatch || cityMatch || contactMatch || catMatch;
+            }).length === 0 ? (
+              <div className="p-8 text-center bg-white border border-zinc-200 rounded-2xl">
+                <Building2 className="w-10 h-10 text-zinc-300 mx-auto mb-2" />
+                <p className="text-sm font-bold text-zinc-700">Nenhum fornecedor encontrado</p>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Clique em "Novo Fornecedor" para realizar o cadastro.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {suppliers
+                  .filter((s) => {
+                    if (!supplierSearch.trim()) return true;
+                    const term = supplierSearch.toLowerCase().trim();
+                    const nameMatch = s.name?.toLowerCase().includes(term);
+                    const cnpjMatch = s.cnpj_cpf?.toLowerCase().includes(term);
+                    const cityMatch =
+                      s.city?.toLowerCase().includes(term) ||
+                      s.address?.toLowerCase().includes(term) ||
+                      s.location?.toLowerCase().includes(term);
+
+                    let cStr = "";
+                    if (Array.isArray(s.contacts)) cStr = JSON.stringify(s.contacts).toLowerCase();
+                    else if (typeof s.contacts === "string") cStr = s.contacts.toLowerCase();
+                    const contactMatch = (s.contact_name?.toLowerCase().includes(term)) || cStr.includes(term);
+
+                    let catStr = "";
+                    if (Array.isArray(s.categories)) catStr = JSON.stringify(s.categories).toLowerCase();
+                    else if (typeof s.categories === "string") catStr = s.categories.toLowerCase();
+                    const catMatch = catStr.includes(term);
+
+                    return nameMatch || cnpjMatch || cityMatch || contactMatch || catMatch;
+                  })
+                  .map((sup) => {
+                    // Parse contacts
+                    let contactsList: any[] = [];
+                    if (Array.isArray(sup.contacts)) {
+                      contactsList = sup.contacts;
+                    } else if (typeof sup.contacts === "string" && sup.contacts.trim()) {
+                      try {
+                        contactsList = JSON.parse(sup.contacts);
+                      } catch (e) {}
+                    }
+                    if (
+                      contactsList.length === 0 &&
+                      (sup.contact_name || sup.phone || sup.email)
+                    ) {
+                      contactsList = [
+                        {
+                          name: sup.contact_name,
+                          department: "Geral",
+                          phone: sup.phone,
+                          email: sup.email,
+                        },
+                      ];
+                    }
+
+                    // Parse categories
+                    let categoriesList: string[] = [];
+                    if (Array.isArray(sup.categories)) {
+                      categoriesList = sup.categories;
+                    } else if (typeof sup.categories === "string" && sup.categories.trim()) {
+                      try {
+                        const json = JSON.parse(sup.categories);
+                        if (Array.isArray(json)) categoriesList = json;
+                        else categoriesList = sup.categories.split(",").map((x: string) => x.trim());
+                      } catch (e) {
+                        categoriesList = sup.categories.split(",").map((x: string) => x.trim());
+                      }
+                    }
+
+                    const streetAddr = sup.address || sup.location;
+                    const fullAddr = [
+                      streetAddr,
+                      sup.number ? `nº ${sup.number}` : "",
+                      sup.bairro,
+                      sup.city && sup.state ? `${sup.city} - ${sup.state}` : sup.city || sup.state,
+                      sup.cep ? `CEP: ${sup.cep}` : "",
+                    ]
+                      .filter(Boolean)
+                      .join(", ");
+
+                    const lat = sup.latitude ?? sup.lat;
+                    const lng = sup.longitude ?? sup.lng;
+                    const hasGps = lat !== null && lng !== null && lat !== undefined && lng !== undefined && lat !== "" && lng !== "";
+
+                    return (
+                      <div
+                        key={sup.id}
+                        className="bg-white border border-zinc-200 rounded-2xl p-4 sm:p-5 hover:shadow-md transition-shadow flex flex-col justify-between space-y-3"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                              <h3 className="font-extrabold text-zinc-900 text-sm leading-tight">
+                                {sup.name}
+                              </h3>
+                              <p className="text-[11px] font-mono text-zinc-500 font-medium">
+                                CNPJ/CPF: {sup.cnpj_cpf || "-"}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setSupplierForm(sup);
+                                setShowSupplierModal(true);
+                              }}
+                              className="text-zinc-400 hover:text-primary p-1 rounded-lg hover:bg-zinc-100 transition shrink-0 cursor-pointer"
+                              title="Editar Fornecedor"
+                            >
+                              <Edit2 size={15} />
+                            </button>
+                          </div>
+
+                          {/* Categories Badges */}
+                          {categoriesList.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {categoriesList.map((cat, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-md"
+                                >
+                                  <Tag size={10} />
+                                  <span>{cat}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Address & GPS */}
+                          {(fullAddr || hasGps) && (
+                            <div className="p-2.5 bg-zinc-50 rounded-xl border border-zinc-100 space-y-1 text-xs">
+                              {fullAddr && (
+                                <div className="flex items-start gap-1.5 text-zinc-700 font-medium text-[11px]">
+                                  <MapPin size={13} className="text-rose-500 shrink-0 mt-0.5" />
+                                  <span className="line-clamp-2">{fullAddr}</span>
+                                </div>
+                              )}
+                              {hasGps && (
+                                <div className="flex items-center justify-between text-[10px] font-mono font-bold text-zinc-500 pt-1 border-t border-zinc-200/60">
+                                  <span>
+                                    GPS: {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)}
+                                  </span>
+                                  <a
+                                    href={`https://www.google.com/maps?q=${lat},${lng}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 font-sans font-bold"
+                                  >
+                                    <span>Mapa</span>
+                                    <ExternalLink size={10} />
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Multiple Contacts */}
+                          <div className="space-y-1.5 pt-1">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block flex items-center gap-1">
+                              <Users size={11} /> Contatos ({contactsList.length})
+                            </span>
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                              {contactsList.map((c, i) => (
+                                <div
+                                  key={i}
+                                  className="text-xs bg-slate-50 p-2 rounded-lg border border-slate-100 space-y-0.5"
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="font-bold text-zinc-800 text-[11px]">
+                                      {c.name || "Contato"}
+                                    </span>
+                                    {c.department && (
+                                      <span className="bg-slate-200 text-slate-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">
+                                        {c.department}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 text-[11px] text-zinc-600 font-medium pt-0.5">
+                                    {c.phone && (
+                                      <a
+                                        href={`tel:${c.phone.replace(/\D/g, "")}`}
+                                        className="flex items-center gap-1 text-indigo-600 hover:underline"
+                                      >
+                                        <Phone size={10} /> {c.phone}
+                                      </a>
+                                    )}
+                                    {c.email && (
+                                      <a
+                                        href={`mailto:${c.email}`}
+                                        className="flex items-center gap-1 text-zinc-500 hover:underline truncate max-w-[180px]"
+                                      >
+                                        <Mail size={10} /> {c.email}
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
         )}
 
