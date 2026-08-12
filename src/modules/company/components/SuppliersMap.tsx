@@ -19,7 +19,10 @@ import {
   Maximize2,
   Minimize2,
   Navigation,
+  FileText,
+  Wrench,
 } from "lucide-react";
+import SupplierServiceHistoryModal from "./SupplierServiceHistoryModal";
 
 export interface SupplierData {
   id: string;
@@ -460,6 +463,7 @@ export default function SuppliersMap({
   const [mapTileStyle, setMapTileStyle] = useState<"standard" | "satellite">("standard");
   const [selectedItem, setSelectedItem] = useState<{ type: "supplier" | "branch"; data: any; coords: { lat: number; lng: number } } | null>(null);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [historySupplier, setHistorySupplier] = useState<SupplierData | null>(null);
 
   // Extract all unique categories present in suppliers
   const allCategories = React.useMemo(() => {
@@ -1117,6 +1121,20 @@ export default function SuppliersMap({
               );
             })()}
 
+            {/* Button for Services / History if Supplier */}
+            {selectedItem.type === "supplier" && (
+              <div className="pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setHistorySupplier(selectedItem.data)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition cursor-pointer shadow-lg hover:shadow-indigo-500/20"
+                >
+                  <FileText size={15} />
+                  <span>Serviços Realizados & Histórico (NF-e)</span>
+                </button>
+              </div>
+            )}
+
             {/* Actions */}
             <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
               <a
@@ -1135,16 +1153,24 @@ export default function SuppliersMap({
                   onClick={() => {
                     onEditSupplier(selectedItem.data);
                   }}
-                  className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition shadow-sm"
+                  className="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition border border-slate-700"
                 >
                   <Edit2 size={12} />
-                  <span>Editar Fornecedor</span>
+                  <span>Editar</span>
                 </button>
               )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Supplier Service History Modal */}
+      {historySupplier && (
+        <SupplierServiceHistoryModal
+          supplier={historySupplier}
+          onClose={() => setHistorySupplier(null)}
+        />
+      )}
     </div>
   );
 }
