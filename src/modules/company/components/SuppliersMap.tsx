@@ -864,70 +864,96 @@ export default function SuppliersMap({
       </div>
 
       {/* Main Map Canvas */}
-      <div className="relative flex-1 h-full min-h-[350px]">
-        {/* Category Color Legend Overlay */}
-        <div className="absolute top-3 left-3 z-[400] max-w-[calc(100%-150px)] hidden sm:flex flex-wrap items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 backdrop-blur-md rounded-xl p-1.5 shadow-lg text-[10px] font-bold text-white">
-          <span className="text-[9px] uppercase tracking-wider text-slate-400 font-extrabold px-1 shrink-0">
-            Cores por Categoria:
-          </span>
-          <div className="flex flex-wrap items-center gap-1 max-h-16 overflow-y-auto pr-1">
-            {Object.entries(CATEGORY_COLORS).map(([catKey, catVal]) => (
-              <button
-                key={catKey}
-                type="button"
-                onClick={() => setSelectedCategory(selectedCategory === catKey ? "TODAS" : catKey)}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] transition cursor-pointer ${
-                  selectedCategory === catKey
-                    ? "ring-2 ring-white scale-105"
-                    : "opacity-85 hover:opacity-100"
-                }`}
-                style={{ backgroundColor: `${catVal.bg}22`, borderColor: catVal.bg, color: "#ffffff" }}
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: catVal.bg }}
-                />
-                <span className="truncate max-w-[80px]">{catVal.label}</span>
-              </button>
-            ))}
+      <div className="relative flex-1 h-full min-h-[380px] flex flex-col">
+        {/* Always Visible Category Color Legend Bar */}
+        <div className="bg-slate-900/95 border-b border-slate-800 p-2 z-[400] shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-bold text-white">
+          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto scrollbar-thin scrollbar-thumb-slate-700 pb-1 sm:pb-0 pr-2">
+            <span className="text-[10px] uppercase tracking-wider text-indigo-400 font-black shrink-0 flex items-center gap-1">
+              <Compass size={13} /> Legenda de Cores:
+            </span>
+
+            {/* TODAS button */}
+            <button
+              type="button"
+              onClick={() => setSelectedCategory("TODAS")}
+              className={`px-2 py-0.5 rounded-lg border text-[10px] font-extrabold transition cursor-pointer shrink-0 ${
+                selectedCategory === "TODAS"
+                  ? "bg-indigo-600 border-indigo-400 text-white shadow-sm"
+                  : "bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+              }`}
+            >
+              TODAS ({suppliers.length})
+            </button>
+
+            {/* Category Badges */}
+            {Object.entries(CATEGORY_COLORS).map(([catKey, catVal]) => {
+              const isSelected = selectedCategory === catKey;
+              return (
+                <button
+                  key={catKey}
+                  type="button"
+                  onClick={() => setSelectedCategory(isSelected ? "TODAS" : catKey)}
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold transition cursor-pointer shrink-0 ${
+                    isSelected
+                      ? "ring-2 ring-white scale-105 shadow-md"
+                      : "opacity-85 hover:opacity-100"
+                  }`}
+                  style={{
+                    backgroundColor: isSelected ? catVal.bg : `${catVal.bg}25`,
+                    borderColor: catVal.bg,
+                    color: "#ffffff",
+                  }}
+                  title={`Filtrar por ${catVal.label}`}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/40"
+                    style={{ backgroundColor: catVal.bg }}
+                  />
+                  <span>{catVal.label}</span>
+                </button>
+              );
+            })}
+
+            {/* Filiais Badge */}
             <button
               type="button"
               onClick={() => setShowBranches(!showBranches)}
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] transition cursor-pointer ${
-                showBranches ? "ring-2 ring-amber-400 scale-105" : "opacity-60"
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold transition cursor-pointer shrink-0 ${
+                showBranches ? "ring-2 ring-amber-400 opacity-100 shadow-md" : "opacity-50"
               }`}
-              style={{ backgroundColor: "#f59e0b22", borderColor: "#f59e0b", color: "#fcd34d" }}
+              style={{ backgroundColor: "#f59e0b33", borderColor: "#f59e0b", color: "#fcd34d" }}
+              title="Ativar/Desativar exibição de Filiais"
             >
-              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-              <span>Filial</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0 border border-white/40" />
+              <span>Filiais</span>
+            </button>
+          </div>
+
+          {/* Map Tile Style Switcher */}
+          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-0.5 shrink-0 self-end sm:self-auto text-[10px]">
+            <button
+              type="button"
+              onClick={() => setMapTileStyle("standard")}
+              className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
+                mapTileStyle === "standard" ? "bg-indigo-600 text-white font-black" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Padrão
+            </button>
+            <button
+              type="button"
+              onClick={() => setMapTileStyle("satellite")}
+              className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
+                mapTileStyle === "satellite" ? "bg-indigo-600 text-white font-black" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Satélite
             </button>
           </div>
         </div>
 
-        {/* Tile Toggle Control */}
-        <div className="absolute top-3 right-3 z-[400] flex items-center gap-1 bg-slate-900/90 border border-slate-700 backdrop-blur-md rounded-xl p-1 shadow-lg text-[10px] font-bold text-white">
-          <button
-            type="button"
-            onClick={() => setMapTileStyle("standard")}
-            className={`px-2 py-1 rounded-lg transition ${
-              mapTileStyle === "standard" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            Padrão
-          </button>
-          <button
-            type="button"
-            onClick={() => setMapTileStyle("satellite")}
-            className={`px-2 py-1 rounded-lg transition ${
-              mapTileStyle === "satellite" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            Satélite
-          </button>
-        </div>
-
         {/* Map Container */}
-        <div ref={mapContainerRef} className="w-full h-full bg-slate-900" />
+        <div ref={mapContainerRef} className="w-full flex-1 min-h-[300px] bg-slate-900 relative" />
 
         {/* Selected Item Drawer / Card Overlay */}
         {selectedItem && (
