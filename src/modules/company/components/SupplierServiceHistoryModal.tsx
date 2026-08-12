@@ -34,11 +34,21 @@ interface TransactionRecord {
   date?: string;
   notes?: string;
   created_at?: string;
+  source?: "ESTOQUE" | "PENDENCIA";
   inventory_items?: {
     name?: string;
     sku?: string;
     category?: string;
   };
+}
+
+function tryParseJSON(jsonString: any) {
+  if (!jsonString || typeof jsonString !== "string") return [];
+  try {
+    return JSON.parse(jsonString);
+  } catch {
+    return [];
+  }
 }
 
 interface SupplierServiceHistoryModalProps {
@@ -54,6 +64,7 @@ export default function SupplierServiceHistoryModal({
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("TODOS");
+  const [sourceFilter, setSourceFilter] = useState("TODAS");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -66,8 +77,8 @@ export default function SupplierServiceHistoryModal({
     if (!supplier?.id) return;
     setLoading(true);
     try {
-      // 1. Fetch transactions linked by supplier_id
-      const { data, error } = await supabase
+      // 1. Fetch inventory transactions linked by supplier_id
+      const { data: txData, error: txError } = await supabase
         .from("inventory_transactions")
         .select(`
           *,
@@ -76,11 +87,158 @@ export default function SupplierServiceHistoryModal({
         .eq("supplier_id", supplier.id)
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Erro ao buscar histórico do fornecedor:", error);
+      if (txError) {
+        console.error("Erro ao buscar transações de estoque do fornecedor:", txError);
       }
 
-      setTransactions(data || []);
+      // 2. Fetch checklist_issues (Resolução de Pendências)
+      const { data: issuesData, error: issuesError } = await supabase
+        .from("checklist_issues")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (issuesError) {
+        console.error("Erro ao buscar resoluções de pendência:", issuesError);
+      }
+
+      const combined: TransactionRecord[] = [];
+
+      // Process inventory_transactions (Estoque)
+      if (txData) {
+        txData.forEach((tx) => {
+          combined.push({
+            id: tx.id,
+            type: tx.type || "ENTRADA",
+            quantity: Number(tx.quantity) || 1,
+            unit_price: Number(tx.unit_price) || 0,
+            total_price: Number(tx.total_price) || 0,
+            nf_number: tx.nf_number,
+            nf_key: tx.nf_key,
+            date: tx.date || tx.created_at,
+            notes: tx.notes,
+            created_at: tx.created_at,
+            source: "ESTOQUE",
+            inventory_items: tx.inventory_items,
+          });
+        });
+      }
+
+      // Process checklist_issues (Resolução de Pendências / Manutenções)
+      if (issuesData) {
+        issuesData.forEach((issue) => {
+          let nfs: any[] = [];
+          if (issue.resolution_nfs) {
+            nfs = typeof issue.resolution_nfs === "string"
+              ? tryParseJSON(issue.resolution_nfs)
+              : issue.resolution_nfs;
+          } else if (issue.resolution_nf && typeof issue.resolution_nf === "string" && issue.resolution_nf.trim().startsWith("[")) {
+            nfs = tryParseJSON(issue.resolution_nf);
+          }
+
+          if (!Array.isArray(nfs)) nfs = [];
+
+          const singleNfNumber = typeof issue.resolution_nf === "string" && !issue.resolution_nf.trim().startsWith("[")
+            ? issue.resolution_nf
+            : null;
+
+          const cleanSupplierId = String(supplier.id).trim();
+          const cleanCnpj = supplier.cnpj_cpf ? String(supplier.cnpj_cpf).replace(/\D/g, "") : "";
+          const cleanSupplierName = supplier.name ? supplier.name.toLowerCase().trim() : "";
+
+          // Check if issue NFs match this supplier
+          let matchedNfs = nfs.filter((nf: any) => {
+            if (!nf) return false;
+            if (nf.supplier_id && String(nf.supplier_id).trim() === cleanSupplierId) return true;
+            if (cleanCnpj && nf.cnpj_cpf && String(nf.cnpj_cpf).replace(/\D/g, "") === cleanCnpj) return true;
+            if (cleanSupplierName && nf.supplier_name && String(nf.supplier_name).toLowerCase().includes(cleanSupplierName)) return true;
+            return false;
+          });
+
+          const isDirectSupplierMatch = issue.supplier_id && String(issue.supplier_id).trim() === cleanSupplierId;
+
+          if (isDirectSupplierMatch && matchedNfs.length === 0 && nfs.length > 0) {
+            matchedNfs = nfs;
+          }
+
+          if (matchedNfs.length > 0) {
+            matchedNfs.forEach((nf: any, nfIdx: number) => {
+              const nfItems = Array.isArray(nf.items) ? nf.items : [];
+              if (nfItems.length > 0) {
+                nfItems.forEach((item: any, itemIdx: number) => {
+                  const itemQty = Number(item.quantity) || 1;
+                  const itemUnitPrice = Number(item.unit_price) || 0;
+                  const itemTotal = itemQty * itemUnitPrice;
+
+                  combined.push({
+                    id: `issue-${issue.id}-nf-${nfIdx}-${itemIdx}`,
+                    type: "SERVICO",
+                    quantity: itemQty,
+                    unit_price: itemUnitPrice,
+                    total_price: itemTotal > 0 ? itemTotal : Number(issue.resolution_value) || 0,
+                    nf_number: nf.nf_number || singleNfNumber || "-",
+                    nf_key: nf.nf_key || "-",
+                    date: issue.resolved_at || issue.created_at || issue.date,
+                    notes: `[Resolução de Pendência] ${issue.item_title ? `Pendência: ${issue.item_title}. ` : ""}${issue.resolution_notes || ""}`.trim(),
+                    created_at: issue.resolved_at || issue.created_at,
+                    source: "PENDENCIA",
+                    inventory_items: {
+                      name: item.name || issue.item_title || "Serviço de Manutenção",
+                      category: issue.item_category || "Pendência / Manutenção",
+                    },
+                  });
+                });
+              } else {
+                const totalVal = Number(nf.total_price || issue.resolution_value) || 0;
+                combined.push({
+                  id: `issue-${issue.id}-nf-${nfIdx}`,
+                  type: "SERVICO",
+                  quantity: 1,
+                  unit_price: totalVal,
+                  total_price: totalVal,
+                  nf_number: nf.nf_number || singleNfNumber || "-",
+                  nf_key: nf.nf_key || "-",
+                  date: issue.resolved_at || issue.created_at || issue.date,
+                  notes: `[Resolução de Pendência] ${issue.item_title ? `Pendência: ${issue.item_title}. ` : ""}${issue.resolution_notes || ""}`.trim(),
+                  created_at: issue.resolved_at || issue.created_at,
+                  source: "PENDENCIA",
+                  inventory_items: {
+                    name: issue.item_title || "Serviço / Manutenção em Pendência",
+                    category: issue.item_category || "Pendência / Manutenção",
+                  },
+                });
+              }
+            });
+          } else if (isDirectSupplierMatch) {
+            const totalVal = Number(issue.resolution_value) || 0;
+            combined.push({
+              id: `issue-${issue.id}`,
+              type: "SERVICO",
+              quantity: 1,
+              unit_price: totalVal,
+              total_price: totalVal,
+              nf_number: singleNfNumber || "-",
+              nf_key: "-",
+              date: issue.resolved_at || issue.created_at,
+              notes: `[Resolução de Pendência] ${issue.item_title ? `Pendência: ${issue.item_title}. ` : ""}${issue.resolution_notes || ""}`.trim(),
+              created_at: issue.resolved_at || issue.created_at,
+              source: "PENDENCIA",
+              inventory_items: {
+                name: issue.item_title || "Serviço de Manutenção",
+                category: issue.item_category || "Pendência / Manutenção",
+              },
+            });
+          }
+        });
+      }
+
+      // Sort by date descending
+      combined.sort((a, b) => {
+        const timeA = new Date(a.date || a.created_at || 0).getTime();
+        const timeB = new Date(b.date || b.created_at || 0).getTime();
+        return timeB - timeA;
+      });
+
+      setTransactions(combined);
     } catch (err) {
       console.error(err);
     } finally {
@@ -109,12 +267,18 @@ export default function SupplierServiceHistoryModal({
       (typeFilter === "SERVICO" && (tx.type === "SERVICO" || tx.type === "MANUTENCAO")) ||
       (typeFilter === "OUTROS" && tx.type !== "ENTRADA" && tx.type !== "SERVICO" && tx.type !== "MANUTENCAO");
 
+    // Source filter
+    const matchesSource =
+      sourceFilter === "TODAS" ||
+      (sourceFilter === "ESTOQUE" && tx.source === "ESTOQUE") ||
+      (sourceFilter === "PENDENCIA" && tx.source === "PENDENCIA");
+
     // Date range filter
     const txDate = tx.date || tx.created_at || "";
     const matchesStartDate = !startDate || txDate >= startDate;
     const matchesEndDate = !endDate || txDate <= endDate + "T23:59:59";
 
-    return matchesSearch && matchesType && matchesStartDate && matchesEndDate;
+    return matchesSearch && matchesType && matchesSource && matchesStartDate && matchesEndDate;
   });
 
   // Calculate metrics
@@ -161,6 +325,7 @@ export default function SupplierServiceHistoryModal({
 
     const headers = [
       "Data/Hora",
+      "Origem",
       "Tipo Operacao",
       "Item / Servico",
       "SKU",
@@ -175,6 +340,7 @@ export default function SupplierServiceHistoryModal({
 
     const rows = filteredTransactions.map((tx) => [
       `"${formatDate(tx.date || tx.created_at)}"`,
+      `"${tx.source === "PENDENCIA" ? "Resolução de Pendência" : "Estoque"}"`,
       `"${tx.type || "ENTRADA"}"`,
       `"${(tx.inventory_items?.name || "Serviço/Peça").replace(/"/g, '""')}"`,
       `"${(tx.inventory_items?.sku || "-").replace(/"/g, '""')}"`,
@@ -358,41 +524,81 @@ export default function SupplierServiceHistoryModal({
                 )}
               </div>
 
-              {/* Type filter tabs */}
-              <div className="flex items-center gap-1 bg-white p-1 border border-zinc-200 rounded-xl shrink-0 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setTypeFilter("TODOS")}
-                  className={`px-3 py-1 rounded-lg transition ${
-                    typeFilter === "TODOS"
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-zinc-600 hover:bg-zinc-100"
-                  }`}
-                >
-                  Todos ({transactions.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTypeFilter("ENTRADA")}
-                  className={`px-3 py-1 rounded-lg transition ${
-                    typeFilter === "ENTRADA"
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-zinc-600 hover:bg-zinc-100"
-                  }`}
-                >
-                  Entradas / NF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTypeFilter("SERVICO")}
-                  className={`px-3 py-1 rounded-lg transition ${
-                    typeFilter === "SERVICO"
-                      ? "bg-indigo-600 text-white shadow-sm"
-                      : "text-zinc-600 hover:bg-zinc-100"
-                  }`}
-                >
-                  Serviços
-                </button>
+              {/* Source & Type filter tabs */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Source Tabs */}
+                <div className="flex items-center gap-1 bg-white p-1 border border-zinc-200 rounded-xl text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setSourceFilter("TODAS")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      sourceFilter === "TODAS"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    Todas Fontes ({transactions.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceFilter("ESTOQUE")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      sourceFilter === "ESTOQUE"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    Estoque
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSourceFilter("PENDENCIA")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      sourceFilter === "PENDENCIA"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    Resolução de Pendências
+                  </button>
+                </div>
+
+                {/* Type Tabs */}
+                <div className="flex items-center gap-1 bg-white p-1 border border-zinc-200 rounded-xl text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setTypeFilter("TODOS")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      typeFilter === "TODOS"
+                        ? "bg-zinc-800 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    Todos Tipos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTypeFilter("ENTRADA")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      typeFilter === "ENTRADA"
+                        ? "bg-zinc-800 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    Entradas / NF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTypeFilter("SERVICO")}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      typeFilter === "SERVICO"
+                        ? "bg-zinc-800 text-white shadow-sm"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    Serviços
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -419,11 +625,12 @@ export default function SupplierServiceHistoryModal({
                   className="bg-white border border-zinc-200 rounded-lg px-2 py-1 text-xs text-zinc-800"
                 />
               </div>
-              {(startDate || endDate || searchTerm || typeFilter !== "TODOS") && (
+              {(startDate || endDate || searchTerm || typeFilter !== "TODOS" || sourceFilter !== "TODAS") && (
                 <button
                   onClick={() => {
                     setSearchTerm("");
                     setTypeFilter("TODOS");
+                    setSourceFilter("TODAS");
                     setStartDate("");
                     setEndDate("");
                   }}
@@ -456,6 +663,7 @@ export default function SupplierServiceHistoryModal({
                   <thead>
                     <tr className="bg-zinc-100 border-b border-zinc-200 text-zinc-700 font-extrabold uppercase text-[10px] tracking-wider print:bg-zinc-200 print:text-zinc-900">
                       <th className="py-3 px-4">Data / Hora</th>
+                      <th className="py-3 px-4">Origem</th>
                       <th className="py-3 px-4">Tipo</th>
                       <th className="py-3 px-4">Item / Serviço Realizado</th>
                       <th className="py-3 px-4">Nº NF-e</th>
@@ -470,6 +678,7 @@ export default function SupplierServiceHistoryModal({
                       const itemName = tx.inventory_items?.name || "Serviço / Compra em Lote";
                       const itemSku = tx.inventory_items?.sku;
                       const isService = tx.type === "SERVICO" || tx.type === "MANUTENCAO";
+                      const isPendency = tx.source === "PENDENCIA";
 
                       return (
                         <tr
@@ -478,6 +687,17 @@ export default function SupplierServiceHistoryModal({
                         >
                           <td className="py-3 px-4 font-mono text-[11px] font-bold text-zinc-600 whitespace-nowrap">
                             {formatDate(tx.date || tx.created_at)}
+                          </td>
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            {isPendency ? (
+                              <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-bold text-[10px] uppercase">
+                                <Wrench size={10} /> Pendência
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px] uppercase">
+                                <Package size={10} /> Estoque
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-4 whitespace-nowrap">
                             {isService ? (
@@ -525,7 +745,7 @@ export default function SupplierServiceHistoryModal({
                   </tbody>
                   <tfoot>
                     <tr className="bg-zinc-100 border-t-2 border-zinc-300 font-extrabold text-zinc-900 print:bg-zinc-200">
-                      <td colSpan={6} className="py-3 px-4 text-right uppercase text-[10px] tracking-wider">
+                      <td colSpan={7} className="py-3 px-4 text-right uppercase text-[10px] tracking-wider">
                         Total Geral ({filteredTransactions.length} registros):
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-sm text-emerald-800">
