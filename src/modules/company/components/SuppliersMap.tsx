@@ -203,11 +203,88 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
   return Math.round(R * c * 10) / 10;
 }
 
-// Custom Marker Icons
-function createSupplierMarkerIcon(supplier: SupplierData, isSelected: boolean = false): L.DivIcon {
-  const color = isSelected ? "#4f46e5" : "#6366f1"; // Indigo
-  const bgBadge = isSelected ? "#312e81" : "#1e1b4b";
+// Category Color Palette & SVG Icons Mapping
+export const CATEGORY_COLORS: Record<string, { bg: string; border: string; text: string; label: string; iconSvg: string }> = {
+  "Baterias": {
+    bg: "#d97706", // Amber / Gold
+    border: "#b45309",
+    text: "#ffffff",
+    label: "Baterias",
+    iconSvg: `<path d="M16 2v2M8 2v2M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z"/><line x1="7" x2="11" y1="13" y2="13"/><line x1="9" x2="9" y1="11" y2="15"/><line x1="13" x2="17" y1="13" y2="13"/>`,
+  },
+  "Pneus": {
+    bg: "#1e293b", // Slate / Dark
+    border: "#0f172a",
+    text: "#ffffff",
+    label: "Pneus",
+    iconSvg: `<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/>`,
+  },
+  "Peças & Reposição": {
+    bg: "#2563eb", // Royal Blue
+    border: "#1d4ed8",
+    text: "#ffffff",
+    label: "Peças",
+    iconSvg: `<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>`,
+  },
+  "Combustível & Arla": {
+    bg: "#dc2626", // Red
+    border: "#b91c1c",
+    text: "#ffffff",
+    label: "Combustível",
+    iconSvg: `<line x1="3" x2="15" y1="22" y2="22"/><path d="M4 9a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v13H4Z"/><path d="M6 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><line x1="4" x2="14" y1="13" y2="13"/><path d="M14 9a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2v0a2 2 0 0 0 2-2V9"/>`,
+  },
+  "Óleos & Lubrificantes": {
+    bg: "#7c3aed", // Purple
+    border: "#6d28d9",
+    text: "#ffffff",
+    label: "Lubrificantes",
+    iconSvg: `<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7Z"/>`,
+  },
+  "Filtros": {
+    bg: "#0284c7", // Sky/Cyan
+    border: "#0369a1",
+    text: "#ffffff",
+    label: "Filtros",
+    iconSvg: `<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>`,
+  },
+  "Serviços & Manutenção": {
+    bg: "#059669", // Emerald
+    border: "#047857",
+    text: "#ffffff",
+    label: "Manutenção",
+    iconSvg: `<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>`,
+  },
+  "Elétrica & Módulos": {
+    bg: "#ec4899", // Pink
+    border: "#be185d",
+    text: "#ffffff",
+    label: "Elétrica",
+    iconSvg: `<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`,
+  },
+  "Carrocerias & Implementos": {
+    bg: "#475569", // Slate
+    border: "#334155",
+    text: "#ffffff",
+    label: "Carrocerias",
+    iconSvg: `<rect x="1" y="3" width="15" height="13" rx="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>`,
+  },
+  "Lavagem & Estética": {
+    bg: "#06b6d4", // Cyan
+    border: "#0891b2",
+    text: "#ffffff",
+    label: "Lavagem",
+    iconSvg: `<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>`,
+  },
+  "Geral": {
+    bg: "#4f46e5", // Indigo
+    border: "#3730a3",
+    text: "#ffffff",
+    label: "Geral",
+    iconSvg: `<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>`,
+  },
+};
 
+export function getCategoryStyle(supplier: SupplierData) {
   let categoriesList: string[] = [];
   if (Array.isArray(supplier.categories)) {
     categoriesList = supplier.categories;
@@ -220,146 +297,149 @@ function createSupplierMarkerIcon(supplier: SupplierData, isSelected: boolean = 
     }
   }
 
-  const firstCat = categoriesList[0] || "Fornecedor";
+  const firstCat = categoriesList[0] || "Geral";
+  const norm = firstCat.trim();
+
+  if (CATEGORY_COLORS[norm]) return { catName: norm, ...CATEGORY_COLORS[norm] };
+
+  const lower = norm.toLowerCase();
+  if (lower.includes("bateri")) return { catName: "Baterias", ...CATEGORY_COLORS["Baterias"] };
+  if (lower.includes("pneu")) return { catName: "Pneus", ...CATEGORY_COLORS["Pneus"] };
+  if (lower.includes("peça") || lower.includes("peca")) return { catName: "Peças & Reposição", ...CATEGORY_COLORS["Peças & Reposição"] };
+  if (lower.includes("combus") || lower.includes("arla") || lower.includes("posto")) return { catName: "Combustível & Arla", ...CATEGORY_COLORS["Combustível & Arla"] };
+  if (lower.includes("óleo") || lower.includes("oleo") || lower.includes("lubrif")) return { catName: "Óleos & Lubrificantes", ...CATEGORY_COLORS["Óleos & Lubrificantes"] };
+  if (lower.includes("filtr")) return { catName: "Filtros", ...CATEGORY_COLORS["Filtros"] };
+  if (lower.includes("serviç") || lower.includes("servic") || lower.includes("manuten")) return { catName: "Serviços & Manutenção", ...CATEGORY_COLORS["Serviços & Manutenção"] };
+  if (lower.includes("elétr") || lower.includes("eletr")) return { catName: "Elétrica & Módulos", ...CATEGORY_COLORS["Elétrica & Módulos"] };
+  if (lower.includes("carroc") || lower.includes("implem")) return { catName: "Carrocerias & Implementos", ...CATEGORY_COLORS["Carrocerias & Implementos"] };
+  if (lower.includes("lava") || lower.includes("estét")) return { catName: "Lavagem & Estética", ...CATEGORY_COLORS["Lavagem & Estética"] };
+
+  // Fallback palette generator for any unknown category
+  const palette = [
+    { bg: "#4f46e5", border: "#3730a3" },
+    { bg: "#0284c7", border: "#0369a1" },
+    { bg: "#0d9488", border: "#0f766e" },
+    { bg: "#16a34a", border: "#15803d" },
+    { bg: "#d97706", border: "#b45309" },
+    { bg: "#e11d48", border: "#be123c" },
+    { bg: "#9333ea", border: "#7e22ce" },
+  ];
+  let hash = 0;
+  for (let i = 0; i < norm.length; i++) {
+    hash = norm.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const idx = Math.abs(hash) % palette.length;
+  return {
+    catName: norm,
+    bg: palette[idx].bg,
+    border: palette[idx].border,
+    text: "#ffffff",
+    label: norm,
+    iconSvg: CATEGORY_COLORS["Geral"].iconSvg,
+  };
+}
+
+// Custom Marker Icon for Suppliers (Icon ONLY, colored by category)
+function createSupplierMarkerIcon(supplier: SupplierData, isSelected: boolean = false): L.DivIcon {
+  const style = getCategoryStyle(supplier);
+  const size = isSelected ? 42 : 34;
+  const borderSize = isSelected ? 4 : 3;
+  const shadow = isSelected
+    ? `0 0 0 6px ${style.bg}55, 0 8px 22px rgba(0,0,0,0.5)`
+    : "0 6px 14px rgba(0,0,0,0.35)";
 
   const html = `
-    <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
-      <div style="
-        background: ${bgBadge};
-        color: #ffffff;
-        font-size: 11px;
-        font-weight: 800;
-        padding: 3px 8px;
-        border-radius: 8px;
-        border: 1.5px solid ${color};
-        white-space: nowrap;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-        margin-bottom: 4px;
-        font-family: system-ui, -apple-system, sans-serif;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      ">
-        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 9999px; background-color: #818cf8;"></span>
-        ${supplier.name}
-        <span style="font-size: 9px; opacity: 0.8; font-weight: 600; padding-left: 2px;">(${firstCat})</span>
-      </div>
-
-      <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
+    <div style="position: relative; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; cursor: pointer;" title="${supplier.name} (${style.catName})">
+      ${isSelected ? `
         <div style="
           position: absolute;
-          inset: 0;
+          inset: -6px;
           border-radius: 9999px;
-          background-color: ${color};
-          opacity: 0.25;
-          animation: ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+          background-color: ${style.bg};
+          opacity: 0.35;
+          animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
         "></div>
-        <div style="
-          position: relative;
-          width: 30px;
-          height: 30px;
-          border-radius: 9999px;
-          background: #ffffff;
-          border: 3px solid ${color};
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 6px 14px rgba(0,0,0,0.25);
-        ">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
-            <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
-            <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
-            <path d="M10 6h4"/>
-            <path d="M10 10h4"/>
-            <path d="M10 14h4"/>
-            <path d="M10 18h4"/>
-          </svg>
-        </div>
+      ` : ""}
+      <div style="
+        position: relative;
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 9999px;
+        background: ${style.bg};
+        border: ${borderSize}px solid #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: ${shadow};
+        transition: transform 0.2s ease;
+      ">
+        <svg width="${size - 16}" height="${size - 16}" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          ${style.iconSvg}
+        </svg>
       </div>
     </div>
   `;
 
   return L.divIcon({
     html,
-    className: "custom-supplier-marker",
-    iconSize: [160, 60],
-    iconAnchor: [80, 56],
-    popupAnchor: [0, -56],
+    className: "custom-supplier-icon-marker",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
   });
 }
 
+// Custom Marker Icon for Branches (Icon ONLY, Gold/Amber)
 function createBranchMarkerIcon(branch: BranchData, isSelected: boolean = false): L.DivIcon {
-  const color = isSelected ? "#d97706" : "#f59e0b"; // Amber/Gold
-  const bgBadge = isSelected ? "#78350f" : "#451a03";
+  const size = isSelected ? 42 : 34;
+  const color = "#f59e0b"; // Gold/Amber
+  const shadow = isSelected
+    ? "0 0 0 6px rgba(251,191,36,0.45), 0 8px 22px rgba(0,0,0,0.5)"
+    : "0 6px 14px rgba(0,0,0,0.35)";
 
   const html = `
-    <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
-      <div style="
-        background: ${bgBadge};
-        color: #ffffff;
-        font-size: 11px;
-        font-weight: 800;
-        padding: 3px 8px;
-        border-radius: 8px;
-        border: 1.5px solid ${color};
-        white-space: nowrap;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-        margin-bottom: 4px;
-        font-family: system-ui, -apple-system, sans-serif;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      ">
-        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 9999px; background-color: #fbbf24;"></span>
-        FILIAL: ${branch.name}
-      </div>
-
-      <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
+    <div style="position: relative; width: ${size}px; height: ${size}px; display: flex; align-items: center; justify-content: center; cursor: pointer;" title="Filial: ${branch.name}">
+      ${isSelected ? `
         <div style="
           position: absolute;
-          inset: 0;
+          inset: -6px;
           border-radius: 9999px;
           background-color: ${color};
-          opacity: 0.25;
-          animation: ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+          opacity: 0.35;
+          animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
         "></div>
-        <div style="
-          position: relative;
-          width: 30px;
-          height: 30px;
-          border-radius: 9999px;
-          background: #ffffff;
-          border: 3px solid ${color};
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 6px 14px rgba(0,0,0,0.25);
-        ">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
-            <path d="M9 22v-4h6v4"/>
-            <path d="M8 6h.01"/>
-            <path d="M16 6h.01"/>
-            <path d="M12 6h.01"/>
-            <path d="M12 10h.01"/>
-            <path d="M12 14h.01"/>
-            <path d="M16 10h.01"/>
-            <path d="M16 14h.01"/>
-            <path d="M8 10h.01"/>
-            <path d="M8 14h.01"/>
-          </svg>
-        </div>
+      ` : ""}
+      <div style="
+        position: relative;
+        width: ${size}px;
+        height: ${size}px;
+        border-radius: 9999px;
+        background: ${color};
+        border: 3px solid #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: ${shadow};
+      ">
+        <svg width="${size - 16}" height="${size - 16}" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
+          <path d="M9 22v-4h6v4"/>
+          <path d="M8 6h.01"/>
+          <path d="M16 6h.01"/>
+          <path d="M12 6h.01"/>
+          <path d="M12 10h.01"/>
+          <path d="M12 14h.01"/>
+        </svg>
       </div>
     </div>
   `;
 
   return L.divIcon({
     html,
-    className: "custom-branch-marker",
-    iconSize: [160, 60],
-    iconAnchor: [80, 56],
-    popupAnchor: [0, -56],
+    className: "custom-branch-icon-marker",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
   });
 }
 
@@ -739,7 +819,12 @@ export default function SuppliersMap({
                           : "bg-slate-900/60 border-slate-800/80 text-slate-300 hover:bg-slate-800/80"
                       }`}
                     >
-                      <Building2 size={14} className="text-indigo-400 shrink-0 mt-0.5" />
+                      <div
+                        className="w-4 h-4 rounded-full shrink-0 mt-0.5 border border-white/20 flex items-center justify-center text-[8px] font-black"
+                        style={{ backgroundColor: getCategoryStyle(supplier).bg }}
+                      >
+                        <Building2 size={10} className="text-white" />
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-1">
                           <p className="font-bold truncate text-slate-100">{supplier.name}</p>
@@ -749,14 +834,18 @@ export default function SuppliersMap({
                         </p>
                         {cats.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {cats.slice(0, 2).map((c, i) => (
-                              <span
-                                key={i}
-                                className="text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-800/60 px-1.5 py-0.2 rounded font-semibold"
-                              >
-                                {c}
-                              </span>
-                            ))}
+                            {cats.slice(0, 2).map((c, i) => {
+                              const style = getCategoryStyle({ ...supplier, categories: [c] });
+                              return (
+                                <span
+                                  key={i}
+                                  className="text-[9px] px-1.5 py-0.2 rounded font-bold text-white border border-white/10"
+                                  style={{ backgroundColor: style.bg }}
+                                >
+                                  {c}
+                                </span>
+                              );
+                            })}
                             {cats.length > 2 && (
                               <span className="text-[9px] text-slate-500 font-semibold">
                                 +{cats.length - 2}
@@ -776,6 +865,45 @@ export default function SuppliersMap({
 
       {/* Main Map Canvas */}
       <div className="relative flex-1 h-full min-h-[350px]">
+        {/* Category Color Legend Overlay */}
+        <div className="absolute top-3 left-3 z-[400] max-w-[calc(100%-150px)] hidden sm:flex flex-wrap items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 backdrop-blur-md rounded-xl p-1.5 shadow-lg text-[10px] font-bold text-white">
+          <span className="text-[9px] uppercase tracking-wider text-slate-400 font-extrabold px-1 shrink-0">
+            Cores por Categoria:
+          </span>
+          <div className="flex flex-wrap items-center gap-1 max-h-16 overflow-y-auto pr-1">
+            {Object.entries(CATEGORY_COLORS).map(([catKey, catVal]) => (
+              <button
+                key={catKey}
+                type="button"
+                onClick={() => setSelectedCategory(selectedCategory === catKey ? "TODAS" : catKey)}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] transition cursor-pointer ${
+                  selectedCategory === catKey
+                    ? "ring-2 ring-white scale-105"
+                    : "opacity-85 hover:opacity-100"
+                }`}
+                style={{ backgroundColor: `${catVal.bg}22`, borderColor: catVal.bg, color: "#ffffff" }}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: catVal.bg }}
+                />
+                <span className="truncate max-w-[80px]">{catVal.label}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setShowBranches(!showBranches)}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] transition cursor-pointer ${
+                showBranches ? "ring-2 ring-amber-400 scale-105" : "opacity-60"
+              }`}
+              style={{ backgroundColor: "#f59e0b22", borderColor: "#f59e0b", color: "#fcd34d" }}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              <span>Filial</span>
+            </button>
+          </div>
+        </div>
+
         {/* Tile Toggle Control */}
         <div className="absolute top-3 right-3 z-[400] flex items-center gap-1 bg-slate-900/90 border border-slate-700 backdrop-blur-md rounded-xl p-1 shadow-lg text-[10px] font-bold text-white">
           <button
