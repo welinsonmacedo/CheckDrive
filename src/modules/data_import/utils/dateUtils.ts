@@ -231,11 +231,33 @@ export function parseRecordFullDate(dateVal?: any): ParsedRecordDate | null {
 }
 
 /**
+ * Safely extracts raw date string/value from any record object checking all possible property names.
+ */
+export function getRecordDateString(r: any): any {
+  if (!r) return undefined;
+  if (typeof r === "string" || typeof r === "number" || r instanceof Date) return r;
+  return (
+    r.data ||
+    r.data_registro ||
+    r.data_abastecimento ||
+    r.data_emissao ||
+    r.data_movimento ||
+    r.data_importacao ||
+    r.data_referencia ||
+    r.periodo ||
+    r.criado_em ||
+    r.created_at ||
+    r.date
+  );
+}
+
+/**
  * Parses any date string/number/Date format (ISO, BR DD/MM/YYYY, MM/YYYY, YYYY-MM, YYYY/MM/DD, date with time, Excel serial, timestamp)
  * into a normalized { month: "MM", year: "YYYY" } object.
  */
 export function parseRecordMonthYear(dateVal?: any): { month: string; year: string } | null {
-  const full = parseRecordFullDate(dateVal);
+  const raw = getRecordDateString(dateVal);
+  const full = parseRecordFullDate(raw);
   if (!full) return null;
   return { month: full.month, year: full.year };
 }
@@ -244,13 +266,14 @@ export function parseRecordMonthYear(dateVal?: any): { month: string; year: stri
  * Checks if a record's date matches a period string (e.g. "07/2026", "m:07/2026", "30", "custom", "0").
  */
 export function matchesPeriod(
-  recordDateStr: string | undefined,
+  recordDateStr: any,
   selectedPeriod: string,
   customMonth?: string
 ): boolean {
   if (!selectedPeriod || selectedPeriod === "0") return true; // Todo o histórico
 
-  const parsedRecord = parseRecordMonthYear(recordDateStr);
+  const rawDate = getRecordDateString(recordDateStr);
+  const parsedRecord = parseRecordMonthYear(rawDate);
 
   // Custom month picker (e.g. customMonth = "2026-07")
   if (selectedPeriod === "custom" && customMonth) {
@@ -284,19 +307,11 @@ export function matchesPeriod(
   // Relative days filter (e.g. "30", "60", "90", "365")
   const days = Number(selectedPeriod);
   if (!isNaN(days) && days > 0) {
-    if (!recordDateStr) return false;
-    if (parsedRecord) {
-      const rDate = new Date(`${parsedRecord.year}-${parsedRecord.month}-01`).getTime();
-      const now = new Date().getTime();
-      const diffDays = (now - rDate) / (1000 * 3600 * 24);
-      if (diffDays > days + 31) return false;
-    } else {
-      const rDate = new Date(recordDateStr).getTime();
-      if (isNaN(rDate)) return false;
-      const now = new Date().getTime();
-      const diffDays = (now - rDate) / (1000 * 3600 * 24);
-      if (diffDays > days) return false;
-    }
+    const full = parseRecordFullDate(rawDate);
+    if (!full) return false;
+    const now = new Date().getTime();
+    const diffDays = (now - full.timestamp) / (1000 * 3600 * 24);
+    if (diffDays > days + 31 || diffDays < -2) return false;
   }
 
   return true;

@@ -37,6 +37,7 @@ import { ImportRecord } from "../types";
 import {
   parseRecordFullDate,
   ParsedRecordDate,
+  getRecordDateString,
   MONTH_NAMES_PT,
   MONTH_SHORT_PT,
 } from "../utils/dateUtils";
@@ -77,15 +78,7 @@ export default function ReportTendenciaTab({
     const monthsMap = new Map<string, { yearMonth: string; label: string; name: string }>();
 
     records.forEach((r) => {
-      const rawDate =
-        r.data ||
-        (r as any).data_registro ||
-        (r as any).data_abastecimento ||
-        (r as any).data_emissao ||
-        (r as any).data_movimento ||
-        (r as any).data_importacao ||
-        (r as any).criado_em ||
-        (r as any).created_at;
+      const rawDate = getRecordDateString(r);
       const parsed = parseRecordFullDate(rawDate);
       if (parsed) {
         yearsSet.add(parsed.year);
@@ -111,6 +104,31 @@ export default function ReportTendenciaTab({
       distinctMonthCount: monthsMap.size,
     };
   }, [records]);
+
+  // Handler when user selects granularity
+  const handleGranularityChange = (newGranularity: GranularityMode) => {
+    setGranularity(newGranularity);
+    setHasUserChangedGranularity(true);
+    // If user clicked "mensal" (Mês a Mês) and timeframe was locked to a single month, expand timeframe to "all" (or the year)
+    if (newGranularity === "mensal" && trendTimeframe.startsWith("month_")) {
+      const year = trendTimeframe.replace("month_", "").split("-")[0];
+      if (availableYears.includes(year)) {
+        setTrendTimeframe(`year_${year}`);
+      } else {
+        setTrendTimeframe("all");
+      }
+    }
+  };
+
+  // Handler when user selects timeframe filter
+  const handleTimeframeChange = (newTimeframe: string) => {
+    setTrendTimeframe(newTimeframe);
+    // If user selected a specific month, switch granularity to "diario" if it was "mensal" so daily curve is shown
+    if (newTimeframe.startsWith("month_") && granularity === "mensal") {
+      setGranularity("diario");
+      setHasUserChangedGranularity(true);
+    }
+  };
 
   // Auto-adjust default granularity if only 1 month exists in records and user hasn't manually chosen yet
   useEffect(() => {
@@ -161,15 +179,7 @@ export default function ReportTendenciaTab({
     const now = new Date().getTime();
 
     return baseFilteredRecords.filter((r) => {
-      const rawDate =
-        r.data ||
-        (r as any).data_registro ||
-        (r as any).data_abastecimento ||
-        (r as any).data_emissao ||
-        (r as any).data_movimento ||
-        (r as any).data_importacao ||
-        (r as any).criado_em ||
-        (r as any).created_at;
+      const rawDate = getRecordDateString(r);
       const parsed = parseRecordFullDate(rawDate);
       if (!parsed) return true;
 
@@ -224,15 +234,7 @@ export default function ReportTendenciaTab({
     const map: Record<string, TrendBucket> = {};
 
     timeframeFilteredRecords.forEach((r) => {
-      const rawDate =
-        r.data ||
-        (r as any).data_registro ||
-        (r as any).data_abastecimento ||
-        (r as any).data_emissao ||
-        (r as any).data_movimento ||
-        (r as any).data_importacao ||
-        (r as any).criado_em ||
-        (r as any).created_at;
+      const rawDate = getRecordDateString(r);
       const parsed = parseRecordFullDate(rawDate);
       if (!parsed) return;
 
@@ -410,8 +412,8 @@ export default function ReportTendenciaTab({
 
   return (
     <div className="space-y-6">
-      {/* Single Month Smart Hint Banner */}
-      {distinctMonthCount === 1 && (
+      {/* Single Month Smart Hint Banner when in Diario/Semanal */}
+      {distinctMonthCount === 1 && granularity !== "mensal" && (
         <div className="bg-purple-50 border border-purple-200/80 rounded-2xl p-4 flex items-start gap-3 text-xs text-purple-900 shadow-xs no-print">
           <Info className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
@@ -421,6 +423,39 @@ export default function ReportTendenciaTab({
             <p className="text-purple-700 leading-relaxed">
               O gráfico está exibindo automaticamente a <strong className="text-purple-950">evolução diária (dia a dia)</strong> de custos e abastecimentos ao longo do mês ({trendData.length} dias com dados). Você também pode alternar para visualização <strong>Semanal</strong>, <strong>Quinzenal</strong> ou <strong>Mensal</strong> nos botões abaixo.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Single Month Alert when Granularity is Mensal */}
+      {granularity === "mensal" && trendData.length === 1 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-xs no-print">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-950">
+                Visualização Mensal Selecionada: {trendData[0]?.fullName || "Mês"}
+              </p>
+              <p className="text-amber-800 text-[11px] mt-0.5">
+                Há apenas 1 mês no período filtrado (Total: {formatCurrency(trendData[0]?.totalValor || 0)}). Para ver o gráfico e a evolução detalhada dia a dia deste mês, selecione a visualização <strong>Dia a Dia</strong> ou <strong>Semanal</strong>.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleGranularityChange("diario")}
+              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs shadow-xs transition-colors cursor-pointer"
+            >
+              Ver Dia a Dia ({trendData[0]?.fullName})
+            </button>
+            {trendTimeframe !== "all" && (
+              <button
+                onClick={() => handleTimeframeChange("all")}
+                className="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-bold text-xs shadow-xs transition-colors cursor-pointer"
+              >
+                Ver Todos os Meses
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -450,10 +485,7 @@ export default function ReportTendenciaTab({
             </span>
             <button
               type="button"
-              onClick={() => {
-                setGranularity("mensal");
-                setHasUserChangedGranularity(true);
-              }}
+              onClick={() => handleGranularityChange("mensal")}
               className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
                 granularity === "mensal"
                   ? "bg-purple-600 text-white shadow-xs font-black"
@@ -464,10 +496,7 @@ export default function ReportTendenciaTab({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setGranularity("quinzenal");
-                setHasUserChangedGranularity(true);
-              }}
+              onClick={() => handleGranularityChange("quinzenal")}
               className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
                 granularity === "quinzenal"
                   ? "bg-purple-600 text-white shadow-xs font-black"
@@ -478,10 +507,7 @@ export default function ReportTendenciaTab({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setGranularity("semanal");
-                setHasUserChangedGranularity(true);
-              }}
+              onClick={() => handleGranularityChange("semanal")}
               className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
                 granularity === "semanal"
                   ? "bg-purple-600 text-white shadow-xs font-black"
@@ -492,10 +518,7 @@ export default function ReportTendenciaTab({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setGranularity("diario");
-                setHasUserChangedGranularity(true);
-              }}
+              onClick={() => handleGranularityChange("diario")}
               className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
                 granularity === "diario"
                   ? "bg-purple-600 text-white shadow-xs font-black"
@@ -516,7 +539,7 @@ export default function ReportTendenciaTab({
             <div className="flex flex-wrap items-center gap-1 bg-zinc-100 p-1 rounded-2xl border border-zinc-200/60 text-xs font-bold">
               <button
                 type="button"
-                onClick={() => setTrendTimeframe("all")}
+                onClick={() => handleTimeframeChange("all")}
                 className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                   trendTimeframe === "all"
                     ? "bg-white text-purple-700 shadow-xs font-black"
@@ -527,7 +550,7 @@ export default function ReportTendenciaTab({
               </button>
               <button
                 type="button"
-                onClick={() => setTrendTimeframe("12m")}
+                onClick={() => handleTimeframeChange("12m")}
                 className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                   trendTimeframe === "12m"
                     ? "bg-white text-purple-700 shadow-xs font-black"
@@ -538,7 +561,7 @@ export default function ReportTendenciaTab({
               </button>
               <button
                 type="button"
-                onClick={() => setTrendTimeframe("6m")}
+                onClick={() => handleTimeframeChange("6m")}
                 className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                   trendTimeframe === "6m"
                     ? "bg-white text-purple-700 shadow-xs font-black"
@@ -549,7 +572,7 @@ export default function ReportTendenciaTab({
               </button>
               <button
                 type="button"
-                onClick={() => setTrendTimeframe("3m")}
+                onClick={() => handleTimeframeChange("3m")}
                 className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                   trendTimeframe === "3m"
                     ? "bg-white text-purple-700 shadow-xs font-black"
@@ -560,7 +583,7 @@ export default function ReportTendenciaTab({
               </button>
               <button
                 type="button"
-                onClick={() => setTrendTimeframe("30d")}
+                onClick={() => handleTimeframeChange("30d")}
                 className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                   trendTimeframe === "30d"
                     ? "bg-white text-purple-700 shadow-xs font-black"
@@ -577,7 +600,7 @@ export default function ReportTendenciaTab({
             <span className="text-xs font-bold text-zinc-500">Filtrar Mês/Ano:</span>
             <select
               value={trendTimeframe}
-              onChange={(e) => setTrendTimeframe(e.target.value)}
+              onChange={(e) => handleTimeframeChange(e.target.value)}
               className="px-3 py-1.5 rounded-xl bg-zinc-50 border border-zinc-200 text-zinc-800 text-xs font-bold focus:outline-none cursor-pointer hover:bg-zinc-100"
             >
               <option value="all">Todos os Meses ({availableMonths.length})</option>

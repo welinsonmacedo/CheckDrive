@@ -230,7 +230,7 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
   const monthsByYear = useMemo(() => {
     const map: Record<string, Set<string>> = {};
     records.forEach((r) => {
-      const parsed = parseRecordMonthYear(r.data || (r as any).criado_em || (r as any).created_at);
+      const parsed = parseRecordMonthYear(r);
       if (parsed) {
         if (!map[parsed.year]) map[parsed.year] = new Set();
         map[parsed.year].add(`${parsed.month}/${parsed.year}`);
@@ -273,7 +273,7 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
       }
 
       // 3. Período
-      if (!matchesPeriod(r.data || (r as any).criado_em || (r as any).created_at, selectedPeriod, customMonth)) {
+      if (!matchesPeriod(r, selectedPeriod, customMonth)) {
         return false;
       }
 
@@ -339,7 +339,7 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
       } else if (agruparPor === "fornecedor") {
         key = r.fornecedor || "Não Informado";
       } else if (agruparPor === "mes") {
-        const parsed = parseRecordMonthYear(r.data || (r as any).criado_em || (r as any).created_at);
+        const parsed = parseRecordMonthYear(r);
         key = parsed ? `${parsed.month}/${parsed.year}` : "Outros";
       } else if (agruparPor === "status") {
         key = r.status || "Pendente";
@@ -373,8 +373,22 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
       };
     });
 
-    // Sort by metric descending
-    result.sort((a, b) => b.valor - a.valor);
+    // If grouping by month, sort chronologically (Jan -> Dec)
+    if (agruparPor === "mes") {
+      result.sort((a, b) => {
+        const pA = parseRecordMonthYear(a.name);
+        const pB = parseRecordMonthYear(b.name);
+        if (pA && pB) {
+          const sA = Number(pA.year) * 100 + Number(pA.month);
+          const sB = Number(pB.year) * 100 + Number(pB.month);
+          return sA - sB;
+        }
+        return a.name.localeCompare(b.name);
+      });
+    } else {
+      // Sort by metric descending
+      result.sort((a, b) => b.valor - a.valor);
+    }
     return result;
   }, [filteredRecords, agruparPor, metrica, totalValorGeral, tipoImportacaoFilter]);
 
