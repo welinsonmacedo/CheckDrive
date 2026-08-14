@@ -38,6 +38,7 @@ import {
 } from "recharts";
 import { ImportJob, ImportRecord } from "../types";
 import { ImportService } from "../services/importService";
+import { AccountMapping, AccountMappingService } from "../services/accountMappingService";
 import { calculateVehicleStats, formatCurrency, getRecordImportType } from "../utils/vehicleStatsUtils";
 import { parseRecordMonthYear, matchesPeriod, MONTH_NAMES_PT } from "../utils/dateUtils";
 
@@ -50,6 +51,7 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
   const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [records, setRecords] = useState<ImportRecord[]>([]);
+  const [accountMappings, setAccountMappings] = useState<AccountMapping[]>([]);
 
   // Individual Filters for Dashboard
   const [dashJobId, setDashJobId] = useState<string>("all");
@@ -66,12 +68,14 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
   const loadData = async () => {
     setLoading(true);
     try {
-      const [jobsData, recsData] = await Promise.all([
+      const [jobsData, recsData, mappingsData] = await Promise.all([
         ImportService.getImportJobs(companyId),
         ImportService.getImportRecords(companyId),
+        AccountMappingService.getAccountMappings(companyId),
       ]);
       setJobs(jobsData);
       setRecords(recsData);
+      setAccountMappings(mappingsData);
     } catch (e) {
       console.error(e);
     } finally {
@@ -172,8 +176,8 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
 
   // CPK Calculations across filtered records
   const vehicleStats = useMemo(() => {
-    return calculateVehicleStats(filteredRecords);
-  }, [filteredRecords]);
+    return calculateVehicleStats(filteredRecords, accountMappings);
+  }, [filteredRecords, accountMappings]);
 
   const totalKmRodadoCombustivel = useMemo(() => {
     return vehicleStats.allVehicles.reduce((sum, v) => sum + v.kmRodadoCombustivel, 0);

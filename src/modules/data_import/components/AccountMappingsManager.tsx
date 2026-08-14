@@ -54,6 +54,7 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
   const [mappings, setMappings] = useState<AccountMapping[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [postoFilter, setPostoFilter] = useState<"todos" | "postos" | "outros">("todos");
 
   // Modal / Form state
   const [showModal, setShowModal] = useState(false);
@@ -63,6 +64,7 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
   const [formTargetName, setFormTargetName] = useState("");
   const [formCategory, setFormCategory] = useState<RecordCategory | string>("Diesel");
   const [formKeywords, setFormKeywords] = useState("");
+  const [formIsPosto, setFormIsPosto] = useState(true);
   const [formActive, setFormActive] = useState(true);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -90,12 +92,23 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const isFuelCategoryName = (cat: string) => {
+    const l = (cat || "").toLowerCase();
+    return (
+      l.includes("diesel") ||
+      l.includes("gasolina") ||
+      l.includes("combust") ||
+      l.includes("arla")
+    );
+  };
+
   const handleOpenAdd = () => {
     setEditingMapping(null);
     setFormCode("");
     setFormTargetName("");
     setFormCategory("Diesel");
     setFormKeywords("");
+    setFormIsPosto(true);
     setFormActive(true);
     setFormError("");
     setShowModal(true);
@@ -107,9 +120,36 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
     setFormTargetName(m.target_name);
     setFormCategory(m.category);
     setFormKeywords((m.keywords || []).join(", "));
+    setFormIsPosto(m.is_posto !== undefined ? Boolean(m.is_posto) : isFuelCategoryName(m.category));
     setFormActive(m.active);
     setFormError("");
     setShowModal(true);
+  };
+
+  const handleCategoryChange = (newCat: string) => {
+    setFormCategory(newCat);
+    // If not manually edited or editing brand new mapping, suggest is_posto based on category
+    if (!editingMapping) {
+      setFormIsPosto(isFuelCategoryName(newCat));
+    }
+  };
+
+  const handleTogglePostoInline = async (m: AccountMapping) => {
+    const nextVal = !m.is_posto;
+    try {
+      await AccountMappingService.saveAccountMapping({
+        ...m,
+        is_posto: nextVal,
+      });
+      await loadMappings();
+      showToast(
+        nextVal
+          ? `Conta '${m.code} - ${m.target_name}' marcada como Posto de Combustível ⛽`
+          : `Conta '${m.code} - ${m.target_name}' marcada como Outras Despesas 📦`
+      );
+    } catch (err: any) {
+      alert("Erro ao atualizar status de posto: " + err.message);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -137,6 +177,7 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
         target_name: formTargetName.trim(),
         category: formCategory,
         keywords: kwArray.length > 0 ? kwArray : [formCode.trim(), formTargetName.trim().toLowerCase()],
+        is_posto: formIsPosto,
         active: formActive,
       });
 
@@ -181,12 +222,24 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
     }
   };
 
-  const filteredMappings = mappings.filter(
-    (m) =>
-      m.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.target_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMappings = mappings.filter((m) => {
+    // 1. Posto filter
+    if (postoFilter === "postos" && !m.is_posto) return false;
+    if (postoFilter === "outros" && m.is_posto) return false;
+
+    // 2. Search query
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      m.code.toLowerCase().includes(term) ||
+      m.target_name.toLowerCase().includes(term) ||
+      m.category.toLowerCase().includes(term) ||
+      (m.keywords && m.keywords.some((k) => k.toLowerCase().includes(term)))
+    );
+  });
+
+  const totalPostosCount = mappings.filter((m) => m.is_posto).length;
+  const totalOutrosCount = mappings.filter((m) => !m.is_posto).length;
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-6">
@@ -210,7 +263,7 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
                 Vínculos de Contas & De-Para Inteligente
               </h3>
               <p className="text-xs text-zinc-500">
-                Configure como os códigos do ERP/PDF são convertidos automaticamente (ex: Código 104 = Diesel S10, Código 106 = Gasolina).
+                Configure como os códigos do ERP/PDF são convertidos e marque se a conta é um <strong>Posto de Combustível</strong> para os relatórios analíticos.
               </p>
             </div>
           </div>
@@ -234,32 +287,69 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
       </div>
 
       {/* Info Notice Box */}
-      <div className="p-4 bg-amber-50/80 border border-amber-200/80 rounded-2xl flex items-start gap-3">
-        <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-        <div className="text-xs text-amber-900 space-y-1">
-          <p className="font-bold">Como funciona a Inteligência de De-Para?</p>
-          <p className="text-amber-800 leading-relaxed">
-            Sempre que um relatório PDF ou planilha for importado e contiver o código ou nome mapeado (ex: <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-950">104</code> ou <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-950">106</code>), o CheckDrive vai vincular o lançamento como <strong className="font-bold text-amber-950">Diesel S10</strong> ou <strong className="font-bold text-amber-950">Gasolina</strong> automaticamente!
+      <div className="p-4 bg-emerald-50/80 border border-emerald-200/80 rounded-2xl flex items-start gap-3">
+        <Fuel className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+        <div className="text-xs text-emerald-950 space-y-1">
+          <p className="font-bold flex items-center gap-1.5">
+            <span>Classificação de Posto de Combustível & Abastecimento</span>
+            <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] rounded-full uppercase tracking-wider font-black">
+              Novo
+            </span>
+          </p>
+          <p className="text-emerald-800 leading-relaxed">
+            As contas marcadas como <strong className="font-bold text-emerald-950">Posto de Combustível ⛽</strong> serão usadas automaticamente pelos relatórios e gráficos de <strong className="font-bold text-emerald-950">Evolução do Preço Médio por Litro (R$/L)</strong>, <strong className="font-bold text-emerald-950">Consumo GFV</strong> e <strong className="font-bold text-emerald-950">Ranking de Postos</strong>. Contas marcadas como <strong className="font-bold text-zinc-800">Outras Despesas 📦</strong> serão computadas como despesas operacionais normais.
           </p>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="relative w-full sm:w-72">
+      {/* Search & Filter Controls */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search Input */}
+        <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
           <input
             type="text"
-            placeholder="Buscar por código (104, 106) ou nome..."
+            placeholder="Buscar código (104, 106), nome ou categoria..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-3 py-2 rounded-xl border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
-        <span className="text-xs font-semibold text-zinc-500">
-          {filteredMappings.length} de {mappings.length} vínculos cadastrados
-        </span>
+        {/* Quick Filter Tabs */}
+        <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-xl border border-zinc-200">
+          <button
+            onClick={() => setPostoFilter("todos")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              postoFilter === "todos"
+                ? "bg-white text-zinc-900 shadow-xs border border-zinc-200/80"
+                : "text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            Todos ({mappings.length})
+          </button>
+          <button
+            onClick={() => setPostoFilter("postos")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              postoFilter === "postos"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "text-emerald-700 hover:bg-emerald-50"
+            }`}
+          >
+            <Fuel className="w-3.5 h-3.5" />
+            <span>Postos ({totalPostosCount})</span>
+          </button>
+          <button
+            onClick={() => setPostoFilter("outros")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              postoFilter === "outros"
+                ? "bg-white text-zinc-900 shadow-xs border border-zinc-200/80"
+                : "text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            Outras Despesas ({totalOutrosCount})
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -269,7 +359,8 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
             <tr className="bg-zinc-50 text-zinc-700 font-bold border-b border-zinc-200">
               <th className="p-3">Código do ERP/PDF</th>
               <th className="p-3">Nome / Produto Mapeado</th>
-              <th className="p-3">Categoria no CheckDrive</th>
+              <th className="p-3">Categoria CheckDrive</th>
+              <th className="p-3 text-center">Tipo / É Posto?</th>
               <th className="p-3">Palavras-Chave de Busca</th>
               <th className="p-3 text-center">Status</th>
               <th className="p-3 text-right">Ações</th>
@@ -278,61 +369,82 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
           <tbody className="divide-y divide-zinc-100">
             {loading ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-zinc-400">
+                <td colSpan={7} className="p-8 text-center text-zinc-400">
                   <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
                   Carregando lista de vínculos...
                 </td>
               </tr>
             ) : filteredMappings.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-zinc-400">
+                <td colSpan={7} className="p-8 text-center text-zinc-400">
                   Nenhum vínculo encontrado. Clique em "+ Criar Novo Vínculo" para adicionar.
                 </td>
               </tr>
             ) : (
-              filteredMappings.map((m) => (
-                <tr key={m.id || m.code} className="hover:bg-zinc-50/80 transition-colors">
-                  <td className="p-3 font-mono font-black text-blue-600 bg-blue-50/50 rounded-lg">
-                    {m.code}
-                  </td>
-                  <td className="p-3 font-bold text-zinc-900">{m.target_name}</td>
-                  <td className="p-3">
-                    <span className="px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-800 font-semibold text-[11px] border border-zinc-200">
-                      {m.category}
-                    </span>
-                  </td>
-                  <td className="p-3 text-zinc-500 max-w-xs truncate font-mono text-[11px]">
-                    {(m.keywords || []).join(", ") || "-"}
-                  </td>
-                  <td className="p-3 text-center">
-                    {m.active ? (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">
-                        Ativo
+              filteredMappings.map((m) => {
+                const isPosto = Boolean(m.is_posto);
+                return (
+                  <tr key={m.id || m.code} className="hover:bg-zinc-50/80 transition-colors">
+                    <td className="p-3 font-mono font-black text-blue-600 bg-blue-50/40 rounded-lg">
+                      {m.code}
+                    </td>
+                    <td className="p-3 font-bold text-zinc-900">{m.target_name}</td>
+                    <td className="p-3">
+                      <span className="px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-800 font-semibold text-[11px] border border-zinc-200">
+                        {m.category}
                       </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-500 font-bold text-[10px]">
-                        Inativo
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-3 text-right space-x-1">
-                    <button
-                      onClick={() => handleOpenEdit(m)}
-                      className="p-1.5 rounded-lg text-zinc-600 hover:bg-zinc-200 transition-colors cursor-pointer"
-                      title="Editar Vínculo"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(m)}
-                      className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                      title="Excluir Vínculo"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))
+                    </td>
+                    <td className="p-3 text-center">
+                      <button
+                        onClick={() => handleTogglePostoInline(m)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black transition-all cursor-pointer border ${
+                          isPosto
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 shadow-xs"
+                            : "bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200"
+                        }`}
+                        title={
+                          isPosto
+                            ? "Marcado como Posto de Combustível. Clique para alterar para Outras Despesas."
+                            : "Marcado como Outras Despesas. Clique para marcar como Posto de Combustível."
+                        }
+                      >
+                        <Fuel className={`w-3.5 h-3.5 ${isPosto ? "text-emerald-600" : "text-zinc-400"}`} />
+                        <span>{isPosto ? "⛽ Posto / Combustível" : "Outras Despesas"}</span>
+                      </button>
+                    </td>
+                    <td className="p-3 text-zinc-500 max-w-xs truncate font-mono text-[11px]">
+                      {(m.keywords || []).join(", ") || "-"}
+                    </td>
+                    <td className="p-3 text-center">
+                      {m.active ? (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">
+                          Ativo
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-500 font-bold text-[10px]">
+                          Inativo
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3 text-right space-x-1">
+                      <button
+                        onClick={() => handleOpenEdit(m)}
+                        className="p-1.5 rounded-lg text-zinc-600 hover:bg-zinc-200 transition-colors cursor-pointer"
+                        title="Editar Vínculo"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(m)}
+                        className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                        title="Excluir Vínculo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -408,7 +520,7 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
                 </label>
                 <select
                   value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value)}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {CATEGORIES.map((cat) => (
@@ -417,6 +529,51 @@ export default function AccountMappingsManager({ companyId = "global" }: Props) 
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* POSTO DE COMBUSTÍVEL CARD TOGGLE */}
+              <div
+                onClick={() => setFormIsPosto(!formIsPosto)}
+                className={`p-3.5 rounded-2xl border transition-all cursor-pointer select-none ${
+                  formIsPosto
+                    ? "bg-emerald-50/90 border-emerald-300 ring-1 ring-emerald-400/40"
+                    : "bg-zinc-50 border-zinc-200 hover:border-zinc-300"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`p-2 rounded-xl mt-0.5 transition-colors ${
+                      formIsPosto ? "bg-emerald-600 text-white shadow-xs" : "bg-zinc-200 text-zinc-600"
+                    }`}
+                  >
+                    <Fuel className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-zinc-900">
+                        É Posto de Combustível / Abastecimento?
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={formIsPosto}
+                        onChange={(e) => setFormIsPosto(e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-zinc-300 cursor-pointer"
+                      />
+                    </div>
+                    <p className="text-[11px] text-zinc-600 mt-1 leading-relaxed">
+                      {formIsPosto ? (
+                        <span className="text-emerald-800 font-medium">
+                          ✓ Sim, esta conta representa combustível/abastecimento e será incluída nos cálculos de litragem, consumo médio e gráficos de postos.
+                        </span>
+                      ) : (
+                        <span>
+                          Não, esta conta será classificada como despesa geral ou manutenção operacional.
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Keywords */}

@@ -19,14 +19,18 @@ import {
 } from "../utils/vehicleStatsUtils";
 import { parseRecordMonthYear, matchesPeriod, MONTH_NAMES_PT } from "../utils/dateUtils";
 
+import { AccountMapping } from "../services/accountMappingService";
+
 interface Props {
   records: ImportRecord[];
   onSelectVehicle: (key: string) => void;
+  accountMappings?: AccountMapping[];
 }
 
 export default function ReportVeiculoTab({
   records,
   onSelectVehicle,
+  accountMappings = [],
 }: Props) {
   // Independent Filter State for Vehicle-by-Vehicle Tab
   const [vehiclePeriod, setVehiclePeriod] = useState<string>("0");
@@ -112,8 +116,8 @@ export default function ReportVeiculoTab({
 
   // Compute Vehicle Stats based on filtered records
   const vehicleStats = useMemo(() => {
-    return calculateVehicleStats(filteredRecords);
-  }, [filteredRecords]);
+    return calculateVehicleStats(filteredRecords, accountMappings);
+  }, [filteredRecords, accountMappings]);
 
   const filteredVehiclesList = vehicleStats.allVehicles.filter((v) => {
     if (!vehicleSearch.trim()) return true;

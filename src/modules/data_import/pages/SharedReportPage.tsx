@@ -63,6 +63,7 @@ import {
 import { ImportRecord, RecordCategory } from "../types";
 import { SharedReportService, SharedReportConfig } from "../services/sharedReportService";
 import { ImportService } from "../services/importService";
+import { AccountMapping, AccountMappingService } from "../services/accountMappingService";
 import { exportReportToExcel, exportReportToPDF } from "../utils/exportReportUtils";
 import { getRecordImportType, getImportTypeLabel } from "../utils/vehicleStatsUtils";
 
@@ -157,6 +158,8 @@ export default function SharedReportPage() {
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 
+  const [accountMappings, setAccountMappings] = useState<AccountMapping[]>([]);
+
   useEffect(() => {
     if (shareId) {
       loadSharedReport(shareId);
@@ -170,15 +173,21 @@ export default function SharedReportPage() {
     try {
       const data = await SharedReportService.getSharedReport(id);
       if (data) {
-        // Fallback: If records_snapshot is empty or missing, fetch from ImportService
-        if ((!data.records_snapshot || data.records_snapshot.length === 0) && data.company_id) {
+        // ALWAYS fetch live records if company_id is available so edits reflect in the shared link!
+        if (data.company_id) {
           try {
-            const fallbackRecords = await ImportService.getImportRecords(data.company_id);
-            if (fallbackRecords && fallbackRecords.length > 0) {
-              data.records_snapshot = fallbackRecords;
+            const liveRecords = await ImportService.getImportRecords(data.company_id);
+            if (liveRecords && liveRecords.length > 0) {
+              data.records_snapshot = liveRecords;
             }
           } catch (e) {
-            console.warn("Fallback records fetch error:", e);
+            console.warn("Live records fetch error:", e);
+          }
+          try {
+            const mappings = await AccountMappingService.getAccountMappings(data.company_id);
+            setAccountMappings(mappings);
+          } catch (e) {
+            console.warn("Error fetching account mappings in shared report:", e);
           }
         }
 
@@ -352,8 +361,8 @@ export default function SharedReportPage() {
 
   // Vehicle Stats for Top 10 Highest, Lowest & CPK Reports
   const vehicleStats = useMemo(() => {
-    return calculateVehicleStats(filteredRecords);
-  }, [filteredRecords]);
+    return calculateVehicleStats(filteredRecords, accountMappings);
+  }, [filteredRecords, accountMappings]);
 
   // Selected vehicle detail
   const selectedVehicleDetail = useMemo(() => {

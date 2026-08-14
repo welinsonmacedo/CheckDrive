@@ -52,7 +52,8 @@ import {
   generateMonthDays,
   generateMonthQuinzena,
 } from "../utils/dateUtils";
-import { getRecordFinancialValue, formatCurrency, getRecordImportType } from "../utils/vehicleStatsUtils";
+import { getRecordFinancialValue, formatCurrency, getRecordImportType, isFuelRecord } from "../utils/vehicleStatsUtils";
+import { AccountMapping } from "../services/accountMappingService";
 
 interface Props {
   records: ImportRecord[];
@@ -61,6 +62,7 @@ interface Props {
   placaFilter: string;
   fornecedorFilter: string;
   onResetFilters?: () => void;
+  accountMappings?: AccountMapping[];
 }
 
 export type GranularityMode = "mensal" | "semanal" | "quinzenal" | "diario";
@@ -85,6 +87,7 @@ export default function ReportTendenciaTab({
   placaFilter,
   fornecedorFilter,
   onResetFilters,
+  accountMappings = [],
 }: Props) {
   // Granularity selector
   const [granularity, setGranularity] = useState<GranularityMode>("mensal");
@@ -256,6 +259,9 @@ export default function ReportTendenciaTab({
     > = {};
 
     timeframeFilteredRecords.forEach((r) => {
+      const isFuel = isFuelRecord(r, accountMappings);
+      if (!isFuel) return;
+
       const liters = Number(r.quantidade) || 0;
       const val = getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
       if (liters <= 0 || val <= 0) return;
@@ -561,7 +567,8 @@ export default function ReportTendenciaTab({
       }
 
       // Track postos per bucket
-      if (liters > 0 && val > 0) {
+      const isFuel = isFuelRecord(r, accountMappings);
+      if (isFuel && liters > 0 && val > 0) {
         const postoName = (r.fornecedor || "").trim() || "Posto Não Identificado";
         if (!map[key].postos[postoName]) {
           map[key].postos[postoName] = { totalValor: 0, totalLiters: 0, count: 0 };

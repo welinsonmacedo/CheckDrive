@@ -88,28 +88,61 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
     setEditKmRodado(r.km_rodado !== undefined && r.km_rodado !== null ? String(r.km_rodado) : "");
   };
 
+  // Helper to parse pt-BR / generic decimal numbers safely
+  const parsePtBrNumber = (val: string): number | null => {
+    if (!val || val.trim() === "") return null;
+    let clean = val.toLowerCase().replace(/km/g, "").trim();
+    if (!clean) return null;
+
+    if (clean.includes(",")) {
+      const parsed = Number(clean.replace(/\./g, "").replace(",", "."));
+      return isNaN(parsed) ? null : parsed;
+    }
+    if ((clean.match(/\./g) || []).length > 1) {
+      const parsed = Number(clean.replace(/\./g, ""));
+      return isNaN(parsed) ? null : parsed;
+    }
+    if (/^\d{1,3}\.\d{3}$/.test(clean)) {
+      const parsed = Number(clean.replace(".", ""));
+      return isNaN(parsed) ? null : parsed;
+    }
+    const parsed = Number(clean);
+    return isNaN(parsed) ? null : parsed;
+  };
+
   const handleSaveOdometer = async (recordId: string) => {
     setSavingOdometer(true);
     try {
-      const numHodometro = editHodometro.trim() !== "" ? Number(editHodometro.replace(",", ".")) : undefined;
-      const numKmRodado = editKmRodado.trim() !== "" ? Number(editKmRodado.replace(",", ".")) : undefined;
+      const trimmedHod = editHodometro.trim();
+      const trimmedKm = editKmRodado.trim();
 
-      const res = await ImportService.updateRecordOdometerAndKm(recordId, companyId, {
-        hodometro: numHodometro !== undefined && !isNaN(numHodometro) ? numHodometro : undefined,
-        km_rodado: numKmRodado !== undefined && !isNaN(numKmRodado) ? numKmRodado : undefined,
-      });
+      const numHodometro = trimmedHod !== "" ? parsePtBrNumber(trimmedHod) : null;
+      const numKmRodado = trimmedKm !== "" ? parsePtBrNumber(trimmedKm) : null;
+
+      const currentRecord = records.find((r) => r.id === recordId);
+
+      const res = await ImportService.updateRecordOdometerAndKm(
+        recordId,
+        companyId,
+        {
+          hodometro: trimmedHod === "" ? null : numHodometro !== null ? numHodometro : undefined,
+          km_rodado: trimmedKm === "" ? null : numKmRodado !== null ? numKmRodado : undefined,
+        },
+        currentRecord
+      );
 
       if (res.success && res.updatedRecord) {
         setRecords((prev) =>
           prev.map((item) => (item.id === recordId ? res.updatedRecord! : item))
         );
-        setFeedbackMsg("✓ Hodômetro e Quilometragem Rodada atualizados com sucesso!");
+        setFeedbackMsg("✓ Hodômetro e Quilometragem atualizados com sucesso!");
         setEditingRecordId(null);
+        setTimeout(() => setFeedbackMsg(null), 4000);
       } else {
         alert("Erro ao salvar: " + (res.error || "Tente novamente."));
       }
     } catch (e: any) {
-      alert("Erro ao salvar hodômetro: " + e.message);
+      alert("Erro ao salvar quilometragem: " + e.message);
     } finally {
       setSavingOdometer(false);
     }
@@ -796,48 +829,71 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
                         ) : null}
                       </td>
                       {editingRecordId === r.id ? (
-                        <td className="p-3 bg-amber-50/90 rounded-2xl border border-amber-300">
-                          <div className="space-y-1.5 text-xs font-bold min-w-[170px]">
-                            <div className="flex items-center justify-between text-[11px] font-black text-amber-900 border-b border-amber-200 pb-1">
+                        <td className="p-3 bg-amber-50/95 rounded-2xl border-2 border-amber-400 shadow-sm">
+                          <div className="space-y-2 text-xs font-bold min-w-[190px]">
+                            <div className="flex items-center justify-between text-[11px] font-black text-amber-950 border-b border-amber-200/80 pb-1">
                               <span className="flex items-center gap-1">
-                                <Gauge className="w-3.5 h-3.5 text-amber-600" /> Editar GFV
+                                <Gauge className="w-3.5 h-3.5 text-amber-700" /> Editar Km & Hodômetro
                               </span>
                               <button
+                                type="button"
                                 onClick={() => setEditingRecordId(null)}
-                                className="text-amber-700 hover:text-amber-950 text-[10px] cursor-pointer font-bold"
+                                className="text-amber-800 hover:text-amber-950 text-[10px] cursor-pointer font-bold px-1 py-0.5 rounded hover:bg-amber-200/50"
                               >
                                 Cancelar
                               </button>
                             </div>
 
                             <div>
-                              <label className="text-[10px] text-amber-800 font-extrabold block">Hodômetro Final (Km):</label>
+                              <label className="text-[10px] text-amber-900 font-extrabold block mb-0.5">
+                                Hodômetro Final (Km):
+                              </label>
                               <input
                                 type="text"
                                 value={editHodometro}
                                 onChange={(e) => setEditHodometro(e.target.value)}
-                                placeholder="Ex: 154200"
-                                className="w-full px-2 py-1 rounded-lg bg-white border border-amber-300 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleSaveOdometer(r.id);
+                                  if (e.key === "Escape") setEditingRecordId(null);
+                                }}
+                                placeholder="Ex: 154.200"
+                                autoFocus
+                                className="w-full px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs"
                               />
                             </div>
 
                             <div>
-                              <label className="text-[10px] text-amber-800 font-extrabold block">Km Rodado (Trecho):</label>
+                              <label className="text-[10px] text-amber-900 font-extrabold block mb-0.5">
+                                Km Rodado (Trecho):
+                              </label>
                               <input
                                 type="text"
                                 value={editKmRodado}
                                 onChange={(e) => setEditKmRodado(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleSaveOdometer(r.id);
+                                  if (e.key === "Escape") setEditingRecordId(null);
+                                }}
                                 placeholder="Ex: 480"
-                                className="w-full px-2 py-1 rounded-lg bg-white border border-amber-300 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                className="w-full px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-2xs"
                               />
                             </div>
 
                             <button
+                              type="button"
                               onClick={() => handleSaveOdometer(r.id)}
                               disabled={savingOdometer}
-                              className="w-full mt-1 py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold flex items-center justify-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
+                              className="w-full mt-1.5 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50 transition-colors"
                             >
-                              <Check className="w-3.5 h-3.5" /> Salvar Alteração
+                              {savingOdometer ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Salvando...
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-3.5 h-3.5" /> Salvar Alteração
+                                </>
+                              )}
                             </button>
                           </div>
                         </td>
@@ -846,27 +902,30 @@ export default function ImportRecordsTab({ companyId, selectedJobId }: Props) {
                           <div className="flex items-center justify-between gap-2">
                             <div>
                               <div className="font-extrabold text-zinc-900 text-xs">
-                                {r.hodometro ? `${Number(r.hodometro).toLocaleString("pt-BR")} km` : <span className="text-zinc-400 font-normal italic">Sem Hodômetro</span>}
+                                {r.hodometro ? (
+                                  `${Number(r.hodometro).toLocaleString("pt-BR")} km`
+                                ) : (
+                                  <span className="text-zinc-400 font-normal italic">Sem Hodômetro</span>
+                                )}
                               </div>
-                              {r.km_rodado !== undefined && r.km_rodado > 0 ? (
+                              {r.km_rodado !== undefined && r.km_rodado !== null && r.km_rodado > 0 ? (
                                 <div className="text-[10px] text-amber-800 font-black bg-amber-50/90 px-1.5 py-0.5 rounded-md border border-amber-200 inline-block mt-0.5">
-                                  +{Number(r.km_rodado).toLocaleString("pt-BR")} km rodado
+                                  +{Number(r.km_rodado).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} km rodado
                                 </div>
                               ) : (
                                 <div className="text-[10px] text-zinc-400">Sem Km Rodado</div>
                               )}
                             </div>
 
-                            {isGfvRecord && (
-                              <button
-                                onClick={() => startEditingOdometer(r)}
-                                className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[10px] font-extrabold transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
-                                title="Editar Hodômetro ou Quilometragem Rodada deste registro GFV"
-                              >
-                                <Pencil className="w-3 h-3 text-amber-700" />
-                                <span>Editar</span>
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => startEditingOdometer(r)}
+                              className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                              title="Editar Hodômetro ou Quilometragem Rodada deste registro"
+                            >
+                              <Pencil className="w-3 h-3 text-amber-700" />
+                              <span>Editar</span>
+                            </button>
                           </div>
                         </td>
                       )}

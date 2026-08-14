@@ -31,14 +31,18 @@ import {
 } from "../utils/vehicleStatsUtils";
 import { parseRecordMonthYear, matchesPeriod, MONTH_NAMES_PT } from "../utils/dateUtils";
 
+import { AccountMapping } from "../services/accountMappingService";
+
 interface Props {
   records: ImportRecord[];
   onSelectVehicle: (key: string) => void;
+  accountMappings?: AccountMapping[];
 }
 
 export default function ReportCpkTab({
   records,
   onSelectVehicle,
+  accountMappings = [],
 }: Props) {
   // Independent Filter State for CPK Tab
   const [cpkPeriod, setCpkPeriod] = useState<string>("0");
@@ -129,8 +133,8 @@ export default function ReportCpkTab({
 
   // Compute Vehicle Stats based on filtered records
   const vehicleStats = useMemo(() => {
-    return calculateVehicleStats(filteredRecords);
-  }, [filteredRecords]);
+    return calculateVehicleStats(filteredRecords, accountMappings);
+  }, [filteredRecords, accountMappings]);
 
   const vehiclesWithKm = vehicleStats.allVehicles.filter((v) => v.kmRodadoCombustivel > 0);
   const totalFleetKm = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.kmRodadoCombustivel || 0), 0);

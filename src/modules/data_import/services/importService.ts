@@ -554,31 +554,77 @@ export class ImportService {
   }
 
   /**
-   * Update Hodometro and/or Km Rodado for a specific import record (GFV / Telemetria)
+   * Update Hodometro and/or Km Rodado for a specific import record (GFV / Telemetria / Senior)
    */
   static async updateRecordOdometerAndKm(
     recordId: string,
     companyId: string,
-    updates: { hodometro?: number; km_rodado?: number }
+    updates: { hodometro?: number | null; km_rodado?: number | null },
+    fallbackRecord?: ImportRecord
   ): Promise<{ success: boolean; updatedRecord?: ImportRecord; error?: string }> {
-    const existing = await RECORDS_STORE.getItem<ImportRecord>(recordId);
+    // 1. Try local storage first
+    let existing = await RECORDS_STORE.getItem<ImportRecord>(recordId);
+
+    // 2. If not found in local store, fetch from Supabase
     if (!existing) {
-      return { success: false, error: "Registro não encontrado." };
+      try {
+        const { data, error } = await supabase
+          .from("import_records")
+          .select("*")
+          .eq("id", recordId)
+          .maybeSingle();
+
+        if (data && !error) {
+          existing = data as ImportRecord;
+        }
+      } catch (err) {
+        console.warn("Supabase fetch in updateRecordOdometerAndKm exception:", err);
+      }
     }
 
-    const newHodometro = updates.hodometro !== undefined ? updates.hodometro : existing.hodometro;
-    const newKmRodado = updates.km_rodado !== undefined ? updates.km_rodado : existing.km_rodado;
+    // 3. If still not found, use the fallback in-memory record if provided
+    if (!existing && fallbackRecord && fallbackRecord.id === recordId) {
+      existing = fallbackRecord;
+    }
+
+    if (!existing) {
+      return { success: false, error: "Registro não encontrado no banco de dados ou armazenamento local." };
+    }
+
+    const newHodometro =
+      updates.hodometro !== undefined
+        ? updates.hodometro === null
+          ? undefined
+          : updates.hodometro
+        : existing.hodometro;
+
+    const newKmRodado =
+      updates.km_rodado !== undefined
+        ? updates.km_rodado === null
+          ? undefined
+          : updates.km_rodado
+        : existing.km_rodado;
 
     // Recalculate media_km_l and preco_por_km
     let newMediaKmL = existing.media_km_l;
     let newPrecoPorKm = existing.preco_por_km;
 
-    if (existing.quantidade && existing.quantidade > 0 && newKmRodado !== undefined && newKmRodado > 0) {
-      newMediaKmL = newKmRodado / existing.quantidade;
-    }
+    const qtd = Number(existing.quantidade) || 0;
+    const val = Number(existing.valor) || 0;
 
-    if (existing.valor && existing.valor > 0 && newKmRodado !== undefined && newKmRodado > 0) {
-      newPrecoPorKm = existing.valor / newKmRodado;
+    if (newKmRodado !== undefined && newKmRodado !== null && newKmRodado > 0) {
+      if (qtd > 0) {
+        newMediaKmL = Number((newKmRodado / qtd).toFixed(2));
+      }
+      if (val > 0) {
+        newPrecoPorKm = Number((val / newKmRodado).toFixed(3));
+      }
+    } else if (newKmRodado === 0 || newKmRodado === undefined || newKmRodado === null) {
+      // If km_rodado was cleared/zeroed
+      if (updates.km_rodado !== undefined) {
+        newMediaKmL = undefined;
+        newPrecoPorKm = undefined;
+      }
     }
 
     const updatedRecord: ImportRecord = {
@@ -590,22 +636,41 @@ export class ImportService {
     };
 
     // 1. Local Storage update
-    await RECORDS_STORE.setItem(recordId, updatedRecord);
+    try {
+      await RECORDS_STORE.setItem(recordId, updatedRecord);
+    } catch (err) {
+      console.warn("RECORDS_STORE setItem error:", err);
+    }
 
     // 2. Supabase update
     try {
+      const dbPayload: any = {
+        hodometro: newHodometro !== undefined ? newHodometro : null,
+        km_rodado: newKmRodado !== undefined ? newKmRodado : null,
+        media_km_l: newMediaKmL !== undefined ? newMediaKmL : null,
+        preco_por_km: newPrecoPorKm !== undefined ? newPrecoPorKm : null,
+      };
+
       const { error } = await supabase
         .from("import_records")
-        .update({
-          hodometro: newHodometro,
-          km_rodado: newKmRodado,
-          media_km_l: newMediaKmL,
-          preco_por_km: newPrecoPorKm,
-        })
+        .update(dbPayload)
         .eq("id", recordId);
 
       if (error) {
         console.warn("Supabase updateRecordOdometerAndKm error:", error.message);
+        // Fallback: If custom columns like media_km_l / km_rodado are missing in schema
+        if (
+          error.message &&
+          (error.message.includes("column") || error.code === "PGRST204" || error.code === "42703")
+        ) {
+          const { error: fallbackErr } = await supabase
+            .from("import_records")
+            .update({ hodometro: newHodometro !== undefined ? newHodometro : null })
+            .eq("id", recordId);
+          if (fallbackErr) {
+            console.warn("Supabase fallback update error:", fallbackErr.message);
+          }
+        }
       }
     } catch (e: any) {
       console.warn("Supabase updateRecordOdometerAndKm exception:", e);
@@ -663,7 +728,7 @@ export class ImportService {
       console.warn("Supabase getImportRecords exception:", e);
     }
 
-    // 2. Fetch from Local Storage (merge local records if offline or not in Supabase)
+    // 2. Fetch from Local Storage (merge local records if offline or not in Supabase, and apply locally updated fields)
     await RECORDS_STORE.iterate((r: ImportRecord) => {
       const matchCompany =
         !companyId ||
@@ -677,6 +742,20 @@ export class ImportService {
       if (matchCompany && matchJob) {
         if (!recordMap.has(r.id)) {
           recordMap.set(r.id, r);
+        } else {
+          // Merge local store fields over Supabase record (to keep edited km_rodado, hodometro, media_km_l, etc.)
+          const remoteRec = recordMap.get(r.id)!;
+          const merged: ImportRecord = {
+            ...remoteRec,
+            ...r,
+            hodometro: r.hodometro !== undefined ? r.hodometro : remoteRec.hodometro,
+            km_rodado: r.km_rodado !== undefined ? r.km_rodado : remoteRec.km_rodado,
+            media_km_l: r.media_km_l !== undefined ? r.media_km_l : remoteRec.media_km_l,
+            preco_por_km: r.preco_por_km !== undefined ? r.preco_por_km : remoteRec.preco_por_km,
+            tipo_registro: r.tipo_registro || remoteRec.tipo_registro,
+            status: r.status || remoteRec.status,
+          };
+          recordMap.set(r.id, merged);
         }
       }
     });

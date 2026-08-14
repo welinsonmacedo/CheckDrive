@@ -1,4 +1,5 @@
 import { ImportRecord } from "../types";
+import { AccountMapping, AccountMappingService } from "../services/accountMappingService";
 
 export interface VehicleReportStat {
   key: string;
@@ -21,7 +22,21 @@ export interface VehicleReportStat {
   items: ImportRecord[];
 }
 
-export function isFuelCategory(category?: string, conta?: string): boolean {
+/**
+ * Checks whether a category/account name represents fuel or a gas station.
+ * If mappings are provided, respects whether the mapped account has is_posto === true / false.
+ */
+export function isFuelCategory(category?: string, conta?: string, mappings?: AccountMapping[]): boolean {
+  if (mappings && mappings.length > 0) {
+    const textToCheck = `${conta || ""} ${category || ""}`.trim();
+    if (textToCheck) {
+      const matched = AccountMappingService.findMatchingMapping(textToCheck, mappings);
+      if (matched && matched.is_posto !== undefined) {
+        return Boolean(matched.is_posto);
+      }
+    }
+  }
+
   const catLower = (category || "").toLowerCase();
   const contaLower = (conta || "").toLowerCase();
   return (
@@ -34,6 +49,30 @@ export function isFuelCategory(category?: string, conta?: string): boolean {
     contaLower.includes("arla") ||
     contaLower.includes("combust")
   );
+}
+
+/**
+ * Checks whether a specific ImportRecord is a fuel/gas station record.
+ */
+export function isFuelRecord(r: ImportRecord, mappings?: AccountMapping[]): boolean {
+  // 1. GFV records are always fuel telemetry
+  if (getRecordImportType(r) === "combustivel_gfv") {
+    return true;
+  }
+
+  // 2. Check de-para mappings if provided
+  if (mappings && mappings.length > 0) {
+    const query = `${r.conta || ""} ${r.tipo_registro || ""} ${r.descricao_conta || ""}`.trim();
+    if (query) {
+      const matched = AccountMappingService.findMatchingMapping(query, mappings);
+      if (matched && matched.is_posto !== undefined) {
+        return Boolean(matched.is_posto);
+      }
+    }
+  }
+
+  // 3. Fallback to category & account name heuristics
+  return isFuelCategory(r.tipo_registro, r.conta, mappings);
 }
 
 export function getRecordImportType(r: ImportRecord): "combustivel_gfv" | "receitas_despesas" {
@@ -78,7 +117,7 @@ export function getImportTypeLabel(type: "combustivel_gfv" | "receitas_despesas"
   return type;
 }
 
-export function calculateVehicleStats(records: ImportRecord[]) {
+export function calculateVehicleStats(records: ImportRecord[], mappings?: AccountMapping[]) {
   const map: Record<string, VehicleReportStat> = {};
 
   records.forEach((r) => {
@@ -151,7 +190,7 @@ export function calculateVehicleStats(records: ImportRecord[]) {
       map[key].softranRecordsCount += 1;
       map[key].totalCost += val;
 
-      if (isFuelCategory(r.tipo_registro, r.conta)) {
+      if (isFuelRecord(r, mappings)) {
         map[key].costCombustivel += val;
       } else {
         map[key].costDespesas += val;
@@ -173,7 +212,7 @@ export function calculateVehicleStats(records: ImportRecord[]) {
     if (v.totalLiters === 0) {
       let softranFuelQty = 0;
       Object.entries(v.categories).forEach(([catName, catData]) => {
-        if (isFuelCategory(catName)) {
+        if (isFuelCategory(catName, undefined, mappings)) {
           softranFuelQty += catData.liters;
         }
       });
@@ -230,15 +269,46 @@ export function formatCurrency(val: number): string {
   return (val || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function calculateSupplierStats(records: ImportRecord[], _tipoImportacaoFilter: string = "Todas") {
-  const map: Record<string, { key: string; name: string; totalCost: number; totalLiters: number; count: number }> = {};
+export function calculateSupplierStats(
+  records: ImportRecord[],
+  _tipoImportacaoFilter: string = "Todas",
+  mappings?: AccountMapping[]
+) {
+  const map: Record<
+    string,
+    {
+      key: string;
+      name: string;
+      totalCost: number;
+      totalLiters: number;
+      count: number;
+      isPosto: boolean;
+      fuelRecordsCount: number;
+    }
+  > = {};
+
   records.forEach((r) => {
     const rawName = r.fornecedor?.trim() || "Não Informado";
     const key = rawName.toUpperCase();
+    const isFuel = isFuelRecord(r, mappings);
+
     if (!map[key]) {
-      map[key] = { key, name: rawName, totalCost: 0, totalLiters: 0, count: 0 };
+      map[key] = {
+        key,
+        name: rawName,
+        totalCost: 0,
+        totalLiters: 0,
+        count: 0,
+        isPosto: isFuel,
+        fuelRecordsCount: 0,
+      };
     }
     map[key].count += 1;
+    if (isFuel) {
+      map[key].fuelRecordsCount += 1;
+      map[key].isPosto = true;
+    }
+
     const impType = getRecordImportType(r);
     if (impType === "combustivel_gfv") {
       map[key].totalLiters += Number(r.quantidade) || 0;

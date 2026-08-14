@@ -9,6 +9,7 @@ export interface AccountMapping {
   target_name: string;
   category: RecordCategory | string;
   keywords?: string[];
+  is_posto?: boolean;
   active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -17,58 +18,58 @@ export interface AccountMapping {
 const MAPPINGS_STORE = localforage.createInstance({ name: "checkdrive_import_account_mappings" });
 
 export const DEFAULT_ACCOUNT_MAPPINGS: Omit<AccountMapping, "id">[] = [
-  { company_id: "global", code: "34", target_name: "Fluido de Freio", category: "Manutenção", active: true, keywords: ["34", "fluido de freio", "freio"] },
-  { company_id: "global", code: "48", target_name: "Óleo de Motor (Acerto)", category: "Lubrificantes", active: true, keywords: ["48", "oleo de motor", "oleo motor"] },
-  { company_id: "global", code: "67", target_name: "Silicone (Acerto)", category: "Outros", active: true, keywords: ["67", "silicone"] },
-  { company_id: "global", code: "89", target_name: "Multas de Trânsito", category: "Multa", active: true, keywords: ["89", "multa", "multas de transito"] },
-  { company_id: "global", code: "93", target_name: "Pedágio / Passagens", category: "Pedágio", active: true, keywords: ["93", "pedagio", "pedágio", "passagens"] },
-  { company_id: "global", code: "100", target_name: "Seguro Veículos", category: "Seguro", active: true, keywords: ["100", "seguro", "seguro veiculos"] },
-  { company_id: "global", code: "101", target_name: "Gasolina Administrativo", category: "Gasolina Administrativo", active: true, keywords: ["101", "gasolina adm", "gasolina admin"] },
-  { company_id: "global", code: "102", target_name: "Arla", category: "Arla", active: true, keywords: ["102", "arla", "arla32"] },
-  { company_id: "global", code: "103", target_name: "Diesel Comum / Arla Estoque", category: "Diesel", active: true, keywords: ["103", "diesel comum", "arla estoque"] },
-  { company_id: "global", code: "104", target_name: "Diesel S10", category: "Diesel", active: true, keywords: ["104", "diesel s10", "s10", "06.01.002"] },
-  { company_id: "global", code: "105", target_name: "Diesel Terceiro", category: "Diesel Terceiro", active: true, keywords: ["105", "diesel ter", "diesel terceiro"] },
-  { company_id: "global", code: "106", target_name: "Gasolina", category: "Gasolina", active: true, keywords: ["106", "gasolina", "06.02.001"] },
-  { company_id: "global", code: "107", target_name: "Lava-jato", category: "Lava-jato", active: true, keywords: ["107", "lavagem", "lava-jato"] },
-  { company_id: "global", code: "108", target_name: "Manutenção", category: "Manutenção", active: true, keywords: ["108", "manutenção", "manutencao"] },
-  { company_id: "global", code: "109", target_name: "Arla / Pneus Novos", category: "Arla", active: true, keywords: ["109", "arla", "pneu novo"] },
-  { company_id: "global", code: "110", target_name: "Lubrificantes", category: "Lubrificantes", active: true, keywords: ["110", "lubrificante", "lubrificantes"] },
-  { company_id: "global", code: "111", target_name: "Seguro", category: "Seguro", active: true, keywords: ["111", "seguro"] },
-  { company_id: "global", code: "112", target_name: "Multa", category: "Multa", active: true, keywords: ["112", "multa"] },
-  { company_id: "global", code: "116", target_name: "Materiais Elétricos", category: "Elétrica", active: true, keywords: ["116", "eletrico", "eletrica", "bateria"] },
-  { company_id: "global", code: "118", target_name: "Filtros", category: "Peças", active: true, keywords: ["118", "filtro", "filtros"] },
-  { company_id: "global", code: "120", target_name: "Peças e Acessórios", category: "Peças", active: true, keywords: ["120", "pecas", "acessorios"] },
-  { company_id: "global", code: "125", target_name: "Peças para Carroceria", category: "Peças", active: true, keywords: ["125", "carroceria", "pecas carroceria"] },
-  { company_id: "global", code: "128", target_name: "Serviços com Borracharia", category: "Pneus", active: true, keywords: ["128", "borracharia", "pneu"] },
-  { company_id: "global", code: "131", target_name: "Materiais para Borracharia", category: "Pneus", active: true, keywords: ["131", "borracharia", "pneu"] },
-  { company_id: "global", code: "135", target_name: "Serviços de Descontaminação", category: "Lava-jato", active: true, keywords: ["135", "descontaminacao", "descontaminação"] },
-  { company_id: "global", code: "140", target_name: "Aquisição de Pneus Novos", category: "Pneus Novos", active: true, keywords: ["140", "pneus novos", "pneu novo"] },
-  { company_id: "global", code: "141", target_name: "Serviço de Recapadora", category: "Recapagem", active: true, keywords: ["141", "recapagem", "recapadora"] },
-  { company_id: "global", code: "144", target_name: "Óleo Motor", category: "Lubrificantes", active: true, keywords: ["144", "oleo motor", "óleo motor"] },
-  { company_id: "global", code: "150", target_name: "Acessórios Carreta", category: "Peças", active: true, keywords: ["150", "acessorios carreta"] },
-  { company_id: "global", code: "151", target_name: "Bombas, Bicos e Injetores", category: "Peças", active: true, keywords: ["151", "bomba", "bico", "injetor"] },
-  { company_id: "global", code: "152", target_name: "Parafusos / Porcas / Arruelas", category: "Peças", active: true, keywords: ["152", "parafuso", "porca", "arruela"] },
-  { company_id: "global", code: "153", target_name: "Amortecedor", category: "Peças", active: true, keywords: ["153", "amortecedor"] },
-  { company_id: "global", code: "154", target_name: "Cabine", category: "Peças", active: true, keywords: ["154", "cabine"] },
-  { company_id: "global", code: "155", target_name: "Caixa de Câmbio", category: "Peças", active: true, keywords: ["155", "cambio", "caixa de cambio"] },
-  { company_id: "global", code: "158", target_name: "Diferencial", category: "Peças", active: true, keywords: ["158", "diferencial"] },
-  { company_id: "global", code: "160", target_name: "Embreagem", category: "Peças", active: true, keywords: ["160", "embreagem"] },
-  { company_id: "global", code: "161", target_name: "Escapamento", category: "Peças", active: true, keywords: ["161", "escapamento"] },
-  { company_id: "global", code: "162", target_name: "Ferros", category: "Peças", active: true, keywords: ["162", "ferros", "ferro"] },
-  { company_id: "global", code: "163", target_name: "Freios / Cubos", category: "Freios", active: true, keywords: ["163", "freio", "freios", "cubo"] },
-  { company_id: "global", code: "164", target_name: "Material de Consumo", category: "Outros", active: true, keywords: ["164", "material de consumo", "consumo"] },
-  { company_id: "global", code: "165", target_name: "Mola Pneumática", category: "Peças", active: true, keywords: ["165", "mola", "mola pneumatica"] },
-  { company_id: "global", code: "166", target_name: "Motor em Geral", category: "Peças", active: true, keywords: ["166", "motor", "motor em geral"] },
-  { company_id: "global", code: "167", target_name: "Pára-brisas / Vidros", category: "Peças", active: true, keywords: ["167", "parabrisa", "para-brisa", "vidro"] },
-  { company_id: "global", code: "168", target_name: "Pára-lamas / Suportes", category: "Peças", active: true, keywords: ["168", "paralama", "para-lama", "suporte"] },
-  { company_id: "global", code: "172", target_name: "Válvulas", category: "Peças", active: true, keywords: ["172", "valvula", "valvulas"] },
-  { company_id: "global", code: "176", target_name: "Adesivos / Placas", category: "Outros", active: true, keywords: ["176", "adesivo", "placa"] },
-  { company_id: "global", code: "178", target_name: "Materiais de Segurança", category: "Outros", active: true, keywords: ["178", "segurança", "epi"] },
-  { company_id: "global", code: "183", target_name: "Serviços Mecânica", category: "Manutenção", active: true, keywords: ["183", "mecanica", "servico mecanico"] },
-  { company_id: "global", code: "187", target_name: "Serviços em Acessórios Geral", category: "Manutenção", active: true, keywords: ["187", "servico acessorio", "acessorios geral"] },
-  { company_id: "global", code: "1013", target_name: "Aditivo (Acerto)", category: "Lubrificantes", active: true, keywords: ["1013", "aditivo"] },
-  { company_id: "global", code: "1027", target_name: "Aromatizantes (Acerto)", category: "Outros", active: true, keywords: ["1027", "aromatizante"] },
-  { company_id: "global", code: "1041", target_name: "Compras Gerais", category: "Outros", active: true, keywords: ["1041", "compras"] },
+  { company_id: "global", code: "34", target_name: "Fluido de Freio", category: "Manutenção", is_posto: false, active: true, keywords: ["34", "fluido de freio", "freio"] },
+  { company_id: "global", code: "48", target_name: "Óleo de Motor (Acerto)", category: "Lubrificantes", is_posto: false, active: true, keywords: ["48", "oleo de motor", "oleo motor"] },
+  { company_id: "global", code: "67", target_name: "Silicone (Acerto)", category: "Outros", is_posto: false, active: true, keywords: ["67", "silicone"] },
+  { company_id: "global", code: "89", target_name: "Multas de Trânsito", category: "Multa", is_posto: false, active: true, keywords: ["89", "multa", "multas de transito"] },
+  { company_id: "global", code: "93", target_name: "Pedágio / Passagens", category: "Pedágio", is_posto: false, active: true, keywords: ["93", "pedagio", "pedágio", "passagens"] },
+  { company_id: "global", code: "100", target_name: "Seguro Veículos", category: "Seguro", is_posto: false, active: true, keywords: ["100", "seguro", "seguro veiculos"] },
+  { company_id: "global", code: "101", target_name: "Gasolina Administrativo", category: "Gasolina Administrativo", is_posto: true, active: true, keywords: ["101", "gasolina adm", "gasolina admin"] },
+  { company_id: "global", code: "102", target_name: "Arla", category: "Arla", is_posto: true, active: true, keywords: ["102", "arla", "arla32"] },
+  { company_id: "global", code: "103", target_name: "Diesel Comum / Arla Estoque", category: "Diesel", is_posto: true, active: true, keywords: ["103", "diesel comum", "arla estoque"] },
+  { company_id: "global", code: "104", target_name: "Diesel S10", category: "Diesel", is_posto: true, active: true, keywords: ["104", "diesel s10", "s10", "06.01.002"] },
+  { company_id: "global", code: "105", target_name: "Diesel Terceiro", category: "Diesel Terceiro", is_posto: true, active: true, keywords: ["105", "diesel ter", "diesel terceiro"] },
+  { company_id: "global", code: "106", target_name: "Gasolina", category: "Gasolina", is_posto: true, active: true, keywords: ["106", "gasolina", "06.02.001"] },
+  { company_id: "global", code: "107", target_name: "Lava-jato", category: "Lava-jato", is_posto: false, active: true, keywords: ["107", "lavagem", "lava-jato"] },
+  { company_id: "global", code: "108", target_name: "Manutenção", category: "Manutenção", is_posto: false, active: true, keywords: ["108", "manutenção", "manutencao"] },
+  { company_id: "global", code: "109", target_name: "Arla / Pneus Novos", category: "Arla", is_posto: true, active: true, keywords: ["109", "arla", "pneu novo"] },
+  { company_id: "global", code: "110", target_name: "Lubrificantes", category: "Lubrificantes", is_posto: false, active: true, keywords: ["110", "lubrificante", "lubrificantes"] },
+  { company_id: "global", code: "111", target_name: "Seguro", category: "Seguro", is_posto: false, active: true, keywords: ["111", "seguro"] },
+  { company_id: "global", code: "112", target_name: "Multa", category: "Multa", is_posto: false, active: true, keywords: ["112", "multa"] },
+  { company_id: "global", code: "116", target_name: "Materiais Elétricos", category: "Elétrica", is_posto: false, active: true, keywords: ["116", "eletrico", "eletrica", "bateria"] },
+  { company_id: "global", code: "118", target_name: "Filtros", category: "Peças", is_posto: false, active: true, keywords: ["118", "filtro", "filtros"] },
+  { company_id: "global", code: "120", target_name: "Peças e Acessórios", category: "Peças", is_posto: false, active: true, keywords: ["120", "pecas", "acessorios"] },
+  { company_id: "global", code: "125", target_name: "Peças para Carroceria", category: "Peças", is_posto: false, active: true, keywords: ["125", "carroceria", "pecas carroceria"] },
+  { company_id: "global", code: "128", target_name: "Serviços com Borracharia", category: "Pneus", is_posto: false, active: true, keywords: ["128", "borracharia", "pneu"] },
+  { company_id: "global", code: "131", target_name: "Materiais para Borracharia", category: "Pneus", is_posto: false, active: true, keywords: ["131", "borracharia", "pneu"] },
+  { company_id: "global", code: "135", target_name: "Serviços de Descontaminação", category: "Lava-jato", is_posto: false, active: true, keywords: ["135", "descontaminacao", "descontaminação"] },
+  { company_id: "global", code: "140", target_name: "Aquisição de Pneus Novos", category: "Pneus Novos", is_posto: false, active: true, keywords: ["140", "pneus novos", "pneu novo"] },
+  { company_id: "global", code: "141", target_name: "Serviço de Recapadora", category: "Recapagem", is_posto: false, active: true, keywords: ["141", "recapagem", "recapadora"] },
+  { company_id: "global", code: "144", target_name: "Óleo Motor", category: "Lubrificantes", is_posto: false, active: true, keywords: ["144", "oleo motor", "óleo motor"] },
+  { company_id: "global", code: "150", target_name: "Acessórios Carreta", category: "Peças", is_posto: false, active: true, keywords: ["150", "acessorios carreta"] },
+  { company_id: "global", code: "151", target_name: "Bombas, Bicos e Injetores", category: "Peças", is_posto: false, active: true, keywords: ["151", "bomba", "bico", "injetor"] },
+  { company_id: "global", code: "152", target_name: "Parafusos / Porcas / Arruelas", category: "Peças", is_posto: false, active: true, keywords: ["152", "parafuso", "porca", "arruela"] },
+  { company_id: "global", code: "153", target_name: "Amortecedor", category: "Peças", is_posto: false, active: true, keywords: ["153", "amortecedor"] },
+  { company_id: "global", code: "154", target_name: "Cabine", category: "Peças", is_posto: false, active: true, keywords: ["154", "cabine"] },
+  { company_id: "global", code: "155", target_name: "Caixa de Câmbio", category: "Peças", is_posto: false, active: true, keywords: ["155", "cambio", "caixa de cambio"] },
+  { company_id: "global", code: "158", target_name: "Diferencial", category: "Peças", is_posto: false, active: true, keywords: ["158", "diferencial"] },
+  { company_id: "global", code: "160", target_name: "Embreagem", category: "Peças", is_posto: false, active: true, keywords: ["160", "embreagem"] },
+  { company_id: "global", code: "161", target_name: "Escapamento", category: "Peças", is_posto: false, active: true, keywords: ["161", "escapamento"] },
+  { company_id: "global", code: "162", target_name: "Ferros", category: "Peças", is_posto: false, active: true, keywords: ["162", "ferros", "ferro"] },
+  { company_id: "global", code: "163", target_name: "Freios / Cubos", category: "Freios", is_posto: false, active: true, keywords: ["163", "freio", "freios", "cubo"] },
+  { company_id: "global", code: "164", target_name: "Material de Consumo", category: "Outros", is_posto: false, active: true, keywords: ["164", "material de consumo", "consumo"] },
+  { company_id: "global", code: "165", target_name: "Mola Pneumática", category: "Peças", is_posto: false, active: true, keywords: ["165", "mola", "mola pneumatica"] },
+  { company_id: "global", code: "166", target_name: "Motor em Geral", category: "Peças", is_posto: false, active: true, keywords: ["166", "motor", "motor em geral"] },
+  { company_id: "global", code: "167", target_name: "Pára-brisas / Vidros", category: "Peças", is_posto: false, active: true, keywords: ["167", "parabrisa", "para-brisa", "vidro"] },
+  { company_id: "global", code: "168", target_name: "Pára-lamas / Suportes", category: "Peças", is_posto: false, active: true, keywords: ["168", "paralama", "para-lama", "suporte"] },
+  { company_id: "global", code: "172", target_name: "Válvulas", category: "Peças", is_posto: false, active: true, keywords: ["172", "valvula", "valvulas"] },
+  { company_id: "global", code: "176", target_name: "Adesivos / Placas", category: "Outros", is_posto: false, active: true, keywords: ["176", "adesivo", "placa"] },
+  { company_id: "global", code: "178", target_name: "Materiais de Segurança", category: "Outros", is_posto: false, active: true, keywords: ["178", "segurança", "epi"] },
+  { company_id: "global", code: "183", target_name: "Serviços Mecânica", category: "Manutenção", is_posto: false, active: true, keywords: ["183", "mecanica", "servico mecanico"] },
+  { company_id: "global", code: "187", target_name: "Serviços em Acessórios Geral", category: "Manutenção", is_posto: false, active: true, keywords: ["187", "servico acessorio", "acessorios geral"] },
+  { company_id: "global", code: "1013", target_name: "Aditivo (Acerto)", category: "Lubrificantes", is_posto: false, active: true, keywords: ["1013", "aditivo"] },
+  { company_id: "global", code: "1027", target_name: "Aromatizantes (Acerto)", category: "Outros", is_posto: false, active: true, keywords: ["1027", "aromatizante"] },
+  { company_id: "global", code: "1041", target_name: "Compras Gerais", category: "Outros", is_posto: false, active: true, keywords: ["1041", "compras"] },
 ];
 
 export class AccountMappingService {
@@ -101,6 +102,7 @@ export class AccountMappingService {
               target_name: row.target_name,
               category: row.category,
               keywords: Array.isArray(row.keywords) ? row.keywords : [],
+              is_posto: row.is_posto !== undefined ? Boolean(row.is_posto) : undefined,
               active: row.active !== false,
               created_at: row.created_at,
               updated_at: row.updated_at,
@@ -116,7 +118,10 @@ export class AccountMappingService {
     try {
       await MAPPINGS_STORE.iterate((val: AccountMapping) => {
         if (val && val.code) {
-          listMap.set(val.code, val);
+          listMap.set(val.code, {
+            ...val,
+            is_posto: val.is_posto !== undefined ? Boolean(val.is_posto) : undefined,
+          });
         }
       });
     } catch (e) {
@@ -130,7 +135,12 @@ export class AccountMappingService {
         const parsed: AccountMapping[] = JSON.parse(lsRaw);
         if (Array.isArray(parsed)) {
           parsed.forEach((m) => {
-            if (m.code) listMap.set(m.code, m);
+            if (m.code) {
+              listMap.set(m.code, {
+                ...m,
+                is_posto: m.is_posto !== undefined ? Boolean(m.is_posto) : undefined,
+              });
+            }
           });
         }
       }
@@ -156,6 +166,7 @@ export class AccountMappingService {
       target_name: mapping.target_name || `Conta ${code}`,
       category: mapping.category || "Combustível",
       keywords: mapping.keywords || [code, (mapping.target_name || "").toLowerCase()],
+      is_posto: mapping.is_posto !== undefined ? Boolean(mapping.is_posto) : false,
       active: mapping.active !== false,
       updated_at: new Date().toISOString(),
       created_at: mapping.created_at || new Date().toISOString(),
@@ -180,16 +191,24 @@ export class AccountMappingService {
 
     // Upsert to Supabase
     try {
-      await supabase.from("import_account_mappings").upsert({
+      const payload: any = {
         id: fullMapping.id,
         company_id: fullMapping.company_id,
         code: fullMapping.code,
         target_name: fullMapping.target_name,
         category: fullMapping.category,
         keywords: fullMapping.keywords,
+        is_posto: fullMapping.is_posto,
         active: fullMapping.active,
         updated_at: fullMapping.updated_at,
-      });
+      };
+
+      const { error } = await supabase.from("import_account_mappings").upsert(payload);
+      if (error) {
+        // Fallback without is_posto if column not migrated in postgres yet
+        delete payload.is_posto;
+        await supabase.from("import_account_mappings").upsert(payload);
+      }
     } catch (e) {
       console.warn("Supabase upsert mapping notice:", e);
     }
@@ -291,5 +310,17 @@ export class AccountMappingService {
     }
 
     return null;
+  }
+
+  /**
+   * Checks if an account or text is mapped as a Posto de Combustível
+   */
+  static isPostoMapping(textOrCode: string, mappings: AccountMapping[]): boolean {
+    if (!textOrCode || !mappings || mappings.length === 0) return false;
+    const match = this.findMatchingMapping(textOrCode, mappings);
+    if (match && match.is_posto !== undefined) {
+      return Boolean(match.is_posto);
+    }
+    return false;
   }
 }

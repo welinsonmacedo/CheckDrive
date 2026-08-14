@@ -33,15 +33,18 @@ import {
   getRecordImportType,
 } from "../utils/vehicleStatsUtils";
 import { parseRecordMonthYear, matchesPeriod, MONTH_NAMES_PT } from "../utils/dateUtils";
+import { AccountMapping } from "../services/accountMappingService";
 
 interface Props {
   records: ImportRecord[];
   onSelectVehicle: (key: string) => void;
+  accountMappings?: AccountMapping[];
 }
 
 export default function ReportRankingTab({
   records,
   onSelectVehicle,
+  accountMappings = [],
 }: Props) {
   // Independent Filter States for Ranking Tab
   const [rankingPeriod, setRankingPeriod] = useState<string>("0");
@@ -126,12 +129,12 @@ export default function ReportRankingTab({
 
   // Compute Vehicle & Supplier Stats based on filtered records
   const vehicleStats = useMemo(() => {
-    return calculateVehicleStats(filteredRecords);
-  }, [filteredRecords]);
+    return calculateVehicleStats(filteredRecords, accountMappings);
+  }, [filteredRecords, accountMappings]);
 
   const supplierStats = useMemo(() => {
-    return calculateSupplierStats(filteredRecords);
-  }, [filteredRecords]);
+    return calculateSupplierStats(filteredRecords, "Todas", accountMappings);
+  }, [filteredRecords, accountMappings]);
 
   const topLitersVehicles = useMemo(() => {
     return [...vehicleStats.allVehicles]

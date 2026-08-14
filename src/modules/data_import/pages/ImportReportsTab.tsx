@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { ImportRecord, ImportJob } from "../types";
 import { ImportService } from "../services/importService";
+import { AccountMapping, AccountMappingService } from "../services/accountMappingService";
 import {
   parseRecordMonthYear,
   matchesPeriod,
@@ -119,6 +120,7 @@ const COLORS = [
 export default function ImportReportsTab({ records: initialRecords, companyId }: Props) {
   const [internalRecords, setInternalRecords] = useState<ImportRecord[]>(initialRecords || []);
   const [loadingRecords, setLoadingRecords] = useState(!initialRecords || initialRecords.length === 0);
+  const [accountMappings, setAccountMappings] = useState<AccountMapping[]>([]);
 
   useEffect(() => {
     if (initialRecords && initialRecords.length > 0) {
@@ -132,6 +134,14 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
         .finally(() => setLoadingRecords(false));
     }
   }, [initialRecords, companyId]);
+
+  useEffect(() => {
+    if (companyId) {
+      AccountMappingService.getAccountMappings(companyId)
+        .then(setAccountMappings)
+        .catch(console.error);
+    }
+  }, [companyId]);
 
   const records = internalRecords;
 
@@ -319,12 +329,12 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
 
   // Vehicle and Supplier Stats
   const vehicleStats = useMemo(() => {
-    return calculateVehicleStats(filteredRecords);
-  }, [filteredRecords]);
+    return calculateVehicleStats(filteredRecords, accountMappings);
+  }, [filteredRecords, accountMappings]);
 
   const supplierStats = useMemo(() => {
-    return calculateSupplierStats(filteredRecords, tipoImportacaoFilter);
-  }, [filteredRecords, tipoImportacaoFilter]);
+    return calculateSupplierStats(filteredRecords, tipoImportacaoFilter, accountMappings);
+  }, [filteredRecords, tipoImportacaoFilter, accountMappings]);
 
   // Aggregated Data for Analytical & Charts
   const aggregatedData = useMemo(() => {
@@ -714,6 +724,7 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
           placaFilter={placaFilter}
           fornecedorFilter={fornecedorFilter}
           onResetFilters={handleResetFilters}
+          accountMappings={accountMappings}
         />
       )}
 
@@ -721,6 +732,7 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
         <ReportRankingTab
           records={records}
           onSelectVehicle={(key) => setSelectedVehicleDetailKey(key)}
+          accountMappings={accountMappings}
         />
       )}
 
@@ -728,6 +740,7 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
         <ReportVeiculoTab
           records={records}
           onSelectVehicle={(key) => setSelectedVehicleDetailKey(key)}
+          accountMappings={accountMappings}
         />
       )}
 
@@ -735,6 +748,7 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
         <ReportCpkTab
           records={records}
           onSelectVehicle={(key) => setSelectedVehicleDetailKey(key)}
+          accountMappings={accountMappings}
         />
       )}
 
