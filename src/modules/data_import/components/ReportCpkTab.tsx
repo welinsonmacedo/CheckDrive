@@ -59,7 +59,7 @@ export default function ReportCpkTab({
     const catsSet = new Set<string>();
     records.forEach((r) => {
       if (r.tipo_registro) catsSet.add(r.tipo_registro);
-      const parsed = parseRecordMonthYear(r.data);
+      const parsed = parseRecordMonthYear(r);
       if (parsed) {
         monthsSet.add(`${parsed.month}/${parsed.year}`);
       }
@@ -102,7 +102,7 @@ export default function ReportCpkTab({
       }
 
       // 3. Periodo
-      if (!matchesPeriod(r.data, cpkPeriod, cpkCustomMonth)) {
+      if (!matchesPeriod(r, cpkPeriod, cpkCustomMonth)) {
         return false;
       }
 

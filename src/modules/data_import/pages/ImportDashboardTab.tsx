@@ -88,7 +88,7 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
     const catsSet = new Set<string>();
     records.forEach((r) => {
       if (r.tipo_registro) catsSet.add(r.tipo_registro);
-      const parsed = parseRecordMonthYear(r.data);
+      const parsed = parseRecordMonthYear(r);
       if (parsed) {
         monthsSet.add(`${parsed.month}/${parsed.year}`);
       }
@@ -131,7 +131,7 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
       }
 
       // 3. Periodo
-      if (!matchesPeriod(r.data, dashPeriod, dashCustomMonth)) {
+      if (!matchesPeriod(r, dashPeriod, dashCustomMonth)) {
         return false;
       }
 
@@ -184,7 +184,7 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
   const monthlyChartData = useMemo(() => {
     const monthlyMap: Record<string, { count: number; valor: number; litros: number }> = {};
     filteredRecords.forEach((r) => {
-      const parsed = parseRecordMonthYear(r.data);
+      const parsed = parseRecordMonthYear(r);
       const monthKey = parsed ? `${parsed.month}/${parsed.year}` : "Atual";
       if (!monthlyMap[monthKey]) {
         monthlyMap[monthKey] = { count: 0, valor: 0, litros: 0 };

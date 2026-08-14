@@ -44,7 +44,7 @@ export default function ReportVeiculoTab({
     const catsSet = new Set<string>();
     records.forEach((r) => {
       if (r.tipo_registro) catsSet.add(r.tipo_registro);
-      const parsed = parseRecordMonthYear(r.data);
+      const parsed = parseRecordMonthYear(r);
       if (parsed) {
         monthsSet.add(`${parsed.month}/${parsed.year}`);
       }
@@ -87,7 +87,7 @@ export default function ReportVeiculoTab({
       }
 
       // 3. Periodo
-      if (!matchesPeriod(r.data, vehiclePeriod, vehicleCustomMonth)) {
+      if (!matchesPeriod(r, vehiclePeriod, vehicleCustomMonth)) {
         return false;
       }
 

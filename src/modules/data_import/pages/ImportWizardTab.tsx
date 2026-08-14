@@ -14,10 +14,12 @@ import {
   Sparkles,
   Link2,
   X,
+  Calendar,
 } from "lucide-react";
 import { RecordCategory } from "../types";
 import { parseSeniorPdfFile } from "../utils/pdfParser";
 import { ImportService } from "../services/importService";
+import { MONTH_NAMES_PT } from "../utils/dateUtils";
 import AccountMappingsManager from "../components/AccountMappingsManager";
 
 interface Props {
@@ -63,8 +65,10 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
-      if (!selected.name.toLowerCase().endsWith(".pdf") && !selected.name.toLowerCase().endsWith(".txt")) {
-        alert("Apenas arquivos PDF (ou relatórios TXT Senior) são permitidos!");
+      const validExtensions = [".pdf", ".txt", ".xlsx", ".xls", ".csv"];
+      const isValid = validExtensions.some((ext) => selected.name.toLowerCase().endsWith(ext));
+      if (!isValid) {
+        alert("Arquivos suportados: PDF, Planilhas Excel (.xlsx, .xls), CSV ou relatórios TXT Senior!");
         return;
       }
       setFile(selected);
@@ -320,7 +324,7 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
           <div className="border-2 border-dashed border-zinc-200 hover:border-blue-400 transition-colors rounded-3xl p-8 text-center bg-zinc-50/50 hover:bg-blue-50/20 relative group">
             <input
               type="file"
-              accept=".pdf,.txt"
+              accept=".pdf,.txt,.xlsx,.xls,.csv"
               onChange={handleFileChange}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             />
@@ -330,10 +334,10 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
               </div>
               <div>
                 <span className="text-sm font-bold text-zinc-800">
-                  {file ? file.name : "Clique para selecionar ou arraste o arquivo PDF"}
+                  {file ? file.name : "Clique para selecionar ou arraste o arquivo PDF, Excel ou TXT"}
                 </span>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Formatos suportados: PDF (Relatório Senior / SOFTran / Gestão de Frota)
+                  Formatos suportados: PDF, Excel (.xlsx, .xls), CSV e TXT (Relatório Senior / SOFTran / Gestão de Frota GFV)
                 </p>
               </div>
             </div>
@@ -456,6 +460,35 @@ export default function ImportWizardTab({ companyId, onFinished }: Props) {
               <div className="text-xl font-black text-rose-800">{summary.conflitos}</div>
             </div>
           </div>
+
+          {/* Detected Months Banner */}
+          {parsedData.extractedMonths && parsedData.extractedMonths.length > 0 && (
+            <div className="p-4 bg-blue-50/80 border border-blue-200/80 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-blue-600" />
+                  {parsedData.extractedMonths.length} {parsedData.extractedMonths.length === 1 ? "Mês Identificado no Arquivo" : "Meses Identificados no Arquivo"}:
+                </span>
+                <span className="text-[11px] font-bold text-blue-700">
+                  Período: {parsedData.periodo}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {parsedData.extractedMonths.map((m: string) => {
+                  const [y, mm] = m.split("-");
+                  const monthName = MONTH_NAMES_PT[mm] || mm;
+                  return (
+                    <span
+                      key={m}
+                      className="px-2.5 py-1 rounded-xl bg-white border border-blue-200 text-blue-800 font-bold text-xs shadow-2xs"
+                    >
+                      {monthName}/{y}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Table Preview */}
           <div className="overflow-x-auto border border-zinc-200 rounded-2xl max-h-96">

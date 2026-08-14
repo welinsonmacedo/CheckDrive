@@ -1,4 +1,5 @@
 import * as pdfjsLib from "pdfjs-dist";
+import * as XLSX from "xlsx";
 import { ImportRecord, RecordCategory } from "../types";
 import { categorizeAccount } from "./classifier";
 import { generateRecordHash } from "./hashUtils";
@@ -14,12 +15,184 @@ export interface ParsedPdfResult {
   records: Omit<ImportRecord, "id" | "import_job_id" | "empresa_id" | "status" | "conflito">[];
   rawText: string;
   totalExtracted: number;
+  extractedMonths?: string[];
 }
 
+const PT_MONTHS_MAP: Record<string, string> = {
+  jan: "01",
+  janeiro: "01",
+  fev: "02",
+  fevereiro: "02",
+  mar: "03",
+  marco: "03",
+  março: "03",
+  abr: "04",
+  abril: "04",
+  mai: "05",
+  maio: "05",
+  jun: "06",
+  junho: "06",
+  jul: "07",
+  julho: "07",
+  ago: "08",
+  agosto: "08",
+  set: "09",
+  setembro: "09",
+  out: "10",
+  outubro: "10",
+  nov: "11",
+  novembro: "11",
+  dez: "12",
+  dezembro: "12",
+};
+
+/**
+ * Normalizes text line by repairing spaces artificially introduced by PDF.js text layer.
+ * Examples:
+ * "15 / 07 / 2024" -> "15/07/2024"
+ * "15 / Jul / 2024" -> "15/07/2024"
+ * "251 . 753 , 000" -> "251.753,000"
+ * "R $ 1 . 500 , 00" -> "R$ 1500,00"
+ */
+export function cleanPdfLineText(rawLine: string): string {
+  if (!rawLine) return "";
+  let line = rawLine;
+
+  // 1. Repair date fragments with spaces around slashes/hyphens: "15 / 07 / 2024" or "15 / 07 / 24"
+  line = line.replace(/(\b\d{1,2})\s*[\/\.-]\s*(\d{1,2})\s*[\/\.-]\s*(\d{2,4}\b)/g, "$1/$2/$3");
+
+  // 2. Repair date fragments with Portuguese month names/abbreviations: "15 / Jan / 2024" or "15 / JUL / 24"
+  line = line.replace(
+    /(\b\d{1,2})\s*[\/\.-]\s*(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*[\/\.-]\s*(\d{2,4}\b)/gi,
+    (_match, d, mName, y) => {
+      const mNum = PT_MONTHS_MAP[mName.toLowerCase()] || "01";
+      return `${d}/${mNum}/${y}`;
+    }
+  );
+
+  // 3. Repair short date fragments: "15 / 07"
+  line = line.replace(/(\b\d{1,2})\s*\/\s*(\d{1,2}\b)/g, "$1/$2");
+
+  // 4. Repair numbers with spaces around thousand dots and decimal commas: "251 . 753 , 00" -> "251.753,00"
+  line = line.replace(/(\d+)\s*\.\s*(\d{3})\s*,\s*(\d{1,3})/g, "$1.$2,$3");
+  line = line.replace(/(\d+)\s*,\s*(\d{1,3})/g, "$1,$2");
+
+  // 5. Repair currency symbols: "R $ 450,00" -> "R$ 450,00"
+  line = line.replace(/R\s*\$\s*/gi, "R$ ");
+
+  return line.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Attempts to extract an ISO date ("YYYY-MM-DD") and original matched string from a text line.
+ * Supports:
+ * - DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+ * - DD/MM/YY, DD-MM-YY
+ * - YYYY-MM-DD, YYYY/MM/DD
+ * - DD/Jan/YYYY, 15/JUL/2024, etc.
+ * - DD/MM (if defaultYear is available)
+ */
+export function extractDateFromLine(
+  line: string,
+  defaultYear?: string,
+  defaultMonth?: string
+): { isoDate: string; rawDateStr: string; matchIndex: number; matchLength: number } | null {
+  const cleaned = cleanPdfLineText(line);
+
+  // 1. Check for full 3-part date with 4 or 2 digit year: "15/07/2024", "15-07-2024", "15.07.2024", "15/07/24"
+  const fullDateMatch = cleaned.match(/(?:^|\s)(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})(?:\s|$|,|;)/);
+  if (fullDateMatch) {
+    const rawMatch = fullDateMatch[0].trim();
+    const d = fullDateMatch[1].padStart(2, "0");
+    const m = fullDateMatch[2].padStart(2, "0");
+    let y = fullDateMatch[3];
+    if (y.length === 2) {
+      y = Number(y) < 50 ? `20${y}` : `19${y}`;
+    }
+
+    if (Number(m) >= 1 && Number(m) <= 12 && Number(d) >= 1 && Number(d) <= 31) {
+      const isoDate = `${y}-${m}-${d}`;
+      const matchIndex = cleaned.indexOf(rawMatch);
+      return { isoDate, rawDateStr: rawMatch, matchIndex, matchLength: rawMatch.length };
+    }
+  }
+
+  // 2. Check for YYYY-MM-DD or YYYY/MM/DD format
+  const isoMatch = cleaned.match(/(?:^|\s)(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})(?:\s|$|,|;)/);
+  if (isoMatch) {
+    const rawMatch = isoMatch[0].trim();
+    const y = isoMatch[1];
+    const m = isoMatch[2].padStart(2, "0");
+    const d = isoMatch[3].padStart(2, "0");
+    if (Number(m) >= 1 && Number(m) <= 12 && Number(d) >= 1 && Number(d) <= 31) {
+      const isoDate = `${y}-${m}-${d}`;
+      const matchIndex = cleaned.indexOf(rawMatch);
+      return { isoDate, rawDateStr: rawMatch, matchIndex, matchLength: rawMatch.length };
+    }
+  }
+
+  // 3. Check for textual month: "15/Jul/2024", "15-JUL-2024", "15 Julho 2024"
+  const textMonthMatch = cleaned.match(
+    /(?:^|\s)(\d{1,2})[\/\.\s-]+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)[\/\.\s-]+(\d{2,4})(?:\s|$|,|;)/i
+  );
+  if (textMonthMatch) {
+    const rawMatch = textMonthMatch[0].trim();
+    const d = textMonthMatch[1].padStart(2, "0");
+    const mKey = textMonthMatch[2].toLowerCase();
+    const m = PT_MONTHS_MAP[mKey] || "01";
+    let y = textMonthMatch[3];
+    if (y.length === 2) {
+      y = Number(y) < 50 ? `20${y}` : `19${y}`;
+    }
+    const isoDate = `${y}-${m}-${d}`;
+    const matchIndex = cleaned.indexOf(rawMatch);
+    return { isoDate, rawDateStr: rawMatch, matchIndex, matchLength: rawMatch.length };
+  }
+
+  // 4. Check for DD/MM when defaultYear is known from report headers
+  if (defaultYear && /^\d{4}$/.test(defaultYear)) {
+    const dayMonthMatch = cleaned.match(/(?:^|\s)(\d{1,2})\/(\d{1,2})(?:\s|$|,|;)/);
+    if (dayMonthMatch) {
+      const rawMatch = dayMonthMatch[0].trim();
+      const d = dayMonthMatch[1].padStart(2, "0");
+      const m = dayMonthMatch[2].padStart(2, "0");
+      if (Number(m) >= 1 && Number(m) <= 12 && Number(d) >= 1 && Number(d) <= 31) {
+        const isoDate = `${defaultYear}-${m}-${d}`;
+        const matchIndex = cleaned.indexOf(rawMatch);
+        return { isoDate, rawDateStr: rawMatch, matchIndex, matchLength: rawMatch.length };
+      }
+    }
+  }
+
+  // 5. Check for Competence/Month headers: "Mês 07/2024" or "Competência: 07/2024" or "Jul/2024"
+  const compMatch = cleaned.match(/(?:compet[êe]ncia|m[êe]s|per[íi]odo|ref|exerc[íi]cio)?:?\s*(\d{1,2})\/(\d{4})/i);
+  if (compMatch) {
+    const m = compMatch[1].padStart(2, "0");
+    const y = compMatch[2];
+    if (Number(m) >= 1 && Number(m) <= 12) {
+      const d = "01";
+      const isoDate = `${y}-${m}-${d}`;
+      return { isoDate, rawDateStr: compMatch[0].trim(), matchIndex: 0, matchLength: compMatch[0].length };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Universal File Parser: Accepts PDF, XLSX, XLS, CSV, TXT
+ */
 export async function parseSeniorPdfFile(
   file: File,
   empresa_id: string
 ): Promise<ParsedPdfResult> {
+  const fileName = file.name.toLowerCase();
+
+  // Route Excel files (.xlsx, .xls)
+  if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls") || fileName.endsWith(".csv")) {
+    return parseSpreadsheetFile(file, empresa_id);
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   let fullText = "";
 
@@ -33,14 +206,14 @@ export async function parseSeniorPdfFile(
       const items = textContent.items as any[];
       const textItems = items.filter((item) => typeof item.str === "string" && item.str.length > 0);
 
-      // Group items into lines by Y coordinate (vertical positioning) with 3.5px tolerance
+      // Group items into lines by Y coordinate (vertical positioning) with 4.0px tolerance
       const lineMap = new Map<number, { x: number; text: string }[]>();
 
       for (const item of textItems) {
         const transform = item.transform || [1, 0, 0, 1, 0, 0];
         const x = transform[4] || 0;
         const yRaw = transform[5] || 0;
-        const yBucket = Math.round(yRaw / 3.5) * 3.5;
+        const yBucket = Math.round(yRaw / 4.0) * 4.0;
 
         if (!lineMap.has(yBucket)) {
           lineMap.set(yBucket, []);
@@ -57,9 +230,10 @@ export async function parseSeniorPdfFile(
         // Sort items on the same line left-to-right by X coordinate
         lineItems.sort((a, b) => a.x - b.x);
 
-        const lineString = lineItems.map((i) => i.text).join(" ").replace(/\s+/g, " ").trim();
-        if (lineString) {
-          pageLines.push(lineString);
+        const rawLine = lineItems.map((item) => item.text).join(" ");
+        const cleanedLine = cleanPdfLineText(rawLine);
+        if (cleanedLine) {
+          pageLines.push(cleanedLine);
         }
       }
 
@@ -105,11 +279,18 @@ export async function parseSeniorTextContent(
   const periodoMatch =
     fullText.match(/Período\s+de:\s*([\d\/\.\-]+(?:\s*at[ée]\s*[\d\/\.\-]+)?)/i) ||
     fullText.match(/(?:período|periodo|data\s+inicial|de|emissã[o0]):\s*([\d\/\.\-]+(?:\s*a\s*[\d\/\.\-]+)?)/i);
-  const periodo = periodoMatch ? periodoMatch[1].trim() : `${new Date().toLocaleDateString("pt-BR")}`;
+  const filePeriodo = periodoMatch ? periodoMatch[1].trim() : `${new Date().toLocaleDateString("pt-BR")}`;
+
+  // Extract base year from period if available (e.g. 2024 or 2025)
+  let detectedBaseYear = "";
+  const yearInPeriod = filePeriodo.match(/\b(20\d{2})\b/);
+  if (yearInPeriod) {
+    detectedBaseYear = yearInPeriod[1];
+  }
 
   const lines = fullText
     .split(/\r?\n/)
-    .map((l) => l.trim())
+    .map((l) => cleanPdfLineText(l))
     .filter((l) => l.length > 0);
 
   const rawRecords: any[] = [];
@@ -119,12 +300,25 @@ export async function parseSeniorTextContent(
   let currentContaNumber = "";
   let currentContaName = "";
   let currentContaFull = "Lançamento Geral";
+  let currentSectionYear = detectedBaseYear || String(new Date().getFullYear());
+  let currentSectionMonth = "";
 
-  const plateRegex = /\b([A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4})\b/i;
-  const dateRegex = /^(\d{2}\/\d{2}\/\d{4})\b/;
+  const plateRegex = /\b([A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4}|[A-Z]{3}\s+[0-9][A-Z0-9][0-9]{2})\b/i;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    // Detect section year / month change in headers (e.g. "Período de: 01/02/2024 a 28/02/2024" or "Competência: 03/2024")
+    const sectionPerMatch = line.match(/(?:per[íi]odo|compet[êe]ncia|exerc[íi]cio|m[êe]s)\s*(?:de:?)?\s*(\d{1,2})[\/\.-](\d{4})/i);
+    if (sectionPerMatch) {
+      currentSectionMonth = sectionPerMatch[1].padStart(2, "0");
+      currentSectionYear = sectionPerMatch[2];
+    } else {
+      const yearMatch = line.match(/\b(20\d{2})\b/);
+      if (yearMatch && (line.includes("Período") || line.includes("Exercício") || line.includes("Ano"))) {
+        currentSectionYear = yearMatch[1];
+      }
+    }
 
     // Ignore header and footer summary lines
     if (
@@ -149,7 +343,7 @@ export async function parseSeniorTextContent(
       const plateMatch = vehicleText.match(plateRegex);
 
       if (plateMatch) {
-        currentPlaca = plateMatch[1].replace("-", "").toUpperCase();
+        currentPlaca = plateMatch[1].replace(/[\s-]/g, "").toUpperCase();
       } else {
         const firstWord = vehicleText.split(/\s+/)[0];
         currentPlaca = firstWord ? `VEIC-${firstWord.padStart(2, "0")}` : "FROTA-GERAL";
@@ -195,14 +389,14 @@ export async function parseSeniorTextContent(
       continue;
     }
 
-    // Match date anywhere in the line e.g., "15/07/2024", "1 15/07/2024", "15-07-2024", "15/07/24"
-    const dateMatch = line.match(/(?:^|\s)(\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4})\b/);
-    if (dateMatch) {
-      const dateBr = dateMatch[1];
-      const isoDate = convertBrDateToIso(dateBr);
+    // Match date anywhere in the line
+    const extractedDate = extractDateFromLine(line, currentSectionYear, currentSectionMonth);
+    if (extractedDate) {
+      const isoDate = extractedDate.isoDate;
+      const rawDateStr = extractedDate.rawDateStr;
 
-      const dateIdx = line.indexOf(dateBr);
-      const afterDate = line.substring(dateIdx + dateBr.length).trim();
+      const dateIdx = line.indexOf(rawDateStr);
+      const afterDate = dateIdx >= 0 ? line.substring(dateIdx + rawDateStr.length).trim() : line;
 
       // Extract all Brazilian currency/number formatted tokens e.g. 69,08 or 462,15 or 251.753,0 or 1,00
       const brNumberMatches = line.match(/\b\d{1,3}(?:\.\d{3})*,\d{1,2}\b/g) || [];
@@ -274,10 +468,15 @@ export async function parseSeniorTextContent(
         fornecedor,
         documento: documento || undefined,
         numero_controle: documento || undefined,
-        observacoes: `Importado de relatório SOFTran/Senior - Período ${periodo}`,
+        observacoes: `Importado de relatório SOFTran/Senior`,
       });
     }
   }
+
+  // Calculate distinct extracted months
+  const distinctMonths = Array.from(
+    new Set(rawRecords.map((r) => r.data.substring(0, 7)))
+  ).sort();
 
   // Calculate SHA-256 hashes for all parsed records
   const recordsWithHash = await Promise.all(
@@ -302,10 +501,11 @@ export async function parseSeniorTextContent(
   );
 
   return {
-    periodo,
+    periodo: distinctMonths.length > 1 ? `${distinctMonths[0]} até ${distinctMonths[distinctMonths.length - 1]}` : filePeriodo,
     records: recordsWithHash,
     rawText: fullText,
     totalExtracted: recordsWithHash.length,
+    extractedMonths: distinctMonths,
   };
 }
 
@@ -322,27 +522,47 @@ export async function parseFuelConsumptionTextContent(
       // ignore
     }
   }
+
   // Extract Period e.g. "Período de: 01/07/2026 até 31/07/2026;"
   const periodoMatch =
     fullText.match(/Período\s+de:\s*([\d\/\.\-]+(?:\s*at[ée]\s*[\d\/\.\-]+)?)/i) ||
     fullText.match(/(?:período|periodo):\s*([\d\/\.\-]+(?:\s*a\s*[\d\/\.\-]+)?)/i);
-  const periodo = periodoMatch ? periodoMatch[1].replace(";", "").trim() : `${new Date().toLocaleDateString("pt-BR")}`;
+  const filePeriodo = periodoMatch ? periodoMatch[1].replace(";", "").trim() : `${new Date().toLocaleDateString("pt-BR")}`;
+
+  let detectedBaseYear = "";
+  const yearInPeriod = filePeriodo.match(/\b(20\d{2})\b/);
+  if (yearInPeriod) {
+    detectedBaseYear = yearInPeriod[1];
+  }
 
   const lines = fullText
     .split(/\r?\n/)
-    .map((l) => l.trim())
+    .map((l) => cleanPdfLineText(l))
     .filter((l) => l.length > 0);
 
   const rawRecords: any[] = [];
   let currentFleet = "";
   let currentPlaca = "";
   let currentVehicleModel = "";
+  let currentSectionYear = detectedBaseYear || String(new Date().getFullYear());
+  let currentSectionMonth = "";
 
   const plateRegex = /\b([A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4}|[A-Z]{3}\s+[0-9][A-Z0-9][0-9]{2})\b/i;
-  const dateRegex = /^(\d{2}\/\d{2}\/\d{4})\b/;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+
+    // Detect section year / month change
+    const sectionPerMatch = line.match(/(?:per[íi]odo|compet[êe]ncia|m[êe]s)\s*(?:de:?)?\s*(\d{1,2})[\/\.-](\d{4})/i);
+    if (sectionPerMatch) {
+      currentSectionMonth = sectionPerMatch[1].padStart(2, "0");
+      currentSectionYear = sectionPerMatch[2];
+    } else {
+      const yearMatch = line.match(/\b(20\d{2})\b/);
+      if (yearMatch && (line.includes("Período") || line.includes("Exercício") || line.includes("Ano"))) {
+        currentSectionYear = yearMatch[1];
+      }
+    }
 
     // Ignore headers, totals, footers
     if (
@@ -386,14 +606,14 @@ export async function parseFuelConsumptionTextContent(
       continue;
     }
 
-    // Date line matching e.g., "15/07/2024", "1 15/07/2024", "15-07-2024", "15/07/24"
-    const dateMatch = line.match(/(?:^|\s)(\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4})\b/);
-    if (dateMatch) {
-      const dateBr = dateMatch[1];
-      const isoDate = convertBrDateToIso(dateBr);
+    // Date extraction
+    const extractedDate = extractDateFromLine(line, currentSectionYear, currentSectionMonth);
+    if (extractedDate) {
+      const isoDate = extractedDate.isoDate;
+      const rawDateStr = extractedDate.rawDateStr;
 
-      const dateIdx = line.indexOf(dateBr);
-      const afterDate = line.substring(dateIdx + dateBr.length).trim();
+      const dateIdx = line.indexOf(rawDateStr);
+      const afterDate = dateIdx >= 0 ? line.substring(dateIdx + rawDateStr.length).trim() : line;
 
       // Find all BR float tokens e.g. 72,731 or 251.753,000 or 512,02 or 7,040 or 2,415
       const brNumberMatches = line.match(/\b\d{1,3}(?:\.\d{3})*,\d{1,3}\b/g) || [];
@@ -571,6 +791,11 @@ export async function parseFuelConsumptionTextContent(
     }
   }
 
+  // Calculate distinct extracted months
+  const distinctMonths = Array.from(
+    new Set(rawRecords.map((r) => r.data.substring(0, 7)))
+  ).sort();
+
   // Calculate SHA-256 hashes for all parsed records
   const recordsWithHash = await Promise.all(
     rawRecords.map(async (r) => {
@@ -594,24 +819,225 @@ export async function parseFuelConsumptionTextContent(
   );
 
   return {
-    periodo,
+    periodo: distinctMonths.length > 1 ? `${distinctMonths[0]} até ${distinctMonths[distinctMonths.length - 1]}` : filePeriodo,
     records: recordsWithHash,
     rawText: fullText,
     totalExtracted: recordsWithHash.length,
+    extractedMonths: distinctMonths,
+  };
+}
+
+/**
+ * Spreadsheet parser (.xlsx, .xls, .csv)
+ */
+export async function parseSpreadsheetFile(
+  file: File,
+  empresa_id: string
+): Promise<ParsedPdfResult> {
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: "array", cellDates: true });
+
+  let customMappings: AccountMapping[] = [];
+  try {
+    customMappings = await AccountMappingService.getAccountMappings(empresa_id);
+  } catch (e) {
+    // ignore
+  }
+
+  const rawRecords: any[] = [];
+  const plateRegex = /\b([A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4}|[A-Z]{3}\s+[0-9][A-Z0-9][0-9]{2})\b/i;
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+    if (!rows || rows.length === 0) continue;
+
+    // Identify header row
+    let headerRowIdx = -1;
+    let colIndices: Record<string, number> = {};
+
+    for (let r = 0; r < Math.min(15, rows.length); r++) {
+      const row = rows[r];
+      if (!Array.isArray(row)) continue;
+
+      const rowStr = row.map((c) => String(c || "").toLowerCase()).join(" ");
+      if (
+        rowStr.includes("data") ||
+        rowStr.includes("dt.") ||
+        rowStr.includes("valor") ||
+        rowStr.includes("placa") ||
+        rowStr.includes("veiculo") ||
+        rowStr.includes("conta")
+      ) {
+        headerRowIdx = r;
+        row.forEach((cellVal, cIdx) => {
+          const col = String(cellVal || "").toLowerCase().trim();
+          if (col.includes("data") || col.includes("dt.") || col.includes("emissao") || col.includes("movto") || col.includes("periodo") || col.includes("competencia")) {
+            colIndices["data"] = cIdx;
+          } else if (col.includes("placa")) {
+            colIndices["placa"] = cIdx;
+          } else if (col.includes("veiculo") || col.includes("veículo") || col.includes("frota")) {
+            colIndices["veiculo"] = cIdx;
+          } else if (col.includes("conta") || col.includes("despesa") || col.includes("historico") || col.includes("histórico")) {
+            colIndices["conta"] = cIdx;
+          } else if (col.includes("valor") || col.includes("vlr") || col.includes("total") || col.includes("liquido") || col.includes("líquido")) {
+            colIndices["valor"] = cIdx;
+          } else if (col.includes("qtd") || col.includes("quantidade") || col.includes("litros") || col.includes("volume")) {
+            colIndices["quantidade"] = cIdx;
+          } else if (col.includes("fornecedor") || col.includes("posto") || col.includes("estabelecimento") || col.includes("razao") || col.includes("razão")) {
+            colIndices["fornecedor"] = cIdx;
+          } else if (col.includes("doc") || col.includes("documento") || col.includes("nota") || col.includes("nf")) {
+            colIndices["documento"] = cIdx;
+          } else if (col.includes("hodometro") || col.includes("hodômetro") || col.includes("km")) {
+            colIndices["hodometro"] = cIdx;
+          }
+        });
+        break;
+      }
+    }
+
+    const startRow = headerRowIdx >= 0 ? headerRowIdx + 1 : 0;
+
+    for (let r = startRow; r < rows.length; r++) {
+      const row = rows[r];
+      if (!Array.isArray(row) || row.length === 0) continue;
+
+      const rawDate = colIndices["data"] !== undefined ? row[colIndices["data"]] : row[0];
+      const rawPlaca = colIndices["placa"] !== undefined ? row[colIndices["placa"]] : colIndices["veiculo"] !== undefined ? row[colIndices["veiculo"]] : row[1];
+      const rawConta = colIndices["conta"] !== undefined ? row[colIndices["conta"]] : row[2];
+      const rawValor = colIndices["valor"] !== undefined ? row[colIndices["valor"]] : row[row.length - 1];
+      const rawQtd = colIndices["quantidade"] !== undefined ? row[colIndices["quantidade"]] : 1;
+      const rawForn = colIndices["fornecedor"] !== undefined ? row[colIndices["fornecedor"]] : "";
+      const rawDoc = colIndices["documento"] !== undefined ? row[colIndices["documento"]] : "";
+      const rawHod = colIndices["hodometro"] !== undefined ? row[colIndices["hodometro"]] : undefined;
+
+      // Extract date
+      let isoDate = "";
+      if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+        const y = rawDate.getFullYear();
+        const m = String(rawDate.getMonth() + 1).padStart(2, "0");
+        const d = String(rawDate.getDate()).padStart(2, "0");
+        isoDate = `${y}-${m}-${d}`;
+      } else if (typeof rawDate === "number" && rawDate > 25000 && rawDate < 70000) {
+        const dateObj = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
+        const y = dateObj.getUTCFullYear();
+        const m = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(dateObj.getUTCDate()).padStart(2, "0");
+        isoDate = `${y}-${m}-${d}`;
+      } else {
+        const dateExt = extractDateFromLine(String(rawDate || ""));
+        if (dateExt) {
+          isoDate = dateExt.isoDate;
+        }
+      }
+
+      if (!isoDate) continue;
+
+      // Parse valor
+      let valor = 0;
+      if (typeof rawValor === "number") {
+        valor = rawValor;
+      } else {
+        valor = parseBrFloat(String(rawValor || "0"));
+      }
+
+      if (valor === 0) continue;
+
+      // Extract plate
+      let placaStr = String(rawPlaca || "").trim().toUpperCase();
+      const pMatch = placaStr.match(plateRegex);
+      if (pMatch) {
+        placaStr = pMatch[1].replace(/[\s-]/g, "");
+      } else if (!placaStr || placaStr.length < 3) {
+        placaStr = "FROTA-GERAL";
+      }
+
+      const contaStr = String(rawConta || "Despesa Geral").trim();
+      const fornStr = String(rawForn || "Fornecedor").trim();
+      const docStr = String(rawDoc || "").trim();
+      const qtdNum = typeof rawQtd === "number" ? rawQtd : parseBrFloat(String(rawQtd || "1")) || 1;
+      const hodNum = typeof rawHod === "number" ? Math.round(rawHod) : rawHod ? Math.round(parseBrFloat(String(rawHod))) : undefined;
+
+      const tipo_registro: RecordCategory = categorizeAccount(contaStr, `${contaStr} ${fornStr}`, customMappings);
+
+      rawRecords.push({
+        tipo_registro,
+        placa: placaStr,
+        numero_frota: undefined,
+        data: isoDate,
+        conta: contaStr,
+        descricao_conta: `${contaStr} - ${fornStr}${docStr ? ` (Doc: ${docStr})` : ""}`,
+        quantidade: qtdNum,
+        valor: valor,
+        hodometro: hodNum,
+        fornecedor: fornStr,
+        documento: docStr || undefined,
+        numero_controle: docStr || undefined,
+        observacoes: `Importado de planilha ${file.name}`,
+      });
+    }
+  }
+
+  const distinctMonths = Array.from(
+    new Set(rawRecords.map((r) => r.data.substring(0, 7)))
+  ).sort();
+
+  const recordsWithHash = await Promise.all(
+    rawRecords.map(async (r) => {
+      const hash = await generateRecordHash({
+        empresa_id,
+        placa: r.placa,
+        conta: r.conta,
+        data: r.data,
+        valor: r.valor,
+        quantidade: r.quantidade,
+        fornecedor: r.fornecedor,
+        documento: r.documento,
+        hodometro: r.hodometro,
+      });
+
+      return {
+        ...r,
+        hash_registro: hash,
+      };
+    })
+  );
+
+  return {
+    periodo: distinctMonths.length > 1 ? `${distinctMonths[0]} até ${distinctMonths[distinctMonths.length - 1]}` : distinctMonths[0] || "Atual",
+    records: recordsWithHash,
+    rawText: `Planilha com ${recordsWithHash.length} registros`,
+    totalExtracted: recordsWithHash.length,
+    extractedMonths: distinctMonths,
   };
 }
 
 function parseBrFloat(strVal: string): number {
   if (!strVal) return 0;
-  if (strVal.includes(",")) {
-    const clean = strVal.replace(/\./g, "").replace(",", ".");
-    return parseFloat(clean) || 0;
+  if (typeof strVal === "number") return strVal;
+  const s = String(strVal).trim().replace(/R\$\s*/gi, "").replace(/[$]/g, "");
+  if (s.includes(",") && s.includes(".")) {
+    // Check if dot is thousand separator or decimal
+    if (s.indexOf(".") < s.indexOf(",")) {
+      // 1.234,56
+      return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+    } else {
+      // 1,234.56
+      return parseFloat(s.replace(/,/g, "")) || 0;
+    }
   }
-  return parseFloat(strVal) || 0;
+  if (s.includes(",")) {
+    return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+  }
+  return parseFloat(s) || 0;
 }
 
-function convertBrDateToIso(brDate: string): string {
+export function convertBrDateToIso(brDate: string): string {
   if (!brDate) return new Date().toISOString().split("T")[0];
+  const dateExt = extractDateFromLine(brDate);
+  if (dateExt) return dateExt.isoDate;
+
   const clean = brDate.trim().replace(/[\.\-]/g, "/");
   const parts = clean.split("/").filter(Boolean);
 
@@ -636,3 +1062,4 @@ function convertBrDateToIso(brDate: string): string {
   }
   return new Date().toISOString().split("T")[0];
 }
+
