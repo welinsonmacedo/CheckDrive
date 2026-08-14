@@ -15,6 +15,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  LabelList,
 } from "recharts";
 import {
   FileSpreadsheet,
@@ -705,22 +706,21 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
 
       {reportViewTab === "ranking" && (
         <ReportRankingTab
-          vehicleStats={vehicleStats}
-          supplierStats={supplierStats}
+          records={records}
           onSelectVehicle={(key) => setSelectedVehicleDetailKey(key)}
         />
       )}
 
       {reportViewTab === "veiculo_a_veiculo" && (
         <ReportVeiculoTab
-          vehicleStats={vehicleStats}
+          records={records}
           onSelectVehicle={(key) => setSelectedVehicleDetailKey(key)}
         />
       )}
 
       {reportViewTab === "cpk" && (
         <ReportCpkTab
-          vehicleStats={vehicleStats}
+          records={records}
           onSelectVehicle={(key) => setSelectedVehicleDetailKey(key)}
         />
       )}
@@ -913,6 +913,18 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
                         ]}
                       />
                       <Bar dataKey="valor" fill="#3b82f6" radius={[8, 8, 0, 0]}>
+                        <LabelList
+                          dataKey="valor"
+                          position="top"
+                          formatter={(val: any) =>
+                            metrica.includes("valor")
+                              ? Number(val) >= 1000
+                                ? `R$ ${(Number(val) / 1000).toFixed(1)}k`
+                                : `R$ ${Number(val).toFixed(0)}`
+                              : Number(val).toLocaleString("pt-BR")
+                          }
+                          style={{ fill: "#1e293b", fontSize: "10px", fontWeight: "bold" }}
+                        />
                         {aggregatedData.slice(0, 15).map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
@@ -957,7 +969,20 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
                           metrica.replace("_", " "),
                         ]}
                       />
-                      <Line type="monotone" dataKey="valor" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="valor" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }}>
+                        <LabelList
+                          dataKey="valor"
+                          position="top"
+                          formatter={(val: any) =>
+                            metrica.includes("valor")
+                              ? Number(val) >= 1000
+                                ? `R$ ${(Number(val) / 1000).toFixed(1)}k`
+                                : `R$ ${Number(val).toFixed(0)}`
+                              : Number(val).toLocaleString("pt-BR")
+                          }
+                          style={{ fill: "#1e293b", fontSize: "10px", fontWeight: "bold" }}
+                        />
+                      </Line>
                     </LineChart>
                   ) : (
                     <AreaChart data={aggregatedData.slice(0, 15)} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
@@ -975,7 +1000,20 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
                           metrica.replace("_", " "),
                         ]}
                       />
-                      <Area type="monotone" dataKey="valor" stroke="#3b82f6" strokeWidth={3} fill="#bfdbfe" fillOpacity={0.5} dot={{ r: 4, fill: "#3b82f6" }} />
+                      <Area type="monotone" dataKey="valor" stroke="#3b82f6" strokeWidth={3} fill="#bfdbfe" fillOpacity={0.5} dot={{ r: 4, fill: "#3b82f6" }}>
+                        <LabelList
+                          dataKey="valor"
+                          position="top"
+                          formatter={(val: any) =>
+                            metrica.includes("valor")
+                              ? Number(val) >= 1000
+                                ? `R$ ${(Number(val) / 1000).toFixed(1)}k`
+                                : `R$ ${Number(val).toFixed(0)}`
+                              : Number(val).toLocaleString("pt-BR")
+                          }
+                          style={{ fill: "#1e293b", fontSize: "10px", fontWeight: "bold" }}
+                        />
+                      </Area>
                     </AreaChart>
                   )}
                 </ResponsiveContainer>

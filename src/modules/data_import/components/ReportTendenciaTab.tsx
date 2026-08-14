@@ -32,6 +32,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  LabelList,
 } from "recharts";
 import { ImportRecord } from "../types";
 import {
@@ -1021,12 +1022,31 @@ export default function ReportTendenciaTab({
                       strokeWidth={3}
                       fillOpacity={1}
                       fill="url(#colorTrend)"
-                      dot={chartData.length <= 31 ? { r: 3, fill: "#8b5cf6" } : false}
+                      dot={chartData.length <= 31 ? { r: 4, fill: "#8b5cf6" } : false}
                       activeDot={{ r: 6 }}
-                    />
+                    >
+                      <LabelList
+                        dataKey="displayVal"
+                        position="top"
+                        formatter={(val: any) =>
+                          metricMode === "valor" || metricMode === "ticket_medio"
+                            ? val >= 1000
+                              ? `R$ ${(val / 1000).toFixed(1)}k`
+                              : `R$ ${Number(val).toFixed(0)}`
+                            : metricMode === "preco_medio" || metricMode === "cpk"
+                            ? `R$ ${Number(val).toFixed(2)}`
+                            : metricMode === "litros"
+                            ? val >= 1000
+                              ? `${(val / 1000).toFixed(1)}k L`
+                              : `${val} L`
+                            : `${val}`
+                        }
+                        style={{ fill: "#4c1d95", fontSize: 10, fontWeight: 800 }}
+                      />
+                    </Area>
                   </AreaChart>
                 ) : chartType === "line" ? (
-                  <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
+                  <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis
                       dataKey="name"
@@ -1083,10 +1103,29 @@ export default function ReportTendenciaTab({
                       strokeWidth={3}
                       dot={chartData.length <= 31 ? { r: 4, fill: "#7c3aed" } : false}
                       activeDot={{ r: 7 }}
-                    />
+                    >
+                      <LabelList
+                        dataKey="displayVal"
+                        position="top"
+                        formatter={(val: any) =>
+                          metricMode === "valor" || metricMode === "ticket_medio"
+                            ? val >= 1000
+                              ? `R$ ${(val / 1000).toFixed(1)}k`
+                              : `R$ ${Number(val).toFixed(0)}`
+                            : metricMode === "preco_medio" || metricMode === "cpk"
+                            ? `R$ ${Number(val).toFixed(2)}`
+                            : metricMode === "litros"
+                            ? val >= 1000
+                              ? `${(val / 1000).toFixed(1)}k L`
+                              : `${val} L`
+                            : `${val}`
+                        }
+                        style={{ fill: "#4c1d95", fontSize: 10, fontWeight: 800 }}
+                      />
+                    </Line>
                   </LineChart>
                 ) : (
-                  <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
+                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis
                       dataKey="name"
@@ -1136,7 +1175,26 @@ export default function ReportTendenciaTab({
                         return item?.fullName ? `${item.fullName}` : `${granularityName}: ${label}`;
                       }}
                     />
-                    <Bar dataKey="displayVal" fill="#8b5cf6" radius={[6, 6, 0, 0]} maxBarSize={45} />
+                    <Bar dataKey="displayVal" fill="#8b5cf6" radius={[6, 6, 0, 0]} maxBarSize={45}>
+                      <LabelList
+                        dataKey="displayVal"
+                        position="top"
+                        formatter={(val: any) =>
+                          metricMode === "valor" || metricMode === "ticket_medio"
+                            ? val >= 1000
+                              ? `R$ ${(val / 1000).toFixed(1)}k`
+                              : `R$ ${Number(val).toFixed(0)}`
+                            : metricMode === "preco_medio" || metricMode === "cpk"
+                            ? `R$ ${Number(val).toFixed(2)}`
+                            : metricMode === "litros"
+                            ? val >= 1000
+                              ? `${(val / 1000).toFixed(1)}k L`
+                              : `${val} L`
+                            : `${val}`
+                        }
+                        style={{ fill: "#1e1b4b", fontSize: 10, fontWeight: 800 }}
+                      />
+                    </Bar>
                   </BarChart>
                 )}
               </ResponsiveContainer>
