@@ -1442,22 +1442,146 @@ export default function SharedReportPage() {
 
       {/* TAB 3: TENDÊNCIA TEMPORAL */}
       {reportViewTab === "tendencia" && (
-        <ReportTendenciaTab
-          records={records}
-          tipoImportacaoFilter={tipoImportacaoFilter}
-          categoryFilter={categoryFilter}
-          placaFilter={placaFilter}
-          fornecedorFilter={fornecedorFilter}
-          onResetFilters={() => {
-            setCategoryFilter("Todas");
-            setTipoImportacaoFilter("Todas");
-            setSelectedPeriod("0");
-            setPlacaFilter("");
-            setFornecedorFilter("");
-          }}
-          accountMappings={accountMappings}
-        />
+        <div className="space-y-6">
+          {/* Trend KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 bg-white rounded-2xl border border-zinc-200 shadow-xs">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Mês com Maior Custo</span>
+              <p className="text-lg font-black text-rose-600 mt-1">
+                {monthlyTrendData.length > 0
+                  ? [...monthlyTrendData].sort((a, b) => b.totalValor - a.totalValor)[0].monthLabel
+                  : "-"}
+              </p>
+              <span className="text-xs font-bold text-zinc-700">
+                {monthlyTrendData.length > 0
+                  ? formatCurrency([...monthlyTrendData].sort((a, b) => b.totalValor - a.totalValor)[0].totalValor)
+                  : "R$ 0,00"}
+              </span>
+            </div>
 
+            <div className="p-4 bg-white rounded-2xl border border-zinc-200 shadow-xs">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Mês mais Econômico</span>
+              <p className="text-lg font-black text-emerald-600 mt-1">
+                {monthlyTrendData.length > 0
+                  ? [...monthlyTrendData].sort((a, b) => a.totalValor - b.totalValor)[0].monthLabel
+                  : "-"}
+              </p>
+              <span className="text-xs font-bold text-zinc-700">
+                {monthlyTrendData.length > 0
+                  ? formatCurrency([...monthlyTrendData].sort((a, b) => a.totalValor - b.totalValor)[0].totalValor)
+                  : "R$ 0,00"}
+              </span>
+            </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-zinc-200 shadow-xs">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Média Mensal</span>
+              <p className="text-lg font-black text-indigo-600 mt-1">
+                {formatCurrency(
+                  monthlyTrendData.length > 0
+                    ? monthlyTrendData.reduce((acc, m) => acc + m.totalValor, 0) / monthlyTrendData.length
+                    : 0
+                )}
+              </p>
+              <span className="text-xs font-bold text-zinc-500">
+                Baseado em {monthlyTrendData.length} mês(es)
+              </span>
+            </div>
+
+            <div className="p-4 bg-white rounded-2xl border border-zinc-200 shadow-xs">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Variação no Último Mês</span>
+              <div className="flex items-center gap-1 mt-1">
+                {monthlyTrendData.length > 1 ? (
+                  monthlyTrendData[monthlyTrendData.length - 1].variationPct >= 0 ? (
+                    <>
+                      <ArrowUpRight className="w-5 h-5 text-rose-600" />
+                      <span className="text-lg font-black text-rose-600">
+                        +{monthlyTrendData[monthlyTrendData.length - 1].variationPct.toFixed(1)}%
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDownRight className="w-5 h-5 text-emerald-600" />
+                      <span className="text-lg font-black text-emerald-600">
+                        {monthlyTrendData[monthlyTrendData.length - 1].variationPct.toFixed(1)}%
+                      </span>
+                    </>
+                  )
+                ) : (
+                  <span className="text-lg font-black text-zinc-400">0%</span>
+                )}
+              </div>
+              <span className="text-xs font-bold text-zinc-500">Em relação ao mês anterior</span>
+            </div>
+          </div>
+
+          {/* Trend Area Chart */}
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <div>
+                <h3 className="font-black text-zinc-900 text-base">Evolução Temporal de Custos (R$)</h3>
+                <p className="text-xs text-zinc-500">Acompanhamento dos gastos mês a mês no período selecionado.</p>
+              </div>
+            </div>
+
+            <div className="h-80 w-full pt-4">
+              {monthlyTrendData.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-zinc-400 text-xs">
+                  Nenhum dado com data identificada para gerar a tendência temporal.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthlyTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="monthLabel" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
+                    <Tooltip
+                      formatter={(val: any) => [formatCurrency(Number(val)), "Custo Total"]}
+                      labelFormatter={(lbl) => `Mês: ${lbl}`}
+                    />
+                    <Area type="monotone" dataKey="totalValor" stroke="#2563eb" fill="#3b82f6" fillOpacity={0.2} strokeWidth={3} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Monthly Evolution Table */}
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
+            <h3 className="font-black text-zinc-900 text-base border-b border-zinc-100 pb-3">Tabela de Evolução Mensal</h3>
+            <div className="overflow-x-auto rounded-2xl border border-zinc-200">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-zinc-100 text-zinc-700 font-bold border-b border-zinc-200">
+                    <th className="p-3">Mês / Ano</th>
+                    <th className="p-3 text-right">Lançamentos</th>
+                    <th className="p-3 text-right">Volume / Qtd Total</th>
+                    <th className="p-3 text-right">Valor Total (R$)</th>
+                    <th className="p-3 text-right">Variação %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {monthlyTrendData.map((m) => (
+                    <tr key={m.monthKey} className="hover:bg-zinc-50 font-medium">
+                      <td className="p-3 font-bold text-zinc-900">{m.monthLabel}</td>
+                      <td className="p-3 text-right text-zinc-600">{m.count}</td>
+                      <td className="p-3 text-right text-zinc-600">{m.totalLiters.toFixed(1)} L</td>
+                      <td className="p-3 text-right font-black text-zinc-900">{formatCurrency(m.totalValor)}</td>
+                      <td className="p-3 text-right font-bold">
+                        {m.variationPct > 0 ? (
+                          <span className="text-rose-600">+{m.variationPct.toFixed(1)}%</span>
+                        ) : m.variationPct < 0 ? (
+                          <span className="text-emerald-600">{m.variationPct.toFixed(1)}%</span>
+                        ) : (
+                          <span className="text-zinc-400">0.0%</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* TAB 4: DETALHAMENTO INTERATIVO DOS REGISTROS (TABELAS) */}

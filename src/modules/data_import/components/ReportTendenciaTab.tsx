@@ -103,7 +103,16 @@ export default function ReportTendenciaTab({
   const [selectedPostoViewMode, setSelectedPostoViewMode] = useState<"all_multi" | "media_only" | string>("all_multi");
   const [visiblePostoKeys, setVisiblePostoKeys] = useState<Set<string>>(new Set());
   const [postoSearchQuery, setPostoSearchQuery] = useState<string>("");
-  const [postoSortBy, setPostoSortBy] = useState<"volume" | "preco_asc" | "preco_desc" | "valor">("volume");
+  const [postoSortBy, setPostoSortBy] = useState<"volume" | "preco_asc" | "preco_desc" | "valor" | "lancamentos" | "ticket_medio">("volume");
+
+  // Sync sorting with the selected metric
+  useEffect(() => {
+    if (metricMode === "valor") setPostoSortBy("valor");
+    else if (metricMode === "litros") setPostoSortBy("volume");
+    else if (metricMode === "preco_medio") setPostoSortBy("preco_asc");
+    else if (metricMode === "lancamentos") setPostoSortBy("lancamentos");
+    else if (metricMode === "ticket_medio") setPostoSortBy("ticket_medio");
+  }, [metricMode]);
 
   // Available distinct months & years from records
   const { availableYears, availableMonths, distinctMonthCount } = useMemo(() => {
@@ -367,6 +376,10 @@ export default function ReportTendenciaTab({
       list.sort((a, b) => b.precoMedio - a.precoMedio);
     } else if (postoSortBy === "valor") {
       list.sort((a, b) => b.totalValor - a.totalValor);
+    } else if (postoSortBy === "lancamentos") {
+      list.sort((a, b) => b.count - a.count);
+    } else if (postoSortBy === "ticket_medio") {
+      list.sort((a, b) => (b.count > 0 ? b.totalValor / b.count : 0) - (a.count > 0 ? a.totalValor / a.count : 0));
     }
     return list;
   }, [allPostosSummary, postoSearchQuery, postoSortBy]);
@@ -1541,17 +1554,17 @@ export default function ReportTendenciaTab({
             </div>
           </div>
 
-          {/* Dedicated Gas Stations (Postos) Pricing & Performance Section when in preco_medio mode */}
-          {metricMode === "preco_medio" && allPostosSummary.length > 0 && (
+          {/* Dedicated Gas Stations (Postos) Pricing & Performance Section */}
+          {allPostosSummary.length > 0 && (
             <div className="bg-white p-6 rounded-3xl border border-zinc-200/80 shadow-sm space-y-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-100 pb-4">
                 <div>
                   <h3 className="font-extrabold text-zinc-900 text-base flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-emerald-600" />
-                    Comparativo e Ranking de Preço Médio por Posto / Fornecedor
+                    Comparativo e Ranking por Posto / Fornecedor
                   </h3>
                   <p className="text-xs text-zinc-500 mt-0.5">
-                    Preço médio ponderado praticado em cada posto com volume abastecido e variação vs média geral da frota.
+                    Análise detalhada de performance, volumes e custos praticados em cada posto/fornecedor.
                   </p>
                 </div>
 
@@ -1576,6 +1589,8 @@ export default function ReportTendenciaTab({
                     <option value="preco_asc">Menor Preço (Mais Barato)</option>
                     <option value="preco_desc">Maior Preço (Mais Caro)</option>
                     <option value="valor">Maior Gasto Total (R$)</option>
+                    <option value="lancamentos">Mais Abastecimentos</option>
+                    <option value="ticket_medio">Maior Ticket Médio</option>
                   </select>
                 </div>
               </div>
