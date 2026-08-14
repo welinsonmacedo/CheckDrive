@@ -169,3 +169,25 @@ export function calculateVehicleStats(records: ImportRecord[]) {
     topCPK,
   };
 }
+
+export function formatCurrency(val: number): string {
+  return (val || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+export function calculateSupplierStats(records: ImportRecord[], tipoImportacaoFilter: string = "Todas") {
+  const map: Record<string, { key: string; name: string; totalCost: number; totalLiters: number; count: number }> = {};
+  records.forEach((r) => {
+    const rawName = r.fornecedor?.trim() || "Não Informado";
+    const key = rawName.toUpperCase();
+    if (!map[key]) {
+      map[key] = { key, name: rawName, totalCost: 0, totalLiters: 0, count: 0 };
+    }
+    map[key].count += 1;
+    map[key].totalLiters += Number(r.quantidade) || 0;
+    map[key].totalCost += getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
+  });
+  return {
+    allSuppliers: Object.values(map),
+  };
+}
+

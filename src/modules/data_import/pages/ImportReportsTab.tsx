@@ -1,64 +1,7 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { exportReportToExcel, exportReportToPDF } from "../utils/exportReportUtils";
-import {
-  calculateVehicleStats,
-  getRecordImportType,
-  getRecordFinancialValue,
-  getImportTypeLabel,
-  VehicleReportStat,
-} from "../utils/vehicleStatsUtils";
-
-import {
-  parseRecordMonthYear,
-  matchesPeriod,
-  getPeriodLabel as getPeriodLabelUtil,
-  MONTH_NAMES_PT,
-} from "../utils/dateUtils";
-
-export { getRecordImportType, getImportTypeLabel, parseRecordMonthYear };
-import {
-  FileSpreadsheet,
-  PieChart as PieChartIcon,
-  BarChart3,
-  TrendingUp,
-  TrendingDown,
-  Truck,
-  Fuel,
-  Building2,
-  Plus,
-  Trash2,
-  Download,
-  Printer,
-  Sparkles,
-  Filter,
-  Check,
-  Search,
-  ChevronDown,
-  ChevronRight,
-  Layers,
-  X,
-  FileText,
-  DollarSign,
-  Hash,
-  Calculator,
-  RefreshCw,
-  Flame,
-  Award,
-  Navigation,
-  Info,
-  ArrowUpRight,
-  ArrowDownRight,
-  ArrowUpDown,
-  RotateCcw,
-} from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   BarChart,
   Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
@@ -66,2771 +9,550 @@ import {
   Line,
   AreaChart,
   Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   Legend,
-  LabelList,
+  ResponsiveContainer,
 } from "recharts";
-import { ImportRecord, ReportMold, RecordCategory } from "../types";
+import {
+  FileSpreadsheet,
+  Printer,
+  Download,
+  Share2,
+  Plus,
+  Trash2,
+  Check,
+  Search,
+  Filter,
+  BarChart3,
+  PieChart as PieChartIcon,
+  LineChart as LineChartIcon,
+  TrendingUp,
+  Table as TableIcon,
+  Sparkles,
+  RefreshCw,
+  Fuel,
+  DollarSign,
+  Layers,
+  Award,
+  Truck,
+  Building2,
+  Calculator,
+  X,
+  Eye,
+} from "lucide-react";
+import { ImportRecord } from "../types";
 import { ImportService } from "../services/importService";
+import {
+  parseRecordMonthYear,
+  matchesPeriod,
+  MONTH_NAMES_PT,
+} from "../utils/dateUtils";
+import {
+  calculateVehicleStats,
+  calculateSupplierStats,
+  getRecordFinancialValue,
+  getRecordImportType,
+  formatCurrency,
+  VehicleReportStat,
+} from "../utils/vehicleStatsUtils";
+import { exportReportToExcel, exportReportToPDF } from "../utils/exportReportUtils";
 import ShareReportModal from "../components/ShareReportModal";
-import { Share2 } from "lucide-react";
+
+import ReportTendenciaTab from "../components/ReportTendenciaTab";
+import ReportRankingTab from "../components/ReportRankingTab";
+import ReportCpkTab from "../components/ReportCpkTab";
+import ReportVeiculoTab from "../components/ReportVeiculoTab";
+import ReportFilterToolbar from "../components/ReportFilterToolbar";
 
 interface Props {
+  records?: ImportRecord[];
   companyId: string;
 }
 
-const CATEGORIES: (RecordCategory | "Todas")[] = [
+export interface ReportMold {
+  id: string;
+  name: string;
+  description: string;
+  categoryFilter: string;
+  tipoImportacaoFilter?: string;
+  periodFilter: string;
+  agruparPor: "categoria" | "tipo_importacao" | "placa" | "fornecedor" | "mes" | "status";
+  metrica: "soma_valor" | "quantidade" | "media_valor" | "soma_quantidade";
+  tipoGrafico: "bar" | "pie" | "line" | "area";
+  viewMode: "grafico" | "tabela" | "ambos";
+  createdAt: string;
+}
+
+const CATEGORIES = [
   "Todas",
   "Combustível",
-  "Gasolina",
-  "Gasolina Administrativo",
   "Diesel",
-  "Diesel Terceiro",
+  "Gasolina",
   "Arla",
-  "Arla Estoque",
-  "Estoque",
-  "Lava-jato",
-  "Pneus Novos",
-  "Recapagem",
-  "Pneus",
-  "Rastreamento",
-  "Freios",
-  "Elétrica",
-  "Pedágio",
-  "Multa",
-  "Seguro",
   "Manutenção",
-  "Lubrificantes",
   "Peças",
+  "Pneus",
+  "Pedágio",
+  "Serviços",
+  "Seguro",
+  "Lavagem",
   "Outros",
 ];
 
 const COLORS = [
   "#2563eb",
-  "#10b981",
-  "#f59e0b",
-  "#ef4444",
-  "#8b5cf6",
-  "#ec4899",
-  "#06b6d4",
-  "#6366f1",
-  "#84cc16",
-  "#d97706",
+  "#7c3aed",
+  "#db2777",
+  "#ea580c",
+  "#ca8a04",
+  "#16a34a",
+  "#0891b2",
+  "#4f46e5",
+  "#9333ea",
+  "#c026d3",
 ];
 
-export default function ImportReportsTab({ companyId }: Props) {
-  const [loading, setLoading] = useState(true);
-  const [records, setRecords] = useState<ImportRecord[]>([]);
-  const [molds, setMolds] = useState<ReportMold[]>([]);
-  const [activeMoldId, setActiveMoldId] = useState<string | null>("mold_default_1");
+export default function ImportReportsTab({ records: initialRecords, companyId }: Props) {
+  const [internalRecords, setInternalRecords] = useState<ImportRecord[]>(initialRecords || []);
+  const [loadingRecords, setLoadingRecords] = useState(!initialRecords || initialRecords.length === 0);
 
-  // Filter & Config state
-  const [reportViewTab, setReportViewTab] = useState<"ranking" | "analitico" | "tendencia" | "tabelas" | "veiculo_a_veiculo" | "cpk">("ranking");
-  const [categoryFilter, setCategoryFilter] = useState<string>("Todas");
-  const [tipoImportacaoFilter, setTipoImportacaoFilter] = useState<string>("Todas"); // "Todas" | "combustivel_gfv" | "receitas_despesas"
-  const [selectedPeriod, setSelectedPeriod] = useState<string>("0"); // "0", "30", "60", "90", "365", "m:01/2026", "custom", etc.
-  const [customMonth, setCustomMonth] = useState<string>(""); // "YYYY-MM"
-  const [placaFilter, setPlacaFilter] = useState<string>("");
-  const [fornecedorFilter, setFornecedorFilter] = useState<string>("");
-  const [agruparPor, setAgruparPor] = useState<"categoria" | "tipo_importacao" | "placa" | "fornecedor" | "mes" | "status">("categoria");
+  useEffect(() => {
+    if (initialRecords && initialRecords.length > 0) {
+      setInternalRecords(initialRecords);
+      setLoadingRecords(false);
+    } else {
+      setLoadingRecords(true);
+      ImportService.getImportRecords(companyId)
+        .then((data) => setInternalRecords(data || []))
+        .catch((err) => console.error("Error loading import records:", err))
+        .finally(() => setLoadingRecords(false));
+    }
+  }, [initialRecords, companyId]);
+
+  const records = internalRecords;
+
+  // Navigation tab
+  const [reportViewTab, setReportViewTab] = useState<
+    "analitico" | "ranking" | "tendencia" | "tabelas" | "veiculo_a_veiculo" | "cpk"
+  >("analitico");
+
+  // Filters
+  const [categoryFilter, setCategoryFilter] = useState("Todas");
+  const [tipoImportacaoFilter, setTipoImportacaoFilter] = useState("Todas");
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("0");
+  const [customMonth, setCustomMonth] = useState<string>("");
+  const [placaFilter, setPlacaFilter] = useState("");
+  const [fornecedorFilter, setFornecedorFilter] = useState("");
+  const [agruparPor, setAgruparPor] = useState<
+    "categoria" | "tipo_importacao" | "placa" | "fornecedor" | "mes" | "status"
+  >("categoria");
   const [metrica, setMetrica] = useState<"soma_valor" | "quantidade" | "media_valor" | "soma_quantidade">("soma_valor");
-  const [tipoGrafico, setTipoGrafico] = useState<"bar" | "pie" | "line" | "area" | "table">("bar");
-  const [viewMode, setViewMode] = useState<"agrupado" | "detalhado">("agrupado");
-  const [tableSearch, setTableSearch] = useState<string>("");
+  const [tipoGrafico, setTipoGrafico] = useState<"bar" | "pie" | "line" | "area">("bar");
+  const [viewMode, setViewMode] = useState<"grafico" | "tabela" | "ambos">("ambos");
 
-  // CPK Report State
-  const [cpkSearch, setCpkSearch] = useState<string>("");
-  const [cpkFilterRange, setCpkFilterRange] = useState<"todos" | "economicos" | "medios" | "elevados" | "sem_km">("todos");
-  const [cpkSortOrder, setCpkSortOrder] = useState<"cpk_asc" | "cpk_desc" | "cost_desc" | "km_desc">("cpk_asc");
-
-  // Top 10 Vehicles Report State
-  const [topVehiclesTab, setTopVehiclesTab] = useState<"maior" | "menor" | "lado_a_lado" | "cpk">("lado_a_lado");
-  const [selectedVehicleDetailKey, setSelectedVehicleDetailKey] = useState<string | null>(null);
-
-  // Vehicle to Vehicle Table State
-  const [veiculoSearch, setVeiculoSearch] = useState<string>("");
-  const [veiculoSortField, setVeiculoSortField] = useState<"totalCost" | "cpk" | "kmRodadoCombustivel" | "totalLiters" | "viagensCount">("totalCost");
-  const [veiculoSortOrder, setVeiculoSortOrder] = useState<"asc" | "desc">("desc");
-
-  // Modal State
+  // Molds & persistence
+  const [savedMolds, setSavedMolds] = useState<ReportMold[]>([]);
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
   const [newMoldName, setNewMoldName] = useState("");
   const [newMoldDesc, setNewMoldDesc] = useState("");
   const [savingMold, setSavingMold] = useState(false);
+
+  // Modals & Exports
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedVehicleDetailKey, setSelectedVehicleDetailKey] = useState<string | null>(null);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
 
+  // Table tab specifics
+  const [tableSearch, setTableSearch] = useState("");
+  const [tableMode, setTableMode] = useState<"agrupado" | "todos_lancamentos">("agrupado");
+
+  // Load saved molds from localStorage
   useEffect(() => {
-    loadData();
+    try {
+      const stored = localStorage.getItem(`report_molds_${companyId}`);
+      if (stored) {
+        setSavedMolds(JSON.parse(stored));
+      } else {
+        const defaultMolds: ReportMold[] = [
+          {
+            id: "mold-1",
+            name: "Gastos por Categoria (Geral)",
+            description: "Distribuição consolidada de todas as despesas por categoria",
+            categoryFilter: "Todas",
+            tipoImportacaoFilter: "Todas",
+            periodFilter: "0",
+            agruparPor: "categoria",
+            metrica: "soma_valor",
+            tipoGrafico: "bar",
+            viewMode: "ambos",
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: "mold-2",
+            name: "Consumo de Combustível GFV",
+            description: "Análise de litragem e despesas de abastecimento da frota",
+            categoryFilter: "Combustível",
+            tipoImportacaoFilter: "combustivel_gfv",
+            periodFilter: "0",
+            agruparPor: "placa",
+            metrica: "soma_quantidade",
+            tipoGrafico: "bar",
+            viewMode: "ambos",
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: "mold-3",
+            name: "Receitas & Despesas SOFtran",
+            description: "Controle de notas e manutenções importadas do SOFtran",
+            categoryFilter: "Todas",
+            tipoImportacaoFilter: "receitas_despesas",
+            periodFilter: "0",
+            agruparPor: "categoria",
+            metrica: "soma_valor",
+            tipoGrafico: "pie",
+            viewMode: "ambos",
+            createdAt: new Date().toISOString(),
+          },
+        ];
+        setSavedMolds(defaultMolds);
+        localStorage.setItem(`report_molds_${companyId}`, JSON.stringify(defaultMolds));
+      }
+    } catch (e) {
+      console.error("Error loading report molds:", e);
+    }
   }, [companyId]);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [recs, mldList] = await Promise.all([
-        ImportService.getImportRecords(companyId),
-        ImportService.getReportMolds(companyId),
-      ]);
-      setRecords(recs);
-      setMolds(mldList);
-    } catch (e) {
-      console.error("Error loading report data:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Apply a mold's settings
-  const applyMold = (mold: ReportMold) => {
-    setActiveMoldId(mold.id);
-    if (mold.categoria_filtro) setCategoryFilter(mold.categoria_filtro);
-    if (mold.tipo_importacao_filtro) setTipoImportacaoFilter(mold.tipo_importacao_filtro);
-    if (mold.periodo_dias !== undefined) setSelectedPeriod(String(mold.periodo_dias));
-    if (mold.placa_filtro !== undefined) setPlacaFilter(mold.placa_filtro);
-    if (mold.fornecedor_filtro !== undefined) setFornecedorFilter(mold.fornecedor_filtro);
-    if (mold.agrupar_por) setAgruparPor(mold.agrupar_por);
-    if (mold.metrica) setMetrica(mold.metrica);
-    if (mold.tipo_grafico) setTipoGrafico(mold.tipo_grafico);
-
-    if (mold.id === "mold_default_top_high") {
-      setTopVehiclesTab("maior");
-    } else if (mold.id === "mold_default_top_low") {
-      setTopVehiclesTab("menor");
-    }
-  };
-
-  // Extract available months from records + standard recent months
-  const availableMonths = useMemo(() => {
-    const monthsSet = new Set<string>();
+  // Group available months by year
+  const monthsByYear = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
     records.forEach((r) => {
-      const parsed = parseRecordMonthYear(r.data);
+      const parsed = parseRecordMonthYear(r.data || (r as any).criado_em || (r as any).created_at);
       if (parsed) {
-        monthsSet.add(`${parsed.month}/${parsed.year}`);
+        if (!map[parsed.year]) map[parsed.year] = new Set();
+        map[parsed.year].add(`${parsed.month}/${parsed.year}`);
       }
     });
 
-    const currentYear = new Date().getFullYear();
-    for (let y = currentYear; y >= currentYear - 1; y--) {
-      for (let m = 12; m >= 1; m--) {
-        const mStr = String(m).padStart(2, "0");
-        monthsSet.add(`${mStr}/${y}`);
-      }
-    }
-
-    return Array.from(monthsSet).sort((a, b) => {
-      const [mA, yA] = a.split("/");
-      const [mB, yB] = b.split("/");
-      if (yA !== yB) return Number(yB) - Number(yA);
-      return Number(mB) - Number(mA);
-    });
+    const result: Record<string, string[]> = {};
+    Object.keys(map)
+      .sort((a, b) => Number(b) - Number(a))
+      .forEach((yr) => {
+        result[yr] = Array.from(map[yr]).sort((a, b) => {
+          const [mA] = a.split("/");
+          const [mB] = b.split("/");
+          return Number(mA) - Number(mB);
+        });
+      });
+    return result;
   }, [records]);
 
-  const monthsByYear = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    availableMonths.forEach((m) => {
-      const [, y] = m.split("/");
-      if (!map[y]) map[y] = [];
-      map[y].push(m);
-    });
-    return map;
-  }, [availableMonths]);
-
-  // Helper for period label
-  const getPeriodLabel = () => getPeriodLabelUtil(selectedPeriod, customMonth);
-
-  // Filtered records
+  // Main Filtered Records
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
-      // Category filter
-      if (categoryFilter !== "Todas" && r.tipo_registro !== categoryFilter) return false;
+      // 1. Categoria
+      if (categoryFilter !== "Todas" && r.tipo_registro !== categoryFilter) {
+        return false;
+      }
 
-      // Tipo de Importação filter
+      // 2. Tipo de Importação
       if (tipoImportacaoFilter !== "Todas") {
-        const rImpType = getRecordImportType(r);
-        if (rImpType !== tipoImportacaoFilter) return false;
+        const isGFV =
+          r.conta?.toLowerCase().includes("gfv") ||
+          r.descricao_conta?.toLowerCase().includes("combustivel") ||
+          r.tipo_registro === "Combustível" ||
+          r.tipo_registro === "Diesel" ||
+          r.tipo_registro === "Gasolina" ||
+          r.tipo_registro === "Arla";
+
+        if (tipoImportacaoFilter === "combustivel_gfv" && !isGFV) return false;
+        if (tipoImportacaoFilter === "receitas_despesas" && isGFV) return false;
       }
 
-      // Placa filter
+      // 3. Período
+      if (!matchesPeriod(r.data || (r as any).criado_em || (r as any).created_at, selectedPeriod, customMonth)) {
+        return false;
+      }
+
+      // 4. Placa
       if (placaFilter.trim()) {
-        const pTerm = placaFilter.toLowerCase().trim();
-        const rPlaca = (r.placa || "").toLowerCase();
-        const rFrota = (r.numero_frota || "").toLowerCase();
-        if (!rPlaca.includes(pTerm) && !rFrota.includes(pTerm)) return false;
+        const term = placaFilter.toLowerCase().trim();
+        const p = (r.placa || "").toLowerCase();
+        const f = (r.numero_frota || "").toLowerCase();
+        if (!p.includes(term) && !f.includes(term)) return false;
       }
 
-      // Fornecedor filter
+      // 5. Fornecedor
       if (fornecedorFilter.trim()) {
-        const fTerm = fornecedorFilter.toLowerCase().trim();
-        const rForn = (r.fornecedor || "").toLowerCase();
-        if (!rForn.includes(fTerm)) return false;
+        const term = fornecedorFilter.toLowerCase().trim();
+        const forn = (r.fornecedor || "").toLowerCase();
+        if (!forn.includes(term)) return false;
       }
-
-      // Period / Month filter
-      if (!matchesPeriod(r.data, selectedPeriod, customMonth)) return false;
 
       return true;
     });
-  }, [records, categoryFilter, tipoImportacaoFilter, placaFilter, fornecedorFilter, selectedPeriod, customMonth]);
+  }, [records, categoryFilter, tipoImportacaoFilter, selectedPeriod, customMonth, placaFilter, fornecedorFilter]);
 
-  // Aggregated data for grouping & charts
-  const aggregatedData = useMemo(() => {
-    const map: Record<
-      string,
-      { key: string; totalValor: number; totalQty: number; count: number; items: ImportRecord[] }
-    > = {};
+  // Overall metrics
+  const totalValorGeral = useMemo(() => {
+    return filteredRecords.reduce((acc, r) => {
+      return acc + getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
+    }, 0);
+  }, [filteredRecords, tipoImportacaoFilter]);
 
-    filteredRecords.forEach((r) => {
-      let groupKey = "Outros";
-      if (agruparPor === "categoria") groupKey = r.tipo_registro || "Sem Categoria";
-      else if (agruparPor === "tipo_importacao") {
-        const impType = getRecordImportType(r);
-        groupKey = getImportTypeLabel(impType);
-      }
-      else if (agruparPor === "placa") groupKey = r.placa ? `${r.placa}${r.numero_frota ? ` (${r.numero_frota})` : ""}` : "Sem Placa";
-      else if (agruparPor === "fornecedor") groupKey = r.fornecedor || "Não informado";
-      else if (agruparPor === "status") groupKey = r.status.toUpperCase();
-      else if (agruparPor === "mes") {
-        const parsed = parseRecordMonthYear(r.data);
-        if (parsed) {
-          groupKey = `${parsed.month}/${parsed.year}`; // MM/YYYY
-        } else {
-          groupKey = "Sem Data";
-        }
-      }
+  const totalQtyGeral = useMemo(() => {
+    return filteredRecords.reduce((acc, r) => acc + (Number(r.quantidade) || 0), 0);
+  }, [filteredRecords]);
 
-      if (!map[groupKey]) {
-        map[groupKey] = { key: groupKey, totalValor: 0, totalQty: 0, count: 0, items: [] };
-      }
+  const totalRegistrosCount = filteredRecords.length;
+  const mediaValorGeral = totalRegistrosCount > 0 ? totalValorGeral / totalRegistrosCount : 0;
 
-      const financialVal = getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
-      map[groupKey].totalValor += financialVal;
-      map[groupKey].totalQty += Number(r.quantidade) || 0;
-      map[groupKey].count += 1;
-      map[groupKey].items.push(r);
-    });
-
-    const totalSumAll = Object.values(map).reduce((sum, g) => sum + g.totalValor, 0);
-
-    return Object.values(map)
-      .map((g) => {
-        let metricValue = g.totalValor;
-        if (metrica === "quantidade") metricValue = g.count;
-        if (metrica === "media_valor") metricValue = g.count > 0 ? g.totalValor / g.count : 0;
-        if (metrica === "soma_quantidade") metricValue = g.totalQty;
-
-        const percent = totalSumAll > 0 ? (g.totalValor / totalSumAll) * 100 : 0;
-
-        return {
-          name: g.key,
-          valorTotal: g.totalValor,
-          totalQty: g.totalQty,
-          count: g.count,
-          mediaValor: g.count > 0 ? g.totalValor / g.count : 0,
-          value: Math.round(metricValue * 100) / 100,
-          percent: Math.round(percent * 10) / 10,
-        };
-      })
-      .sort((a, b) => b.value - a.value);
-  }, [filteredRecords, agruparPor, metrica]);
-
-  // Vehicle Stats for Top 10 Highest, Lowest & CPK Reports
+  // Vehicle and Supplier Stats
   const vehicleStats = useMemo(() => {
     return calculateVehicleStats(filteredRecords);
   }, [filteredRecords]);
 
+  const supplierStats = useMemo(() => {
+    return calculateSupplierStats(filteredRecords, tipoImportacaoFilter);
+  }, [filteredRecords, tipoImportacaoFilter]);
+
+  // Aggregated Data for Analytical & Charts
+  const aggregatedData = useMemo(() => {
+    const groups: Record<
+      string,
+      { count: number; totalVal: number; totalQty: number; name: string }
+    > = {};
+
+    filteredRecords.forEach((r) => {
+      let key = "Outros";
+
+      if (agruparPor === "categoria") {
+        key = r.tipo_registro || "Sem Categoria";
+      } else if (agruparPor === "tipo_importacao") {
+        const imp = getRecordImportType(r);
+        key = imp === "combustivel_gfv" ? "Combustível (GFV)" : "Receitas / Despesas (SOFtran)";
+      } else if (agruparPor === "placa") {
+        key = r.placa ? (r.numero_frota ? `${r.placa} (${r.numero_frota})` : r.placa) : "Sem Placa";
+      } else if (agruparPor === "fornecedor") {
+        key = r.fornecedor || "Não Informado";
+      } else if (agruparPor === "mes") {
+        const parsed = parseRecordMonthYear(r.data || (r as any).criado_em || (r as any).created_at);
+        key = parsed ? `${parsed.month}/${parsed.year}` : "Outros";
+      } else if (agruparPor === "status") {
+        key = r.status || "Pendente";
+      }
+
+      if (!groups[key]) {
+        groups[key] = { count: 0, totalVal: 0, totalQty: 0, name: key };
+      }
+
+      groups[key].count += 1;
+      groups[key].totalQty += Number(r.quantidade) || 0;
+      groups[key].totalVal += getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
+    });
+
+    const result = Object.values(groups).map((g) => {
+      let metricValue = g.totalVal;
+      if (metrica === "quantidade") metricValue = g.count;
+      if (metrica === "media_valor") metricValue = g.count > 0 ? g.totalVal / g.count : 0;
+      if (metrica === "soma_quantidade") metricValue = g.totalQty;
+
+      const pct = totalValorGeral > 0 ? (g.totalVal / totalValorGeral) * 100 : 0;
+
+      return {
+        name: g.name,
+        valor: Number(metricValue.toFixed(2)),
+        count: g.count,
+        totalQty: g.totalQty,
+        valorTotal: g.totalVal,
+        mediaValor: g.count > 0 ? g.totalVal / g.count : 0,
+        percent: Number(pct.toFixed(1)),
+      };
+    });
+
+    // Sort by metric descending
+    result.sort((a, b) => b.valor - a.valor);
+    return result;
+  }, [filteredRecords, agruparPor, metrica, totalValorGeral, tipoImportacaoFilter]);
+
+  // Selected Vehicle Detail
   const selectedVehicleDetail = useMemo(() => {
     if (!selectedVehicleDetailKey) return null;
     return vehicleStats.allVehicles.find((v) => v.key === selectedVehicleDetailKey) || null;
   }, [selectedVehicleDetailKey, vehicleStats]);
 
-  // Monthly Trend Data for Tendência tab
-  const monthlyTrendData = useMemo(() => {
-    const map: Record<
-      string,
-      { monthKey: string; monthLabel: string; totalValor: number; totalLiters: number; count: number; year: number; monthNum: number }
-    > = {};
-
-    filteredRecords.forEach((r) => {
-      const parsed = parseRecordMonthYear(r.data);
-      if (!parsed) return;
-      const key = `${parsed.year}-${parsed.month}`;
-      const label = `${parsed.month}/${parsed.year}`;
-
-      if (!map[key]) {
-        map[key] = {
-          monthKey: key,
-          monthLabel: label,
-          totalValor: 0,
-          totalLiters: 0,
-          count: 0,
-          year: Number(parsed.year),
-          monthNum: Number(parsed.month),
-        };
-      }
-
-      const finVal = getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
-      map[key].totalValor += finVal;
-      map[key].totalLiters += Number(r.quantidade) || 0;
-      map[key].count += 1;
-    });
-
-    const sorted = Object.values(map).sort((a, b) => {
-      if (a.year !== b.year) return a.year - b.year;
-      return a.monthNum - b.monthNum;
-    });
-
-    return sorted.map((item, idx, arr) => {
-      const prev = idx > 0 ? arr[idx - 1] : null;
-      let variationPct = 0;
-      if (prev && prev.totalValor > 0) {
-        variationPct = ((item.totalValor - prev.totalValor) / prev.totalValor) * 100;
-      }
-      return {
-        ...item,
-        variationPct,
-      };
-    });
-  }, [filteredRecords, tipoImportacaoFilter]);
-
-  // Top Categories list for Ranking tab
-  const topCategoriesList = useMemo(() => {
-    const map: Record<string, { name: string; valorTotal: number; count: number }> = {};
-    filteredRecords.forEach((r) => {
-      const cat = r.tipo_registro || "Outros";
-      if (!map[cat]) map[cat] = { name: cat, valorTotal: 0, count: 0 };
-      map[cat].valorTotal += getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
-      map[cat].count += 1;
-    });
-    const totalGeral = Object.values(map).reduce((acc, c) => acc + c.valorTotal, 0);
-    return Object.values(map)
-      .map((c) => ({
-        ...c,
-        percent: totalGeral > 0 ? (c.valorTotal / totalGeral) * 100 : 0,
-      }))
-      .sort((a, b) => b.valorTotal - a.valorTotal);
-  }, [filteredRecords, tipoImportacaoFilter]);
-
-  // Top Suppliers list for Ranking tab
-  const topFornecedoresList = useMemo(() => {
-    const map: Record<string, { name: string; valorTotal: number; count: number }> = {};
-    filteredRecords.forEach((r) => {
-      const forn = r.fornecedor?.trim() || "Não Informado";
-      if (!map[forn]) map[forn] = { name: forn, valorTotal: 0, count: 0 };
-      map[forn].valorTotal += getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
-      map[forn].count += 1;
-    });
-    const totalGeral = Object.values(map).reduce((acc, f) => acc + f.valorTotal, 0);
-    return Object.values(map)
-      .map((f) => ({
-        ...f,
-        percent: totalGeral > 0 ? (f.valorTotal / totalGeral) * 100 : 0,
-      }))
-      .sort((a, b) => b.valorTotal - a.valorTotal);
-  }, [filteredRecords, tipoImportacaoFilter]);
-
-  // Sorted Vehicle list for Tabelas Veículo a Veículo tab
-  const sortedVehiclesList = useMemo(() => {
-    let list = [...vehicleStats.allVehicles];
-    if (veiculoSearch.trim()) {
-      const term = veiculoSearch.toLowerCase().trim();
-      list = list.filter(
-        (v) =>
-          v.placa.toLowerCase().includes(term) ||
-          (v.numero_frota && v.numero_frota.toLowerCase().includes(term))
-      );
-    }
-    list.sort((a, b) => {
-      let valA = a[veiculoSortField] || 0;
-      let valB = b[veiculoSortField] || 0;
-      if (veiculoSortOrder === "asc") return valA - valB;
-      return valB - valA;
-    });
-    return list;
-  }, [vehicleStats.allVehicles, veiculoSearch, veiculoSortField, veiculoSortOrder]);
-
-  // Helper to render individual vehicle card in Top 10 lists
-  const renderVehicleCard = (vehicle: typeof vehicleStats.top10Highest[0], rank: number, isHighCost: boolean) => {
-    const avgCostPerTrip = vehicle.viagensCount > 0 ? vehicle.totalCost / vehicle.viagensCount : 0;
-    const categoriesList = Object.entries(vehicle.categories)
-      .map(([catName, catData]) => ({
-        name: catName,
-        valor: catData.valor,
-        count: catData.count,
-        percent: vehicle.totalCost > 0 ? (catData.valor / vehicle.totalCost) * 100 : 0,
-      }))
-      .sort((a, b) => b.valor - a.valor);
-
-    const rankBadgeBg =
-      rank === 1
-        ? "bg-amber-400 text-amber-950 border-amber-300 font-black shadow-xs"
-        : rank === 2
-        ? "bg-slate-300 text-slate-900 border-slate-200 font-black"
-        : rank === 3
-        ? "bg-amber-700 text-amber-100 border-amber-600 font-black"
-        : "bg-zinc-100 text-zinc-700 border-zinc-200 font-bold";
-
-    const renderFilterToolbar = () => (
-    <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4 no-print">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
-        <div className="flex items-center gap-2 text-zinc-900 font-bold text-sm">
-          <Filter className="w-4 h-4 text-blue-600" />
-          <span>Filtros e Configuração do Relatório Atual</span>
-        </div>
-
-        {/* Quick Sub-tabs for Import Type */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-100/90 rounded-2xl border border-zinc-200/60">
-          <button
-            onClick={() => setTipoImportacaoFilter("Todas")}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              tipoImportacaoFilter === "Todas"
-                ? "bg-white text-blue-700 shadow-xs"
-                : "text-zinc-600 hover:text-zinc-900"
-            }`}
-          >
-            Todas as Importações
-          </button>
-          <button
-            onClick={() => setTipoImportacaoFilter("combustivel_gfv")}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              tipoImportacaoFilter === "combustivel_gfv"
-                ? "bg-amber-600 text-white shadow-xs"
-                : "text-zinc-600 hover:text-zinc-900"
-            }`}
-          >
-            <Fuel className="w-3.5 h-3.5" /> Consumo de Combustível (GFV)
-          </button>
-          <button
-            onClick={() => setTipoImportacaoFilter("receitas_despesas")}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              tipoImportacaoFilter === "receitas_despesas"
-                ? "bg-indigo-600 text-white shadow-xs"
-                : "text-zinc-600 hover:text-zinc-900"
-            }`}
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" /> Receitas e Despesas (SOFtran)
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        {/* Tipo de Importação Dropdown */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Tipo da Importação
-          </label>
-          <select
-            value={tipoImportacaoFilter}
-            onChange={(e) => setTipoImportacaoFilter(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-amber-50/80 border border-amber-200 text-xs font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
-          >
-            <option value="Todas">Todas as Importações</option>
-            <option value="combustivel_gfv">Consumo de Combustível (GFV)</option>
-            <option value="receitas_despesas">Receitas e Despesas (SOFtran)</option>
-          </select>
-        </div>
-
-        {/* Categoria */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Categoria
-          </label>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Período / Mês */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1 flex items-center justify-between">
-            <span>Período / Mês</span>
-            {selectedPeriod.startsWith("m:") && (
-              <span className="text-[10px] text-blue-600 font-bold">Por Mês</span>
-            )}
-          </label>
-          <div className="space-y-1">
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            >
-              <optgroup label="Períodos Relativos">
-                <option value="0">Todo o Histórico</option>
-                <option value="30">Últimos 30 dias</option>
-                <option value="60">Últimos 60 dias</option>
-                <option value="90">Últimos 90 dias</option>
-                <option value="365">Este Ano (365d)</option>
-              </optgroup>
-
-              {Object.entries(monthsByYear).map(([year, monthList]) => (
-                <optgroup key={year} label={`Ano ${year}`}>
-                  {monthList.map((my) => {
-                    const [m] = my.split("/");
-                    const monthName = MONTH_NAMES_PT[m] || m;
-                    const renderRankingTab = () => (
-    <div className="space-y-6">
-      {renderFilterToolbar()}
-
-      {/* Top 10 Vehicles Cost Analysis Block */}
-      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-          <div>
-            <div className="flex items-center gap-2 text-zinc-900 font-extrabold text-lg">
-              <Award className="w-6 h-6 text-amber-500" />
-              <span>Ranking & Desempenho de Veículos / Frotas</span>
-            </div>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Identifique rapidamente os veículos de maior e menor custo da frota, além do Custo por Quilômetro (CPK).
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 bg-zinc-100 p-1.5 rounded-2xl border border-zinc-200/60 no-print">
-            <button
-              onClick={() => setTopVehiclesTab("lado_a_lado")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                topVehiclesTab === "lado_a_lado"
-                  ? "bg-white text-zinc-900 shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              Lado a Lado
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("maior")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "maior"
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5" /> Top 10 Maior Custo
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("menor")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "menor"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <TrendingDown className="w-3.5 h-3.5" /> Top 10 Menor Custo
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("cpk")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "cpk"
-                  ? "bg-purple-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <Calculator className="w-3.5 h-3.5" /> Ranking CPK (R$/Km)
-            </button>
-          </div>
-        </div>
-
-        {/* Content based on topVehiclesTab */}
-        {topVehiclesTab === "lado_a_lado" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top 10 Highest Cost */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between bg-rose-50 p-3 rounded-2xl border border-rose-100">
-                <span className="font-extrabold text-rose-900 text-xs flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-rose-600" /> Top 10 Veículos de Maior Custo
-                </span>
-                <span className="text-[10px] font-bold bg-rose-200/80 text-rose-900 px-2 py-0.5 rounded-md">
-                  Atenção ao Custo
-                </span>
-              </div>
-              <div className="space-y-2">
-                {vehicleStats.top10Highest.length === 0 ? (
-                  <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo registrado.</p>
-                ) : (
-                  vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))
-                )}
-              </div>
-            </div>
-
-            {/* Top 10 Lowest Cost */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
-                <span className="font-extrabold text-emerald-900 text-xs flex items-center gap-2">
-                  <TrendingDown className="w-4 h-4 text-emerald-600" /> Top 10 Veículos de Menor Custo
-                </span>
-                <span className="text-[10px] font-bold bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-md">
-                  Mais Eficientes
-                </span>
-              </div>
-              <div className="space-y-2">
-                {vehicleStats.top10Lowest.length === 0 ? (
-                  <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo registrado.</p>
-                ) : (
-                  vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {topVehiclesTab === "maior" && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))}
-            </div>
-          </div>
-        )}
-
-        {topVehiclesTab === "menor" && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))}
-            </div>
-          </div>
-        )}
-
-        {topVehiclesTab === "cpk" && (
-          <div className="space-y-3">
-            <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100 text-xs text-purple-900 space-y-1">
-              <p className="font-extrabold text-purple-950">O que é o Ranking CPK (Custo por Quilômetro Rodado)?</p>
-              <p className="text-purple-800 text-[11px]">
-                O CPK é calculado dividindo o Custo Total das despesas do veículo no SOFtran pelo Km Rodado importado via relatório GFV. Quanto menor o CPK, mais econômico é a operação daquele veículo.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vehicleStats.topCPK.length === 0 ? (
-                <p className="text-xs text-zinc-400 italic p-4 text-center col-span-2">
-                  Importe os relatórios GFV (Consumo) e SOFtran (Despesas) para visualizar o CPK.
-                </p>
-              ) : (
-                vehicleStats.topCPK.map((v, i) => renderVehicleCard(v, i + 1, true))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Category & Supplier Ranking Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Categories Ranking */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-extrabold text-zinc-900 text-base">Ranking por Categoria de Custo</h3>
-            </div>
-            <span className="text-xs font-bold text-zinc-500">{topCategoriesList.length} categorias</span>
-          </div>
-
-          <div className="space-y-2">
-            {topCategoriesList.slice(0, 10).map((cat, idx) => (
-              <div key={cat.name} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-200/80 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center ${
-                    idx === 0 ? "bg-amber-400 text-amber-950" : idx === 1 ? "bg-slate-300 text-slate-900" : idx === 2 ? "bg-amber-600/30 text-amber-900" : "bg-zinc-200 text-zinc-700"
-                  }`}>
-                    #{idx + 1}
-                  </span>
-                  <div>
-                    <p className="font-bold text-xs text-zinc-900">{cat.name}</p>
-                    <p className="text-[11px] text-zinc-500">{cat.count} lançamentos • {cat.percent.toFixed(1)}% do total</p>
-                  </div>
-                </div>
-                <span className="font-black text-xs text-indigo-700">{formatCurrency(cat.valorTotal)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Top Suppliers Ranking */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-blue-600" />
-              <h3 className="font-extrabold text-zinc-900 text-base">Ranking por Fornecedor / Posto</h3>
-            </div>
-            <span className="text-xs font-bold text-zinc-500">{topFornecedoresList.length} fornecedores</span>
-          </div>
-
-          <div className="space-y-2">
-            {topFornecedoresList.slice(0, 10).map((forn, idx) => (
-              <div key={forn.name} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-200/80 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center ${
-                    idx === 0 ? "bg-amber-400 text-amber-950" : idx === 1 ? "bg-slate-300 text-slate-900" : idx === 2 ? "bg-amber-600/30 text-amber-900" : "bg-zinc-200 text-zinc-700"
-                  }`}>
-                    #{idx + 1}
-                  </span>
-                  <div>
-                    <p className="font-bold text-xs text-zinc-900 truncate max-w-[200px]">{forn.name}</p>
-                    <p className="text-[11px] text-zinc-500">{forn.count} compras • {forn.percent.toFixed(1)}% do total</p>
-                  </div>
-                </div>
-                <span className="font-black text-xs text-blue-700">{formatCurrency(forn.valorTotal)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderTendenciaTab = () => {
-    const highestMonth = [...monthlyTrendData].sort((a, b) => b.totalValor - a.totalValor)[0];
-    const lowestMonth = [...monthlyTrendData].sort((a, b) => a.totalValor - b.totalValor)[0];
-    const avgMonthlyCost = monthlyTrendData.length > 0
-      ? monthlyTrendData.reduce((acc, m) => acc + m.totalValor, 0) / monthlyTrendData.length
-      : 0;
-    const lastMonth = monthlyTrendData[monthlyTrendData.length - 1];
-
-    return (
-      <div className="space-y-6">
-        {renderFilterToolbar()}
-
-        {/* Trend KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Mês de Maior Custo</span>
-              <TrendingUp className="w-4 h-4 text-rose-500" />
-            </div>
-            <p className="text-lg font-black text-zinc-900">{highestMonth ? highestMonth.monthLabel : "-"}</p>
-            <p className="text-xs font-bold text-rose-600 mt-0.5">{highestMonth ? formatCurrency(highestMonth.totalValor) : "R$ 0,00"}</p>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Mês de Menor Custo</span>
-              <TrendingDown className="w-4 h-4 text-emerald-500" />
-            </div>
-            <p className="text-lg font-black text-zinc-900">{lowestMonth ? lowestMonth.monthLabel : "-"}</p>
-            <p className="text-xs font-bold text-emerald-600 mt-0.5">{lowestMonth ? formatCurrency(lowestMonth.totalValor) : "R$ 0,00"}</p>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Média Mensal</span>
-              <Calculator className="w-4 h-4 text-blue-500" />
-            </div>
-            <p className="text-lg font-black text-blue-900">{formatCurrency(avgMonthlyCost)}</p>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Calculada em {monthlyTrendData.length} meses</p>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Variação Último Mês</span>
-              {lastMonth && lastMonth.variationPct >= 0 ? (
-                <ArrowUpRight className="w-4 h-4 text-rose-500" />
-              ) : (
-                <ArrowDownRight className="w-4 h-4 text-emerald-500" />
-              )}
-            </div>
-            <p className={`text-lg font-black ${lastMonth && lastMonth.variationPct >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-              {lastMonth ? `${lastMonth.variationPct >= 0 ? "+" : ""}${lastMonth.variationPct.toFixed(1)}%` : "0.0%"}
-            </p>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Comparado ao mês anterior</p>
-          </div>
-        </div>
-
-        {/* Line / Area Chart for Trend */}
-        <div className="bg-white p-6 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-extrabold text-zinc-900 text-base flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-purple-600" /> Evolução Temporal de Custos (R$)
-              </h3>
-              <p className="text-xs text-zinc-500 mt-0.5">Tendência mês a mês dos valores totais importados</p>
-            </div>
-          </div>
-
-          <div className="h-80 w-full pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyTrendData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
-                <defs>
-                  <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: "#64748b" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(value: any) => [formatCurrency(Number(value)), "Custo Total"]} />
-                <Area type="monotone" dataKey="totalValor" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Monthly Table */}
-        <div className="bg-white p-6 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
-          <h3 className="font-extrabold text-zinc-900 text-base">Tabela de Evolução Mensal</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                  <th className="p-3">Mês / Ano</th>
-                  <th className="p-3 text-center">Lançamentos</th>
-                  <th className="p-3 text-center">Consumo (Litros)</th>
-                  <th className="p-3 text-right">Custo Total (R$)</th>
-                  <th className="p-3 text-right">Variação vs Mês Anterior</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {monthlyTrendData.map((m) => (
-                  <tr key={m.monthKey} className="hover:bg-zinc-50">
-                    <td className="p-3 font-bold text-zinc-900">{m.monthLabel}</td>
-                    <td className="p-3 text-center text-zinc-700">{m.count}</td>
-                    <td className="p-3 text-center text-zinc-700">{m.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</td>
-                    <td className="p-3 text-right font-black text-purple-700">{formatCurrency(m.totalValor)}</td>
-                    <td className="p-3 text-right">
-                      <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full font-bold text-[11px] ${
-                        m.variationPct > 0 ? "bg-rose-100 text-rose-800" : m.variationPct < 0 ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-700"
-                      }`}>
-                        {m.variationPct > 0 ? `+${m.variationPct.toFixed(1)}%` : `${m.variationPct.toFixed(1)}%`}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderVeiculoAVeiculoTab = () => {
-    const totalKmFrota = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.kmRodadoCombustivel || 0), 0);
-    const totalDespesasFrota = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.costDespesas || 0), 0);
-    const totalLitersFrota = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.totalLiters || 0), 0);
-    const cpkFrotaMedio = totalKmFrota > 0 ? totalDespesasFrota / totalKmFrota : 0;
-
-    return (
-      <div className="space-y-6">
-        {renderFilterToolbar()}
-
-        {/* Fleet KPI Summary Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-sm">
-            <p className="text-[10px] font-extrabold uppercase text-slate-400">Total de Veículos</p>
-            <p className="text-xl font-black mt-1 text-amber-400">{vehicleStats.allVehicles.length} veículos</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Km Rodado Total</p>
-            <p className="text-lg font-black mt-1 text-blue-900">{totalKmFrota ? `${totalKmFrota.toLocaleString("pt-BR")} km` : "0 km"}</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Consumo Total</p>
-            <p className="text-lg font-black mt-1 text-amber-900">{totalLitersFrota.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Despesas SOFtran</p>
-            <p className="text-lg font-black mt-1 text-emerald-700">{formatCurrency(totalDespesasFrota)}</p>
-          </div>
-          <div className="bg-purple-900 text-white p-4 rounded-2xl shadow-sm">
-            <p className="text-[10px] font-extrabold uppercase text-purple-300">CPK Médio da Frota</p>
-            <p className="text-xl font-black mt-1 text-purple-200">{cpkFrotaMedio > 0 ? `R$ ${cpkFrotaMedio.toFixed(3)}/km` : "Sem Km"}</p>
-          </div>
-        </div>
-
-        {/* Vehicle Search & Sorting Bar */}
-        <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar placa ou número da frota..."
-                value={veiculoSearch}
-                onChange={(e) => setVeiculoSearch(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-zinc-600">
-                <ArrowUpDown className="w-4 h-4 text-zinc-400" />
-                <span>Ordenar Por:</span>
-                <select
-                  value={veiculoSortField}
-                  onChange={(e) => setVeiculoSortField(e.target.value as any)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-100 border border-zinc-200 text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
-                >
-                  <option value="totalCost">Custo Total (R$)</option>
-                  <option value="cpk">CPK (R$/Km)</option>
-                  <option value="kmRodadoCombustivel">Km Rodado (GFV)</option>
-                  <option value="totalLiters">Litros Consumidos</option>
-                  <option value="viagensCount">Qtd Viagens / Abastecimentos</option>
-                </select>
-
-                <button
-                  onClick={() => setVeiculoSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
-                  className="px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-xs font-bold text-zinc-700 transition-colors cursor-pointer"
-                >
-                  {veiculoSortOrder === "desc" ? "Decrescente" : "Crescente"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Complete Vehicle Matrix Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                  <th className="p-3.5 text-center">#</th>
-                  <th className="p-3.5">Placa</th>
-                  <th className="p-3.5">Frota</th>
-                  <th className="p-3.5 text-center">Viagens (Qtd)</th>
-                  <th className="p-3.5 text-center">Litros (GFV)</th>
-                  <th className="p-3.5 text-center">Km Rodado (GFV)</th>
-                  <th className="p-3.5 text-center">Média (Km/L)</th>
-                  <th className="p-3.5 text-right">Despesas SOFtran</th>
-                  <th className="p-3.5 text-right">CPK (R$/Km)</th>
-                  <th className="p-3.5 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {sortedVehiclesList.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="p-8 text-center text-zinc-400 font-semibold">
-                      Nenhum veículo encontrado para a busca.
-                    </td>
-                  </tr>
-                ) : (
-                  sortedVehiclesList.map((v, idx) => {
-                    const mediaKmL = v.totalLiters > 0 && v.kmRodadoCombustivel > 0
-                      ? v.kmRodadoCombustivel / v.totalLiters
-                      : 0;
-
-                    return (
-                      <tr key={v.key} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="p-3.5 text-center font-bold text-zinc-400">#{idx + 1}</td>
-                        <td className="p-3.5 font-extrabold text-zinc-900">{v.placa}</td>
-                        <td className="p-3.5 font-semibold text-zinc-600">{v.numero_frota || "-"}</td>
-                        <td className="p-3.5 text-center text-zinc-700">{v.viagensCount}</td>
-                        <td className="p-3.5 text-center text-amber-900 font-bold">
-                          {v.totalLiters > 0 ? `${v.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center text-blue-900 font-bold">
-                          {v.kmRodadoCombustivel > 0 ? `${v.kmRodadoCombustivel.toLocaleString("pt-BR")} km` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center font-bold text-emerald-700">
-                          {mediaKmL > 0 ? `${mediaKmL.toFixed(2)} km/L` : "-"}
-                        </td>
-                        <td className="p-3.5 text-right font-black text-slate-900">{formatCurrency(v.costDespesas)}</td>
-                        <td className="p-3.5 text-right font-black text-purple-700">
-                          {v.cpk > 0 ? `R$ ${v.cpk.toFixed(3)}` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <button
-                            onClick={() => setSelectedVehicleDetailKey(v.key)}
-                            className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            Ver Viagens
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-                      <option key={my} value={`m:${my}`}>
-                        Mês {my} ({monthName})
-                      </option>
-                    );
-                  })}
-                </optgroup>
-              ))}
-
-              <optgroup label="Personalizado">
-                <option value="custom">Selecionar Mês Específico (Seletor)</option>
-              </optgroup>
-            </select>
-
-            {selectedPeriod === "custom" && (
-              <input
-                type="month"
-                value={customMonth}
-                onChange={(e) => setCustomMonth(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl bg-blue-50 border border-blue-300 text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Agrupar Por */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Agrupar Dados Por
-          </label>
-          <select
-            value={agruparPor}
-            onChange={(e) => setAgruparPor(e.target.value as any)}
-            className="w-full px-3 py-2 rounded-xl bg-blue-50/80 border border-blue-200 text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          >
-            <option value="categoria">Categoria</option>
-            <option value="tipo_importacao">Tipo de Importação (GFV vs SOFtran)</option>
-            <option value="placa">Placa / Frota</option>
-            <option value="fornecedor">Fornecedor / Posto</option>
-            <option value="mes">Mês / Período</option>
-            <option value="status">Status do Lançamento</option>
-          </select>
-        </div>
-
-        {/* Métrica */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Métrica Principal
-          </label>
-          <select
-            value={metrica}
-            onChange={(e) => setMetrica(e.target.value as any)}
-            className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          >
-            <option value="soma_valor">Soma Valor Total (R$)</option>
-            <option value="quantidade">Quantidade de Lançamentos</option>
-            <option value="media_valor">Valor Médio por Lançamento (R$)</option>
-            <option value="soma_quantidade">Soma Unidades / Litros</option>
-          </select>
-        </div>
-
-        {/* Placa Search Filter */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Filtro Placa / Frota
-          </label>
-          <input
-            type="text"
-            placeholder="Ex: ABC1D23"
-            value={placaFilter}
-            onChange={(e) => setPlacaFilter(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderRankingTab = () => (
-    <div className="space-y-6">
-      {renderFilterToolbar()}
-
-      {/* Top 10 Vehicles Cost Analysis Block */}
-      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-          <div>
-            <div className="flex items-center gap-2 text-zinc-900 font-extrabold text-lg">
-              <Award className="w-6 h-6 text-amber-500" />
-              <span>Ranking & Desempenho de Veículos / Frotas</span>
-            </div>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Identifique rapidamente os veículos de maior e menor custo da frota, além do Custo por Quilômetro (CPK).
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 bg-zinc-100 p-1.5 rounded-2xl border border-zinc-200/60 no-print">
-            <button
-              onClick={() => setTopVehiclesTab("lado_a_lado")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                topVehiclesTab === "lado_a_lado"
-                  ? "bg-white text-zinc-900 shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              Lado a Lado
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("maior")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "maior"
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5" /> Top 10 Maior Custo
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("menor")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "menor"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <TrendingDown className="w-3.5 h-3.5" /> Top 10 Menor Custo
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("cpk")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "cpk"
-                  ? "bg-purple-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <Calculator className="w-3.5 h-3.5" /> Ranking CPK (R$/Km)
-            </button>
-          </div>
-        </div>
-
-        {/* Content based on topVehiclesTab */}
-        {topVehiclesTab === "lado_a_lado" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top 10 Highest Cost */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between bg-rose-50 p-3 rounded-2xl border border-rose-100">
-                <span className="font-extrabold text-rose-900 text-xs flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-rose-600" /> Top 10 Veículos de Maior Custo
-                </span>
-                <span className="text-[10px] font-bold bg-rose-200/80 text-rose-900 px-2 py-0.5 rounded-md">
-                  Atenção ao Custo
-                </span>
-              </div>
-              <div className="space-y-2">
-                {vehicleStats.top10Highest.length === 0 ? (
-                  <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo registrado.</p>
-                ) : (
-                  vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))
-                )}
-              </div>
-            </div>
-
-            {/* Top 10 Lowest Cost */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
-                <span className="font-extrabold text-emerald-900 text-xs flex items-center gap-2">
-                  <TrendingDown className="w-4 h-4 text-emerald-600" /> Top 10 Veículos de Menor Custo
-                </span>
-                <span className="text-[10px] font-bold bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-md">
-                  Mais Eficientes
-                </span>
-              </div>
-              <div className="space-y-2">
-                {vehicleStats.top10Lowest.length === 0 ? (
-                  <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo registrado.</p>
-                ) : (
-                  vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {topVehiclesTab === "maior" && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))}
-            </div>
-          </div>
-        )}
-
-        {topVehiclesTab === "menor" && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))}
-            </div>
-          </div>
-        )}
-
-        {topVehiclesTab === "cpk" && (
-          <div className="space-y-3">
-            <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100 text-xs text-purple-900 space-y-1">
-              <p className="font-extrabold text-purple-950">O que é o Ranking CPK (Custo por Quilômetro Rodado)?</p>
-              <p className="text-purple-800 text-[11px]">
-                O CPK é calculado dividindo o Custo Total das despesas do veículo no SOFtran pelo Km Rodado importado via relatório GFV. Quanto menor o CPK, mais econômico é a operação daquele veículo.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vehicleStats.topCPK.length === 0 ? (
-                <p className="text-xs text-zinc-400 italic p-4 text-center col-span-2">
-                  Importe os relatórios GFV (Consumo) e SOFtran (Despesas) para visualizar o CPK.
-                </p>
-              ) : (
-                vehicleStats.topCPK.map((v, i) => renderVehicleCard(v, i + 1, true))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Category & Supplier Ranking Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Categories Ranking */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-extrabold text-zinc-900 text-base">Ranking por Categoria de Custo</h3>
-            </div>
-            <span className="text-xs font-bold text-zinc-500">{topCategoriesList.length} categorias</span>
-          </div>
-
-          <div className="space-y-2">
-            {topCategoriesList.slice(0, 10).map((cat, idx) => (
-              <div key={cat.name} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-200/80 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center ${
-                    idx === 0 ? "bg-amber-400 text-amber-950" : idx === 1 ? "bg-slate-300 text-slate-900" : idx === 2 ? "bg-amber-600/30 text-amber-900" : "bg-zinc-200 text-zinc-700"
-                  }`}>
-                    #{idx + 1}
-                  </span>
-                  <div>
-                    <p className="font-bold text-xs text-zinc-900">{cat.name}</p>
-                    <p className="text-[11px] text-zinc-500">{cat.count} lançamentos • {cat.percent.toFixed(1)}% do total</p>
-                  </div>
-                </div>
-                <span className="font-black text-xs text-indigo-700">{formatCurrency(cat.valorTotal)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Top Suppliers Ranking */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-blue-600" />
-              <h3 className="font-extrabold text-zinc-900 text-base">Ranking por Fornecedor / Posto</h3>
-            </div>
-            <span className="text-xs font-bold text-zinc-500">{topFornecedoresList.length} fornecedores</span>
-          </div>
-
-          <div className="space-y-2">
-            {topFornecedoresList.slice(0, 10).map((forn, idx) => (
-              <div key={forn.name} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-200/80 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center ${
-                    idx === 0 ? "bg-amber-400 text-amber-950" : idx === 1 ? "bg-slate-300 text-slate-900" : idx === 2 ? "bg-amber-600/30 text-amber-900" : "bg-zinc-200 text-zinc-700"
-                  }`}>
-                    #{idx + 1}
-                  </span>
-                  <div>
-                    <p className="font-bold text-xs text-zinc-900 truncate max-w-[200px]">{forn.name}</p>
-                    <p className="text-[11px] text-zinc-500">{forn.count} compras • {forn.percent.toFixed(1)}% do total</p>
-                  </div>
-                </div>
-                <span className="font-black text-xs text-blue-700">{formatCurrency(forn.valorTotal)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderTendenciaTab = () => {
-    const highestMonth = [...monthlyTrendData].sort((a, b) => b.totalValor - a.totalValor)[0];
-    const lowestMonth = [...monthlyTrendData].sort((a, b) => a.totalValor - b.totalValor)[0];
-    const avgMonthlyCost = monthlyTrendData.length > 0
-      ? monthlyTrendData.reduce((acc, m) => acc + m.totalValor, 0) / monthlyTrendData.length
-      : 0;
-    const lastMonth = monthlyTrendData[monthlyTrendData.length - 1];
-
-    return (
-      <div className="space-y-6">
-        {renderFilterToolbar()}
-
-        {/* Trend KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Mês de Maior Custo</span>
-              <TrendingUp className="w-4 h-4 text-rose-500" />
-            </div>
-            <p className="text-lg font-black text-zinc-900">{highestMonth ? highestMonth.monthLabel : "-"}</p>
-            <p className="text-xs font-bold text-rose-600 mt-0.5">{highestMonth ? formatCurrency(highestMonth.totalValor) : "R$ 0,00"}</p>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Mês de Menor Custo</span>
-              <TrendingDown className="w-4 h-4 text-emerald-500" />
-            </div>
-            <p className="text-lg font-black text-zinc-900">{lowestMonth ? lowestMonth.monthLabel : "-"}</p>
-            <p className="text-xs font-bold text-emerald-600 mt-0.5">{lowestMonth ? formatCurrency(lowestMonth.totalValor) : "R$ 0,00"}</p>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Média Mensal</span>
-              <Calculator className="w-4 h-4 text-blue-500" />
-            </div>
-            <p className="text-lg font-black text-blue-900">{formatCurrency(avgMonthlyCost)}</p>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Calculada em {monthlyTrendData.length} meses</p>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Variação Último Mês</span>
-              {lastMonth && lastMonth.variationPct >= 0 ? (
-                <ArrowUpRight className="w-4 h-4 text-rose-500" />
-              ) : (
-                <ArrowDownRight className="w-4 h-4 text-emerald-500" />
-              )}
-            </div>
-            <p className={`text-lg font-black ${lastMonth && lastMonth.variationPct >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-              {lastMonth ? `${lastMonth.variationPct >= 0 ? "+" : ""}${lastMonth.variationPct.toFixed(1)}%` : "0.0%"}
-            </p>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Comparado ao mês anterior</p>
-          </div>
-        </div>
-
-        {/* Line / Area Chart for Trend */}
-        <div className="bg-white p-6 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-extrabold text-zinc-900 text-base flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-purple-600" /> Evolução Temporal de Custos (R$)
-              </h3>
-              <p className="text-xs text-zinc-500 mt-0.5">Tendência mês a mês dos valores totais importados</p>
-            </div>
-          </div>
-
-          <div className="h-80 w-full pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyTrendData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
-                <defs>
-                  <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: "#64748b" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(value: any) => [formatCurrency(Number(value)), "Custo Total"]} />
-                <Area type="monotone" dataKey="totalValor" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Monthly Table */}
-        <div className="bg-white p-6 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
-          <h3 className="font-extrabold text-zinc-900 text-base">Tabela de Evolução Mensal</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                  <th className="p-3">Mês / Ano</th>
-                  <th className="p-3 text-center">Lançamentos</th>
-                  <th className="p-3 text-center">Consumo (Litros)</th>
-                  <th className="p-3 text-right">Custo Total (R$)</th>
-                  <th className="p-3 text-right">Variação vs Mês Anterior</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {monthlyTrendData.map((m) => (
-                  <tr key={m.monthKey} className="hover:bg-zinc-50">
-                    <td className="p-3 font-bold text-zinc-900">{m.monthLabel}</td>
-                    <td className="p-3 text-center text-zinc-700">{m.count}</td>
-                    <td className="p-3 text-center text-zinc-700">{m.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</td>
-                    <td className="p-3 text-right font-black text-purple-700">{formatCurrency(m.totalValor)}</td>
-                    <td className="p-3 text-right">
-                      <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full font-bold text-[11px] ${
-                        m.variationPct > 0 ? "bg-rose-100 text-rose-800" : m.variationPct < 0 ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-700"
-                      }`}>
-                        {m.variationPct > 0 ? `+${m.variationPct.toFixed(1)}%` : `${m.variationPct.toFixed(1)}%`}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderVeiculoAVeiculoTab = () => {
-    const totalKmFrota = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.kmRodadoCombustivel || 0), 0);
-    const totalDespesasFrota = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.costDespesas || 0), 0);
-    const totalLitersFrota = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.totalLiters || 0), 0);
-    const cpkFrotaMedio = totalKmFrota > 0 ? totalDespesasFrota / totalKmFrota : 0;
-
-    return (
-      <div className="space-y-6">
-        {renderFilterToolbar()}
-
-        {/* Fleet KPI Summary Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-sm">
-            <p className="text-[10px] font-extrabold uppercase text-slate-400">Total de Veículos</p>
-            <p className="text-xl font-black mt-1 text-amber-400">{vehicleStats.allVehicles.length} veículos</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Km Rodado Total</p>
-            <p className="text-lg font-black mt-1 text-blue-900">{totalKmFrota ? `${totalKmFrota.toLocaleString("pt-BR")} km` : "0 km"}</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Consumo Total</p>
-            <p className="text-lg font-black mt-1 text-amber-900">{totalLitersFrota.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Despesas SOFtran</p>
-            <p className="text-lg font-black mt-1 text-emerald-700">{formatCurrency(totalDespesasFrota)}</p>
-          </div>
-          <div className="bg-purple-900 text-white p-4 rounded-2xl shadow-sm">
-            <p className="text-[10px] font-extrabold uppercase text-purple-300">CPK Médio da Frota</p>
-            <p className="text-xl font-black mt-1 text-purple-200">{cpkFrotaMedio > 0 ? `R$ ${cpkFrotaMedio.toFixed(3)}/km` : "Sem Km"}</p>
-          </div>
-        </div>
-
-        {/* Vehicle Search & Sorting Bar */}
-        <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar placa ou número da frota..."
-                value={veiculoSearch}
-                onChange={(e) => setVeiculoSearch(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-zinc-600">
-                <ArrowUpDown className="w-4 h-4 text-zinc-400" />
-                <span>Ordenar Por:</span>
-                <select
-                  value={veiculoSortField}
-                  onChange={(e) => setVeiculoSortField(e.target.value as any)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-100 border border-zinc-200 text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
-                >
-                  <option value="totalCost">Custo Total (R$)</option>
-                  <option value="cpk">CPK (R$/Km)</option>
-                  <option value="kmRodadoCombustivel">Km Rodado (GFV)</option>
-                  <option value="totalLiters">Litros Consumidos</option>
-                  <option value="viagensCount">Qtd Viagens / Abastecimentos</option>
-                </select>
-
-                <button
-                  onClick={() => setVeiculoSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
-                  className="px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-xs font-bold text-zinc-700 transition-colors cursor-pointer"
-                >
-                  {veiculoSortOrder === "desc" ? "Decrescente" : "Crescente"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Complete Vehicle Matrix Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                  <th className="p-3.5 text-center">#</th>
-                  <th className="p-3.5">Placa</th>
-                  <th className="p-3.5">Frota</th>
-                  <th className="p-3.5 text-center">Viagens (Qtd)</th>
-                  <th className="p-3.5 text-center">Litros (GFV)</th>
-                  <th className="p-3.5 text-center">Km Rodado (GFV)</th>
-                  <th className="p-3.5 text-center">Média (Km/L)</th>
-                  <th className="p-3.5 text-right">Despesas SOFtran</th>
-                  <th className="p-3.5 text-right">CPK (R$/Km)</th>
-                  <th className="p-3.5 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {sortedVehiclesList.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="p-8 text-center text-zinc-400 font-semibold">
-                      Nenhum veículo encontrado para a busca.
-                    </td>
-                  </tr>
-                ) : (
-                  sortedVehiclesList.map((v, idx) => {
-                    const mediaKmL = v.totalLiters > 0 && v.kmRodadoCombustivel > 0
-                      ? v.kmRodadoCombustivel / v.totalLiters
-                      : 0;
-
-                    return (
-                      <tr key={v.key} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="p-3.5 text-center font-bold text-zinc-400">#{idx + 1}</td>
-                        <td className="p-3.5 font-extrabold text-zinc-900">{v.placa}</td>
-                        <td className="p-3.5 font-semibold text-zinc-600">{v.numero_frota || "-"}</td>
-                        <td className="p-3.5 text-center text-zinc-700">{v.viagensCount}</td>
-                        <td className="p-3.5 text-center text-amber-900 font-bold">
-                          {v.totalLiters > 0 ? `${v.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center text-blue-900 font-bold">
-                          {v.kmRodadoCombustivel > 0 ? `${v.kmRodadoCombustivel.toLocaleString("pt-BR")} km` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center font-bold text-emerald-700">
-                          {mediaKmL > 0 ? `${mediaKmL.toFixed(2)} km/L` : "-"}
-                        </td>
-                        <td className="p-3.5 text-right font-black text-slate-900">{formatCurrency(v.costDespesas)}</td>
-                        <td className="p-3.5 text-right font-black text-purple-700">
-                          {v.cpk > 0 ? `R$ ${v.cpk.toFixed(3)}` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <button
-                            onClick={() => setSelectedVehicleDetailKey(v.key)}
-                            className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            Ver Viagens
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-      <div
-        key={vehicle.key}
-        className={`p-4 rounded-2xl border transition-all ${
-          isHighCost
-            ? "bg-gradient-to-br from-rose-50/40 via-white to-amber-50/20 border-rose-200/80 hover:border-rose-300 hover:shadow-sm"
-            : "bg-gradient-to-br from-emerald-50/40 via-white to-teal-50/20 border-emerald-200/80 hover:border-emerald-300 hover:shadow-sm"
-        }`}
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100">
-          <div className="flex items-center gap-3">
-            <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs border ${rankBadgeBg}`}>
-              #{rank}
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-black text-zinc-900 text-sm tracking-wide">{vehicle.placa}</h4>
-                {vehicle.numero_frota && (
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-600 border border-zinc-200">
-                    Frota {vehicle.numero_frota}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-zinc-500 font-medium">
-                <span className="inline-flex items-center gap-1 font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                  <Navigation className="w-3 h-3 text-indigo-600" />
-                  {vehicle.viagensCount} {vehicle.viagensCount === 1 ? "viagem (abastecimento)" : "viagens (abastecimentos)"}
-                </span>
-                {vehicle.totalLiters > 0 && (
-                  <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
-                    <Fuel className="w-3 h-3 text-amber-600" />
-                    {vehicle.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="text-right flex sm:flex-col items-center sm:items-end justify-between gap-1">
-            <div>
-              <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Custo Total</p>
-              <p className={`text-base font-black ${isHighCost ? "text-rose-700" : "text-emerald-700"}`}>
-                {formatCurrency(vehicle.totalCost)}
-              </p>
-            </div>
-            <p className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
-              Média: {formatCurrency(avgCostPerTrip)} / viagem
-            </p>
-          </div>
-        </div>
-
-        {/* CPK & Import Source Metrics (Km GFV x Custo SOFtran) */}
-        <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-            <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            <span className="text-[11px]">Km Rodado (GFV):</span>
-            <strong className="text-slate-900 font-extrabold ml-auto">
-              {vehicle.kmRodadoCombustivel ? `${vehicle.kmRodadoCombustivel.toLocaleString("pt-BR")} km` : "N/I"}
-            </strong>
-          </div>
-          <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-            <DollarSign className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span className="text-[11px]">Custo Veículo:</span>
-            <strong className="text-slate-900 font-extrabold ml-auto">{formatCurrency(vehicle.costDespesas)}</strong>
-          </div>
-          <div className="flex items-center gap-1.5 font-semibold text-purple-900 bg-purple-100/90 px-2 py-1 rounded-lg border border-purple-200">
-            <Calculator className="w-3.5 h-3.5 text-purple-700 shrink-0" />
-            <span className="text-[11px]">CPK:</span>
-            <strong className="text-purple-950 font-black ml-auto">
-              {vehicle.cpk > 0 ? `R$ ${vehicle.cpk.toFixed(3)}/km` : "Sem Km"}
-            </strong>
-          </div>
-        </div>
-
-        {/* Cost Breakdown Description / Detalhamento de Custos */}
-        <div className="mt-3 space-y-2">
-          <p className="text-[11px] font-extrabold text-zinc-700 flex items-center justify-between">
-            <span>Detalhamento dos Custos por Categoria:</span>
-            <span className="text-[10px] text-zinc-400 font-semibold">{categoriesList.length} categoria(s)</span>
-          </p>
-
-          {/* Visual Progress Bar */}
-          <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden flex">
-            {categoriesList.map((cat, idx) => (
-              <div
-                key={cat.name}
-                style={{ width: `${cat.percent}%`, backgroundColor: COLORS[idx % COLORS.length] }}
-                title={`${cat.name}: ${formatCurrency(cat.valor)} (${cat.percent.toFixed(1)}%)`}
-              />
-            ))}
-          </div>
-
-          {/* Categories Chips */}
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {categoriesList.map((cat, idx) => (
-              <div
-                key={cat.name}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] bg-zinc-50 border border-zinc-200/80"
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-                />
-                <span className="font-semibold text-zinc-700">{cat.name}:</span>
-                <span className="font-black text-zinc-900">{formatCurrency(cat.valor)}</span>
-                <span className="text-[10px] text-zinc-400 font-bold">({cat.percent.toFixed(0)}%)</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer Action */}
-        <div className="mt-3 pt-2.5 border-t border-zinc-100 flex items-center justify-between">
-          <span className="text-[10px] text-zinc-400 font-medium">
-            {vehicle.items.length} lançamento(s) vinculados (cada lançamento = 1 viagem)
-          </span>
-          <button
-            onClick={() => setSelectedVehicleDetailKey(vehicle.key)}
-            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline cursor-pointer"
-          >
-            Ver Viagens / Detalhes <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // Overall Metrics
-  const totalValorGeral = useMemo(
-    () => filteredRecords.reduce((sum, r) => sum + getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv"), 0),
-    [filteredRecords, tipoImportacaoFilter]
-  );
-  const totalQtyGeral = useMemo(
-    () => filteredRecords.reduce((sum, r) => sum + (Number(r.quantidade) || 0), 0),
-    [filteredRecords]
-  );
-  const totalRegistrosCount = filteredRecords.length;
-  const mediaValorGeral = totalRegistrosCount > 0 ? totalValorGeral / totalRegistrosCount : 0;
-  const topGroup = aggregatedData.length > 0 ? aggregatedData[0] : null;
-
-  // Filter table by search
-  const tableFilteredRecords = useMemo(() => {
-    if (!tableSearch.trim()) return filteredRecords;
-    const term = tableSearch.toLowerCase().trim();
-    return filteredRecords.filter(
-      (r) =>
-        r.placa?.toLowerCase().includes(term) ||
-        r.tipo_registro?.toLowerCase().includes(term) ||
-        r.fornecedor?.toLowerCase().includes(term) ||
-        r.descricao_conta?.toLowerCase().includes(term) ||
-        r.numero_frota?.toLowerCase().includes(term)
-    );
-  }, [filteredRecords, tableSearch]);
-
-  const handleSaveMold = async () => {
-    if (!newMoldName.trim()) {
-      alert("Por favor, digite um nome para o molde de relatório.");
-      return;
-    }
+  // Save Mold
+  const handleSaveMold = () => {
+    if (!newMoldName.trim()) return;
     setSavingMold(true);
+
+    const mold: ReportMold = {
+      id: `mold-${Date.now()}`,
+      name: newMoldName.trim(),
+      description: newMoldDesc.trim() || `Configuração personalizada salva em ${new Date().toLocaleDateString("pt-BR")}`,
+      categoryFilter,
+      tipoImportacaoFilter,
+      periodFilter: selectedPeriod,
+      agruparPor,
+      metrica,
+      tipoGrafico,
+      viewMode,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [...savedMolds, mold];
+    setSavedMolds(updated);
     try {
-      const created = await ImportService.saveReportMold({
-        empresa_id: companyId,
-        nome: newMoldName,
-        descricao: newMoldDesc,
-        icon: "FileSpreadsheet",
-        categoria_filtro: categoryFilter,
-        tipo_importacao_filtro: tipoImportacaoFilter,
-        periodo_dias: Number(selectedPeriod) || 0,
-        placa_filtro: placaFilter,
-        fornecedor_filtro: fornecedorFilter,
-        agrupar_por: agruparPor,
-        metrica,
-        tipo_grafico: tipoGrafico,
-      });
+      localStorage.setItem(`report_molds_${companyId}`, JSON.stringify(updated));
+    } catch (e) {
+      console.error("Error saving mold:", e);
+    }
 
-      setMolds((prev) => [...prev, created]);
-      setActiveMoldId(created.id);
-      setShowSaveModal(false);
-      setNewMoldName("");
-      setNewMoldDesc("");
-    } catch (e: any) {
-      alert("Erro ao salvar molde: " + e.message);
-    } finally {
-      setSavingMold(false);
+    setNewMoldName("");
+    setNewMoldDesc("");
+    setSavingMold(false);
+    setShowSaveModal(false);
+  };
+
+  const handleApplyMold = (mold: ReportMold) => {
+    setCategoryFilter(mold.categoryFilter || "Todas");
+    if (mold.tipoImportacaoFilter) setTipoImportacaoFilter(mold.tipoImportacaoFilter);
+    setSelectedPeriod(mold.periodFilter || "0");
+    setAgruparPor(mold.agruparPor || "categoria");
+    setMetrica(mold.metrica || "soma_valor");
+    setTipoGrafico(mold.tipoGrafico || "bar");
+    setViewMode(mold.viewMode || "ambos");
+    setReportViewTab("analitico");
+  };
+
+  const handleDeleteMold = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = savedMolds.filter((m) => m.id !== id);
+    setSavedMolds(updated);
+    try {
+      localStorage.setItem(`report_molds_${companyId}`, JSON.stringify(updated));
+    } catch (err) {
+      console.error("Error deleting mold:", err);
     }
   };
 
-  const handleDeleteCustomMold = async (moldId: string, moldName: string) => {
-    if (window.confirm(`Deseja excluir o molde de relatório "${moldName}"?`)) {
-      try {
-        await ImportService.deleteReportMold(moldId);
-        setMolds((prev) => prev.filter((m) => m.id !== moldId));
-        if (activeMoldId === moldId) setActiveMoldId("mold_default_1");
-      } catch (e: any) {
-        alert("Erro ao remover molde: " + e.message);
-      }
-    }
-  };
-
-  // Export Excel (.xlsx) profissional
+  // Exports
   const handleExportExcel = async () => {
-    setIsExportingExcel(true);
     try {
+      setIsExportingExcel(true);
+      const periodLabel =
+        selectedPeriod === "0"
+          ? "Todo o Histórico"
+          : selectedPeriod.startsWith("m:")
+          ? `Mês ${selectedPeriod.replace("m:", "")}`
+          : selectedPeriod === "custom" && customMonth
+          ? `Mês ${customMonth}`
+          : `Últimos ${selectedPeriod} dias`;
+
       await exportReportToExcel({
+        records: filteredRecords,
+        companyName: "Empresa",
         filters: {
-          periodLabel: getPeriodLabel(),
+          periodLabel,
           categoryFilter,
           tipoImportacaoFilter,
+          selectedPeriod,
+          customMonth,
+          placaFilter,
+          fornecedorFilter,
           agruparPor,
           metrica,
           tipoGrafico,
-          fornecedorFilter,
-          placaFilter,
+          viewMode,
         },
+        aggregatedData,
         overallMetrics: {
           totalValorGeral,
           totalQtyGeral,
           totalRegistrosCount,
           mediaValorGeral,
         },
-        aggregatedData,
         vehicleStats,
-        tableFilteredRecords,
       });
-    } catch (e: any) {
-      console.error("Erro ao exportar Excel:", e);
-      alert("Ocorreu um erro ao gerar a planilha Excel: " + (e?.message || e));
+    } catch (err) {
+      console.error("Error exporting to Excel:", err);
     } finally {
       setIsExportingExcel(false);
     }
   };
 
-  // Export PDF (.pdf) profissional
-  const handleExportPDF = () => {
-    setIsExportingPDF(true);
+  const handleExportPDF = async () => {
     try {
-      exportReportToPDF({
+      setIsExportingPDF(true);
+      const periodLabel =
+        selectedPeriod === "0"
+          ? "Todo o Histórico"
+          : selectedPeriod.startsWith("m:")
+          ? `Mês ${selectedPeriod.replace("m:", "")}`
+          : selectedPeriod === "custom" && customMonth
+          ? `Mês ${customMonth}`
+          : `Últimos ${selectedPeriod} dias`;
+
+      await exportReportToPDF({
+        records: filteredRecords,
+        companyName: "Empresa",
         filters: {
-          periodLabel: getPeriodLabel(),
+          periodLabel,
           categoryFilter,
           tipoImportacaoFilter,
+          selectedPeriod,
+          customMonth,
+          placaFilter,
+          fornecedorFilter,
           agruparPor,
           metrica,
           tipoGrafico,
-          fornecedorFilter,
-          placaFilter,
+          viewMode,
         },
+        aggregatedData,
         overallMetrics: {
           totalValorGeral,
           totalQtyGeral,
           totalRegistrosCount,
           mediaValorGeral,
         },
-        aggregatedData,
         vehicleStats,
-        tableFilteredRecords,
       });
-    } catch (e: any) {
-      console.error("Erro ao exportar PDF:", e);
-      alert("Ocorreu um erro ao gerar o relatório PDF: " + (e?.message || e));
+    } catch (err) {
+      console.error("Error exporting to PDF:", err);
     } finally {
       setIsExportingPDF(false);
     }
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
+  // Reset Filters Helper
+  const handleResetFilters = () => {
+    setCategoryFilter("Todas");
+    setTipoImportacaoFilter("Todas");
+    setSelectedPeriod("0");
+    setCustomMonth("");
+    setPlacaFilter("");
+    setFornecedorFilter("");
   };
 
-  const renderLabelValue = (val: number) => {
-    if (metrica.includes("valor")) {
-      return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(val);
-    }
-    return val;
-  };
-
-  const renderRankingTab = () => (
-    <div className="space-y-6">
-      {renderFilterToolbar()}
-
-      {/* Top 10 Vehicles Cost Analysis Block */}
-      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-          <div>
-            <div className="flex items-center gap-2 text-zinc-900 font-extrabold text-lg">
-              <Award className="w-6 h-6 text-amber-500" />
-              <span>Ranking & Desempenho de Veículos / Frotas</span>
-            </div>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Identifique rapidamente os veículos de maior e menor custo da frota, além do Custo por Quilômetro (CPK).
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 bg-zinc-100 p-1.5 rounded-2xl border border-zinc-200/60 no-print">
-            <button
-              onClick={() => setTopVehiclesTab("lado_a_lado")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                topVehiclesTab === "lado_a_lado"
-                  ? "bg-white text-zinc-900 shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              Lado a Lado
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("maior")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "maior"
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5" /> Top 10 Maior Custo
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("menor")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "menor"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <TrendingDown className="w-3.5 h-3.5" /> Top 10 Menor Custo
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("cpk")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                topVehiclesTab === "cpk"
-                  ? "bg-purple-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <Calculator className="w-3.5 h-3.5" /> Ranking CPK (R$/Km)
-            </button>
-          </div>
-        </div>
-
-        {/* Content based on topVehiclesTab */}
-        {topVehiclesTab === "lado_a_lado" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top 10 Highest Cost */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between bg-rose-50 p-3 rounded-2xl border border-rose-100">
-                <span className="font-extrabold text-rose-900 text-xs flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-rose-600" /> Top 10 Veículos de Maior Custo
-                </span>
-                <span className="text-[10px] font-bold bg-rose-200/80 text-rose-900 px-2 py-0.5 rounded-md">
-                  Atenção ao Custo
-                </span>
-              </div>
-              <div className="space-y-2">
-                {vehicleStats.top10Highest.length === 0 ? (
-                  <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo registrado.</p>
-                ) : (
-                  vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))
-                )}
-              </div>
-            </div>
-
-            {/* Top 10 Lowest Cost */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
-                <span className="font-extrabold text-emerald-900 text-xs flex items-center gap-2">
-                  <TrendingDown className="w-4 h-4 text-emerald-600" /> Top 10 Veículos de Menor Custo
-                </span>
-                <span className="text-[10px] font-bold bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-md">
-                  Mais Eficientes
-                </span>
-              </div>
-              <div className="space-y-2">
-                {vehicleStats.top10Lowest.length === 0 ? (
-                  <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo registrado.</p>
-                ) : (
-                  vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {topVehiclesTab === "maior" && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))}
-            </div>
-          </div>
-        )}
-
-        {topVehiclesTab === "menor" && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))}
-            </div>
-          </div>
-        )}
-
-        {topVehiclesTab === "cpk" && (
-          <div className="space-y-3">
-            <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100 text-xs text-purple-900 space-y-1">
-              <p className="font-extrabold text-purple-950">O que é o Ranking CPK (Custo por Quilômetro Rodado)?</p>
-              <p className="text-purple-800 text-[11px]">
-                O CPK é calculado dividindo o Custo Total das despesas do veículo no SOFtran pelo Km Rodado importado via relatório GFV. Quanto menor o CPK, mais econômico é a operação daquele veículo.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vehicleStats.topCPK.length === 0 ? (
-                <p className="text-xs text-zinc-400 italic p-4 text-center col-span-2">
-                  Importe os relatórios GFV (Consumo) e SOFtran (Despesas) para visualizar o CPK.
-                </p>
-              ) : (
-                vehicleStats.topCPK.map((v, i) => renderVehicleCard(v, i + 1, true))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Category & Supplier Ranking Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Categories Ranking */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-extrabold text-zinc-900 text-base">Ranking por Categoria de Custo</h3>
-            </div>
-            <span className="text-xs font-bold text-zinc-500">{topCategoriesList.length} categorias</span>
-          </div>
-
-          <div className="space-y-2">
-            {topCategoriesList.slice(0, 10).map((cat, idx) => (
-              <div key={cat.name} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-200/80 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center ${
-                    idx === 0 ? "bg-amber-400 text-amber-950" : idx === 1 ? "bg-slate-300 text-slate-900" : idx === 2 ? "bg-amber-600/30 text-amber-900" : "bg-zinc-200 text-zinc-700"
-                  }`}>
-                    #{idx + 1}
-                  </span>
-                  <div>
-                    <p className="font-bold text-xs text-zinc-900">{cat.name}</p>
-                    <p className="text-[11px] text-zinc-500">{cat.count} lançamentos • {cat.percent.toFixed(1)}% do total</p>
-                  </div>
-                </div>
-                <span className="font-black text-xs text-indigo-700">{formatCurrency(cat.valorTotal)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Top Suppliers Ranking */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-            <div className="flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-blue-600" />
-              <h3 className="font-extrabold text-zinc-900 text-base">Ranking por Fornecedor / Posto</h3>
-            </div>
-            <span className="text-xs font-bold text-zinc-500">{topFornecedoresList.length} fornecedores</span>
-          </div>
-
-          <div className="space-y-2">
-            {topFornecedoresList.slice(0, 10).map((forn, idx) => (
-              <div key={forn.name} className="p-3 bg-zinc-50 rounded-2xl border border-zinc-200/80 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`w-7 h-7 rounded-xl text-xs font-black flex items-center justify-center ${
-                    idx === 0 ? "bg-amber-400 text-amber-950" : idx === 1 ? "bg-slate-300 text-slate-900" : idx === 2 ? "bg-amber-600/30 text-amber-900" : "bg-zinc-200 text-zinc-700"
-                  }`}>
-                    #{idx + 1}
-                  </span>
-                  <div>
-                    <p className="font-bold text-xs text-zinc-900 truncate max-w-[200px]">{forn.name}</p>
-                    <p className="text-[11px] text-zinc-500">{forn.count} compras • {forn.percent.toFixed(1)}% do total</p>
-                  </div>
-                </div>
-                <span className="font-black text-xs text-blue-700">{formatCurrency(forn.valorTotal)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderTendenciaTab = () => {
-    const highestMonth = [...monthlyTrendData].sort((a, b) => b.totalValor - a.totalValor)[0];
-    const lowestMonth = [...monthlyTrendData].sort((a, b) => a.totalValor - b.totalValor)[0];
-    const avgMonthlyCost = monthlyTrendData.length > 0
-      ? monthlyTrendData.reduce((acc, m) => acc + m.totalValor, 0) / monthlyTrendData.length
-      : 0;
-    const lastMonth = monthlyTrendData[monthlyTrendData.length - 1];
-
-    return (
-      <div className="space-y-6">
-        {renderFilterToolbar()}
-
-        {/* Trend KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Mês de Maior Custo</span>
-              <TrendingUp className="w-4 h-4 text-rose-500" />
-            </div>
-            <p className="text-lg font-black text-zinc-900">{highestMonth ? highestMonth.monthLabel : "-"}</p>
-            <p className="text-xs font-bold text-rose-600 mt-0.5">{highestMonth ? formatCurrency(highestMonth.totalValor) : "R$ 0,00"}</p>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Mês de Menor Custo</span>
-              <TrendingDown className="w-4 h-4 text-emerald-500" />
-            </div>
-            <p className="text-lg font-black text-zinc-900">{lowestMonth ? lowestMonth.monthLabel : "-"}</p>
-            <p className="text-xs font-bold text-emerald-600 mt-0.5">{lowestMonth ? formatCurrency(lowestMonth.totalValor) : "R$ 0,00"}</p>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Média Mensal</span>
-              <Calculator className="w-4 h-4 text-blue-500" />
-            </div>
-            <p className="text-lg font-black text-blue-900">{formatCurrency(avgMonthlyCost)}</p>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Calculada em {monthlyTrendData.length} meses</p>
-          </div>
-
-          <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
-            <div className="flex items-center justify-between text-zinc-500 mb-2">
-              <span className="text-xs font-extrabold uppercase tracking-wider">Variação Último Mês</span>
-              {lastMonth && lastMonth.variationPct >= 0 ? (
-                <ArrowUpRight className="w-4 h-4 text-rose-500" />
-              ) : (
-                <ArrowDownRight className="w-4 h-4 text-emerald-500" />
-              )}
-            </div>
-            <p className={`text-lg font-black ${lastMonth && lastMonth.variationPct >= 0 ? "text-rose-600" : "text-emerald-600"}`}>
-              {lastMonth ? `${lastMonth.variationPct >= 0 ? "+" : ""}${lastMonth.variationPct.toFixed(1)}%` : "0.0%"}
-            </p>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Comparado ao mês anterior</p>
-          </div>
-        </div>
-
-        {/* Line / Area Chart for Trend */}
-        <div className="bg-white p-6 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-extrabold text-zinc-900 text-base flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-purple-600" /> Evolução Temporal de Custos (R$)
-              </h3>
-              <p className="text-xs text-zinc-500 mt-0.5">Tendência mês a mês dos valores totais importados</p>
-            </div>
-          </div>
-
-          <div className="h-80 w-full pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyTrendData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
-                <defs>
-                  <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: "#64748b" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(value: any) => [formatCurrency(Number(value)), "Custo Total"]} />
-                <Area type="monotone" dataKey="totalValor" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Monthly Table */}
-        <div className="bg-white p-6 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
-          <h3 className="font-extrabold text-zinc-900 text-base">Tabela de Evolução Mensal</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                  <th className="p-3">Mês / Ano</th>
-                  <th className="p-3 text-center">Lançamentos</th>
-                  <th className="p-3 text-center">Consumo (Litros)</th>
-                  <th className="p-3 text-right">Custo Total (R$)</th>
-                  <th className="p-3 text-right">Variação vs Mês Anterior</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {monthlyTrendData.map((m) => (
-                  <tr key={m.monthKey} className="hover:bg-zinc-50">
-                    <td className="p-3 font-bold text-zinc-900">{m.monthLabel}</td>
-                    <td className="p-3 text-center text-zinc-700">{m.count}</td>
-                    <td className="p-3 text-center text-zinc-700">{m.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</td>
-                    <td className="p-3 text-right font-black text-purple-700">{formatCurrency(m.totalValor)}</td>
-                    <td className="p-3 text-right">
-                      <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full font-bold text-[11px] ${
-                        m.variationPct > 0 ? "bg-rose-100 text-rose-800" : m.variationPct < 0 ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-700"
-                      }`}>
-                        {m.variationPct > 0 ? `+${m.variationPct.toFixed(1)}%` : `${m.variationPct.toFixed(1)}%`}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderVeiculoAVeiculoTab = () => {
-    const totalKmFrota = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.kmRodadoCombustivel || 0), 0);
-    const totalDespesasFrota = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.costDespesas || 0), 0);
-    const totalLitersFrota = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.totalLiters || 0), 0);
-    const cpkFrotaMedio = totalKmFrota > 0 ? totalDespesasFrota / totalKmFrota : 0;
-
-    return (
-      <div className="space-y-6">
-        {renderFilterToolbar()}
-
-        {/* Fleet KPI Summary Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-sm">
-            <p className="text-[10px] font-extrabold uppercase text-slate-400">Total de Veículos</p>
-            <p className="text-xl font-black mt-1 text-amber-400">{vehicleStats.allVehicles.length} veículos</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Km Rodado Total</p>
-            <p className="text-lg font-black mt-1 text-blue-900">{totalKmFrota ? `${totalKmFrota.toLocaleString("pt-BR")} km` : "0 km"}</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Consumo Total</p>
-            <p className="text-lg font-black mt-1 text-amber-900">{totalLitersFrota.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Despesas SOFtran</p>
-            <p className="text-lg font-black mt-1 text-emerald-700">{formatCurrency(totalDespesasFrota)}</p>
-          </div>
-          <div className="bg-purple-900 text-white p-4 rounded-2xl shadow-sm">
-            <p className="text-[10px] font-extrabold uppercase text-purple-300">CPK Médio da Frota</p>
-            <p className="text-xl font-black mt-1 text-purple-200">{cpkFrotaMedio > 0 ? `R$ ${cpkFrotaMedio.toFixed(3)}/km` : "Sem Km"}</p>
-          </div>
-        </div>
-
-        {/* Vehicle Search & Sorting Bar */}
-        <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar placa ou número da frota..."
-                value={veiculoSearch}
-                onChange={(e) => setVeiculoSearch(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-zinc-600">
-                <ArrowUpDown className="w-4 h-4 text-zinc-400" />
-                <span>Ordenar Por:</span>
-                <select
-                  value={veiculoSortField}
-                  onChange={(e) => setVeiculoSortField(e.target.value as any)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-100 border border-zinc-200 text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
-                >
-                  <option value="totalCost">Custo Total (R$)</option>
-                  <option value="cpk">CPK (R$/Km)</option>
-                  <option value="kmRodadoCombustivel">Km Rodado (GFV)</option>
-                  <option value="totalLiters">Litros Consumidos</option>
-                  <option value="viagensCount">Qtd Viagens / Abastecimentos</option>
-                </select>
-
-                <button
-                  onClick={() => setVeiculoSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))}
-                  className="px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-xs font-bold text-zinc-700 transition-colors cursor-pointer"
-                >
-                  {veiculoSortOrder === "desc" ? "Decrescente" : "Crescente"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Complete Vehicle Matrix Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                  <th className="p-3.5 text-center">#</th>
-                  <th className="p-3.5">Placa</th>
-                  <th className="p-3.5">Frota</th>
-                  <th className="p-3.5 text-center">Viagens (Qtd)</th>
-                  <th className="p-3.5 text-center">Litros (GFV)</th>
-                  <th className="p-3.5 text-center">Km Rodado (GFV)</th>
-                  <th className="p-3.5 text-center">Média (Km/L)</th>
-                  <th className="p-3.5 text-right">Despesas SOFtran</th>
-                  <th className="p-3.5 text-right">CPK (R$/Km)</th>
-                  <th className="p-3.5 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {sortedVehiclesList.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="p-8 text-center text-zinc-400 font-semibold">
-                      Nenhum veículo encontrado para a busca.
-                    </td>
-                  </tr>
-                ) : (
-                  sortedVehiclesList.map((v, idx) => {
-                    const mediaKmL = v.totalLiters > 0 && v.kmRodadoCombustivel > 0
-                      ? v.kmRodadoCombustivel / v.totalLiters
-                      : 0;
-
-                    return (
-                      <tr key={v.key} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="p-3.5 text-center font-bold text-zinc-400">#{idx + 1}</td>
-                        <td className="p-3.5 font-extrabold text-zinc-900">{v.placa}</td>
-                        <td className="p-3.5 font-semibold text-zinc-600">{v.numero_frota || "-"}</td>
-                        <td className="p-3.5 text-center text-zinc-700">{v.viagensCount}</td>
-                        <td className="p-3.5 text-center text-amber-900 font-bold">
-                          {v.totalLiters > 0 ? `${v.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center text-blue-900 font-bold">
-                          {v.kmRodadoCombustivel > 0 ? `${v.kmRodadoCombustivel.toLocaleString("pt-BR")} km` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center font-bold text-emerald-700">
-                          {mediaKmL > 0 ? `${mediaKmL.toFixed(2)} km/L` : "-"}
-                        </td>
-                        <td className="p-3.5 text-right font-black text-slate-900">{formatCurrency(v.costDespesas)}</td>
-                        <td className="p-3.5 text-right font-black text-purple-700">
-                          {v.cpk > 0 ? `R$ ${v.cpk.toFixed(3)}` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <button
-                            onClick={() => setSelectedVehicleDetailKey(v.key)}
-                            className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            Ver Viagens
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderFilterToolbar = () => (
-    <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4 no-print">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
-        <div className="flex items-center gap-2 text-zinc-900 font-bold text-sm">
-          <Filter className="w-4 h-4 text-blue-600" />
-          <span>Filtros e Configuração do Relatório Atual</span>
-        </div>
-
-        {/* Quick Sub-tabs for Import Type */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-100/90 rounded-2xl border border-zinc-200/60">
-          <button
-            onClick={() => setTipoImportacaoFilter("Todas")}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              tipoImportacaoFilter === "Todas"
-                ? "bg-white text-blue-700 shadow-xs"
-                : "text-zinc-600 hover:text-zinc-900"
-            }`}
-          >
-            Todas as Importações
-          </button>
-          <button
-            onClick={() => setTipoImportacaoFilter("combustivel_gfv")}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              tipoImportacaoFilter === "combustivel_gfv"
-                ? "bg-amber-600 text-white shadow-xs"
-                : "text-zinc-600 hover:text-zinc-900"
-            }`}
-          >
-            <Fuel className="w-3.5 h-3.5" /> Consumo de Combustível (GFV)
-          </button>
-          <button
-            onClick={() => setTipoImportacaoFilter("receitas_despesas")}
-            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              tipoImportacaoFilter === "receitas_despesas"
-                ? "bg-indigo-600 text-white shadow-xs"
-                : "text-zinc-600 hover:text-zinc-900"
-            }`}
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" /> Receitas e Despesas (SOFtran)
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        {/* Tipo de Importação Dropdown */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Tipo da Importação
-          </label>
-          <select
-            value={tipoImportacaoFilter}
-            onChange={(e) => setTipoImportacaoFilter(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-amber-50/80 border border-amber-200 text-xs font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
-          >
-            <option value="Todas">Todas as Importações</option>
-            <option value="combustivel_gfv">Consumo de Combustível (GFV)</option>
-            <option value="receitas_despesas">Receitas e Despesas (SOFtran)</option>
-          </select>
-        </div>
-
-        {/* Categoria */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Categoria
-          </label>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Período / Mês */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1 flex items-center justify-between">
-            <span>Período / Mês</span>
-            {selectedPeriod.startsWith("m:") && (
-              <span className="text-[10px] text-blue-600 font-bold">Por Mês</span>
-            )}
-          </label>
-          <div className="space-y-1">
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            >
-              <optgroup label="Períodos Relativos">
-                <option value="0">Todo o Histórico</option>
-                <option value="30">Últimos 30 dias</option>
-                <option value="60">Últimos 60 dias</option>
-                <option value="90">Últimos 90 dias</option>
-                <option value="365">Este Ano (365d)</option>
-              </optgroup>
-
-              {Object.entries(monthsByYear).map(([year, monthList]) => (
-                <optgroup key={year} label={`Ano ${year}`}>
-                  {monthList.map((my) => {
-                    const [m] = my.split("/");
-                    const monthName = MONTH_NAMES_PT[m] || m;
-                    return (
-                      <option key={my} value={`m:${my}`}>
-                        Mês {my} ({monthName})
-                      </option>
-                    );
-                  })}
-                </optgroup>
-              ))}
-
-              <optgroup label="Personalizado">
-                <option value="custom">Selecionar Mês Específico (Seletor)</option>
-              </optgroup>
-            </select>
-
-            {selectedPeriod === "custom" && (
-              <input
-                type="month"
-                value={customMonth}
-                onChange={(e) => setCustomMonth(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-xl bg-blue-50 border border-blue-300 text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Agrupar Por */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Agrupar Dados Por
-          </label>
-          <select
-            value={agruparPor}
-            onChange={(e) => setAgruparPor(e.target.value as any)}
-            className="w-full px-3 py-2 rounded-xl bg-blue-50/80 border border-blue-200 text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          >
-            <option value="categoria">Categoria</option>
-            <option value="tipo_importacao">Tipo de Importação (GFV vs SOFtran)</option>
-            <option value="placa">Placa / Frota</option>
-            <option value="fornecedor">Fornecedor / Posto</option>
-            <option value="mes">Mês / Período</option>
-            <option value="status">Status do Lançamento</option>
-          </select>
-        </div>
-
-        {/* Métrica */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Métrica Principal
-          </label>
-          <select
-            value={metrica}
-            onChange={(e) => setMetrica(e.target.value as any)}
-            className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          >
-            <option value="soma_valor">Soma Valor Total (R$)</option>
-            <option value="quantidade">Quantidade de Lançamentos</option>
-            <option value="media_valor">Valor Médio por Lançamento (R$)</option>
-            <option value="soma_quantidade">Soma Unidades / Litros</option>
-          </select>
-        </div>
-
-        {/* Placa Search Filter */}
-        <div>
-          <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-            Filtro Placa / Frota
-          </label>
-          <input
-            type="text"
-            placeholder="Ex: ABC1D23"
-            value={placaFilter}
-            onChange={(e) => setPlacaFilter(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderCpkTab = () => {
-    const vehiclesWithKm = vehicleStats.allVehicles.filter((v) => v.kmRodadoCombustivel > 0);
-    const totalFleetKm = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.kmRodadoCombustivel || 0), 0);
-    const totalFleetCost = vehicleStats.allVehicles.reduce((acc, v) => acc + (v.totalCost || 0), 0);
-    const avgFleetCpk = totalFleetKm > 0 ? totalFleetCost / totalFleetKm : 0;
-
-    const validCpkVehicles = [...vehiclesWithKm].filter((v) => v.cpk > 0);
-    const bestCpkVehicle = [...validCpkVehicles].sort((a, b) => a.cpk - b.cpk)[0];
-    const worstCpkVehicle = [...validCpkVehicles].sort((a, b) => b.cpk - a.cpk)[0];
-
-    // Filtering & Sorting for CPK list
-    const filteredCpkVehicles = vehicleStats.allVehicles.filter((v) => {
-      if (cpkSearch.trim()) {
-        const term = cpkSearch.toLowerCase().trim();
-        const matchPlate = v.placa.toLowerCase().includes(term);
-        const matchFrota = (v.numero_frota || "").toLowerCase().includes(term);
-        if (!matchPlate && !matchFrota) return false;
-      }
-
-      if (cpkFilterRange === "economicos") {
-        return v.cpk > 0 && v.cpk <= 2.0;
-      } else if (cpkFilterRange === "medios") {
-        return v.cpk > 2.0 && v.cpk <= 4.0;
-      } else if (cpkFilterRange === "elevados") {
-        return v.cpk > 4.0;
-      } else if (cpkFilterRange === "sem_km") {
-        return v.kmRodadoCombustivel === 0;
-      }
-
-      return true;
+  // Table Tab Filtered Records
+  const tableFilteredRecords = useMemo(() => {
+    if (!tableSearch.trim()) return filteredRecords;
+    const term = tableSearch.toLowerCase().trim();
+    return filteredRecords.filter((r) => {
+      return (
+        (r.placa || "").toLowerCase().includes(term) ||
+        (r.numero_frota || "").toLowerCase().includes(term) ||
+        (r.tipo_registro || "").toLowerCase().includes(term) ||
+        (r.fornecedor || "").toLowerCase().includes(term) ||
+        (r.descricao_conta || "").toLowerCase().includes(term) ||
+        (r.conta || "").toLowerCase().includes(term)
+      );
     });
-
-    const sortedCpkVehicles = [...filteredCpkVehicles].sort((a, b) => {
-      if (cpkSortOrder === "cpk_asc") {
-        if (a.cpk === 0 && b.cpk > 0) return 1;
-        if (b.cpk === 0 && a.cpk > 0) return -1;
-        return a.cpk - b.cpk;
-      } else if (cpkSortOrder === "cpk_desc") {
-        return b.cpk - a.cpk;
-      } else if (cpkSortOrder === "cost_desc") {
-        return b.totalCost - a.totalCost;
-      } else if (cpkSortOrder === "km_desc") {
-        return b.kmRodadoCombustivel - a.kmRodadoCombustivel;
-      }
-      return 0;
-    });
-
-    return (
-      <div className="space-y-6">
-        {renderFilterToolbar()}
-
-        {/* Header CPK Concept Card */}
-        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 shadow-lg relative overflow-hidden">
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-semibold border border-purple-400/30">
-                <Calculator className="w-3.5 h-3.5 text-purple-300" /> Indicador de Desempenho Operacional (R$/Km)
-              </div>
-              <h3 className="text-2xl font-black tracking-tight">Relatório Especializado de CPK</h3>
-              <p className="text-purple-200 text-xs sm:text-sm max-w-2xl leading-relaxed">
-                O <strong>CPK (Custo por Quilômetro Rodado)</strong> mede o custo operacional de cada veículo. É obtido dividindo o <strong>Custo Total das despesas (SOFtran e Combustível)</strong> pelo <strong>Quilômetro Rodado (GFV/Telemetria)</strong>.
-              </p>
-            </div>
-
-            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 shrink-0 text-center space-y-1">
-              <p className="text-[10px] uppercase tracking-wider font-extrabold text-purple-300">Fórmula de Cálculo</p>
-              <p className="text-sm font-black text-amber-300">CPK = Custo Total (R$) ÷ Km Rodado</p>
-              <p className="text-[10px] text-slate-300">Cruzamento Inteligente GFV x SOFtran</p>
-            </div>
-          </div>
-        </div>
-
-        {/* CPK Fleet KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-          <div className="bg-purple-900 text-white p-4 rounded-2xl shadow-sm border border-purple-800">
-            <p className="text-[10px] font-extrabold uppercase text-purple-300">CPK Médio da Frota</p>
-            <p className="text-xl font-black mt-1 text-purple-200">
-              {avgFleetCpk > 0 ? `R$ ${avgFleetCpk.toFixed(3)}/km` : "Sem dados de Km"}
-            </p>
-            <p className="text-[10px] text-purple-300/80 mt-1">Geral de todos os veículos</p>
-          </div>
-
-          <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-emerald-700">Mais Econômico (Menor CPK)</p>
-            <p className="text-base font-black mt-1 text-emerald-900 truncate">
-              {bestCpkVehicle ? `${bestCpkVehicle.placa} (R$ ${bestCpkVehicle.cpk.toFixed(3)})` : "-"}
-            </p>
-            <p className="text-[10px] text-emerald-600 mt-1">Melhor eficiência no período</p>
-          </div>
-
-          <div className="bg-rose-50 p-4 rounded-2xl border border-rose-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-rose-700">Maior Custo por Km</p>
-            <p className="text-base font-black mt-1 text-rose-900 truncate">
-              {worstCpkVehicle ? `${worstCpkVehicle.placa} (R$ ${worstCpkVehicle.cpk.toFixed(3)})` : "-"}
-            </p>
-            <p className="text-[10px] text-rose-600 mt-1">Ponto de atenção operacional</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Frota Km Rodado Total</p>
-            <p className="text-base font-black mt-1 text-blue-900">
-              {totalFleetKm ? `${totalFleetKm.toLocaleString("pt-BR")} km` : "0 km"}
-            </p>
-            <p className="text-[10px] text-zinc-400 mt-1">Registrado via GFV</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Custo Total Avaliado</p>
-            <p className="text-base font-black mt-1 text-slate-900">{formatCurrency(totalFleetCost)}</p>
-            <p className="text-[10px] text-zinc-400 mt-1">SOFtran + GFV</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-            <p className="text-[10px] font-extrabold uppercase text-zinc-500">Veículos com CPK</p>
-            <p className="text-base font-black mt-1 text-indigo-900">
-              {vehiclesWithKm.length} / {vehicleStats.allVehicles.length}
-            </p>
-            <p className="text-[10px] text-zinc-400 mt-1">Com Km de telemetria</p>
-          </div>
-        </div>
-
-        {/* CPK Chart Comparison View */}
-        {validCpkVehicles.length > 0 && (
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-              <div>
-                <h3 className="font-extrabold text-zinc-900 text-base flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-purple-600" /> Comparativo Visual de CPK por Veículo (R$/Km)
-                </h3>
-                <p className="text-xs text-zinc-500">Veículos com barras menores apresentam maior eficiência econômica.</p>
-              </div>
-              <span className="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
-                Média Frota: R$ {avgFleetCpk.toFixed(3)}/km
-              </span>
-            </div>
-
-            <div className="h-72 w-full pt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[...validCpkVehicles]
-                    .sort((a, b) => a.cpk - b.cpk)
-                    .slice(0, 15)
-                    .map((v) => ({
-                      placa: v.placa,
-                      cpk: Number(v.cpk.toFixed(3)),
-                      cost: v.totalCost,
-                      km: v.kmRodadoCombustivel,
-                    }))}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="placa" tick={{ fontSize: 11, fontWeight: "bold" }} />
-                  <YAxis tick={{ fontSize: 11 }} unit=" R$" />
-                  <Tooltip
-                    formatter={(value: any) => [`R$ ${Number(value).toFixed(3)} / km`, "CPK"]}
-                    labelFormatter={(label) => `Veículo Placa: ${label}`}
-                  />
-                  <Bar dataKey="cpk" fill="#7c3aed" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* CPK Matrix Table Section */}
-        <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4">
-          {/* Search, Filter & Sort Bar */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-            <div className="relative w-full md:w-72">
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar placa ou frota..."
-                value={cpkSearch}
-                onChange={(e) => setCpkSearch(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Filter Range */}
-              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-600">
-                <Filter className="w-4 h-4 text-purple-600" />
-                <span>Faixa CPK:</span>
-                <select
-                  value={cpkFilterRange}
-                  onChange={(e) => setCpkFilterRange(e.target.value as any)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-100 border border-zinc-200 text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
-                >
-                  <option value="todos">Todos os Veículos</option>
-                  <option value="economicos">Econômicos (&le; R$ 2,00/km)</option>
-                  <option value="medios">Médios (R$ 2,00 - R$ 4,00/km)</option>
-                  <option value="elevados">Elevados (&gt; R$ 4,00/km)</option>
-                  <option value="sem_km">Sem Km Registrado</option>
-                </select>
-              </div>
-
-              {/* Sort Order */}
-              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-600">
-                <ArrowUpDown className="w-4 h-4 text-zinc-400" />
-                <span>Ordenar:</span>
-                <select
-                  value={cpkSortOrder}
-                  onChange={(e) => setCpkSortOrder(e.target.value as any)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-100 border border-zinc-200 text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
-                >
-                  <option value="cpk_asc">Menor CPK (Mais Econômico)</option>
-                  <option value="cpk_desc">Maior CPK (Maior Custo/Km)</option>
-                  <option value="cost_desc">Maior Custo Total (R$)</option>
-                  <option value="km_desc">Maior Km Rodado</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* CPK Detailed Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-purple-950 text-purple-200 border-b border-purple-900 uppercase tracking-wider text-[10px] font-extrabold">
-                  <th className="p-3.5 text-center">#</th>
-                  <th className="p-3.5">Placa</th>
-                  <th className="p-3.5">Frota</th>
-                  <th className="p-3.5 text-center">Km Rodado (GFV)</th>
-                  <th className="p-3.5 text-center">Consumo (L)</th>
-                  <th className="p-3.5 text-center">Média (Km/L)</th>
-                  <th className="p-3.5 text-right">Custo Despesas (R$)</th>
-                  <th className="p-3.5 text-right">CPK Total (R$/Km)</th>
-                  <th className="p-3.5 text-center">Status CPK</th>
-                  <th className="p-3.5 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {sortedCpkVehicles.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="p-8 text-center text-zinc-400 font-semibold">
-                      Nenhum veículo encontrado para os filtros selecionados.
-                    </td>
-                  </tr>
-                ) : (
-                  sortedCpkVehicles.map((v, idx) => {
-                    const mediaKmL = v.totalLiters > 0 && v.kmRodadoCombustivel > 0
-                      ? v.kmRodadoCombustivel / v.totalLiters
-                      : 0;
-
-                    let cpkBadge = { label: "Sem Km", cls: "bg-zinc-100 text-zinc-600 border-zinc-200" };
-                    if (v.cpk > 0) {
-                      if (v.cpk <= 2.0) {
-                        cpkBadge = { label: "Econômico", cls: "bg-emerald-100 text-emerald-800 border-emerald-300 font-bold" };
-                      } else if (v.cpk <= 4.0) {
-                        cpkBadge = { label: "Média Operacional", cls: "bg-amber-100 text-amber-800 border-amber-300 font-bold" };
-                      } else {
-                        cpkBadge = { label: "Custo Elevado", cls: "bg-rose-100 text-rose-800 border-rose-300 font-bold" };
-                      }
-                    }
-
-                    return (
-                      <tr key={v.key} className="hover:bg-purple-50/30 transition-colors">
-                        <td className="p-3.5 text-center font-bold text-zinc-400">#{idx + 1}</td>
-                        <td className="p-3.5 font-extrabold text-zinc-900">{v.placa}</td>
-                        <td className="p-3.5 font-semibold text-zinc-600">{v.numero_frota || "-"}</td>
-                        <td className="p-3.5 text-center text-blue-900 font-bold">
-                          {v.kmRodadoCombustivel > 0 ? `${v.kmRodadoCombustivel.toLocaleString("pt-BR")} km` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center text-amber-900 font-bold">
-                          {v.totalLiters > 0 ? `${v.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center font-bold text-emerald-700">
-                          {mediaKmL > 0 ? `${mediaKmL.toFixed(2)} km/L` : "-"}
-                        </td>
-                        <td className="p-3.5 text-right font-black text-slate-900">{formatCurrency(v.totalCost)}</td>
-                        <td className="p-3.5 text-right font-black text-purple-700 text-sm">
-                          {v.cpk > 0 ? `R$ ${v.cpk.toFixed(3)}` : "-"}
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-[11px] border ${cpkBadge.cls}`}>
-                            {cpkBadge.label}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <button
-                            onClick={() => setSelectedVehicleDetailKey(v.key)}
-                            className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            Ver Viagens
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  }, [filteredRecords, tableSearch]);
 
   return (
     <div className="space-y-6">
@@ -2887,8 +609,18 @@ export default function ImportReportsTab({ companyId }: Props) {
         </div>
       </div>
 
-      {/* Sub-Navigation Tabs Bar for Reports & Dashboards */}
+      {/* Sub-Navigation Tabs Bar */}
       <div className="bg-white rounded-2xl p-2 border border-zinc-200/80 shadow-xs flex flex-wrap items-center gap-1.5 no-print">
+        <button
+          onClick={() => setReportViewTab("analitico")}
+          className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            reportViewTab === "analitico"
+              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" /> Analítico & Moldes
+        </button>
         <button
           onClick={() => setReportViewTab("ranking")}
           className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
@@ -2899,890 +631,407 @@ export default function ImportReportsTab({ companyId }: Props) {
         >
           <Award className="w-4 h-4" /> Ranking
         </button>
-
-        <button
-          onClick={() => setReportViewTab("analitico")}
-          className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            reportViewTab === "analitico"
-              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
-              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
-          }`}
-        >
-          <PieChartIcon className="w-4 h-4" /> Analítico
-        </button>
-
         <button
           onClick={() => setReportViewTab("tendencia")}
           className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
             reportViewTab === "tendencia"
-              ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-md shadow-purple-500/20"
+              ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-500/20"
               : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
           }`}
         >
           <TrendingUp className="w-4 h-4" /> Tendência
         </button>
-
+        <button
+          onClick={() => setReportViewTab("veiculo_a_veiculo")}
+          className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            reportViewTab === "veiculo_a_veiculo"
+              ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-500/20"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <Truck className="w-4 h-4" /> Veículo a Veículo
+        </button>
+        <button
+          onClick={() => setReportViewTab("cpk")}
+          className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            reportViewTab === "cpk"
+              ? "bg-gradient-to-r from-purple-700 to-indigo-800 text-white shadow-md shadow-purple-500/20"
+              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+          }`}
+        >
+          <Calculator className="w-4 h-4" /> Relatório CPK
+        </button>
         <button
           onClick={() => setReportViewTab("tabelas")}
           className={`flex-1 min-w-[140px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
             reportViewTab === "tabelas"
-              ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/20"
+              ? "bg-gradient-to-r from-slate-700 to-zinc-900 text-white shadow-md shadow-zinc-500/20"
               : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
           }`}
         >
-          <FileSpreadsheet className="w-4 h-4" /> Tabelas
-        </button>
-
-        <button
-          onClick={() => setReportViewTab("veiculo_a_veiculo")}
-          className={`flex-1 min-w-[160px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            reportViewTab === "veiculo_a_veiculo"
-              ? "bg-gradient-to-r from-slate-800 to-zinc-900 text-white shadow-md shadow-slate-900/20"
-              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
-          }`}
-        >
-          <Truck className="w-4 h-4 text-amber-400" /> Tabelas Veículo a Veículo
-        </button>
-
-        <button
-          onClick={() => setReportViewTab("cpk")}
-          className={`flex-1 min-w-[150px] px-4 py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            reportViewTab === "cpk"
-              ? "bg-gradient-to-r from-purple-700 to-indigo-800 text-white shadow-md shadow-purple-600/20"
-              : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
-          }`}
-        >
-          <Calculator className="w-4 h-4 text-purple-300" /> Relatório CPK
+          <TableIcon className="w-4 h-4" /> Tabelas & Lançamentos
         </button>
       </div>
 
-      {/* Tab 1: Ranking */}
-      {reportViewTab === "ranking" && renderRankingTab()}
+      {/* RENDER ACTIVE TAB */}
+      {reportViewTab === "tendencia" && (
+        <ReportTendenciaTab
+          records={records}
+          tipoImportacaoFilter={tipoImportacaoFilter}
+          categoryFilter={categoryFilter}
+          placaFilter={placaFilter}
+          fornecedorFilter={fornecedorFilter}
+          onResetFilters={handleResetFilters}
+        />
+      )}
 
-      {/* Tab 3: Tendência */}
-      {reportViewTab === "tendencia" && renderTendenciaTab()}
+      {reportViewTab === "ranking" && (
+        <ReportRankingTab
+          vehicleStats={vehicleStats}
+          supplierStats={supplierStats}
+          onSelectVehicle={(key) => setSelectedVehicleDetailKey(key)}
+        />
+      )}
 
-      {/* Tab 5: Tabelas Veículo a Veículo */}
-      {reportViewTab === "veiculo_a_veiculo" && renderVeiculoAVeiculoTab()}
+      {reportViewTab === "veiculo_a_veiculo" && (
+        <ReportVeiculoTab
+          vehicleStats={vehicleStats}
+          onSelectVehicle={(key) => setSelectedVehicleDetailKey(key)}
+        />
+      )}
 
-      {/* Tab 6: Relatório CPK */}
-      {reportViewTab === "cpk" && renderCpkTab()}
+      {reportViewTab === "cpk" && (
+        <ReportCpkTab
+          vehicleStats={vehicleStats}
+          onSelectVehicle={(key) => setSelectedVehicleDetailKey(key)}
+        />
+      )}
 
-      {/* Tab 2: Analítico */}
       {reportViewTab === "analitico" && (
         <div className="space-y-6">
-          {/* Gallery of Report Models / Moldes */}
-          <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4 no-print">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-blue-600" />
-            <h3 className="font-extrabold text-zinc-900 text-base">Moldes e Modelos de Relatórios</h3>
-            <span className="text-xs bg-zinc-100 text-zinc-600 px-2.5 py-0.5 rounded-full font-bold">
-              {molds.length} disponíveis
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-          {molds.map((mold) => {
-            const isActive = activeMoldId === mold.id;
-            return (
-              <div
-                key={mold.id}
-                onClick={() => applyMold(mold)}
-                className={`p-4 rounded-2xl border transition-all cursor-pointer relative group flex flex-col justify-between ${
-                  isActive
-                    ? "bg-blue-50/70 border-blue-500 shadow-md ring-2 ring-blue-500/20"
-                    : "bg-zinc-50/60 border-zinc-200/80 hover:bg-white hover:border-zinc-300 hover:shadow-sm"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span
-                      className={`p-2 rounded-xl text-xs font-bold ${
-                        isActive ? "bg-blue-600 text-white" : "bg-zinc-200/80 text-zinc-700"
-                      }`}
-                    >
-                      {mold.icon === "Fuel" ? (
-                        <Fuel className="w-4 h-4" />
-                      ) : mold.icon === "Truck" ? (
-                        <Truck className="w-4 h-4" />
-                      ) : mold.icon === "Building2" ? (
-                        <Building2 className="w-4 h-4" />
-                      ) : mold.icon === "TrendingUp" ? (
-                        <TrendingUp className="w-4 h-4" />
-                      ) : (
-                        <PieChartIcon className="w-4 h-4" />
-                      )}
-                    </span>
-                    {mold.e_padrao ? (
-                      <span className="text-[10px] font-bold text-zinc-500 bg-zinc-200/60 px-2 py-0.5 rounded-md">
-                        Padrão
-                      </span>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteCustomMold(mold.id, mold.nome);
-                        }}
-                        className="text-zinc-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors"
-                        title="Excluir Molde Customizado"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  <h4 className="font-bold text-zinc-900 text-xs line-clamp-1">{mold.nome}</h4>
-                  <p className="text-[11px] text-zinc-500 mt-1 line-clamp-2 leading-tight">
-                    {mold.descricao || "Sem descrição"}
-                  </p>
+          {/* Saved Molds Carousel */}
+          {savedMolds.length > 0 && (
+            <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-3 no-print">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-zinc-900 font-extrabold text-sm">
+                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  <span>Seus Moldes de Relatórios Salvos</span>
                 </div>
-
-                <div className="mt-3 pt-2 border-t border-zinc-200/60 flex items-center justify-between text-[10px] font-semibold text-zinc-600">
-                  <span className="capitalize">
-                    Agrup: <strong>{mold.agrupar_por}</strong>
-                  </span>
-                  <span className="capitalize text-blue-600 font-bold">{mold.tipo_grafico}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Filter Customizer Toolbar */}
-      <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
-          <div className="flex items-center gap-2 text-zinc-900 font-bold text-sm">
-            <Filter className="w-4 h-4 text-blue-600" />
-            <span>Filtros e Configuração do Relatório Atual</span>
-          </div>
-
-          {/* Quick Sub-tabs for Import Type */}
-          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-zinc-100/90 rounded-2xl border border-zinc-200/60">
-            <button
-              onClick={() => setTipoImportacaoFilter("Todas")}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                tipoImportacaoFilter === "Todas"
-                  ? "bg-white text-blue-700 shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              Todas as Importações
-            </button>
-            <button
-              onClick={() => setTipoImportacaoFilter("combustivel_gfv")}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                tipoImportacaoFilter === "combustivel_gfv"
-                  ? "bg-amber-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <Fuel className="w-3.5 h-3.5" /> Consumo de Combustível (GFV)
-            </button>
-            <button
-              onClick={() => setTipoImportacaoFilter("receitas_despesas")}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                tipoImportacaoFilter === "receitas_despesas"
-                  ? "bg-indigo-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" /> Receitas e Despesas (SOFtran)
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-          {/* Tipo de Importação Dropdown */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-              Tipo da Importação
-            </label>
-            <select
-              value={tipoImportacaoFilter}
-              onChange={(e) => setTipoImportacaoFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-amber-50/80 border border-amber-200 text-xs font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
-            >
-              <option value="Todas">Todas as Importações</option>
-              <option value="combustivel_gfv">Consumo de Combustível (GFV)</option>
-              <option value="receitas_despesas">Receitas e Despesas (SOFtran)</option>
-            </select>
-          </div>
-
-          {/* Categoria */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-              Categoria
-            </label>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            >
-              {CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Período / Mês */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1 flex items-center justify-between">
-              <span>Período / Mês</span>
-              {selectedPeriod.startsWith("m:") && (
-                <span className="text-[10px] text-blue-600 font-bold">Por Mês</span>
-              )}
-            </label>
-            <div className="space-y-1">
-              <select
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              >
-                <optgroup label="Períodos Relativos">
-                  <option value="0">Todo o Histórico</option>
-                  <option value="30">Últimos 30 dias</option>
-                  <option value="60">Últimos 60 dias</option>
-                  <option value="90">Últimos 90 dias</option>
-                  <option value="365">Este Ano (365d)</option>
-                </optgroup>
-
-                {Object.entries(monthsByYear).map(([year, monthList]) => (
-                  <optgroup key={year} label={`Ano ${year}`}>
-                    {monthList.map((my) => {
-                      const [m] = my.split("/");
-                      const monthName = MONTH_NAMES_PT[m] || m;
-                      return (
-                        <option key={my} value={`m:${my}`}>
-                          Mês {my} ({monthName})
-                        </option>
-                      );
-                    })}
-                  </optgroup>
-                ))}
-
-                <optgroup label="Personalizado">
-                  <option value="custom">Selecionar Mês Específico (Seletor)</option>
-                </optgroup>
-              </select>
-
-              {selectedPeriod === "custom" && (
-                <input
-                  type="month"
-                  value={customMonth}
-                  onChange={(e) => setCustomMonth(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-xl bg-blue-50 border border-blue-300 text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Agrupar Por */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-              Agrupar Dados Por
-            </label>
-            <select
-              value={agruparPor}
-              onChange={(e) => setAgruparPor(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl bg-blue-50/80 border border-blue-200 text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            >
-              <option value="categoria">Categoria</option>
-              <option value="tipo_importacao">Tipo de Importação (GFV vs SOFtran)</option>
-              <option value="placa">Placa / Frota</option>
-              <option value="fornecedor">Fornecedor / Posto</option>
-              <option value="mes">Mês / Período</option>
-              <option value="status">Status do Lançamento</option>
-            </select>
-          </div>
-
-          {/* Métrica */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-              Métrica Principal
-            </label>
-            <select
-              value={metrica}
-              onChange={(e) => setMetrica(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            >
-              <option value="soma_valor">Soma Valor Total (R$)</option>
-              <option value="quantidade">Quantidade de Lançamentos</option>
-              <option value="media_valor">Valor Médio por Lançamento (R$)</option>
-              <option value="soma_quantidade">Soma Unidades / Litros</option>
-            </select>
-          </div>
-
-          {/* Tipo de Gráfico */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-              Exibição Gráfica
-            </label>
-            <select
-              value={tipoGrafico}
-              onChange={(e) => setTipoGrafico(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl bg-purple-50/80 border border-purple-200 text-xs font-bold text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-            >
-              <option value="bar">Gráfico de Barras</option>
-              <option value="pie">Gráfico de Pizza</option>
-              <option value="line">Gráfico de Linhas</option>
-              <option value="area">Gráfico de Área</option>
-              <option value="table">Apenas Tabela</option>
-            </select>
-          </div>
-
-          {/* Placa Search Filter */}
-          <div>
-            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">
-              Filtro Placa / Frota
-            </label>
-            <input
-              type="text"
-              placeholder="Ex: ABC1D23"
-              value={placaFilter}
-              onChange={(e) => setPlacaFilter(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Overall KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-zinc-200/80 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl">
-            <DollarSign className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-extrabold text-zinc-500">Valor Total Filtrado</p>
-            <h4 className="text-xl font-black text-zinc-900 mt-0.5">{formatCurrency(totalValorGeral)}</h4>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-zinc-200/80 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-blue-100 text-blue-700 rounded-2xl">
-            <Hash className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-extrabold text-zinc-500">Total de Registros</p>
-            <h4 className="text-xl font-black text-zinc-900 mt-0.5">{totalRegistrosCount} lançamentos</h4>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-zinc-200/80 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl">
-            <Calculator className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-extrabold text-zinc-500">Custo Médio por Item</p>
-            <h4 className="text-xl font-black text-zinc-900 mt-0.5">{formatCurrency(mediaValorGeral)}</h4>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-zinc-200/80 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-amber-100 text-amber-700 rounded-2xl">
-            <BarChart3 className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-extrabold text-zinc-500">Maior Custo ({agruparPor})</p>
-            <h4 className="text-sm font-black text-zinc-900 mt-0.5 line-clamp-1">
-              {topGroup ? `${topGroup.name}: ${formatCurrency(topGroup.valorTotal)}` : "Sem dados"}
-            </h4>
-          </div>
-        </div>
-      </div>
-
-      {/* Top 10 Vehicles Cost Analysis Block */}
-      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-extrabold mb-1.5 border border-rose-200">
-              <Truck className="w-3.5 h-3.5" /> Relatório Especial de Frotas & Veículos
-            </div>
-            <h3 className="text-lg font-black text-zinc-900">
-              Top 10 Veículos de Maior e Menor Custo
-            </h3>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Análise com detalhamento descritivo de custos por categoria e contagem de viagens (considerando <strong>cada abastecimento / lançamento como 1 viagem</strong>).
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 p-1.5 bg-zinc-100 rounded-2xl border border-zinc-200/80 shrink-0">
-            <button
-              onClick={() => setTopVehiclesTab("lado_a_lado")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                topVehiclesTab === "lado_a_lado"
-                  ? "bg-white text-blue-700 shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              Lado a Lado
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("maior")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                topVehiclesTab === "maior"
-                  ? "bg-rose-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <ArrowUpRight className="w-3.5 h-3.5" /> Top 10 Maior Custo
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("menor")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                topVehiclesTab === "menor"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <ArrowDownRight className="w-3.5 h-3.5" /> Top 10 Menor Custo
-            </button>
-            <button
-              onClick={() => setTopVehiclesTab("cpk")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                topVehiclesTab === "cpk"
-                  ? "bg-purple-600 text-white shadow-xs"
-                  : "text-zinc-600 hover:text-zinc-900"
-              }`}
-            >
-              <Calculator className="w-3.5 h-3.5" /> Ranking CPK (R$/Km)
-            </button>
-          </div>
-        </div>
-
-        {topVehiclesTab === "lado_a_lado" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top 10 Maior Custo */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between bg-rose-50/80 p-3.5 rounded-2xl border border-rose-200">
-                <div className="flex items-center gap-2">
-                  <Flame className="w-5 h-5 text-rose-600" />
-                  <h4 className="font-black text-rose-950 text-sm">10 Veículos com Maior Custo</h4>
-                </div>
-                <span className="text-[11px] font-bold text-rose-800 bg-white/80 px-2.5 py-0.5 rounded-md border border-rose-200">
-                  {vehicleStats.top10Highest.length} veículos
+                <span className="text-xs text-zinc-400 font-bold">
+                  {savedMolds.length} modelo(s) disponível(is)
                 </span>
               </div>
 
-              {vehicleStats.top10Highest.length === 0 ? (
-                <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo encontrado para este filtro.</p>
-              ) : (
-                <div className="space-y-3">
-                  {vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))}
-                </div>
-              )}
-            </div>
-
-            {/* Top 10 Menor Custo */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between bg-emerald-50/80 p-3.5 rounded-2xl border border-emerald-200">
-                <div className="flex items-center gap-2">
-                  <Award className="w-5 h-5 text-emerald-600" />
-                  <h4 className="font-black text-emerald-950 text-sm">10 Veículos com Menor Custo</h4>
-                </div>
-                <span className="text-[11px] font-bold text-emerald-800 bg-white/80 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                  {vehicleStats.top10Lowest.length} veículos
-                </span>
-              </div>
-
-              {vehicleStats.top10Lowest.length === 0 ? (
-                <p className="text-xs text-zinc-400 italic p-4 text-center">Nenhum veículo encontrado para este filtro.</p>
-              ) : (
-                <div className="space-y-3">
-                  {vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : topVehiclesTab === "maior" ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between bg-rose-50/80 p-4 rounded-2xl border border-rose-200">
-              <div className="flex items-center gap-2">
-                <Flame className="w-5 h-5 text-rose-600" />
-                <h4 className="font-black text-rose-950 text-base">Top 10 Veículos de Maior Custo Acumulado</h4>
-              </div>
-              <span className="text-xs font-extrabold text-rose-800 bg-white px-3 py-1 rounded-xl border border-rose-200">
-                Total acumulado: {formatCurrency(vehicleStats.top10Highest.reduce((s, v) => s + v.totalCost, 0))}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {vehicleStats.top10Highest.map((v, i) => renderVehicleCard(v, i + 1, true))}
-            </div>
-          </div>
-        ) : topVehiclesTab === "menor" ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between bg-emerald-50/80 p-4 rounded-2xl border border-emerald-200">
-              <div className="flex items-center gap-2">
-                <Award className="w-5 h-5 text-emerald-600" />
-                <h4 className="font-black text-emerald-950 text-base">Top 10 Veículos de Menor Custo Registrado</h4>
-              </div>
-              <span className="text-xs font-extrabold text-emerald-800 bg-white px-3 py-1 rounded-xl border border-emerald-200">
-                Total acumulado: {formatCurrency(vehicleStats.top10Lowest.reduce((s, v) => s + v.totalCost, 0))}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {vehicleStats.top10Lowest.map((v, i) => renderVehicleCard(v, i + 1, false))}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-purple-50/80 p-4 rounded-2xl border border-purple-200 gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-purple-700" />
-                  <h4 className="font-black text-purple-950 text-base">Ranking & Relatório de Custo por Quilômetro (CPK)</h4>
-                </div>
-                <p className="text-xs text-purple-800 mt-0.5">
-                  CPK = Custo do Veículo (Importação de Receitas/Despesas SOFtran) ÷ Km Rodado (Importação de Consumo de Combustível GFV).
-                </p>
-              </div>
-              <span className="text-xs font-extrabold text-purple-900 bg-white px-3 py-1.5 rounded-xl border border-purple-200 self-start sm:self-auto shadow-xs">
-                {vehicleStats.topCPK.length} veículo(s) calculados
-              </span>
-            </div>
-
-            {vehicleStats.topCPK.length === 0 ? (
-              <div className="p-8 text-center bg-zinc-50 rounded-2xl border border-zinc-200">
-                <Info className="w-8 h-8 text-zinc-400 mx-auto mb-2" />
-                <p className="text-xs font-bold text-zinc-600">Nenhum veículo com Km e Custo registrados no filtro atual.</p>
-                <p className="text-[11px] text-zinc-400 mt-1">
-                  Importe relatórios de 'Consumo de Combustível (GFV)' para obter o Km Rodado e 'Receitas e Despesas (SOFtran)' para os Custos dos veículos.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {vehicleStats.topCPK.map((v, i) => renderVehicleCard(v, i + 1, true))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Chart Section */}
-      {tipoGrafico !== "table" && (
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-extrabold text-zinc-900 text-base">
-                Visualização Gráfica — Agrupado por {agruparPor.toUpperCase()}
-              </h3>
-            </div>
-            <span className="text-xs font-bold text-zinc-500">
-              Métrica: {metrica === "soma_valor" ? "Valor Total (R$)" : metrica === "quantidade" ? "Qtd Lançamentos" : metrica === "media_valor" ? "Valor Médio (R$)" : "Soma Quantidade"}
-            </span>
-          </div>
-
-          <div className="h-80 w-full pt-4">
-            {aggregatedData.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-zinc-400">
-                <FileText className="w-12 h-12 mb-2 stroke-1" />
-                <p className="text-sm font-semibold">Nenhum dado importado para o filtro selecionado.</p>
-              </div>
-            ) : tipoGrafico === "bar" ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={aggregatedData} margin={{ top: 25, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 600 }} interval={0} angle={-15} textAnchor="end" height={60} />
-                  <YAxis tick={{ fontSize: 11, fontWeight: 600 }} />
-                  <Tooltip
-                    formatter={(value: any) =>
-                      metrica.includes("valor") ? [formatCurrency(Number(value)), "Valor"] : [value, "Quantidade"]
-                    }
-                    contentStyle={{ backgroundColor: "#18181b", borderRadius: "12px", border: "none", color: "#fff", fontWeight: 700 }}
-                  />
-                  <Bar dataKey="value" fill="#2563eb" radius={[8, 8, 0, 0]}>
-                    <LabelList
-                      dataKey="value"
-                      position="top"
-                      formatter={renderLabelValue}
-                      style={{ fill: "#1e293b", fontSize: 11, fontWeight: 800 }}
-                    />
-                    {aggregatedData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : tipoGrafico === "pie" ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={aggregatedData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={95}
-                    innerRadius={45}
-                    dataKey="value"
-                    nameKey="name"
-                    label={({ name, value, percent }) => `${name}: ${renderLabelValue(value)} (${(percent * 100).toFixed(0)}%)`}
-                    labelLine={true}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {savedMolds.map((mold) => (
+                  <div
+                    key={mold.id}
+                    onClick={() => handleApplyMold(mold)}
+                    className="p-4 rounded-2xl border border-zinc-200 hover:border-purple-300 bg-zinc-50 hover:bg-purple-50/50 transition-all cursor-pointer group flex flex-col justify-between"
                   >
-                    {aggregatedData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: any) =>
-                      metrica.includes("valor") ? [formatCurrency(Number(value)), "Valor"] : [value, "Quantidade"]
-                    }
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : tipoGrafico === "line" ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={aggregatedData} margin={{ top: 25, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 600 }} />
-                  <YAxis tick={{ fontSize: 11, fontWeight: 600 }} />
-                  <Tooltip
-                    formatter={(value: any) =>
-                      metrica.includes("valor") ? [formatCurrency(Number(value)), "Valor"] : [value, "Quantidade"]
-                    }
-                  />
-                  <Line type="monotone" dataKey="value" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 5 }}>
-                    <LabelList
-                      dataKey="value"
-                      position="top"
-                      formatter={renderLabelValue}
-                      style={{ fill: "#4c1d95", fontSize: 11, fontWeight: 800 }}
-                    />
-                  </Line>
-                </LineChart>
-              </ResponsiveContainer>
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h4 className="font-extrabold text-zinc-900 text-xs group-hover:text-purple-700 transition-colors line-clamp-1">
+                          {mold.name}
+                        </h4>
+                        <button
+                          onClick={(e) => handleDeleteMold(mold.id, e)}
+                          className="text-zinc-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                          title="Excluir molde"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 line-clamp-2">{mold.description}</p>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between pt-2 border-t border-zinc-200/60 text-[10px] text-zinc-500">
+                      <span className="font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
+                        {mold.agruparPor}
+                      </span>
+                      <span className="font-semibold">{mold.metrica.replace("_", " ")}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Filter Toolbar */}
+          <ReportFilterToolbar
+            tipoImportacaoFilter={tipoImportacaoFilter}
+            setTipoImportacaoFilter={setTipoImportacaoFilter}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            categories={CATEGORIES}
+            selectedPeriod={selectedPeriod}
+            setSelectedPeriod={setSelectedPeriod}
+            monthsByYear={monthsByYear}
+            customMonth={customMonth}
+            setCustomMonth={setCustomMonth}
+            agruparPor={agruparPor}
+            setAgruparPor={setAgruparPor}
+            metrica={metrica}
+            setMetrica={setMetrica}
+            placaFilter={placaFilter}
+            setPlacaFilter={setPlacaFilter}
+          />
+
+          {/* Overall Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
+              <div className="flex items-center justify-between text-zinc-500 mb-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider">Total em Despesas</span>
+                <DollarSign className="w-4 h-4 text-emerald-500" />
+              </div>
+              <p className="text-2xl font-black text-slate-900">{formatCurrency(totalValorGeral)}</p>
+              <p className="text-[11px] text-zinc-400 mt-1">Soma financeira dos registros</p>
+            </div>
+
+            <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
+              <div className="flex items-center justify-between text-zinc-500 mb-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider">Volume Total (Litros)</span>
+                <Fuel className="w-4 h-4 text-amber-500" />
+              </div>
+              <p className="text-2xl font-black text-amber-900">
+                {totalQtyGeral > 0 ? `${totalQtyGeral.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "0,0 L"}
+              </p>
+              <p className="text-[11px] text-zinc-400 mt-1">Combustível e insumos</p>
+            </div>
+
+            <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
+              <div className="flex items-center justify-between text-zinc-500 mb-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider">Qtd de Lançamentos</span>
+                <Layers className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="text-2xl font-black text-blue-900">{totalRegistrosCount}</p>
+              <p className="text-[11px] text-zinc-400 mt-1">Total de linhas filtradas</p>
+            </div>
+
+            <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
+              <div className="flex items-center justify-between text-zinc-500 mb-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider">Ticket Médio</span>
+                <Calculator className="w-4 h-4 text-purple-500" />
+              </div>
+              <p className="text-2xl font-black text-purple-900">{formatCurrency(mediaValorGeral)}</p>
+              <p className="text-[11px] text-zinc-400 mt-1">Média por lançamento</p>
+            </div>
+          </div>
+
+          {/* Chart View */}
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-zinc-900 text-base">
+                  Gráfico Analítico: Agrupamento por {agruparPor}
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Métrica exibida: {metrica.replace("_", " ")}
+                </p>
+              </div>
+
+              {/* Chart Switchers */}
+              <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-2xl border border-zinc-200/60 no-print">
+                <button
+                  onClick={() => setTipoGrafico("bar")}
+                  className={`p-2 rounded-xl transition-all cursor-pointer ${
+                    tipoGrafico === "bar" ? "bg-white text-blue-700 shadow-xs" : "text-zinc-600"
+                  }`}
+                  title="Barras"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setTipoGrafico("pie")}
+                  className={`p-2 rounded-xl transition-all cursor-pointer ${
+                    tipoGrafico === "pie" ? "bg-white text-blue-700 shadow-xs" : "text-zinc-600"
+                  }`}
+                  title="Pizza"
+                >
+                  <PieChartIcon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setTipoGrafico("line")}
+                  className={`p-2 rounded-xl transition-all cursor-pointer ${
+                    tipoGrafico === "line" ? "bg-white text-blue-700 shadow-xs" : "text-zinc-600"
+                  }`}
+                  title="Linha"
+                >
+                  <LineChartIcon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setTipoGrafico("area")}
+                  className={`p-2 rounded-xl transition-all cursor-pointer ${
+                    tipoGrafico === "area" ? "bg-white text-blue-700 shadow-xs" : "text-zinc-600"
+                  }`}
+                  title="Área"
+                >
+                  <Sparkles className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {aggregatedData.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-zinc-400 font-semibold text-sm">
+                Nenhum dado encontrado para os filtros selecionados.
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={aggregatedData} margin={{ top: 25, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 600 }} />
-                  <YAxis tick={{ fontSize: 11, fontWeight: 600 }} />
-                  <Tooltip
-                    formatter={(value: any) =>
-                      metrica.includes("valor") ? [formatCurrency(Number(value)), "Valor"] : [value, "Quantidade"]
-                    }
-                  />
-                  <Area type="monotone" dataKey="value" stroke="#2563eb" fill="#3b82f6" fillOpacity={0.2} strokeWidth={3}>
-                    <LabelList
-                      dataKey="value"
-                      position="top"
-                      formatter={renderLabelValue}
-                      style={{ fill: "#1e3a8a", fontSize: 11, fontWeight: 800 }}
-                    />
-                  </Area>
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="h-80 w-full pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  {tipoGrafico === "bar" ? (
+                    <BarChart data={aggregatedData.slice(0, 15)} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: "bold" }} angle={-25} textAnchor="end" />
+                      <YAxis
+                        tick={{ fontSize: 11 }}
+                        tickFormatter={(val) =>
+                          metrica.includes("valor") ? `R$ ${(val / 1000).toFixed(0)}k` : val.toLocaleString("pt-BR")
+                        }
+                      />
+                      <Tooltip
+                        formatter={(val: any) => [
+                          metrica.includes("valor") ? formatCurrency(Number(val)) : Number(val).toLocaleString("pt-BR"),
+                          metrica.replace("_", " "),
+                        ]}
+                      />
+                      <Bar dataKey="valor" fill="#3b82f6" radius={[8, 8, 0, 0]}>
+                        {aggregatedData.slice(0, 15).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  ) : tipoGrafico === "pie" ? (
+                    <PieChart>
+                      <Pie
+                        data={aggregatedData.slice(0, 8)}
+                        dataKey="valor"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        label={(entry) => `${entry.name}: ${entry.percent}%`}
+                      >
+                        {aggregatedData.slice(0, 8).map((entry, index) => (
+                          <Cell key={`cell-pie-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(val: any) => [
+                          metrica.includes("valor") ? formatCurrency(Number(val)) : Number(val).toLocaleString("pt-BR"),
+                          metrica.replace("_", " "),
+                        ]}
+                      />
+                      <Legend />
+                    </PieChart>
+                  ) : tipoGrafico === "line" ? (
+                    <LineChart data={aggregatedData.slice(0, 15)} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-25} textAnchor="end" />
+                      <YAxis
+                        tick={{ fontSize: 11 }}
+                        tickFormatter={(val) =>
+                          metrica.includes("valor") ? `R$ ${(val / 1000).toFixed(0)}k` : val.toLocaleString("pt-BR")
+                        }
+                      />
+                      <Tooltip
+                        formatter={(val: any) => [
+                          metrica.includes("valor") ? formatCurrency(Number(val)) : Number(val).toLocaleString("pt-BR"),
+                          metrica.replace("_", " "),
+                        ]}
+                      />
+                      <Line type="monotone" dataKey="valor" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} />
+                    </LineChart>
+                  ) : (
+                    <AreaChart data={aggregatedData.slice(0, 15)} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-25} textAnchor="end" />
+                      <YAxis
+                        tick={{ fontSize: 11 }}
+                        tickFormatter={(val) =>
+                          metrica.includes("valor") ? `R$ ${(val / 1000).toFixed(0)}k` : val.toLocaleString("pt-BR")
+                        }
+                      />
+                      <Tooltip
+                        formatter={(val: any) => [
+                          metrica.includes("valor") ? formatCurrency(Number(val)) : Number(val).toLocaleString("pt-BR"),
+                          metrica.replace("_", " "),
+                        ]}
+                      />
+                      <Area type="monotone" dataKey="valor" stroke="#3b82f6" fill="#bfdbfe" fillOpacity={0.5} />
+                    </AreaChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Table Section */}
-      <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setViewMode("agrupado")}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                viewMode === "agrupado"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-              }`}
-            >
-              Tabela Agrupada ({aggregatedData.length} grupos)
-            </button>
-            <button
-              onClick={() => setViewMode("detalhado")}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                viewMode === "detalhado"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-              }`}
-            >
-              Lançamentos Individuais ({filteredRecords.length})
-            </button>
-          </div>
-
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              placeholder="Buscar no relatório..."
-              value={tableSearch}
-              onChange={(e) => setTableSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          {viewMode === "agrupado" ? (
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                  <th className="p-3.5">Item ({agruparPor.toUpperCase()})</th>
-                  <th className="p-3.5 text-center">Qtd Lançamentos</th>
-                  <th className="p-3.5 text-center">Soma Qtd/Litros</th>
-                  <th className="p-3.5 text-right">Valor Médio (R$)</th>
-                  <th className="p-3.5 text-right">Valor Total (R$)</th>
-                  <th className="p-3.5 text-right">% do Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {aggregatedData.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-zinc-400 font-semibold">
-                      Nenhum registro encontrado.
-                    </td>
-                  </tr>
-                ) : (
-                  aggregatedData.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-blue-50/40 transition-colors">
-                      <td className="p-3.5 font-bold text-zinc-900">{row.name}</td>
-                      <td className="p-3.5 text-center text-zinc-700">{row.count}</td>
-                      <td className="p-3.5 text-center text-zinc-700">{row.totalQty.toFixed(2)}</td>
-                      <td className="p-3.5 text-right text-zinc-700">{formatCurrency(row.mediaValor)}</td>
-                      <td className="p-3.5 text-right font-black text-blue-700">{formatCurrency(row.valorTotal)}</td>
-                      <td className="p-3.5 text-right">
-                        <span className="inline-block px-2 py-0.5 rounded-full bg-zinc-100 font-bold text-zinc-700 text-[11px]">
-                          {row.percent}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                  <th className="p-3.5">Data</th>
-                  <th className="p-3.5">Tipo Importação</th>
-                  <th className="p-3.5">Categoria</th>
-                  <th className="p-3.5">Placa / Frota</th>
-                  <th className="p-3.5">Conta / Descrição</th>
-                  <th className="p-3.5 text-center">Qtd</th>
-                  <th className="p-3.5 text-right">Valor (R$)</th>
-                  <th className="p-3.5">Fornecedor</th>
-                  <th className="p-3.5 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 font-medium">
-                {tableFilteredRecords.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="p-8 text-center text-zinc-400 font-semibold">
-                      Nenhum lançamento encontrado.
-                    </td>
-                  </tr>
-                ) : (
-                  tableFilteredRecords.slice(0, 100).map((r) => {
-                    const impType = getRecordImportType(r);
-                    return (
-                      <tr key={r.id} className="hover:bg-zinc-50 transition-colors">
-                        <td className="p-3.5 whitespace-nowrap text-zinc-600">{r.data || "-"}</td>
-                        <td className="p-3.5 whitespace-nowrap">
-                          {impType === "combustivel_gfv" ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                              <Fuel className="w-3 h-3 text-amber-600" /> GFV (Combustível)
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
-                              <FileSpreadsheet className="w-3 h-3 text-indigo-600" /> SOFtran (Despesas)
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3.5 font-bold text-blue-700">{r.tipo_registro}</td>
-                      <td className="p-3.5 font-extrabold text-zinc-900">
-                        {r.placa} {r.numero_frota && `(${r.numero_frota})`}
-                      </td>
-                      <td className="p-3.5 text-zinc-600 max-w-xs truncate">{r.descricao_conta || r.conta || "-"}</td>
-                      <td className="p-3.5 text-center font-semibold text-zinc-700">{r.quantidade}</td>
-                      <td className="p-3.5 text-right font-black text-emerald-600">{formatCurrency(r.valor)}</td>
-                      <td className="p-3.5 text-zinc-600 max-w-xs truncate">{r.fornecedor || "-"}</td>
-                      <td className="p-3.5 text-center">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold capitalize ${
-                            r.status === "aprovado"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : r.status === "conflito"
-                              ? "bg-rose-100 text-rose-800"
-                              : "bg-blue-100 text-blue-800"
-                          }`}
-                        >
-                          {r.status}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-        </div>
-      )}
-
-      {/* Tab 4: Tabelas */}
       {reportViewTab === "tabelas" && (
         <div className="space-y-6">
-          {renderFilterToolbar()}
+          <ReportFilterToolbar
+            tipoImportacaoFilter={tipoImportacaoFilter}
+            setTipoImportacaoFilter={setTipoImportacaoFilter}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            categories={CATEGORIES}
+            selectedPeriod={selectedPeriod}
+            setSelectedPeriod={setSelectedPeriod}
+            monthsByYear={monthsByYear}
+            customMonth={customMonth}
+            setCustomMonth={setCustomMonth}
+            agruparPor={agruparPor}
+            setAgruparPor={setAgruparPor}
+            metrica={metrica}
+            setMetrica={setMetrica}
+            placaFilter={placaFilter}
+            setPlacaFilter={setPlacaFilter}
+          />
 
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setViewMode("agrupado")}
-                  className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                    viewMode === "agrupado"
-                      ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                  }`}
-                >
-                  Tabela Agrupada ({aggregatedData.length} grupos)
-                </button>
-                <button
-                  onClick={() => setViewMode("detalhado")}
-                  className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                    viewMode === "detalhado"
-                      ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                  }`}
-                >
-                  Lançamentos Individuais ({filteredRecords.length})
-                </button>
+          <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 p-1 bg-zinc-100 rounded-2xl border border-zinc-200/60 text-xs font-bold">
+                  <button
+                    onClick={() => setTableMode("agrupado")}
+                    className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                      tableMode === "agrupado" ? "bg-white text-zinc-900 shadow-xs" : "text-zinc-600"
+                    }`}
+                  >
+                    Visão Agrupada ({agruparPor})
+                  </button>
+                  <button
+                    onClick={() => setTableMode("todos_lancamentos")}
+                    className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                      tableMode === "todos_lancamentos" ? "bg-white text-zinc-900 shadow-xs" : "text-zinc-600"
+                    }`}
+                  >
+                    Todos os Lançamentos ({tableFilteredRecords.length})
+                  </button>
+                </div>
               </div>
 
               <div className="relative w-full sm:w-64">
-                <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
+                <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
                 <input
                   type="text"
-                  placeholder="Buscar no relatório..."
+                  placeholder="Pesquisar..."
                   value={tableSearch}
                   onChange={(e) => setTableSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              {viewMode === "agrupado" ? (
+              {tableMode === "agrupado" ? (
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                      <th className="p-3.5">Item ({agruparPor.toUpperCase()})</th>
+                      <th className="p-3.5">Grupo ({agruparPor})</th>
                       <th className="p-3.5 text-center">Qtd Lançamentos</th>
-                      <th className="p-3.5 text-center">Soma Qtd/Litros</th>
-                      <th className="p-3.5 text-right">Valor Médio (R$)</th>
+                      <th className="p-3.5 text-center">Volume Total (Litros)</th>
+                      <th className="p-3.5 text-right">Média por Registro (R$)</th>
                       <th className="p-3.5 text-right">Valor Total (R$)</th>
                       <th className="p-3.5 text-right">% do Total</th>
                     </tr>
@@ -3791,12 +1040,12 @@ export default function ImportReportsTab({ companyId }: Props) {
                     {aggregatedData.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="p-8 text-center text-zinc-400 font-semibold">
-                          Nenhum registro encontrado.
+                          Nenhum dado encontrado.
                         </td>
                       </tr>
                     ) : (
-                      aggregatedData.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-blue-50/40 transition-colors">
+                      aggregatedData.map((row) => (
+                        <tr key={row.name} className="hover:bg-zinc-50 transition-colors">
                           <td className="p-3.5 font-bold text-zinc-900">{row.name}</td>
                           <td className="p-3.5 text-center text-zinc-700">{row.count}</td>
                           <td className="p-3.5 text-center text-zinc-700">{row.totalQty.toFixed(2)}</td>
@@ -3908,7 +1157,7 @@ export default function ImportReportsTab({ companyId }: Props) {
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: Relatório Mensal de Combustível da Frota SP"
+                  placeholder="Ex: Relatório Mensal de Combustível"
                   value={newMoldName}
                   onChange={(e) => setNewMoldName(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
@@ -3942,14 +1191,14 @@ export default function ImportReportsTab({ companyId }: Props) {
             <div className="flex items-center justify-end gap-2 border-t border-zinc-100 pt-3">
               <button
                 onClick={() => setShowSaveModal(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-600 hover:bg-zinc-100 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-600 hover:bg-zinc-100 transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveMold}
                 disabled={savingMold}
-                className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-md disabled:opacity-50 flex items-center gap-2"
+                className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-md disabled:opacity-50 flex items-center gap-2 cursor-pointer"
               >
                 {savingMold ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
@@ -3978,7 +1227,7 @@ export default function ImportReportsTab({ companyId }: Props) {
                   {selectedVehicleDetail.numero_frota && ` (Frota ${selectedVehicleDetail.numero_frota})`}
                 </h3>
                 <p className="text-xs text-slate-300 mt-1">
-                  Exibindo todas as {selectedVehicleDetail.viagensCount} viagens (cada abastecimento / lançamento = 1 viagem).
+                  Exibindo todas as {selectedVehicleDetail.viagensCount} viagens e abastecimentos.
                 </p>
               </div>
 
@@ -4026,10 +1275,10 @@ export default function ImportReportsTab({ companyId }: Props) {
                 </div>
               </div>
 
-              {/* Categories Breakdown Table */}
+              {/* Categories Breakdown */}
               <div>
                 <h4 className="font-extrabold text-zinc-900 text-sm mb-3">
-                  Resumo de Custos Descritivos por Categoria
+                  Resumo de Custos por Categoria
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {Object.entries(selectedVehicleDetail.categories).map(([catName, catData]) => (
@@ -4041,7 +1290,9 @@ export default function ImportReportsTab({ companyId }: Props) {
                       <div className="text-right">
                         <p className="font-black text-blue-700 text-sm">{formatCurrency(catData.valor)}</p>
                         <p className="text-[10px] text-zinc-400 font-bold">
-                          {((catData.valor / selectedVehicleDetail.totalCost) * 100).toFixed(1)}% do total
+                          {selectedVehicleDetail.totalCost > 0
+                            ? `${((catData.valor / selectedVehicleDetail.totalCost) * 100).toFixed(1)}% do total`
+                            : "0%"}
                         </p>
                       </div>
                     </div>
@@ -4049,7 +1300,7 @@ export default function ImportReportsTab({ companyId }: Props) {
                 </div>
               </div>
 
-              {/* Trips List / Table */}
+              {/* Trips Table */}
               <div>
                 <h4 className="font-extrabold text-zinc-900 text-sm mb-3">
                   Lista Detalhada de Viagens e Lançamentos
@@ -4104,7 +1355,7 @@ export default function ImportReportsTab({ companyId }: Props) {
         </div>
       )}
 
-      {/* Modal de Compartilhamento Protegido por PIN */}
+      {/* Share Report Modal */}
       <ShareReportModal
         isOpen={showShareModal}
         onClose={() => setShowShareModal(false)}

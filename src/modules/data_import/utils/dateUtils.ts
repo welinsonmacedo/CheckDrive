@@ -42,29 +42,73 @@ export const MONTH_NAMES_PT: Record<string, string> = {
 };
 
 /**
- * Parses any date string format (ISO, BR DD/MM/YYYY, MM/YYYY, YYYY-MM, YYYY/MM/DD, date with time, etc.)
+ * Parses any date string/number/Date format (ISO, BR DD/MM/YYYY, MM/YYYY, YYYY-MM, YYYY/MM/DD, date with time, Excel serial, timestamp)
  * into a normalized { month: "MM", year: "YYYY" } object.
  */
-export function parseRecordMonthYear(dateStr?: string): { month: string; year: string } | null {
-  if (!dateStr) return null;
-  const s = String(dateStr).trim();
-  if (!s) return null;
+export function parseRecordMonthYear(dateVal?: any): { month: string; year: string } | null {
+  if (!dateVal) return null;
 
-  // Extract date portion before space or T
-  const datePart = s.split(/[ T]/)[0].replace(/,/g, "").trim();
+  // Handle Date instance
+  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
+    const year = String(dateVal.getFullYear());
+    const month = String(dateVal.getMonth() + 1).padStart(2, "0");
+    return { year, month };
+  }
+
+  const s = String(dateVal).trim();
+  if (!s || s === "undefined" || s === "null" || s === "-") return null;
+
+  // Handle pure numbers: Excel serial number or Unix timestamp
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const num = Number(s);
+    // Excel serial number (typically between 30000 and 60000)
+    if (num > 25000 && num < 70000) {
+      const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+      if (!isNaN(d.getTime())) {
+        return {
+          year: String(d.getUTCFullYear()),
+          month: String(d.getUTCMonth() + 1).padStart(2, "0"),
+        };
+      }
+    }
+    // Unix timestamp in ms
+    if (num > 1000000000000) {
+      const d = new Date(num);
+      if (!isNaN(d.getTime())) {
+        return {
+          year: String(d.getFullYear()),
+          month: String(d.getMonth() + 1).padStart(2, "0"),
+        };
+      }
+    }
+    // Unix timestamp in seconds
+    if (num > 1000000000 && num < 3000000000) {
+      const d = new Date(num * 1000);
+      if (!isNaN(d.getTime())) {
+        return {
+          year: String(d.getFullYear()),
+          month: String(d.getMonth() + 1).padStart(2, "0"),
+        };
+      }
+    }
+  }
+
+  // Extract date portion before space or T or comma
+  const datePart = s.split(/[ T,]/)[0].trim();
   const normalized = datePart.replace(/\./g, "/");
 
   const separator = normalized.includes("-") ? "-" : normalized.includes("/") ? "/" : null;
 
   if (separator) {
-    const parts = normalized.split(separator).map((p) => p.trim());
+    const parts = normalized.split(separator).map((p) => p.trim()).filter(Boolean);
 
     // Case 1: Year first (e.g. 2026-07-15, 2026-07, 2026/07/15, 2026/07)
     if (/^\d{4}$/.test(parts[0])) {
       const year = parts[0];
-      let month = parts[1] ? parts[1].padStart(2, "0") : "01";
-      if (PORTUGUESE_MONTH_MAP[month.toLowerCase()]) {
-        month = PORTUGUESE_MONTH_MAP[month.toLowerCase()];
+      let rawMonth = parts[1] ? parts[1] : "01";
+      let month = rawMonth.padStart(2, "0");
+      if (PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()]) {
+        month = PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()];
       }
       if (/^\d{2}$/.test(month) && Number(month) >= 1 && Number(month) <= 12) {
         return { year, month };
@@ -80,8 +124,8 @@ export function parseRecordMonthYear(dateStr?: string): { month: string; year: s
       }
       if (year.length === 4) {
         let rawMonth = parts.length === 3 ? parts[1] : parts[0];
-        let month = rawMonth.padStart(2, "0");
-        if (PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()]) {
+        let month = (rawMonth || "01").padStart(2, "0");
+        if (PORTUGUESE_MONTH_MAP[rawMonth?.toLowerCase()]) {
           month = PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()];
         }
         if (/^\d{2}$/.test(month) && Number(month) >= 1 && Number(month) <= 12) {
@@ -93,7 +137,7 @@ export function parseRecordMonthYear(dateStr?: string): { month: string; year: s
 
   // Case 3: Standard JS Date fallback
   const d = new Date(s);
-  if (!isNaN(d.getTime())) {
+  if (!isNaN(d.getTime()) && d.getFullYear() > 1990 && d.getFullYear() < 2100) {
     const year = String(d.getFullYear());
     const month = String(d.getMonth() + 1).padStart(2, "0");
     return { year, month };

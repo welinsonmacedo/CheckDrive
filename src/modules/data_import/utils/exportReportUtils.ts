@@ -4,17 +4,21 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ImportRecord } from "../types";
 import { VehicleReportStat, getRecordFinancialValue, getRecordImportType } from "./vehicleStatsUtils";
+import { parseRecordMonthYear } from "./dateUtils";
 
 export type { VehicleReportStat };
 
 export interface ReportExportFilterOptions {
   companyName?: string;
-  periodLabel: string;
+  periodLabel?: string;
+  selectedPeriod?: string;
+  customMonth?: string;
   categoryFilter: string;
   tipoImportacaoFilter: string;
   agruparPor: string;
   metrica: string;
   tipoGrafico: string;
+  viewMode?: string;
   fornecedorFilter?: string;
   placaFilter?: string;
 }
@@ -29,6 +33,7 @@ export interface AggregatedReportRow {
 }
 
 export interface ExportReportData {
+  companyName?: string;
   filters: ReportExportFilterOptions;
   overallMetrics: {
     totalValorGeral: number;
@@ -43,7 +48,8 @@ export interface ExportReportData {
     topCPK?: VehicleReportStat[];
     allVehicles?: VehicleReportStat[];
   };
-  tableFilteredRecords: ImportRecord[];
+  tableFilteredRecords?: ImportRecord[];
+  records?: ImportRecord[];
 }
 
 const formatCurrency = (val: number) => {
@@ -61,7 +67,8 @@ const formatNumber = (val: number, decimals: number = 2) => {
  * EXPORTAÇÃO EXCEL PROFISSIONAL (.XLSX)
  */
 export async function exportReportToExcel(data: ExportReportData) {
-  const { filters, overallMetrics, aggregatedData, vehicleStats, tableFilteredRecords } = data;
+  const { filters, overallMetrics, aggregatedData, vehicleStats } = data;
+  const tableFilteredRecords = data.tableFilteredRecords || data.records || [];
   const company = filters.companyName || "CHECKDRIVE GESTÃO DE FROTAS";
   const emissionDate = new Date().toLocaleString("pt-BR");
 
@@ -518,24 +525,25 @@ export async function exportReportToExcel(data: ExportReportData) {
   trendTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "1E1B4B" } };
   trendTitle.alignment = { vertical: "middle", horizontal: "center" };
 
-  const monthlyMap: Record<string, { monthYear: string; count: number; totalQty: number; valorTotal: number }> = {};
+  const monthlyMap: Record<string, { monthYear: string; count: number; totalQty: number; valorTotal: number; year: number; monthNum: number }> = {};
   (tableFilteredRecords || []).forEach((r) => {
-    let my = "Outros";
-    if (r.data) {
-      const parts = r.data.trim().split("/");
-      if (parts.length >= 3) {
-        my = `${parts[1].padStart(2, "0")}/${parts[2].substring(0, 4)}`;
-      }
-    }
+    const parsed = parseRecordMonthYear(r.data || (r as any).criado_em || (r as any).created_at);
+    const my = parsed ? `${parsed.month}/${parsed.year}` : "Outros";
+    const year = parsed ? Number(parsed.year) : 0;
+    const monthNum = parsed ? Number(parsed.month) : 0;
+
     if (!monthlyMap[my]) {
-      monthlyMap[my] = { monthYear: my, count: 0, totalQty: 0, valorTotal: 0 };
+      monthlyMap[my] = { monthYear: my, count: 0, totalQty: 0, valorTotal: 0, year, monthNum };
     }
     monthlyMap[my].count += 1;
     monthlyMap[my].totalQty += Number(r.quantidade || 0);
     monthlyMap[my].valorTotal += getRecordFinancialValue(r, data.filters.tipoImportacaoFilter === "combustivel_gfv");
   });
 
-  const monthlyList = Object.values(monthlyMap).sort((a, b) => a.monthYear.localeCompare(b.monthYear));
+  const monthlyList = Object.values(monthlyMap).sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return a.monthNum - b.monthNum;
+  });
 
   wsTrend.getRow(5).values = [
     "Mês / Período",
@@ -765,7 +773,8 @@ export async function exportReportToExcel(data: ExportReportData) {
  * EXPORTAÇÃO PDF PROFISSIONAL (.PDF)
  */
 export function exportReportToPDF(data: ExportReportData) {
-  const { filters, overallMetrics, aggregatedData, vehicleStats, tableFilteredRecords } = data;
+  const { filters, overallMetrics, aggregatedData, vehicleStats } = data;
+  const tableFilteredRecords = data.tableFilteredRecords || data.records || [];
   const company = filters.companyName || "CHECKDRIVE GESTÃO DE FROTAS";
   const emissionDate = new Date().toLocaleString("pt-BR");
 
@@ -1075,24 +1084,25 @@ export function exportReportToPDF(data: ExportReportData) {
   }
 
   // 6. EVOLUÇÃO TEMPORAL MÊS A MÊS
-  const monthlyMapPdf: Record<string, { monthYear: string; count: number; totalQty: number; valorTotal: number }> = {};
+  const monthlyMapPdf: Record<string, { monthYear: string; count: number; totalQty: number; valorTotal: number; year: number; monthNum: number }> = {};
   (tableFilteredRecords || []).forEach((r) => {
-    let my = "Outros";
-    if (r.data) {
-      const parts = r.data.trim().split("/");
-      if (parts.length >= 3) {
-        my = `${parts[1].padStart(2, "0")}/${parts[2].substring(0, 4)}`;
-      }
-    }
+    const parsed = parseRecordMonthYear(r.data || (r as any).criado_em || (r as any).created_at);
+    const my = parsed ? `${parsed.month}/${parsed.year}` : "Outros";
+    const year = parsed ? Number(parsed.year) : 0;
+    const monthNum = parsed ? Number(parsed.month) : 0;
+
     if (!monthlyMapPdf[my]) {
-      monthlyMapPdf[my] = { monthYear: my, count: 0, totalQty: 0, valorTotal: 0 };
+      monthlyMapPdf[my] = { monthYear: my, count: 0, totalQty: 0, valorTotal: 0, year, monthNum };
     }
     monthlyMapPdf[my].count += 1;
     monthlyMapPdf[my].totalQty += Number(r.quantidade || 0);
     monthlyMapPdf[my].valorTotal += getRecordFinancialValue(r, data.filters.tipoImportacaoFilter === "combustivel_gfv");
   });
 
-  const monthlyListPdf = Object.values(monthlyMapPdf).sort((a, b) => a.monthYear.localeCompare(b.monthYear));
+  const monthlyListPdf = Object.values(monthlyMapPdf).sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return a.monthNum - b.monthNum;
+  });
   if (monthlyListPdf.length > 0) {
     if (currentY + 45 > pageHeight) {
       doc.addPage();
