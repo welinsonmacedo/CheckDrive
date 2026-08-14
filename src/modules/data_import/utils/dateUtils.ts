@@ -41,109 +41,203 @@ export const MONTH_NAMES_PT: Record<string, string> = {
   "12": "Dezembro",
 };
 
+export const MONTH_SHORT_PT: Record<string, string> = {
+  "01": "Jan",
+  "02": "Fev",
+  "03": "Mar",
+  "04": "Abr",
+  "05": "Mai",
+  "06": "Jun",
+  "07": "Jul",
+  "08": "Ago",
+  "09": "Set",
+  "10": "Out",
+  "11": "Nov",
+  "12": "Dez",
+};
+
+export interface ParsedRecordDate {
+  year: string;        // "2026"
+  month: string;       // "07"
+  day: string;         // "15"
+  monthName: string;   // "Julho"
+  monthShort: string;  // "Jul"
+  isoDate: string;     // "2026-07-15"
+  formattedBr: string; // "15/07/2026"
+  formattedDayMonth: string; // "15/07"
+  monthYear: string;   // "07/2026"
+  yearMonth: string;   // "2026-07"
+  weekNum: number;     // 28
+  weekKey: string;     // "2026-W28"
+  weekLabel: string;   // "Sem 28/2026"
+  quinzenaKey: string; // "2026-07-Q1" | "2026-07-Q2"
+  quinzenaLabel: string; // "1ª Quinzena Jul/26"
+  timestamp: number;
+  dateObj: Date;
+}
+
+export function getWeekNumber(d: Date): number {
+  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = target.getTime();
+  target.setUTCMonth(0, 1);
+  if (target.getUTCDay() !== 4) {
+    target.setUTCMonth(0, 1 + ((4 - target.getUTCDay() + 7) % 7));
+  }
+  return 1 + Math.ceil((firstThursday - target.getTime()) / 604800000);
+}
+
+/**
+ * Extracts a complete ParsedRecordDate with year, month, day, week, quinzena, and iso formats.
+ */
+export function parseRecordFullDate(dateVal?: any): ParsedRecordDate | null {
+  if (!dateVal) return null;
+
+  let y = "";
+  let m = "";
+  let d = "";
+
+  // 1. Handle Date instance
+  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
+    y = String(dateVal.getFullYear());
+    m = String(dateVal.getMonth() + 1).padStart(2, "0");
+    d = String(dateVal.getDate()).padStart(2, "0");
+  } else {
+    const s = String(dateVal).trim();
+    if (!s || s === "undefined" || s === "null" || s === "-") return null;
+
+    // 2. Handle pure numbers: Excel serial number or Unix timestamp
+    if (/^\d+(\.\d+)?$/.test(s)) {
+      const num = Number(s);
+      if (num > 25000 && num < 70000) {
+        const dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
+        if (!isNaN(dateObj.getTime())) {
+          y = String(dateObj.getUTCFullYear());
+          m = String(dateObj.getUTCMonth() + 1).padStart(2, "0");
+          d = String(dateObj.getUTCDate()).padStart(2, "0");
+        }
+      } else if (num > 1000000000000) {
+        const dateObj = new Date(num);
+        if (!isNaN(dateObj.getTime())) {
+          y = String(dateObj.getFullYear());
+          m = String(dateObj.getMonth() + 1).padStart(2, "0");
+          d = String(dateObj.getDate()).padStart(2, "0");
+        }
+      } else if (num > 1000000000 && num < 3000000000) {
+        const dateObj = new Date(num * 1000);
+        if (!isNaN(dateObj.getTime())) {
+          y = String(dateObj.getFullYear());
+          m = String(dateObj.getMonth() + 1).padStart(2, "0");
+          d = String(dateObj.getDate()).padStart(2, "0");
+        }
+      }
+    }
+
+    if (!y || !m) {
+      // Clean string
+      const datePart = s.split(/[ T,]/)[0].trim();
+      const normalized = datePart.replace(/\./g, "/");
+      const separator = normalized.includes("-") ? "-" : normalized.includes("/") ? "/" : null;
+
+      if (separator) {
+        const parts = normalized.split(separator).map((p) => p.trim()).filter(Boolean);
+
+        // Case A: Year first (e.g. 2026-07-15, 2026-07, 2026/07/15)
+        if (/^\d{4}$/.test(parts[0])) {
+          y = parts[0];
+          let rawMonth = parts[1] ? parts[1] : "01";
+          m = rawMonth.padStart(2, "0");
+          if (PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()]) {
+            m = PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()];
+          }
+          d = parts[2] ? parts[2].padStart(2, "0") : "01";
+        }
+
+        // Case B: Year last (e.g. 15/07/2026, 07/2026, 15-07-2026, 15/07/26)
+        const lastPart = parts[parts.length - 1];
+        if (!y && /^\d{2,4}$/.test(lastPart)) {
+          let yearCandidate = lastPart;
+          if (yearCandidate.length === 2) {
+            yearCandidate = Number(yearCandidate) < 50 ? `20${yearCandidate}` : `19${yearCandidate}`;
+          }
+          if (yearCandidate.length === 4) {
+            y = yearCandidate;
+            if (parts.length === 3) {
+              d = parts[0].padStart(2, "0");
+              let rawMonth = parts[1];
+              m = (rawMonth || "01").padStart(2, "0");
+              if (PORTUGUESE_MONTH_MAP[rawMonth?.toLowerCase()]) {
+                m = PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()];
+              }
+            } else if (parts.length === 2) {
+              d = "01";
+              let rawMonth = parts[0];
+              m = (rawMonth || "01").padStart(2, "0");
+              if (PORTUGUESE_MONTH_MAP[rawMonth?.toLowerCase()]) {
+                m = PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()];
+              }
+            }
+          }
+        }
+      }
+
+      // Case C: Standard JS Date fallback
+      if (!y || !m) {
+        const dateObj = new Date(s);
+        if (!isNaN(dateObj.getTime()) && dateObj.getFullYear() > 1990 && dateObj.getFullYear() < 2100) {
+          y = String(dateObj.getFullYear());
+          m = String(dateObj.getMonth() + 1).padStart(2, "0");
+          d = String(dateObj.getDate()).padStart(2, "0");
+        }
+      }
+    }
+  }
+
+  if (!y || !m || Number(m) < 1 || Number(m) > 12) return null;
+  d = d ? d.padStart(2, "0") : "01";
+  if (Number(d) < 1 || Number(d) > 31) d = "01";
+
+  const isoDate = `${y}-${m}-${d}`;
+  const dateObj = new Date(`${isoDate}T12:00:00.000Z`);
+  const monthName = MONTH_NAMES_PT[m] || m;
+  const monthShort = MONTH_SHORT_PT[m] || m;
+  const weekNum = getWeekNumber(dateObj);
+  const weekKey = `${y}-W${String(weekNum).padStart(2, "0")}`;
+  const weekLabel = `Sem ${String(weekNum).padStart(2, "0")}/${y.substring(2)}`;
+  const isQ1 = Number(d) <= 15;
+  const quinzenaKey = `${y}-${m}-${isQ1 ? "Q1" : "Q2"}`;
+  const quinzenaLabel = `${isQ1 ? "1ª" : "2ª"} Quin. ${monthShort}/${y.substring(2)}`;
+
+  return {
+    year: y,
+    month: m,
+    day: d,
+    monthName,
+    monthShort,
+    isoDate,
+    formattedBr: `${d}/${m}/${y}`,
+    formattedDayMonth: `${d}/${m}`,
+    monthYear: `${m}/${y}`,
+    yearMonth: `${y}-${m}`,
+    weekNum,
+    weekKey,
+    weekLabel,
+    quinzenaKey,
+    quinzenaLabel,
+    timestamp: dateObj.getTime(),
+    dateObj,
+  };
+}
+
 /**
  * Parses any date string/number/Date format (ISO, BR DD/MM/YYYY, MM/YYYY, YYYY-MM, YYYY/MM/DD, date with time, Excel serial, timestamp)
  * into a normalized { month: "MM", year: "YYYY" } object.
  */
 export function parseRecordMonthYear(dateVal?: any): { month: string; year: string } | null {
-  if (!dateVal) return null;
-
-  // Handle Date instance
-  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
-    const year = String(dateVal.getFullYear());
-    const month = String(dateVal.getMonth() + 1).padStart(2, "0");
-    return { year, month };
-  }
-
-  const s = String(dateVal).trim();
-  if (!s || s === "undefined" || s === "null" || s === "-") return null;
-
-  // Handle pure numbers: Excel serial number or Unix timestamp
-  if (/^\d+(\.\d+)?$/.test(s)) {
-    const num = Number(s);
-    // Excel serial number (typically between 30000 and 60000)
-    if (num > 25000 && num < 70000) {
-      const d = new Date(Math.round((num - 25569) * 86400 * 1000));
-      if (!isNaN(d.getTime())) {
-        return {
-          year: String(d.getUTCFullYear()),
-          month: String(d.getUTCMonth() + 1).padStart(2, "0"),
-        };
-      }
-    }
-    // Unix timestamp in ms
-    if (num > 1000000000000) {
-      const d = new Date(num);
-      if (!isNaN(d.getTime())) {
-        return {
-          year: String(d.getFullYear()),
-          month: String(d.getMonth() + 1).padStart(2, "0"),
-        };
-      }
-    }
-    // Unix timestamp in seconds
-    if (num > 1000000000 && num < 3000000000) {
-      const d = new Date(num * 1000);
-      if (!isNaN(d.getTime())) {
-        return {
-          year: String(d.getFullYear()),
-          month: String(d.getMonth() + 1).padStart(2, "0"),
-        };
-      }
-    }
-  }
-
-  // Extract date portion before space or T or comma
-  const datePart = s.split(/[ T,]/)[0].trim();
-  const normalized = datePart.replace(/\./g, "/");
-
-  const separator = normalized.includes("-") ? "-" : normalized.includes("/") ? "/" : null;
-
-  if (separator) {
-    const parts = normalized.split(separator).map((p) => p.trim()).filter(Boolean);
-
-    // Case 1: Year first (e.g. 2026-07-15, 2026-07, 2026/07/15, 2026/07)
-    if (/^\d{4}$/.test(parts[0])) {
-      const year = parts[0];
-      let rawMonth = parts[1] ? parts[1] : "01";
-      let month = rawMonth.padStart(2, "0");
-      if (PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()]) {
-        month = PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()];
-      }
-      if (/^\d{2}$/.test(month) && Number(month) >= 1 && Number(month) <= 12) {
-        return { year, month };
-      }
-    }
-
-    // Case 2: Year last (e.g. 15/07/2026, 07/2026, 15-07-2026, 07-2026, 15/07/26)
-    const lastPart = parts[parts.length - 1];
-    if (/^\d{2,4}$/.test(lastPart)) {
-      let year = lastPart;
-      if (year.length === 2) {
-        year = Number(year) < 50 ? `20${year}` : `19${year}`;
-      }
-      if (year.length === 4) {
-        let rawMonth = parts.length === 3 ? parts[1] : parts[0];
-        let month = (rawMonth || "01").padStart(2, "0");
-        if (PORTUGUESE_MONTH_MAP[rawMonth?.toLowerCase()]) {
-          month = PORTUGUESE_MONTH_MAP[rawMonth.toLowerCase()];
-        }
-        if (/^\d{2}$/.test(month) && Number(month) >= 1 && Number(month) <= 12) {
-          return { year, month };
-        }
-      }
-    }
-  }
-
-  // Case 3: Standard JS Date fallback
-  const d = new Date(s);
-  if (!isNaN(d.getTime()) && d.getFullYear() > 1990 && d.getFullYear() < 2100) {
-    const year = String(d.getFullYear());
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    return { year, month };
-  }
-
-  return null;
+  const full = parseRecordFullDate(dateVal);
+  if (!full) return null;
+  return { month: full.month, year: full.year };
 }
 
 /**

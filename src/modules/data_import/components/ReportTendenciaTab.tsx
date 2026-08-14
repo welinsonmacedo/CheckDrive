@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -13,6 +13,11 @@ import {
   LineChart as LineChartIcon,
   RotateCcw,
   Sparkles,
+  Clock,
+  Filter,
+  Gauge,
+  Info,
+  CalendarDays,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -29,7 +34,12 @@ import {
   Legend,
 } from "recharts";
 import { ImportRecord } from "../types";
-import { parseRecordMonthYear, MONTH_NAMES_PT } from "../utils/dateUtils";
+import {
+  parseRecordFullDate,
+  ParsedRecordDate,
+  MONTH_NAMES_PT,
+  MONTH_SHORT_PT,
+} from "../utils/dateUtils";
 import { getRecordFinancialValue, formatCurrency } from "../utils/vehicleStatsUtils";
 
 interface Props {
@@ -41,6 +51,8 @@ interface Props {
   onResetFilters?: () => void;
 }
 
+export type GranularityMode = "mensal" | "semanal" | "quinzenal" | "diario";
+
 export default function ReportTendenciaTab({
   records,
   tipoImportacaoFilter,
@@ -49,30 +61,76 @@ export default function ReportTendenciaTab({
   fornecedorFilter,
   onResetFilters,
 }: Props) {
-  // Local trend controls
-  const [trendTimeframe, setTrendTimeframe] = useState<string>("all"); // "all", "12m", "6m", "year_2026", etc.
-  const [metricMode, setMetricMode] = useState<"valor" | "litros" | "preco_medio" | "lancamentos">("valor");
-  const [chartType, setChartType] = useState<"area" | "line" | "bar">("area");
-  const [sortBy, setSortBy] = useState<"chrono" | "valor_desc" | "variation_desc">("chrono");
+  // Granularity selector
+  const [granularity, setGranularity] = useState<GranularityMode>("mensal");
+  const [hasUserChangedGranularity, setHasUserChangedGranularity] = useState<boolean>(false);
 
-  // Available years from records
-  const availableYears = useMemo(() => {
+  // Timeframe & metric controls
+  const [trendTimeframe, setTrendTimeframe] = useState<string>("all"); // "all", "12m", "6m", "3m", "30d", "year_2026", "month_2026-07"
+  const [metricMode, setMetricMode] = useState<"valor" | "litros" | "preco_medio" | "cpk" | "lancamentos" | "ticket_medio">("valor");
+  const [chartType, setChartType] = useState<"area" | "line" | "bar">("area");
+  const [sortBy, setSortBy] = useState<"chrono" | "valor_desc" | "variation_desc" | "volume_desc">("chrono");
+
+  // Available distinct months & years from records
+  const { availableYears, availableMonths, distinctMonthCount } = useMemo(() => {
     const yearsSet = new Set<string>();
+    const monthsMap = new Map<string, { yearMonth: string; label: string; name: string }>();
+
     records.forEach((r) => {
-      const parsed = parseRecordMonthYear(r.data || (r as any).criado_em || (r as any).created_at);
-      if (parsed) yearsSet.add(parsed.year);
+      const rawDate =
+        r.data ||
+        (r as any).data_registro ||
+        (r as any).data_abastecimento ||
+        (r as any).data_emissao ||
+        (r as any).data_movimento ||
+        (r as any).data_importacao ||
+        (r as any).criado_em ||
+        (r as any).created_at;
+      const parsed = parseRecordFullDate(rawDate);
+      if (parsed) {
+        yearsSet.add(parsed.year);
+        if (!monthsMap.has(parsed.yearMonth)) {
+          monthsMap.set(parsed.yearMonth, {
+            yearMonth: parsed.yearMonth,
+            label: parsed.monthYear,
+            name: `${parsed.monthName} / ${parsed.year}`,
+          });
+        }
+      }
     });
+
     const curr = String(new Date().getFullYear());
     yearsSet.add(curr);
-    return Array.from(yearsSet).sort((a, b) => Number(b) - Number(a));
+
+    const sortedYears = Array.from(yearsSet).sort((a, b) => Number(b) - Number(a));
+    const sortedMonths = Array.from(monthsMap.values()).sort((a, b) => b.yearMonth.localeCompare(a.yearMonth));
+
+    return {
+      availableYears: sortedYears,
+      availableMonths: sortedMonths,
+      distinctMonthCount: monthsMap.size,
+    };
   }, [records]);
+
+  // Auto-adjust default granularity if only 1 month exists in records and user hasn't manually chosen yet
+  useEffect(() => {
+    if (!hasUserChangedGranularity) {
+      if (distinctMonthCount === 1) {
+        // If data is from a single month, default to daily view so chart has 20-31 data points instead of 1 bar!
+        setGranularity("diario");
+      } else if (distinctMonthCount > 1) {
+        setGranularity("mensal");
+      }
+    }
+  }, [distinctMonthCount, hasUserChangedGranularity]);
 
   // Filter records considering non-period filters (category, type, placa, supplier)
   const baseFilteredRecords = useMemo(() => {
     return records.filter((r) => {
       if (categoryFilter !== "Todas" && r.tipo_registro !== categoryFilter) return false;
       if (tipoImportacaoFilter !== "Todas") {
-        const isGFV = r.conta?.toLowerCase().includes("gfv") ||
+        const isGFV =
+          r.conta?.toLowerCase().includes("gfv") ||
           r.descricao_conta?.toLowerCase().includes("combustivel") ||
           r.tipo_registro === "Combustível" ||
           r.tipo_registro === "Diesel" ||
@@ -96,41 +154,123 @@ export default function ReportTendenciaTab({
     });
   }, [records, categoryFilter, tipoImportacaoFilter, placaFilter, fornecedorFilter]);
 
-  // Aggregate monthly data
-  const monthlyData = useMemo(() => {
-    const map: Record<
-      string,
-      {
-        monthKey: string;
-        monthLabel: string;
-        monthName: string;
-        year: number;
-        monthNum: number;
-        totalValor: number;
-        totalLiters: number;
-        totalKm: number;
-        count: number;
-        categories: Record<string, number>;
-      }
-    > = {};
+  // Filter records by timeframe
+  const timeframeFilteredRecords = useMemo(() => {
+    if (trendTimeframe === "all") return baseFilteredRecords;
 
-    baseFilteredRecords.forEach((r) => {
-      const parsed = parseRecordMonthYear(r.data || (r as any).criado_em || (r as any).created_at);
+    const now = new Date().getTime();
+
+    return baseFilteredRecords.filter((r) => {
+      const rawDate =
+        r.data ||
+        (r as any).data_registro ||
+        (r as any).data_abastecimento ||
+        (r as any).data_emissao ||
+        (r as any).data_movimento ||
+        (r as any).data_importacao ||
+        (r as any).criado_em ||
+        (r as any).created_at;
+      const parsed = parseRecordFullDate(rawDate);
+      if (!parsed) return true;
+
+      if (trendTimeframe.startsWith("year_")) {
+        const targetYear = trendTimeframe.replace("year_", "");
+        return parsed.year === targetYear;
+      }
+
+      if (trendTimeframe.startsWith("month_")) {
+        const targetYearMonth = trendTimeframe.replace("month_", "");
+        return parsed.yearMonth === targetYearMonth;
+      }
+
+      if (trendTimeframe === "30d") {
+        const diffDays = (now - parsed.timestamp) / (1000 * 3600 * 24);
+        return diffDays <= 35 && diffDays >= -2;
+      }
+
+      if (trendTimeframe === "3m") {
+        const diffDays = (now - parsed.timestamp) / (1000 * 3600 * 24);
+        return diffDays <= 95 && diffDays >= -2;
+      }
+
+      if (trendTimeframe === "6m") {
+        const diffDays = (now - parsed.timestamp) / (1000 * 3600 * 24);
+        return diffDays <= 185 && diffDays >= -2;
+      }
+
+      if (trendTimeframe === "12m") {
+        const diffDays = (now - parsed.timestamp) / (1000 * 3600 * 24);
+        return diffDays <= 370 && diffDays >= -2;
+      }
+
+      return true;
+    });
+  }, [baseFilteredRecords, trendTimeframe]);
+
+  // Aggregate trend data based on selected granularity (Mensal, Semanal, Quinzenal, Diário)
+  const trendData = useMemo(() => {
+    interface TrendBucket {
+      key: string;
+      label: string;
+      fullName: string;
+      sortKey: number | string;
+      totalValor: number;
+      totalLiters: number;
+      totalKm: number;
+      count: number;
+      categories: Record<string, number>;
+    }
+
+    const map: Record<string, TrendBucket> = {};
+
+    timeframeFilteredRecords.forEach((r) => {
+      const rawDate =
+        r.data ||
+        (r as any).data_registro ||
+        (r as any).data_abastecimento ||
+        (r as any).data_emissao ||
+        (r as any).data_movimento ||
+        (r as any).data_importacao ||
+        (r as any).criado_em ||
+        (r as any).created_at;
+      const parsed = parseRecordFullDate(rawDate);
       if (!parsed) return;
 
-      const key = `${parsed.year}-${parsed.month}`;
-      const label = `${parsed.month}/${parsed.year}`;
-      const mName = MONTH_NAMES_PT[parsed.month] || parsed.month;
-      const yNum = Number(parsed.year);
-      const mNum = Number(parsed.month);
+      let key = "";
+      let label = "";
+      let fullName = "";
+      let sortKey: number | string = 0;
+
+      if (granularity === "diario") {
+        key = parsed.isoDate;
+        label = parsed.formattedDayMonth;
+        fullName = `${parsed.formattedBr} (${parsed.monthName})`;
+        sortKey = parsed.timestamp;
+      } else if (granularity === "semanal") {
+        key = parsed.weekKey;
+        label = parsed.weekLabel;
+        fullName = `Semana ${parsed.weekNum} de ${parsed.year}`;
+        sortKey = Number(parsed.year) * 100 + parsed.weekNum;
+      } else if (granularity === "quinzenal") {
+        key = parsed.quinzenaKey;
+        label = parsed.quinzenaLabel;
+        fullName = `${parsed.quinzenaLabel} (${parsed.year})`;
+        const qNum = parsed.quinzenaKey.endsWith("Q1") ? 1 : 2;
+        sortKey = Number(parsed.year) * 1000 + Number(parsed.month) * 10 + qNum;
+      } else {
+        // Mensal (default)
+        key = parsed.yearMonth;
+        label = parsed.monthYear;
+        fullName = `${parsed.monthName} / ${parsed.year}`;
+        sortKey = Number(parsed.year) * 100 + Number(parsed.month);
+      }
 
       if (!map[key]) {
         map[key] = {
-          monthKey: key,
-          monthLabel: label,
-          monthName: mName,
-          year: yNum,
-          monthNum: mNum,
+          key,
+          label,
+          fullName,
+          sortKey,
           totalValor: 0,
           totalLiters: 0,
           totalKm: 0,
@@ -152,19 +292,11 @@ export default function ReportTendenciaTab({
     });
 
     let list = Object.values(map).sort((a, b) => {
-      if (a.year !== b.year) return a.year - b.year;
-      return a.monthNum - b.monthNum;
+      if (typeof a.sortKey === "number" && typeof b.sortKey === "number") {
+        return a.sortKey - b.sortKey;
+      }
+      return String(a.sortKey).localeCompare(String(b.sortKey));
     });
-
-    // Apply Timeframe filter
-    if (trendTimeframe === "12m") {
-      list = list.slice(-12);
-    } else if (trendTimeframe === "6m") {
-      list = list.slice(-6);
-    } else if (trendTimeframe.startsWith("year_")) {
-      const targetYear = Number(trendTimeframe.replace("year_", ""));
-      list = list.filter((m) => m.year === targetYear);
-    }
 
     // Compute variations and derived metrics
     const totalPeriodCost = list.reduce((sum, m) => sum + m.totalValor, 0);
@@ -178,7 +310,8 @@ export default function ReportTendenciaTab({
         variationPct = (variationVal / prev.totalValor) * 100;
       }
       const precoMedioLitro = item.totalLiters > 0 ? item.totalValor / item.totalLiters : 0;
-      const cpkMensal = item.totalKm > 0 ? item.totalValor / item.totalKm : 0;
+      const cpk = item.totalKm > 0 ? item.totalValor / item.totalKm : 0;
+      const ticketMedio = item.count > 0 ? item.totalValor / item.count : 0;
       const sharePct = totalPeriodCost > 0 ? (item.totalValor / totalPeriodCost) * 100 : 0;
 
       return {
@@ -186,61 +319,71 @@ export default function ReportTendenciaTab({
         variationPct,
         variationVal,
         precoMedioLitro,
-        cpkMensal,
+        cpk,
+        ticketMedio,
         sharePct,
       };
     });
-  }, [baseFilteredRecords, tipoImportacaoFilter, trendTimeframe]);
+  }, [timeframeFilteredRecords, granularity, tipoImportacaoFilter]);
 
   // Overall KPIs
   const totalGeralPeriodo = useMemo(
-    () => monthlyData.reduce((acc, m) => acc + m.totalValor, 0),
-    [monthlyData]
+    () => trendData.reduce((acc, m) => acc + m.totalValor, 0),
+    [trendData]
   );
   const totalLitrosPeriodo = useMemo(
-    () => monthlyData.reduce((acc, m) => acc + m.totalLiters, 0),
-    [monthlyData]
+    () => trendData.reduce((acc, m) => acc + m.totalLiters, 0),
+    [trendData]
   );
   const totalLancamentosPeriodo = useMemo(
-    () => monthlyData.reduce((acc, m) => acc + m.count, 0),
-    [monthlyData]
+    () => trendData.reduce((acc, m) => acc + m.count, 0),
+    [trendData]
   );
-  const mediaMensal = useMemo(
-    () => (monthlyData.length > 0 ? totalGeralPeriodo / monthlyData.length : 0),
-    [totalGeralPeriodo, monthlyData]
+  const totalKmPeriodo = useMemo(
+    () => trendData.reduce((acc, m) => acc + m.totalKm, 0),
+    [trendData]
+  );
+  const mediaPeriodo = useMemo(
+    () => (trendData.length > 0 ? totalGeralPeriodo / trendData.length : 0),
+    [totalGeralPeriodo, trendData]
   );
 
-  const highestMonth = useMemo(() => {
-    if (monthlyData.length === 0) return null;
-    return [...monthlyData].sort((a, b) => b.totalValor - a.totalValor)[0];
-  }, [monthlyData]);
+  const highestPeriod = useMemo(() => {
+    if (trendData.length === 0) return null;
+    return [...trendData].sort((a, b) => b.totalValor - a.totalValor)[0];
+  }, [trendData]);
 
-  const lowestMonth = useMemo(() => {
-    if (monthlyData.length === 0) return null;
-    return [...monthlyData].sort((a, b) => a.totalValor - b.totalValor)[0];
-  }, [monthlyData]);
+  const lowestPeriod = useMemo(() => {
+    if (trendData.length === 0) return null;
+    return [...trendData].sort((a, b) => a.totalValor - b.totalValor)[0];
+  }, [trendData]);
 
-  const lastMonth = monthlyData[monthlyData.length - 1] || null;
+  const lastPeriod = trendData[trendData.length - 1] || null;
 
   // Sorted list for table
   const sortedTableData = useMemo(() => {
-    const list = [...monthlyData];
+    const list = [...trendData];
     if (sortBy === "valor_desc") {
       list.sort((a, b) => b.totalValor - a.totalValor);
     } else if (sortBy === "variation_desc") {
       list.sort((a, b) => b.variationPct - a.variationPct);
+    } else if (sortBy === "volume_desc") {
+      list.sort((a, b) => b.totalLiters - a.totalLiters);
     }
     return list;
-  }, [monthlyData, sortBy]);
+  }, [trendData, sortBy]);
 
   // Determine chart values based on metricMode
   const chartData = useMemo(() => {
-    return monthlyData.map((m) => ({
-      name: m.monthLabel,
+    return trendData.map((m) => ({
+      name: m.label,
+      fullName: m.fullName,
       valor: m.totalValor,
       litros: m.totalLiters,
       preco_medio: Number(m.precoMedioLitro.toFixed(3)),
+      cpk: Number(m.cpk.toFixed(3)),
       lancamentos: m.count,
+      ticket_medio: Number(m.ticketMedio.toFixed(2)),
       displayVal:
         metricMode === "valor"
           ? m.totalValor
@@ -248,17 +391,46 @@ export default function ReportTendenciaTab({
           ? m.totalLiters
           : metricMode === "preco_medio"
           ? m.precoMedioLitro
+          : metricMode === "cpk"
+          ? m.cpk
+          : metricMode === "ticket_medio"
+          ? m.ticketMedio
           : m.count,
     }));
-  }, [monthlyData, metricMode]);
+  }, [trendData, metricMode]);
+
+  const granularityName =
+    granularity === "diario"
+      ? "Dia"
+      : granularity === "semanal"
+      ? "Semana"
+      : granularity === "quinzenal"
+      ? "Quinzena"
+      : "Mês";
 
   return (
     <div className="space-y-6">
+      {/* Single Month Smart Hint Banner */}
+      {distinctMonthCount === 1 && (
+        <div className="bg-purple-50 border border-purple-200/80 rounded-2xl p-4 flex items-start gap-3 text-xs text-purple-900 shadow-xs no-print">
+          <Info className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-purple-950">
+              📊 Base de dados com 1 mês de lançamentos ({availableMonths[0]?.name || "Período Único"}).
+            </p>
+            <p className="text-purple-700 leading-relaxed">
+              O gráfico está exibindo automaticamente a <strong className="text-purple-950">evolução diária (dia a dia)</strong> de custos e abastecimentos ao longo do mês ({trendData.length} dias com dados). Você também pode alternar para visualização <strong>Semanal</strong>, <strong>Quinzenal</strong> ou <strong>Mensal</strong> nos botões abaixo.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Top Trend Controls Bar */}
       <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4 no-print">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-2xl bg-purple-50 text-purple-700 border border-purple-200">
+        {/* Row 1: Header + Granularity Selector */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-purple-50 text-purple-700 border border-purple-200 shadow-xs">
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
@@ -266,20 +438,88 @@ export default function ReportTendenciaTab({
                 Análise de Tendência & Evolução Temporal
               </h3>
               <p className="text-xs text-zinc-500">
-                Acompanhe a curva de crescimento de custos, litragens e médias mês a mês.
+                Acompanhe o comportamento financeiro e operacional da frota ao longo do tempo.
               </p>
             </div>
           </div>
 
+          {/* Granularity Switcher Tabs */}
+          <div className="flex items-center gap-1.5 bg-zinc-100 p-1.5 rounded-2xl border border-zinc-200/70 text-xs font-bold self-start lg:self-auto">
+            <span className="text-[11px] font-extrabold text-zinc-500 px-2 uppercase tracking-wider">
+              Agrupar por:
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setGranularity("mensal");
+                setHasUserChangedGranularity(true);
+              }}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                granularity === "mensal"
+                  ? "bg-purple-600 text-white shadow-xs font-black"
+                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60"
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" /> Mensal (Mês a Mês)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGranularity("quinzenal");
+                setHasUserChangedGranularity(true);
+              }}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                granularity === "quinzenal"
+                  ? "bg-purple-600 text-white shadow-xs font-black"
+                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60"
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" /> Quinzenal
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGranularity("semanal");
+                setHasUserChangedGranularity(true);
+              }}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                granularity === "semanal"
+                  ? "bg-purple-600 text-white shadow-xs font-black"
+                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60"
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" /> Semanal
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGranularity("diario");
+                setHasUserChangedGranularity(true);
+              }}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                granularity === "diario"
+                  ? "bg-purple-600 text-white shadow-xs font-black"
+                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60"
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Dia a Dia (Diário)
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Timeframe & Months Filter */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 pb-3">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Timeframe Selector */}
-            <div className="flex items-center gap-1.5 bg-zinc-100 p-1 rounded-2xl border border-zinc-200/60 text-xs font-bold">
+            <span className="text-xs font-extrabold text-zinc-600 flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-zinc-400" /> Período Temporal:
+            </span>
+            <div className="flex flex-wrap items-center gap-1 bg-zinc-100 p-1 rounded-2xl border border-zinc-200/60 text-xs font-bold">
               <button
                 type="button"
                 onClick={() => setTrendTimeframe("all")}
-                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                   trendTimeframe === "all"
-                    ? "bg-purple-600 text-white shadow-xs"
+                    ? "bg-white text-purple-700 shadow-xs font-black"
                     : "text-zinc-600 hover:text-zinc-900"
                 }`}
               >
@@ -288,9 +528,9 @@ export default function ReportTendenciaTab({
               <button
                 type="button"
                 onClick={() => setTrendTimeframe("12m")}
-                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                   trendTimeframe === "12m"
-                    ? "bg-purple-600 text-white shadow-xs"
+                    ? "bg-white text-purple-700 shadow-xs font-black"
                     : "text-zinc-600 hover:text-zinc-900"
                 }`}
               >
@@ -299,38 +539,72 @@ export default function ReportTendenciaTab({
               <button
                 type="button"
                 onClick={() => setTrendTimeframe("6m")}
-                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                   trendTimeframe === "6m"
-                    ? "bg-purple-600 text-white shadow-xs"
+                    ? "bg-white text-purple-700 shadow-xs font-black"
                     : "text-zinc-600 hover:text-zinc-900"
                 }`}
               >
                 Últimos 6m
               </button>
-              {availableYears.map((yr) => (
-                <button
-                  key={yr}
-                  type="button"
-                  onClick={() => setTrendTimeframe(`year_${yr}`)}
-                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                    trendTimeframe === `year_${yr}`
-                      ? "bg-purple-600 text-white shadow-xs"
-                      : "text-zinc-600 hover:text-zinc-900"
-                  }`}
-                >
-                  {yr}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={() => setTrendTimeframe("3m")}
+                className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
+                  trendTimeframe === "3m"
+                    ? "bg-white text-purple-700 shadow-xs font-black"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                Últimos 90d
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrendTimeframe("30d")}
+                className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
+                  trendTimeframe === "30d"
+                    ? "bg-white text-purple-700 shadow-xs font-black"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                Últimos 30d
+              </button>
             </div>
+          </div>
+
+          {/* Month / Year Specific Dropdown Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-zinc-500">Filtrar Mês/Ano:</span>
+            <select
+              value={trendTimeframe}
+              onChange={(e) => setTrendTimeframe(e.target.value)}
+              className="px-3 py-1.5 rounded-xl bg-zinc-50 border border-zinc-200 text-zinc-800 text-xs font-bold focus:outline-none cursor-pointer hover:bg-zinc-100"
+            >
+              <option value="all">Todos os Meses ({availableMonths.length})</option>
+              <optgroup label="Por Mês Específico">
+                {availableMonths.map((m) => (
+                  <option key={m.yearMonth} value={`month_${m.yearMonth}`}>
+                    {m.name}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Por Ano">
+                {availableYears.map((yr) => (
+                  <option key={yr} value={`year_${yr}`}>
+                    Ano {yr}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
           </div>
         </div>
 
-        {/* Sub-Filters / Metrics & Chart Switchers */}
+        {/* Row 3: Metric Mode & Chart Type Selector */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           {/* Metric Selector */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-extrabold text-zinc-600">Visualizar Métrica:</span>
-            <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-2xl border border-zinc-200/60 text-xs font-bold">
+            <div className="flex flex-wrap items-center gap-1 bg-zinc-100 p-1 rounded-2xl border border-zinc-200/60 text-xs font-bold">
               <button
                 type="button"
                 onClick={() => setMetricMode("valor")}
@@ -366,6 +640,17 @@ export default function ReportTendenciaTab({
               </button>
               <button
                 type="button"
+                onClick={() => setMetricMode("cpk")}
+                className={`px-3 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                  metricMode === "cpk"
+                    ? "bg-white text-cyan-700 shadow-xs font-black"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                <Gauge className="w-3.5 h-3.5 text-cyan-600" /> CPK (R$/Km)
+              </button>
+              <button
+                type="button"
                 onClick={() => setMetricMode("lancamentos")}
                 className={`px-3 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
                   metricMode === "lancamentos"
@@ -374,6 +659,17 @@ export default function ReportTendenciaTab({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5 text-blue-600" /> Qtd Lançamentos
+              </button>
+              <button
+                type="button"
+                onClick={() => setMetricMode("ticket_medio")}
+                className={`px-3 py-1 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                  metricMode === "ticket_medio"
+                    ? "bg-white text-indigo-700 shadow-xs font-black"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                <DollarSign className="w-3.5 h-3.5 text-indigo-600" /> Ticket Médio (R$)
               </button>
             </div>
           </div>
@@ -388,7 +684,7 @@ export default function ReportTendenciaTab({
                 className={`p-1.5 rounded-xl transition-all cursor-pointer ${
                   chartType === "area" ? "bg-white text-purple-700 shadow-xs" : "text-zinc-500 hover:text-zinc-800"
                 }`}
-                title="Gráfico de Área"
+                title="Gráfico de Área Suave"
               >
                 <Sparkles className="w-4 h-4" />
               </button>
@@ -417,7 +713,7 @@ export default function ReportTendenciaTab({
         </div>
       </div>
 
-      {monthlyData.length === 0 ? (
+      {trendData.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-zinc-200 shadow-sm space-y-4">
           <div className="w-16 h-16 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center mx-auto">
             <TrendingUp size={32} />
@@ -443,51 +739,59 @@ export default function ReportTendenciaTab({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
               <div className="flex items-center justify-between text-zinc-500 mb-2">
-                <span className="text-xs font-extrabold uppercase tracking-wider">Mês de Maior Custo</span>
+                <span className="text-xs font-extrabold uppercase tracking-wider">
+                  {granularityName} de Maior Custo
+                </span>
                 <TrendingUp className="w-4 h-4 text-rose-500" />
               </div>
               <p className="text-lg font-black text-zinc-900">
-                {highestMonth ? highestMonth.monthLabel : "-"}
+                {highestPeriod ? highestPeriod.label : "-"}
               </p>
               <p className="text-xs font-bold text-rose-600 mt-0.5">
-                {highestMonth ? formatCurrency(highestMonth.totalValor) : "R$ 0,00"}
+                {highestPeriod ? formatCurrency(highestPeriod.totalValor) : "R$ 0,00"}
               </p>
               <p className="text-[11px] text-zinc-400 mt-0.5">
-                {highestMonth ? `${highestMonth.count} lançamentos • ${highestMonth.sharePct.toFixed(1)}% do período` : ""}
+                {highestPeriod ? `${highestPeriod.count} lançamentos • ${highestPeriod.sharePct.toFixed(1)}% do total` : ""}
               </p>
             </div>
 
             <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
               <div className="flex items-center justify-between text-zinc-500 mb-2">
-                <span className="text-xs font-extrabold uppercase tracking-wider">Mês Mais Econômico</span>
+                <span className="text-xs font-extrabold uppercase tracking-wider">
+                  {granularityName} Mais Econômico
+                </span>
                 <TrendingDown className="w-4 h-4 text-emerald-500" />
               </div>
               <p className="text-lg font-black text-zinc-900">
-                {lowestMonth ? lowestMonth.monthLabel : "-"}
+                {lowestPeriod ? lowestPeriod.label : "-"}
               </p>
               <p className="text-xs font-bold text-emerald-600 mt-0.5">
-                {lowestMonth ? formatCurrency(lowestMonth.totalValor) : "R$ 0,00"}
+                {lowestPeriod ? formatCurrency(lowestPeriod.totalValor) : "R$ 0,00"}
               </p>
               <p className="text-[11px] text-zinc-400 mt-0.5">
-                {lowestMonth ? `${lowestMonth.count} lançamentos • ${lowestMonth.sharePct.toFixed(1)}% do período` : ""}
+                {lowestPeriod ? `${lowestPeriod.count} lançamentos • ${lowestPeriod.sharePct.toFixed(1)}% do total` : ""}
               </p>
             </div>
 
             <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
               <div className="flex items-center justify-between text-zinc-500 mb-2">
-                <span className="text-xs font-extrabold uppercase tracking-wider">Média Mensal</span>
+                <span className="text-xs font-extrabold uppercase tracking-wider">
+                  Média por {granularityName}
+                </span>
                 <Calculator className="w-4 h-4 text-blue-500" />
               </div>
-              <p className="text-lg font-black text-blue-900">{formatCurrency(mediaMensal)}</p>
+              <p className="text-lg font-black text-blue-900">{formatCurrency(mediaPeriodo)}</p>
               <p className="text-[11px] text-zinc-500 mt-0.5">
-                Calculada em {monthlyData.length} mês(es) analisados
+                Calculada em {trendData.length} ponto(s) analisados ({granularity})
               </p>
             </div>
 
             <div className="bg-white p-5 rounded-3xl border border-zinc-200/80 shadow-xs">
               <div className="flex items-center justify-between text-zinc-500 mb-2">
-                <span className="text-xs font-extrabold uppercase tracking-wider">Variação Último Mês</span>
-                {lastMonth && lastMonth.variationPct >= 0 ? (
+                <span className="text-xs font-extrabold uppercase tracking-wider">
+                  Variação vs {granularityName} Anterior
+                </span>
+                {lastPeriod && lastPeriod.variationPct >= 0 ? (
                   <ArrowUpRight className="w-4 h-4 text-rose-500" />
                 ) : (
                   <ArrowDownRight className="w-4 h-4 text-emerald-500" />
@@ -495,17 +799,17 @@ export default function ReportTendenciaTab({
               </div>
               <p
                 className={`text-lg font-black ${
-                  lastMonth && lastMonth.variationPct >= 0 ? "text-rose-600" : "text-emerald-600"
+                  lastPeriod && lastPeriod.variationPct >= 0 ? "text-rose-600" : "text-emerald-600"
                 }`}
               >
-                {lastMonth
-                  ? `${lastMonth.variationPct >= 0 ? "+" : ""}${lastMonth.variationPct.toFixed(1)}%`
+                {lastPeriod
+                  ? `${lastPeriod.variationPct >= 0 ? "+" : ""}${lastPeriod.variationPct.toFixed(1)}%`
                   : "0.0%"}
               </p>
               <p className="text-[11px] text-zinc-500 mt-0.5">
-                {lastMonth && lastMonth.variationVal !== 0
-                  ? `${lastMonth.variationVal >= 0 ? "+" : ""}${formatCurrency(lastMonth.variationVal)} vs mês anterior`
-                  : "Comparado ao mês anterior"}
+                {lastPeriod && lastPeriod.variationVal !== 0
+                  ? `${lastPeriod.variationVal >= 0 ? "+" : ""}${formatCurrency(lastPeriod.variationVal)} vs anterior`
+                  : "Comparado ao período anterior"}
               </p>
             </div>
           </div>
@@ -519,10 +823,12 @@ export default function ReportTendenciaTab({
                   {metricMode === "valor" && "Evolução Temporal de Custos (R$)"}
                   {metricMode === "litros" && "Evolução de Consumo de Combustível (Litros)"}
                   {metricMode === "preco_medio" && "Evolução do Preço Médio por Litro (R$/L)"}
+                  {metricMode === "cpk" && "Evolução do Custo por Km (R$/Km)"}
                   {metricMode === "lancamentos" && "Evolução da Quantidade de Lançamentos"}
+                  {metricMode === "ticket_medio" && "Evolução do Ticket Médio por Lançamento (R$)"}
                 </h3>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Visualização contínua mês a mês no período ({monthlyData.length} meses)
+                  Visualização {granularity} contínua com {trendData.length} pontos temporais no período
                 </p>
               </div>
             </div>
@@ -530,7 +836,7 @@ export default function ReportTendenciaTab({
             <div className="h-80 w-full pt-4">
               <ResponsiveContainer width="100%" height="100%">
                 {chartType === "area" ? (
-                  <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+                  <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
                     <defs>
                       <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
@@ -538,23 +844,34 @@ export default function ReportTendenciaTab({
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      interval={chartData.length > 20 ? "preserveStartEnd" : 0}
+                      angle={chartData.length > 12 ? -25 : 0}
+                      textAnchor={chartData.length > 12 ? "end" : "middle"}
+                      height={40}
+                    />
                     <YAxis
                       tick={{ fontSize: 11, fill: "#64748b" }}
                       tickFormatter={(val) =>
-                        metricMode === "valor"
-                          ? `R$ ${(val / 1000).toFixed(0)}k`
-                          : metricMode === "preco_medio"
+                        metricMode === "valor" || metricMode === "ticket_medio"
+                          ? val >= 1000
+                            ? `R$ ${(val / 1000).toFixed(0)}k`
+                            : `R$ ${val.toFixed(0)}`
+                          : metricMode === "preco_medio" || metricMode === "cpk"
                           ? `R$ ${val.toFixed(2)}`
                           : val.toLocaleString("pt-BR")
                       }
                     />
                     <Tooltip
                       formatter={(value: any) => [
-                        metricMode === "valor"
+                        metricMode === "valor" || metricMode === "ticket_medio"
                           ? formatCurrency(Number(value))
                           : metricMode === "preco_medio"
                           ? `R$ ${Number(value).toFixed(3)} / L`
+                          : metricMode === "cpk"
+                          ? `R$ ${Number(value).toFixed(3)} / Km`
                           : metricMode === "litros"
                           ? `${Number(value).toLocaleString("pt-BR")} L`
                           : `${Number(value)} registros`,
@@ -564,9 +881,16 @@ export default function ReportTendenciaTab({
                           ? "Volume"
                           : metricMode === "preco_medio"
                           ? "Preço Médio"
+                          : metricMode === "cpk"
+                          ? "Custo por Km"
+                          : metricMode === "ticket_medio"
+                          ? "Ticket Médio"
                           : "Lançamentos",
                       ]}
-                      labelFormatter={(label) => `Mês: ${label}`}
+                      labelFormatter={(label, items) => {
+                        const item = items && items[0] ? (items[0].payload as any) : null;
+                        return item?.fullName ? `${item.fullName}` : `${granularityName}: ${label}`;
+                      }}
                     />
                     <Area
                       type="monotone"
@@ -575,28 +899,41 @@ export default function ReportTendenciaTab({
                       strokeWidth={3}
                       fillOpacity={1}
                       fill="url(#colorTrend)"
+                      dot={chartData.length <= 31 ? { r: 3, fill: "#8b5cf6" } : false}
+                      activeDot={{ r: 6 }}
                     />
                   </AreaChart>
                 ) : chartType === "line" ? (
-                  <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+                  <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      interval={chartData.length > 20 ? "preserveStartEnd" : 0}
+                      angle={chartData.length > 12 ? -25 : 0}
+                      textAnchor={chartData.length > 12 ? "end" : "middle"}
+                      height={40}
+                    />
                     <YAxis
                       tick={{ fontSize: 11, fill: "#64748b" }}
                       tickFormatter={(val) =>
-                        metricMode === "valor"
-                          ? `R$ ${(val / 1000).toFixed(0)}k`
-                          : metricMode === "preco_medio"
+                        metricMode === "valor" || metricMode === "ticket_medio"
+                          ? val >= 1000
+                            ? `R$ ${(val / 1000).toFixed(0)}k`
+                            : `R$ ${val.toFixed(0)}`
+                          : metricMode === "preco_medio" || metricMode === "cpk"
                           ? `R$ ${val.toFixed(2)}`
                           : val.toLocaleString("pt-BR")
                       }
                     />
                     <Tooltip
                       formatter={(value: any) => [
-                        metricMode === "valor"
+                        metricMode === "valor" || metricMode === "ticket_medio"
                           ? formatCurrency(Number(value))
                           : metricMode === "preco_medio"
                           ? `R$ ${Number(value).toFixed(3)} / L`
+                          : metricMode === "cpk"
+                          ? `R$ ${Number(value).toFixed(3)} / Km`
                           : metricMode === "litros"
                           ? `${Number(value).toLocaleString("pt-BR")} L`
                           : `${Number(value)} registros`,
@@ -606,39 +943,57 @@ export default function ReportTendenciaTab({
                           ? "Volume"
                           : metricMode === "preco_medio"
                           ? "Preço Médio"
+                          : metricMode === "cpk"
+                          ? "Custo por Km"
+                          : metricMode === "ticket_medio"
+                          ? "Ticket Médio"
                           : "Lançamentos",
                       ]}
-                      labelFormatter={(label) => `Mês: ${label}`}
+                      labelFormatter={(label, items) => {
+                        const item = items && items[0] ? (items[0].payload as any) : null;
+                        return item?.fullName ? `${item.fullName}` : `${granularityName}: ${label}`;
+                      }}
                     />
                     <Line
                       type="monotone"
                       dataKey="displayVal"
                       stroke="#7c3aed"
                       strokeWidth={3}
-                      dot={{ r: 4, fill: "#7c3aed" }}
+                      dot={chartData.length <= 31 ? { r: 4, fill: "#7c3aed" } : false}
                       activeDot={{ r: 7 }}
                     />
                   </LineChart>
                 ) : (
-                  <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+                  <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: "#64748b" }}
+                      interval={chartData.length > 20 ? "preserveStartEnd" : 0}
+                      angle={chartData.length > 12 ? -25 : 0}
+                      textAnchor={chartData.length > 12 ? "end" : "middle"}
+                      height={40}
+                    />
                     <YAxis
                       tick={{ fontSize: 11, fill: "#64748b" }}
                       tickFormatter={(val) =>
-                        metricMode === "valor"
-                          ? `R$ ${(val / 1000).toFixed(0)}k`
-                          : metricMode === "preco_medio"
+                        metricMode === "valor" || metricMode === "ticket_medio"
+                          ? val >= 1000
+                            ? `R$ ${(val / 1000).toFixed(0)}k`
+                            : `R$ ${val.toFixed(0)}`
+                          : metricMode === "preco_medio" || metricMode === "cpk"
                           ? `R$ ${val.toFixed(2)}`
                           : val.toLocaleString("pt-BR")
                       }
                     />
                     <Tooltip
                       formatter={(value: any) => [
-                        metricMode === "valor"
+                        metricMode === "valor" || metricMode === "ticket_medio"
                           ? formatCurrency(Number(value))
                           : metricMode === "preco_medio"
                           ? `R$ ${Number(value).toFixed(3)} / L`
+                          : metricMode === "cpk"
+                          ? `R$ ${Number(value).toFixed(3)} / Km`
                           : metricMode === "litros"
                           ? `${Number(value).toLocaleString("pt-BR")} L`
                           : `${Number(value)} registros`,
@@ -648,36 +1003,46 @@ export default function ReportTendenciaTab({
                           ? "Volume"
                           : metricMode === "preco_medio"
                           ? "Preço Médio"
+                          : metricMode === "cpk"
+                          ? "Custo por Km"
+                          : metricMode === "ticket_medio"
+                          ? "Ticket Médio"
                           : "Lançamentos",
                       ]}
-                      labelFormatter={(label) => `Mês: ${label}`}
+                      labelFormatter={(label, items) => {
+                        const item = items && items[0] ? (items[0].payload as any) : null;
+                        return item?.fullName ? `${item.fullName}` : `${granularityName}: ${label}`;
+                      }}
                     />
-                    <Bar dataKey="displayVal" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="displayVal" fill="#8b5cf6" radius={[6, 6, 0, 0]} maxBarSize={45} />
                   </BarChart>
                 )}
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Monthly Evolution Detailed Table */}
+          {/* Temporal Evolution Detailed Table */}
           <div className="bg-white p-6 rounded-3xl border border-zinc-200/80 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <h3 className="font-extrabold text-zinc-900 text-base">Tabela de Evolução Mensal</h3>
+                <h3 className="font-extrabold text-zinc-900 text-base">
+                  Tabela Detalhada de Evolução ({granularity})
+                </h3>
                 <p className="text-xs text-zinc-500">
-                  Valores consolidados mês a mês com taxa de crescimento e preço médio.
+                  Valores consolidados por {granularityName.toLowerCase()} com taxa de crescimento, consumo e médias.
                 </p>
               </div>
 
               <div className="flex items-center gap-2 text-xs font-bold text-zinc-600">
-                <span>Ordenar:</span>
+                <span>Ordenar por:</span>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-800 text-xs font-bold focus:outline-none cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-zinc-100 border border-zinc-200 text-zinc-800 text-xs font-bold focus:outline-none cursor-pointer hover:bg-zinc-200/60"
                 >
-                  <option value="chrono">Cronológica (Mês a Mês)</option>
+                  <option value="chrono">Cronológica (Mais antigo ao mais recente)</option>
                   <option value="valor_desc">Maior Custo Primeiro</option>
+                  <option value="volume_desc">Maior Volume (Litros)</option>
                   <option value="variation_desc">Maior Crescimento %</option>
                 </select>
               </div>
@@ -687,29 +1052,34 @@ export default function ReportTendenciaTab({
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-zinc-50 text-zinc-500 border-b border-zinc-200/80 uppercase tracking-wider text-[10px] font-extrabold">
-                    <th className="p-3">Mês / Ano</th>
+                    <th className="p-3">{granularityName} / Período</th>
                     <th className="p-3 text-center">Lançamentos</th>
                     <th className="p-3 text-center">Consumo (Litros)</th>
                     <th className="p-3 text-center">Preço Médio (R$/L)</th>
+                    <th className="p-3 text-center">CPK (R$/Km)</th>
                     <th className="p-3 text-right">Custo Total (R$)</th>
                     <th className="p-3 text-center">Participação (%)</th>
-                    <th className="p-3 text-right">Variação vs Mês Anterior</th>
+                    <th className="p-3 text-right">Variação vs Anterior</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 font-medium">
                   {sortedTableData.map((m) => (
-                    <tr key={m.monthKey} className="hover:bg-zinc-50 transition-colors">
+                    <tr key={m.key} className="hover:bg-zinc-50 transition-colors">
                       <td className="p-3 font-bold text-zinc-900">
-                        {m.monthLabel} <span className="text-[11px] text-zinc-400 font-normal">({m.monthName})</span>
+                        {m.label}{" "}
+                        <span className="text-[11px] text-zinc-400 font-normal">({m.fullName})</span>
                       </td>
                       <td className="p-3 text-center text-zinc-700 font-semibold">{m.count}</td>
                       <td className="p-3 text-center text-amber-900 font-bold">
                         {m.totalLiters > 0
-                          ? `${m.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L`
+                          ? `${m.totalLiters.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
                           : "-"}
                       </td>
                       <td className="p-3 text-center text-emerald-800 font-bold">
                         {m.precoMedioLitro > 0 ? `R$ ${m.precoMedioLitro.toFixed(3)}` : "-"}
+                      </td>
+                      <td className="p-3 text-center text-cyan-800 font-bold">
+                        {m.cpk > 0 ? `R$ ${m.cpk.toFixed(3)}` : "-"}
                       </td>
                       <td className="p-3 text-right font-black text-purple-700">{formatCurrency(m.totalValor)}</td>
                       <td className="p-3 text-center">
@@ -735,7 +1105,7 @@ export default function ReportTendenciaTab({
                 </tbody>
                 <tfoot>
                   <tr className="bg-zinc-100 border-t-2 border-zinc-300 font-black text-zinc-900">
-                    <td className="p-3 uppercase text-[10px] tracking-wider">Total do Período:</td>
+                    <td className="p-3 uppercase text-[10px] tracking-wider">Total Consolidado:</td>
                     <td className="p-3 text-center font-bold">{totalLancamentosPeriodo}</td>
                     <td className="p-3 text-center text-amber-950 font-bold">
                       {totalLitrosPeriodo > 0
@@ -745,12 +1115,15 @@ export default function ReportTendenciaTab({
                     <td className="p-3 text-center text-emerald-950 font-bold">
                       {totalLitrosPeriodo > 0 ? `R$ ${(totalGeralPeriodo / totalLitrosPeriodo).toFixed(3)}` : "-"}
                     </td>
+                    <td className="p-3 text-center text-cyan-950 font-bold">
+                      {totalKmPeriodo > 0 ? `R$ ${(totalGeralPeriodo / totalKmPeriodo).toFixed(3)}` : "-"}
+                    </td>
                     <td className="p-3 text-right font-black text-purple-900 text-sm">
                       {formatCurrency(totalGeralPeriodo)}
                     </td>
                     <td className="p-3 text-center">100%</td>
                     <td className="p-3 text-right text-zinc-500 font-normal text-[11px]">
-                      Média: {formatCurrency(mediaMensal)}/mês
+                      Média: {formatCurrency(mediaPeriodo)}/{granularityName.toLowerCase()}
                     </td>
                   </tr>
                 </tfoot>
