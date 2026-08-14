@@ -1,6 +1,7 @@
 import React from "react";
-import { Filter, Fuel, FileSpreadsheet } from "lucide-react";
+import { Filter, Fuel, FileSpreadsheet, Layers } from "lucide-react";
 import { MONTH_NAMES_PT } from "../utils/dateUtils";
+import { ImportJob } from "../types";
 
 interface Props {
   tipoImportacaoFilter: string;
@@ -19,6 +20,9 @@ interface Props {
   setMetrica: (val: any) => void;
   placaFilter: string;
   setPlacaFilter: (val: string) => void;
+  jobs?: ImportJob[];
+  jobIdFilter?: string;
+  setJobIdFilter?: (val: string) => void;
 }
 
 export default function ReportFilterToolbar({
@@ -38,6 +42,9 @@ export default function ReportFilterToolbar({
   setMetrica,
   placaFilter,
   setPlacaFilter,
+  jobs = [],
+  jobIdFilter = "all",
+  setJobIdFilter,
 }: Props) {
   return (
     <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-sm space-y-4 no-print">
@@ -85,7 +92,29 @@ export default function ReportFilterToolbar({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3">
+        {/* Lote de Importação */}
+        {jobs.length > 0 && setJobIdFilter && (
+          <div>
+            <label className="block text-[11px] font-extrabold text-zinc-600 mb-1 flex items-center gap-1">
+              <Layers className="w-3 h-3 text-blue-600" />
+              Lote / Arquivo
+            </label>
+            <select
+              value={jobIdFilter}
+              onChange={(e) => setJobIdFilter(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-blue-50/70 border border-blue-200 text-xs font-bold text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            >
+              <option value="all">★ Todos os Lotes (Consolidado)</option>
+              {jobs.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.nome_arquivo} ({j.total_registros || 0} reg)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Tipo de Importação Dropdown */}
         <div>
           <label className="block text-[11px] font-extrabold text-zinc-600 mb-1">

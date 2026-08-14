@@ -44,7 +44,7 @@ import {
   X,
   Eye,
 } from "lucide-react";
-import { ImportRecord } from "../types";
+import { ImportRecord, ImportJob } from "../types";
 import { ImportService } from "../services/importService";
 import {
   parseRecordMonthYear,
@@ -143,6 +143,14 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
   // Filters
   const [categoryFilter, setCategoryFilter] = useState("Todas");
   const [tipoImportacaoFilter, setTipoImportacaoFilter] = useState("Todas");
+  const [jobIdFilter, setJobIdFilter] = useState<string>("all");
+  const [jobs, setJobs] = useState<ImportJob[]>([]);
+
+  useEffect(() => {
+    ImportService.getImportJobs(companyId)
+      .then((data) => setJobs(data || []))
+      .catch((err) => console.error("Error loading jobs in reports:", err));
+  }, [companyId]);
   const [selectedPeriod, setSelectedPeriod] = useState<string>("0");
   const [customMonth, setCustomMonth] = useState<string>("");
   const [placaFilter, setPlacaFilter] = useState("");
@@ -254,6 +262,11 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
   // Main Filtered Records
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
+      // 0. Filtro de Lote de Importação
+      if (jobIdFilter && jobIdFilter !== "all") {
+        if (r.import_job_id !== jobIdFilter) return false;
+      }
+
       // 1. Categoria
       if (categoryFilter !== "Todas" && r.tipo_registro !== categoryFilter) {
         return false;
@@ -288,7 +301,7 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
 
       return true;
     });
-  }, [records, categoryFilter, tipoImportacaoFilter, selectedPeriod, customMonth, placaFilter, fornecedorFilter]);
+  }, [records, jobIdFilter, categoryFilter, tipoImportacaoFilter, selectedPeriod, customMonth, placaFilter, fornecedorFilter]);
 
   // Overall metrics
   const totalValorGeral = useMemo(() => {
@@ -793,6 +806,9 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
             setMetrica={setMetrica}
             placaFilter={placaFilter}
             setPlacaFilter={setPlacaFilter}
+            jobs={jobs}
+            jobIdFilter={jobIdFilter}
+            setJobIdFilter={setJobIdFilter}
           />
 
           {/* Overall Metric Cards */}

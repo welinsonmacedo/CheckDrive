@@ -52,7 +52,14 @@ export class ImportService {
 
     // Local fallback / merge
     await JOBS_STORE.iterate((value: ImportJob) => {
-      const matchCompany = !companyId || companyId === "all" || value.empresa_id === companyId || value.empresa_id === formattedCompanyId;
+      const matchCompany =
+        !companyId ||
+        companyId === "all" ||
+        value.empresa_id === companyId ||
+        value.empresa_id === formattedCompanyId ||
+        !value.empresa_id ||
+        value.empresa_id === "default_company" ||
+        value.empresa_id === "caiapo";
       if (matchCompany && !jobMap.has(value.id)) {
         jobMap.set(value.id, value);
       }
@@ -596,7 +603,7 @@ export class ImportService {
         query = query.eq("empresa_id", formattedCompanyId);
       }
 
-      if (jobId) {
+      if (jobId && jobId !== "all") {
         query = query.eq("import_job_id", jobId);
       }
 
@@ -615,8 +622,15 @@ export class ImportService {
 
     // 2. Fetch from Local Storage (merge local records if offline or not in Supabase)
     await RECORDS_STORE.iterate((r: ImportRecord) => {
-      const matchCompany = !companyId || companyId === "all" || r.empresa_id === companyId || r.empresa_id === formattedCompanyId;
-      const matchJob = !jobId || r.import_job_id === jobId;
+      const matchCompany =
+        !companyId ||
+        companyId === "all" ||
+        r.empresa_id === companyId ||
+        r.empresa_id === formattedCompanyId ||
+        !r.empresa_id ||
+        r.empresa_id === "default_company" ||
+        r.empresa_id === "caiapo";
+      const matchJob = !jobId || jobId === "all" || r.import_job_id === jobId;
       if (matchCompany && matchJob) {
         if (!recordMap.has(r.id)) {
           recordMap.set(r.id, r);

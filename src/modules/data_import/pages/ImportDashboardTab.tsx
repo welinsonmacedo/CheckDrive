@@ -21,6 +21,7 @@ import {
   Fuel,
   RotateCcw,
   Search,
+  Layers,
 } from "lucide-react";
 import {
   BarChart,
@@ -51,8 +52,9 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
   const [records, setRecords] = useState<ImportRecord[]>([]);
 
   // Individual Filters for Dashboard
+  const [dashJobId, setDashJobId] = useState<string>("all");
   const [dashPeriod, setDashPeriod] = useState<string>("0");
-  const [dashCustomMonth, setDashCustomMonth] = useState<string>("");
+  const [dashCustomMonth, setDashCustomMonth] = useState<string>("" );
   const [dashImportType, setDashImportType] = useState<string>("Todas");
   const [dashCategory, setDashCategory] = useState<string>("Todas");
   const [dashPlaca, setDashPlaca] = useState<string>("");
@@ -118,6 +120,11 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
   // Filtered records for Dashboard calculations
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
+      // 0. Lote de Importação
+      if (dashJobId && dashJobId !== "all") {
+        if (r.import_job_id !== dashJobId) return false;
+      }
+
       // 1. Tipo de importacao
       if (dashImportType !== "Todas") {
         const imp = getRecordImportType(r);
@@ -145,15 +152,17 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
 
       return true;
     });
-  }, [records, dashImportType, dashCategory, dashPeriod, dashCustomMonth, dashPlaca]);
+  }, [records, dashJobId, dashImportType, dashCategory, dashPeriod, dashCustomMonth, dashPlaca]);
 
   const isFiltered =
+    dashJobId !== "all" ||
     dashPeriod !== "0" ||
     dashImportType !== "Todas" ||
     dashCategory !== "Todas" ||
     dashPlaca.trim() !== "";
 
   const handleResetFilters = () => {
+    setDashJobId("all");
     setDashPeriod("0");
     setDashCustomMonth("");
     setDashImportType("Todas");
@@ -406,7 +415,29 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {/* Lote / Arquivo */}
+          {jobs.length > 0 && (
+            <div>
+              <label className="block text-[11px] font-extrabold text-zinc-600 mb-1 flex items-center gap-1">
+                <Layers className="w-3 h-3 text-blue-600" />
+                Lote / Arquivo
+              </label>
+              <select
+                value={dashJobId}
+                onChange={(e) => setDashJobId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-blue-50/70 border border-blue-200 text-xs font-bold text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="all">★ Todos os Lotes ({totalPdfs})</option>
+                {jobs.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.nome_arquivo} ({j.total_registros || 0} reg)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Período / Mês */}
           <div>
             <label className="block text-[11px] font-extrabold text-zinc-600 mb-1 flex items-center justify-between">
