@@ -144,6 +144,7 @@ export default function ReportFilterToolbar({
 
               {Object.entries(monthsByYear).map(([year, monthList]) => (
                 <optgroup key={year} label={`Ano ${year}`}>
+                  <option value={`y:${year}`}>Ano Completo de {year}</option>
                   {monthList.map((my) => {
                     const [m] = my.split("/");
                     const monthName = MONTH_NAMES_PT[m] || m;

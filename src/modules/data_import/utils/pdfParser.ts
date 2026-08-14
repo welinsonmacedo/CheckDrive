@@ -195,13 +195,14 @@ export async function parseSeniorTextContent(
       continue;
     }
 
-    // Check for Date line starting with DD/MM/YYYY
-    const dMatch = line.match(dateRegex);
-    if (dMatch) {
-      const dateBr = dMatch[1];
+    // Match date anywhere in the line e.g., "15/07/2024", "1 15/07/2024", "15-07-2024", "15/07/24"
+    const dateMatch = line.match(/(?:^|\s)(\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4})\b/);
+    if (dateMatch) {
+      const dateBr = dateMatch[1];
       const isoDate = convertBrDateToIso(dateBr);
 
-      const afterDate = line.substring(dateBr.length).trim();
+      const dateIdx = line.indexOf(dateBr);
+      const afterDate = line.substring(dateIdx + dateBr.length).trim();
 
       // Extract all Brazilian currency/number formatted tokens e.g. 69,08 or 462,15 or 251.753,0 or 1,00
       const brNumberMatches = line.match(/\b\d{1,3}(?:\.\d{3})*,\d{1,2}\b/g) || [];
@@ -385,13 +386,14 @@ export async function parseFuelConsumptionTextContent(
       continue;
     }
 
-    // Date line starting with DD/MM/YYYY
-    const dMatch = line.match(dateRegex);
-    if (dMatch) {
-      const dateBr = dMatch[1];
+    // Date line matching e.g., "15/07/2024", "1 15/07/2024", "15-07-2024", "15/07/24"
+    const dateMatch = line.match(/(?:^|\s)(\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4})\b/);
+    if (dateMatch) {
+      const dateBr = dateMatch[1];
       const isoDate = convertBrDateToIso(dateBr);
 
-      const afterDate = line.substring(dateBr.length).trim();
+      const dateIdx = line.indexOf(dateBr);
+      const afterDate = line.substring(dateIdx + dateBr.length).trim();
 
       // Find all BR float tokens e.g. 72,731 or 251.753,000 or 512,02 or 7,040 or 2,415
       const brNumberMatches = line.match(/\b\d{1,3}(?:\.\d{3})*,\d{1,3}\b/g) || [];
@@ -609,9 +611,28 @@ function parseBrFloat(strVal: string): number {
 }
 
 function convertBrDateToIso(brDate: string): string {
-  const parts = brDate.split("/");
+  if (!brDate) return new Date().toISOString().split("T")[0];
+  const clean = brDate.trim().replace(/[\.\-]/g, "/");
+  const parts = clean.split("/").filter(Boolean);
+
   if (parts.length === 3) {
-    return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+    // Format YYYY/MM/DD
+    if (/^\d{4}$/.test(parts[0])) {
+      const y = parts[0];
+      const m = parts[1].padStart(2, "0");
+      const d = parts[2].padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    // Format DD/MM/YYYY or DD/MM/YY
+    const d = parts[0].padStart(2, "0");
+    const m = parts[1].padStart(2, "0");
+    let y = parts[2];
+    if (y.length === 2) {
+      y = Number(y) < 50 ? `20${y}` : `19${y}`;
+    }
+    if (y.length === 4) {
+      return `${y}-${m}-${d}`;
+    }
   }
   return new Date().toISOString().split("T")[0];
 }

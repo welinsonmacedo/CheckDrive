@@ -207,7 +207,6 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
         }
         return a.localeCompare(b);
       })
-      .slice(-8)
       .map((k) => ({
         month: k,
         count: monthlyMap[k].count,
@@ -431,6 +430,7 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
 
               {Object.entries(monthsByYear).map(([year, monthList]) => (
                 <optgroup key={year} label={`Ano ${year}`}>
+                  <option value={`y:${year}`}>Ano Completo de {year}</option>
                   {monthList.map((my) => {
                     const [m] = my.split("/");
                     const monthName = MONTH_NAMES_PT[m] || m;
