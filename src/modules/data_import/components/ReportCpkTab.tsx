@@ -89,14 +89,14 @@ export default function ReportCpkTab({
             </div>
             <h3 className="text-2xl font-black tracking-tight">Relatório Especializado de CPK</h3>
             <p className="text-purple-200 text-xs sm:text-sm max-w-2xl leading-relaxed">
-              O <strong>CPK (Custo por Quilômetro Rodado)</strong> mede o custo operacional de cada veículo. É obtido dividindo o <strong>Custo Total das despesas</strong> pelo <strong>Quilômetro Rodado (GFV/Telemetria)</strong>.
+              O <strong>CPK (Custo por Quilômetro Rodado)</strong> mede o custo operacional de cada veículo. É obtido dividindo o <strong>Custo Total das Despesas (SOFtran)</strong> pelos <strong>Quilômetros Rodados (GFV/Telemetria)</strong>.
             </p>
           </div>
 
           <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 shrink-0 text-center space-y-1">
             <p className="text-[10px] uppercase tracking-wider font-extrabold text-purple-300">Fórmula de Cálculo</p>
-            <p className="text-sm font-black text-amber-300">CPK = Custo Total (R$) ÷ Km Rodado</p>
-            <p className="text-[10px] text-slate-300">Cruzamento GFV x SOFtran</p>
+            <p className="text-sm font-black text-amber-300">CPK = Custo SOFtran (R$) ÷ Km GFV</p>
+            <p className="text-[10px] text-slate-300">Custos SOFtran &bull; Km GFV</p>
           </div>
         </div>
       </div>
@@ -108,7 +108,7 @@ export default function ReportCpkTab({
           <p className="text-xl font-black mt-1 text-purple-200">
             {avgFleetCpk > 0 ? `R$ ${avgFleetCpk.toFixed(3)}/km` : "Sem Km"}
           </p>
-          <p className="text-[10px] text-purple-300/80 mt-1">Geral de todos os veículos</p>
+          <p className="text-[10px] text-purple-300/80 mt-1">Custo SOFtran ÷ Km GFV</p>
         </div>
 
         <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200/80 shadow-xs">
@@ -132,13 +132,13 @@ export default function ReportCpkTab({
           <p className="text-base font-black mt-1 text-blue-900">
             {totalFleetKm ? `${totalFleetKm.toLocaleString("pt-BR")} km` : "0 km"}
           </p>
-          <p className="text-[10px] text-zinc-400 mt-1">Registrado via GFV</p>
+          <p className="text-[10px] text-zinc-400 mt-1">100% GFV (Telemetria)</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
-          <p className="text-[10px] font-extrabold uppercase text-zinc-500">Custo Total Avaliado</p>
+          <p className="text-[10px] font-extrabold uppercase text-zinc-500">Custo Total Despesas</p>
           <p className="text-base font-black mt-1 text-slate-900">{formatCurrency(totalFleetCost)}</p>
-          <p className="text-[10px] text-zinc-400 mt-1">SOFtran + GFV</p>
+          <p className="text-[10px] text-zinc-400 mt-1">100% SOFtran (Custos)</p>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-zinc-200/80 shadow-xs">
@@ -252,9 +252,9 @@ export default function ReportCpkTab({
                 <th className="p-3.5">Placa</th>
                 <th className="p-3.5">Frota</th>
                 <th className="p-3.5 text-center">Km Rodado (GFV)</th>
-                <th className="p-3.5 text-center">Consumo (L)</th>
+                <th className="p-3.5 text-center">Consumo (GFV L)</th>
                 <th className="p-3.5 text-center">Média (Km/L)</th>
-                <th className="p-3.5 text-right">Custo Despesas (R$)</th>
+                <th className="p-3.5 text-right">Custo Total (SOFtran R$)</th>
                 <th className="p-3.5 text-right">CPK Total (R$/Km)</th>
                 <th className="p-3.5 text-center">Status CPK</th>
                 <th className="p-3.5 text-center">Ações</th>

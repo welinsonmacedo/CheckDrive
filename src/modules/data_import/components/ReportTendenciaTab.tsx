@@ -40,8 +40,11 @@ import {
   getRecordDateString,
   MONTH_NAMES_PT,
   MONTH_SHORT_PT,
+  generateYearMonths,
+  generateMonthDays,
+  generateMonthQuinzena,
 } from "../utils/dateUtils";
-import { getRecordFinancialValue, formatCurrency } from "../utils/vehicleStatsUtils";
+import { getRecordFinancialValue, formatCurrency, getRecordImportType } from "../utils/vehicleStatsUtils";
 
 interface Props {
   records: ImportRecord[];
@@ -147,15 +150,9 @@ export default function ReportTendenciaTab({
     return records.filter((r) => {
       if (categoryFilter !== "Todas" && r.tipo_registro !== categoryFilter) return false;
       if (tipoImportacaoFilter !== "Todas") {
-        const isGFV =
-          r.conta?.toLowerCase().includes("gfv") ||
-          r.descricao_conta?.toLowerCase().includes("combustivel") ||
-          r.tipo_registro === "Combustível" ||
-          r.tipo_registro === "Diesel" ||
-          r.tipo_registro === "Gasolina" ||
-          r.tipo_registro === "Arla";
-        if (tipoImportacaoFilter === "combustivel_gfv" && !isGFV) return false;
-        if (tipoImportacaoFilter === "receitas_despesas" && isGFV) return false;
+        const imp = getRecordImportType(r);
+        if (tipoImportacaoFilter === "combustivel_gfv" && imp !== "combustivel_gfv") return false;
+        if (tipoImportacaoFilter === "receitas_despesas" && imp !== "receitas_despesas") return false;
       }
       if (placaFilter.trim()) {
         const p = placaFilter.toLowerCase().trim();
@@ -233,6 +230,89 @@ export default function ReportTendenciaTab({
 
     const map: Record<string, TrendBucket> = {};
 
+    // 1. Pre-populate timeline slots so charts render continuous full series (never a single lonely point)
+    if (granularity === "mensal") {
+      let yearsToPopulate: string[] = [];
+      if (trendTimeframe.startsWith("year_")) {
+        yearsToPopulate = [trendTimeframe.replace("year_", "")];
+      } else if (trendTimeframe.startsWith("month_")) {
+        const ym = trendTimeframe.replace("month_", "");
+        yearsToPopulate = [ym.split("-")[0]];
+      } else if (availableYears.length > 0) {
+        yearsToPopulate = [...availableYears];
+      } else {
+        yearsToPopulate = [String(new Date().getFullYear())];
+      }
+
+      yearsToPopulate.forEach((year) => {
+        const monthSlots = generateYearMonths(year);
+        monthSlots.forEach((slot) => {
+          map[slot.key] = {
+            key: slot.key,
+            label: slot.label,
+            fullName: slot.fullName,
+            sortKey: slot.sortKey,
+            totalValor: 0,
+            totalLiters: 0,
+            totalKm: 0,
+            count: 0,
+            categories: {},
+          };
+        });
+      });
+    } else if (granularity === "diario") {
+      let targetYearMonth = "";
+      if (trendTimeframe.startsWith("month_")) {
+        targetYearMonth = trendTimeframe.replace("month_", "");
+      } else if (availableMonths.length > 0) {
+        targetYearMonth = availableMonths[0].yearMonth;
+      } else {
+        const now = new Date();
+        targetYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      }
+
+      const [y, m] = targetYearMonth.split("-");
+      const daySlots = generateMonthDays(y, m);
+      daySlots.forEach((slot) => {
+        map[slot.key] = {
+          key: slot.key,
+          label: slot.label,
+          fullName: slot.fullName,
+          sortKey: slot.sortKey,
+          totalValor: 0,
+          totalLiters: 0,
+          totalKm: 0,
+          count: 0,
+          categories: {},
+        };
+      });
+    } else if (granularity === "quinzenal") {
+      let yearsToPopulate = availableYears.length > 0 ? availableYears : [String(new Date().getFullYear())];
+      if (trendTimeframe.startsWith("year_")) {
+        yearsToPopulate = [trendTimeframe.replace("year_", "")];
+      }
+      yearsToPopulate.forEach((year) => {
+        for (let m = 1; m <= 12; m++) {
+          const monthStr = String(m).padStart(2, "0");
+          const qSlots = generateMonthQuinzena(year, monthStr);
+          qSlots.forEach((slot) => {
+            map[slot.key] = {
+              key: slot.key,
+              label: slot.label,
+              fullName: slot.fullName,
+              sortKey: slot.sortKey,
+              totalValor: 0,
+              totalLiters: 0,
+              totalKm: 0,
+              count: 0,
+              categories: {},
+            };
+          });
+        }
+      });
+    }
+
+    // 2. Accumulate records into the corresponding bucket
     timeframeFilteredRecords.forEach((r) => {
       const rawDate = getRecordDateString(r);
       const parsed = parseRecordFullDate(rawDate);
@@ -281,16 +361,31 @@ export default function ReportTendenciaTab({
         };
       }
 
+      const impType = getRecordImportType(r);
       const val = getRecordFinancialValue(r, tipoImportacaoFilter === "combustivel_gfv");
       const liters = Number(r.quantidade) || 0;
-      const km = Number(r.km_rodado) || 0;
+      
+      let km = 0;
+      if (typeof r.km_rodado === "number" && !isNaN(r.km_rodado) && r.km_rodado > 0) {
+        km = r.km_rodado;
+      } else if (r.quantidade && r.media_km_l && r.quantidade > 0 && r.media_km_l > 0) {
+        km = r.quantidade * r.media_km_l;
+      } else if (r.observacoes) {
+        const obsKmMatch = r.observacoes.match(/Km\s+Rodados?:\s*([\d\.\,]+)/i);
+        if (obsKmMatch) {
+          km = parseFloat(obsKmMatch[1].replace(/\./g, "").replace(",", "."));
+        }
+      }
+
       const cat = r.tipo_registro || "Outros";
 
       map[key].totalValor += val;
       map[key].totalLiters += liters;
       map[key].totalKm += km;
       map[key].count += 1;
-      map[key].categories[cat] = (map[key].categories[cat] || 0) + val;
+      if (impType !== "combustivel_gfv") {
+        map[key].categories[cat] = (map[key].categories[cat] || 0) + val;
+      }
     });
 
     let list = Object.values(map).sort((a, b) => {
@@ -326,7 +421,7 @@ export default function ReportTendenciaTab({
         sharePct,
       };
     });
-  }, [timeframeFilteredRecords, granularity, tipoImportacaoFilter]);
+  }, [timeframeFilteredRecords, granularity, tipoImportacaoFilter, availableYears, availableMonths, trendTimeframe]);
 
   // Overall KPIs
   const totalGeralPeriodo = useMemo(
@@ -345,20 +440,24 @@ export default function ReportTendenciaTab({
     () => trendData.reduce((acc, m) => acc + m.totalKm, 0),
     [trendData]
   );
+  const activePeriodsWithData = useMemo(
+    () => trendData.filter((m) => m.totalValor > 0),
+    [trendData]
+  );
   const mediaPeriodo = useMemo(
-    () => (trendData.length > 0 ? totalGeralPeriodo / trendData.length : 0),
-    [totalGeralPeriodo, trendData]
+    () => (activePeriodsWithData.length > 0 ? totalGeralPeriodo / activePeriodsWithData.length : totalGeralPeriodo),
+    [totalGeralPeriodo, activePeriodsWithData]
   );
 
   const highestPeriod = useMemo(() => {
-    if (trendData.length === 0) return null;
-    return [...trendData].sort((a, b) => b.totalValor - a.totalValor)[0];
-  }, [trendData]);
+    if (activePeriodsWithData.length === 0) return trendData[0] || null;
+    return [...activePeriodsWithData].sort((a, b) => b.totalValor - a.totalValor)[0];
+  }, [activePeriodsWithData, trendData]);
 
   const lowestPeriod = useMemo(() => {
-    if (trendData.length === 0) return null;
-    return [...trendData].sort((a, b) => a.totalValor - b.totalValor)[0];
-  }, [trendData]);
+    if (activePeriodsWithData.length === 0) return trendData[0] || null;
+    return [...activePeriodsWithData].sort((a, b) => a.totalValor - b.totalValor)[0];
+  }, [activePeriodsWithData, trendData]);
 
   const lastPeriod = trendData[trendData.length - 1] || null;
 

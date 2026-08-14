@@ -83,7 +83,7 @@ export default function ImportDashboardTab({ companyId, onNavigateToWizard }: Pr
   }, [vehicleStats]);
 
   const totalCostDespesas = useMemo(() => {
-    return vehicleStats.allVehicles.reduce((sum, v) => sum + v.costDespesas, 0);
+    return vehicleStats.allVehicles.reduce((sum, v) => sum + v.totalCost, 0);
   }, [vehicleStats]);
 
   const fleetCPK = totalKmRodadoCombustivel > 0 ? totalCostDespesas / totalKmRodadoCombustivel : 0;

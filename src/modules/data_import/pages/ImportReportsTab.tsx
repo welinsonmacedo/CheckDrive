@@ -260,16 +260,9 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
 
       // 2. Tipo de Importação
       if (tipoImportacaoFilter !== "Todas") {
-        const isGFV =
-          r.conta?.toLowerCase().includes("gfv") ||
-          r.descricao_conta?.toLowerCase().includes("combustivel") ||
-          r.tipo_registro === "Combustível" ||
-          r.tipo_registro === "Diesel" ||
-          r.tipo_registro === "Gasolina" ||
-          r.tipo_registro === "Arla";
-
-        if (tipoImportacaoFilter === "combustivel_gfv" && !isGFV) return false;
-        if (tipoImportacaoFilter === "receitas_despesas" && isGFV) return false;
+        const imp = getRecordImportType(r);
+        if (tipoImportacaoFilter === "combustivel_gfv" && imp !== "combustivel_gfv") return false;
+        if (tipoImportacaoFilter === "receitas_despesas" && imp !== "receitas_despesas") return false;
       }
 
       // 3. Período
@@ -325,6 +318,17 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
       string,
       { count: number; totalVal: number; totalQty: number; name: string }
     > = {};
+
+    // When grouping by month, pre-populate all 12 months for the year so the chart renders a complete annual timeline
+    if (agruparPor === "mes") {
+      const availableYearsList = Object.keys(monthsByYear);
+      let targetYear = availableYearsList.length > 0 ? availableYearsList[0] : String(new Date().getFullYear());
+      for (let m = 1; m <= 12; m++) {
+        const mStr = String(m).padStart(2, "0");
+        const key = `${mStr}/${targetYear}`;
+        groups[key] = { count: 0, totalVal: 0, totalQty: 0, name: key };
+      }
+    }
 
     filteredRecords.forEach((r) => {
       let key = "Outros";
@@ -971,7 +975,7 @@ export default function ImportReportsTab({ records: initialRecords, companyId }:
                           metrica.replace("_", " "),
                         ]}
                       />
-                      <Area type="monotone" dataKey="valor" stroke="#3b82f6" fill="#bfdbfe" fillOpacity={0.5} />
+                      <Area type="monotone" dataKey="valor" stroke="#3b82f6" strokeWidth={3} fill="#bfdbfe" fillOpacity={0.5} dot={{ r: 4, fill: "#3b82f6" }} />
                     </AreaChart>
                   )}
                 </ResponsiveContainer>

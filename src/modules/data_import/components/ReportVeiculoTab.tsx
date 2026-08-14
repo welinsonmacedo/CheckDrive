@@ -102,11 +102,12 @@ export default function ReportVeiculoTab({
                 <th className="p-3.5 text-center">#</th>
                 <th className="p-3.5">Placa</th>
                 <th className="p-3.5">Frota</th>
-                <th className="p-3.5 text-center">Viagens / Lançamentos</th>
-                <th className="p-3.5 text-center">Consumo Total</th>
+                <th className="p-3.5 text-center">Lançamentos</th>
+                <th className="p-3.5 text-center">Consumo (GFV L)</th>
                 <th className="p-3.5 text-center">Km Rodado (GFV)</th>
                 <th className="p-3.5 text-center">Média (Km/L)</th>
-                <th className="p-3.5 text-right">Custo Despesas (R$)</th>
+                <th className="p-3.5 text-right">Despesas (SOFtran)</th>
+                <th className="p-3.5 text-right">Custo Total (SOFtran)</th>
                 <th className="p-3.5 text-right">CPK (R$/Km)</th>
                 <th className="p-3.5 text-center">Ações</th>
               </tr>
@@ -114,7 +115,7 @@ export default function ReportVeiculoTab({
             <tbody className="divide-y divide-zinc-100 font-medium">
               {sortedVehiclesList.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-zinc-400 font-semibold">
+                  <td colSpan={11} className="p-8 text-center text-zinc-400 font-semibold">
                     Nenhum veículo encontrado para a busca.
                   </td>
                 </tr>
@@ -144,7 +145,8 @@ export default function ReportVeiculoTab({
                       <td className="p-3.5 text-center font-bold text-emerald-700">
                         {mediaKmL > 0 ? `${mediaKmL.toFixed(2)} km/L` : "-"}
                       </td>
-                      <td className="p-3.5 text-right font-black text-slate-900">{formatCurrency(v.costDespesas)}</td>
+                      <td className="p-3.5 text-right font-bold text-zinc-700">{formatCurrency(v.costDespesas)}</td>
+                      <td className="p-3.5 text-right font-black text-slate-900">{formatCurrency(v.totalCost)}</td>
                       <td className="p-3.5 text-right font-black text-purple-700">
                         {v.cpk > 0 ? `R$ ${v.cpk.toFixed(3)}` : "-"}
                       </td>

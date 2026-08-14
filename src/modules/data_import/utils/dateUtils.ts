@@ -347,3 +347,76 @@ export function getPeriodLabel(selectedPeriod: string, customMonth?: string): st
   if (!isNaN(days) && days > 0) return `Últimos ${days} dias`;
   return selectedPeriod;
 }
+
+export interface TimelineSlot {
+  key: string;
+  label: string;
+  shortName: string;
+  fullName: string;
+  sortKey: number;
+}
+
+/**
+ * Generates full 12 month slots for a given year (Jan to Dec).
+ */
+export function generateYearMonths(year: string): TimelineSlot[] {
+  const slots: TimelineSlot[] = [];
+  for (let m = 1; m <= 12; m++) {
+    const monthStr = String(m).padStart(2, "0");
+    const key = `${year}-${monthStr}`;
+    const label = `${monthStr}/${year}`;
+    const shortName = MONTH_SHORT_PT[monthStr] || monthStr;
+    const fullName = `${MONTH_NAMES_PT[monthStr]} / ${year}`;
+    const sortKey = Number(year) * 100 + m;
+    slots.push({ key, label, shortName, fullName, sortKey });
+  }
+  return slots;
+}
+
+/**
+ * Generates all day slots for a given month (e.g. 01 to 31).
+ */
+export function generateMonthDays(year: string, month: string): TimelineSlot[] {
+  const y = Number(year);
+  const m = Number(month);
+  const totalDays = new Date(y, m, 0).getDate();
+  const slots: TimelineSlot[] = [];
+  const monthName = MONTH_NAMES_PT[month] || month;
+
+  for (let d = 1; d <= totalDays; d++) {
+    const dayStr = String(d).padStart(2, "0");
+    const key = `${year}-${month}-${dayStr}`;
+    const label = `${dayStr}/${month}`;
+    const shortName = `${dayStr}/${month}`;
+    const fullName = `${dayStr}/${month}/${year} (${monthName})`;
+    const sortKey = new Date(`${year}-${month}-${dayStr}T12:00:00Z`).getTime();
+    slots.push({ key, label, shortName, fullName, sortKey });
+  }
+  return slots;
+}
+
+/**
+ * Generates 1st and 2nd quinzena slots for a given month.
+ */
+export function generateMonthQuinzena(year: string, month: string): TimelineSlot[] {
+  const monthName = MONTH_NAMES_PT[month] || month;
+  const monthShort = MONTH_SHORT_PT[month] || month;
+  const yShort = year.length === 4 ? year.substring(2) : year;
+  return [
+    {
+      key: `${year}-${month}-Q1`,
+      label: `1ª Q. ${monthShort}/${yShort}`,
+      shortName: `1ª Q. ${monthShort}`,
+      fullName: `1ª Quinzena de ${monthName}/${year} (Dias 01 a 15)`,
+      sortKey: Number(year) * 1000 + Number(month) * 10 + 1,
+    },
+    {
+      key: `${year}-${month}-Q2`,
+      label: `2ª Q. ${monthShort}/${yShort}`,
+      shortName: `2ª Q. ${monthShort}`,
+      fullName: `2ª Quinzena de ${monthName}/${year} (Dias 16 ao fim)`,
+      sortKey: Number(year) * 1000 + Number(month) * 10 + 2,
+    },
+  ];
+}
+
