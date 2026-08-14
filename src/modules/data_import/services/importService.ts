@@ -164,21 +164,39 @@ export class ImportService {
   }> {
     const formattedCompanyId = formatUuid(companyId);
 
-    // 1. Get existing records to check duplicates & conflicts
+    // 1. Get existing records to check duplicates & conflicts (paginated to handle >1000 records)
     const existingHashes = new Set<string>();
     const existingRecordsList: ImportRecord[] = [];
 
     try {
-      const { data } = await supabase
-        .from("import_records")
-        .select("*")
-        .eq("empresa_id", formattedCompanyId);
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      let hasMore = true;
 
-      if (data) {
-        data.forEach((r: any) => {
-          if (r.hash_registro) existingHashes.add(r.hash_registro);
-          existingRecordsList.push(r);
-        });
+      while (hasMore) {
+        let query = supabase.from("import_records").select("*");
+        if (companyId && companyId !== "all") {
+          query = query.eq("empresa_id", formattedCompanyId);
+        }
+
+        const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+
+        if (error) {
+          console.warn("Supabase duplicate check query error:", error.message);
+          hasMore = false;
+        } else if (data && data.length > 0) {
+          data.forEach((r: any) => {
+            if (r.hash_registro) existingHashes.add(r.hash_registro);
+            existingRecordsList.push(r);
+          });
+          if (data.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            from += PAGE_SIZE;
+          }
+        } else {
+          hasMore = false;
+        }
       }
     } catch (e) {
       // Local check fallback
@@ -444,19 +462,23 @@ export class ImportService {
       }
     }
 
-    // 2. Update in Supabase
+    // 2. Update in Supabase (chunked in batches of 200 to prevent URL length limits)
     try {
-      const { error } = await supabase
-        .from("import_records")
-        .update({ status: "aprovado" })
-        .in("id", recordIds);
+      const CHUNK_SIZE = 200;
+      for (let i = 0; i < recordIds.length; i += CHUNK_SIZE) {
+        const chunk = recordIds.slice(i, i + CHUNK_SIZE);
+        const { error } = await supabase
+          .from("import_records")
+          .update({ status: "aprovado" })
+          .in("id", chunk);
 
-      if (error) {
-        console.warn("Supabase approveRecords error:", error.message);
-        if (error.message.includes("does not exist") || error.message.includes("400") || error.message === "Bad Request") {
-          dbError = "Tabela 'import_records' pendente no Supabase (Crie a tabela em 'Configurações' para sync em nuvem).";
-        } else {
-          dbError = error.message;
+        if (error) {
+          console.warn("Supabase approveRecords error on chunk:", error.message);
+          if (error.message.includes("does not exist") || error.message.includes("400") || error.message === "Bad Request") {
+            dbError = "Tabela 'import_records' pendente no Supabase (Crie a tabela em 'Configurações' para sync em nuvem).";
+          } else {
+            dbError = error.message;
+          }
         }
       }
     } catch (e: any) {
@@ -514,12 +536,16 @@ export class ImportService {
       }
     }
 
-    // 2. Supabase update
+    // 2. Supabase update (chunked in batches of 200)
     try {
-      await supabase
-        .from("import_records")
-        .update({ tipo_registro: newCategory })
-        .in("id", recordIds);
+      const CHUNK_SIZE = 200;
+      for (let i = 0; i < recordIds.length; i += CHUNK_SIZE) {
+        const chunk = recordIds.slice(i, i + CHUNK_SIZE);
+        await supabase
+          .from("import_records")
+          .update({ tipo_registro: newCategory })
+          .in("id", chunk);
+      }
     } catch (e) {
       console.warn("Supabase updateRecordCategory error:", e);
     }
@@ -590,31 +616,48 @@ export class ImportService {
 
   /**
    * Fetch imported records with optional filters, merging Supabase and Local Storage
+   * Includes automatic pagination to fetch all rows beyond Supabase's default 1,000 row limit.
    */
   static async getImportRecords(companyId: string, jobId?: string): Promise<ImportRecord[]> {
     const formattedCompanyId = formatUuid(companyId);
     const recordMap = new Map<string, ImportRecord>();
 
-    // 1. Fetch from Supabase
+    // 1. Fetch from Supabase with complete pagination
     try {
-      let query = supabase.from("import_records").select("*");
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      let hasMore = true;
 
-      if (companyId && companyId !== "all") {
-        query = query.eq("empresa_id", formattedCompanyId);
-      }
+      while (hasMore) {
+        let query = supabase.from("import_records").select("*");
 
-      if (jobId && jobId !== "all") {
-        query = query.eq("import_job_id", jobId);
-      }
+        if (companyId && companyId !== "all") {
+          query = query.eq("empresa_id", formattedCompanyId);
+        }
 
-      const { data, error } = await query.order("criado_em", { ascending: false });
+        if (jobId && jobId !== "all") {
+          query = query.eq("import_job_id", jobId);
+        }
 
-      if (error) {
-        console.warn("Supabase getImportRecords error:", error.message);
-      } else if (data) {
-        data.forEach((r: any) => {
-          recordMap.set(r.id, r as ImportRecord);
-        });
+        const { data, error } = await query
+          .order("criado_em", { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) {
+          console.warn("Supabase getImportRecords error:", error.message);
+          hasMore = false;
+        } else if (data && data.length > 0) {
+          data.forEach((r: any) => {
+            recordMap.set(r.id, r as ImportRecord);
+          });
+          if (data.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            from += PAGE_SIZE;
+          }
+        } else {
+          hasMore = false;
+        }
       }
     } catch (e) {
       console.warn("Supabase getImportRecords exception:", e);
